@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+		<link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+		<title>piw</title>
+		<!--
+		  Pick the theme before the first paint. The app would set the same
+		  attribute on mount, but the module graph loads first — long enough to
+		  flash a dark window at someone who chose the light flavor.
+
+		  Deliberately not validating the stored value: an unrecognised one
+		  matches no palette and falls through to the default on :root, and
+		  prefs.ts normalises it on mount. Listing the flavors here too would
+		  just be a second place to forget one.
+		-->
+		<script>
+			try {
+				// Throws outright in some privacy modes; the default palette on
+				// :root covers that.
+				document.documentElement.dataset.theme =
+					localStorage.getItem("piw:theme") || "mocha";
+			} catch {}
+		</script>
+	</head>
+	<body>
+		<div id="root"></div>
+		<script type="module" src="/src/web/main.tsx"></script>
+	</body>
+</html>

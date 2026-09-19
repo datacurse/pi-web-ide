@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+	<!--
+	  Brain, orange. Transparent background on purpose: the same file has to sit
+	  on a light and a dark browser chrome, and the fill/fold pair is contrasty
+	  enough for both.
+
+	  The silhouette is one path of nine outward arcs around an ellipse (the
+	  lobes). The folds are deliberately few and heavy — at the 16px a tab
+	  actually renders, anything finer collapses into a smudge.
+	-->
+	<path
+		fill="#fb8c2b"
+		d="M22.08 8.51 A12.00 12.00 0 0 0 6.89 19.50 A11.00 11.00 0 0 0 3.44 36.34 A11.41 11.41 0 0 0 13.36 51.15 A12.50 12.50 0 0 0 32.00 57.00 A12.50 12.50 0 0 0 50.64 51.15 A11.41 11.41 0 0 0 60.56 36.34 A11.00 11.00 0 0 0 57.11 19.50 A12.00 12.00 0 0 0 41.92 8.51 A12.70 12.70 0 0 0 22.08 8.51 Z"
+	/>
+	<g fill="none" stroke="#7a2f08" stroke-width="5" stroke-linecap="round">
+		<path d="M32 7 C25 15 39 20 32 30 C25 40 39 45 32 57" />
+		<path d="M19 17 C27 22 25 29 16 31" />
+		<path d="M45 17 C37 22 39 29 48 31" />
+		<path d="M19 48 C27 43 25 36 16 34" />
+		<path d="M45 48 C37 43 39 36 48 34" />
+	</g>
+</svg>

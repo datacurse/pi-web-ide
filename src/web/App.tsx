@@ -1,0 +1,1726 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type {
+	AskAnswer,
+	PiAsk,
+	PiEvent,
+	PiImage,
+	PiPartial,
+	PiSessionInfo,
+	PiwHostStatus,
+	Snapshot,
+} from "../shared/types.js";
+import { SessionList, unreachable, type HostProjects, type Selection } from "./SessionList.js";
+import { SessionTabs, tabDomId } from "./SessionTabs.js";
+import { Chat } from "./Chat.js";
+import { TerminalPane } from "./Terminal.js";
+import { EMPTY_LAYOUT, parseLayout, reconcile, type TermLayout } from "./termLayout.js";
+import { Settings } from "./Settings.js";
+import {
+	applyTheme,
+	readNotify,
+	readSessionSort,
+	readShortNames,
+	readShowThinking,
+	readTerminalLayout,
+	readTerminalOpen,
+	readTerminalWidth,
+	readTheme,
+	readToolMode,
+	TERMINAL_MAX_PERCENT,
+	TERMINAL_MIN_PERCENT,
+	writeNotify,
+	writeSessionSort,
+	writeShortNames,
+	writeShowThinking,
+	writeTerminalLayout,
+	writeTerminalOpen,
+	writeTerminalWidth,
+	writeToolMode,
+	type SessionSort,
+	type ThemeId,
+	type ToolMode,
+} from "./prefs.js";
+import { pulseFavicon } from "./favicon.js";
+
+const emptyPartial = (): PiPartial => ({ text: "", thinking: "", tools: [] });
+
+/**
+ * The terminal pane's share of the chat+terminal track, kept inside the
+ * bounds prefs.ts advertises — a pane narrower than the minimum is one the
+ * divider cannot be grabbed back from.
+ */
+const clampTerminal = (percent: number): number =>
+	Math.min(TERMINAL_MAX_PERCENT, Math.max(TERMINAL_MIN_PERCENT, percent));
+
+/**
+ * The server's JSON, made safe to render.
+ *
+ * An open browser tab holds whatever bundle it loaded for as long as it
+ * stays open, and the server process outlives that bundle or predates it —
+ * a long-running server still answering a freshly built client is the normal
+ * state of this app during development. A field added on one side therefore
+ * arrives absent on the other, and every consumer downstream trusts the
+ * `Snapshot` type: one missing number becomes `undefined.toLocaleString()`
+ * inside render, React unmounts the tree, and the whole app goes blank over
+ * a tooltip.
+ *
+ * So the JSON is coerced exactly once, here, at the only place it enters
+ * React state. Downstream code keeps reading non-optional fields, and a
+ * skewed server costs the feature it is missing — no meter, no thinking
+ * picker — instead of the window.
+ */
+function toSnapshot(raw: Partial<Snapshot>): Snapshot {
+	return {
+		...raw,
+		id: String(raw.id),
+		file: typeof raw.file === "string" ? raw.file : undefined,
+		// An older server sends none, and the git button simply does not appear.
+		cwd: typeof raw.cwd === "string" ? raw.cwd : "",
+		model: typeof raw.model === "string" ? raw.model : undefined,
+		messages: Array.isArray(raw.messages) ? raw.messages : [],
+		partial: raw.partial ?? null,
+		isStreaming: raw.isStreaming === true,
+		error: typeof raw.error === "string" ? raw.error : null,
+		notices: Array.isArray(raw.notices) ? raw.notices : [],
+		ask: raw.ask ?? null,
+		// An older server sends none, and the picker simply has nothing to offer.
+		commands: Array.isArray(raw.commands) ? raw.commands : [],
+		// Absent means an older server that has no opinion; assume support
+		// rather than silently disabling attachments the backend would accept.
+		supportsImages: raw.supportsImages !== false,
+		thinkingLevel: typeof raw.thinkingLevel === "string" ? raw.thinkingLevel : undefined,
+		thinkingLevels: Array.isArray(raw.thinkingLevels) ? raw.thinkingLevels : [],
+		contextTokens: typeof raw.contextTokens === "number" ? raw.contextTokens : 0,
+		contextWindow: typeof raw.contextWindow === "number" ? raw.contextWindow : 0,
+		// An older server sends none, and the roster simply never appears.
+		subagents: Array.isArray(raw.subagents) ? raw.subagents : [],
+	};
+}
+
+/**
+ * What a "finished" notification says: the opening line of the answer that
+ * just landed, which is the part worth reading from a desktop corner. A run
+ * that ended in tool calls and no prose has nothing to quote, so it falls
+ * back to saying so rather than showing an empty notification.
+ */
+function replyLine(snapshot: Snapshot | undefined): string {
+	const message = [...(snapshot?.messages ?? [])]
+		.reverse()
+		.find((m) => m.role === "assistant");
+	let text = "";
+	for (const block of message?.blocks ?? []) {
+		if (block.kind === "text") text = block.text;
+	}
+	const line =
+		text
+			.trim()
+			.split("\n")
+			.find((l) => l.trim()) ?? "";
+	if (!line) return "Finished.";
+	return line.length > 140 ? `${line.slice(0, 140)}…` : line;
+}
+
+/**
+ * What a "needs you" notification says. The question itself, because that is
+ * the one thing that decides whether it is worth walking back to: the agent
+ * is blocked until it is answered.
+ */
+function askLine(ask: PiAsk): string {
+	const line = (ask.message || ask.title || "omp is waiting for an answer").trim();
+	return line.length > 140 ? `${line.slice(0, 140)}…` : line;
+}
+
+/** The chat panel the tab strip controls; `aria-controls` needs a real id. */
+const CHAT_PANEL_ID = "chat-panel";
+
+/*
+ * Open tabs are remembered across reloads under `piw:tabs:<project cwd>`.
+ *
+ * One key per project rather than one map of every project: the strip only
+ * ever shows one project's sessions, so a per-project key is read and written
+ * whole, and switching projects cannot corrupt the other project's entry.
+ *
+ * A tab is identified by its session FILE. The file is the stable identity on
+ * disk, is exactly what /api/sessions/open takes, and survives a server
+ * restart or an idle eviction that invalidates the in-memory id — so a
+ * restored tab reopens through the same path a click would take.
+ *
+ * localStorage rather than the URL: this is per-browser UI state, not a
+ * shareable address, and piw has no router.
+ */
+
+/**
+ * The selected project — a cwd on a machine — remembered in TWO places on
+ * purpose.
+ *
+ * `sessionStorage` is the selection of THIS window: it is scoped to the tab,
+ * survives a reload, an HMR refresh and a session restore, and — crucially —
+ * is invisible to every other window. `localStorage` holds the same value as
+ * "the project last worked on anywhere", which is what a brand-new window
+ * should open on.
+ *
+ * One localStorage key for both jobs was a bug: two windows on two projects
+ * share it, so the second selection overwrote the first, and the next reload
+ * of EITHER window silently adopted the other's project — taking its tab
+ * strip with it, and pointing `+ New` at a directory nobody had selected.
+ */
+const PROJECT_KEY = "piw:project";
+const LAST_PROJECT_KEY = "piw:lastProject";
+
+/**
+ * A stored selection. Older builds stored the bare cwd, which was always
+ * this machine's; anything that does not parse degrades to "nothing
+ * remembered" rather than throwing during the first render.
+ */
+function parseSelection(raw: string | undefined): Selection | undefined {
+	if (!raw) return undefined;
+	if (!raw.startsWith("{")) return { host: "", cwd: raw };
+	try {
+		const parsed: unknown = JSON.parse(raw);
+		if (parsed && typeof parsed === "object" && "cwd" in parsed && typeof parsed.cwd === "string") {
+			const host = "host" in parsed && typeof parsed.host === "string" ? parsed.host : "";
+			return { host, cwd: parsed.cwd };
+		}
+	} catch {
+		/* fall through */
+	}
+	return undefined;
+}
+
+/**
+ * How long a local slash command may claim to be running before the row stops
+ * saying so. A command that answers nothing (`/model`, `/thinking`) emits no
+ * `command_output`, so nothing else would ever stop the spinner, and
+ * `/compact` on a full context legitimately takes minutes. The command itself
+ * stays on screen either way — it is the record of what was sent.
+ */
+const COMMAND_RUNNING_MAX_MS = 120_000;
+
+function readStored(key: string): string | undefined {
+	try {
+		return localStorage.getItem(key) ?? undefined;
+	} catch {
+		// Private mode / disabled storage must not break the app.
+		return undefined;
+	}
+}
+
+function writeStored(key: string, value: string | undefined): void {
+	try {
+		if (value) localStorage.setItem(key, value);
+		else localStorage.removeItem(key);
+	} catch {
+		/* ignore */
+	}
+}
+
+/**
+ * This window's own selection. The read falls back to the shared key, so a
+ * brand-new window still opens where you last worked; the write is
+ * sessionStorage ONLY, because the shared key must keep meaning "the last
+ * project someone explicitly selected" — a window merely restoring itself is
+ * not a selection.
+ */
+function readWindowProject(): Selection | undefined {
+	try {
+		return parseSelection(sessionStorage.getItem(PROJECT_KEY) ?? readStored(LAST_PROJECT_KEY));
+	} catch {
+		// Private mode / disabled storage: the shared key may still be readable,
+		// and a window with no scope of its own is the pre-fix behaviour, which
+		// is correct for a single window.
+		return parseSelection(readStored(LAST_PROJECT_KEY));
+	}
+}
+
+function pinWindowProject(selection: Selection): void {
+	try {
+		sessionStorage.setItem(PROJECT_KEY, JSON.stringify(selection));
+	} catch {
+		/* ignore */
+	}
+}
+
+/**
+ * The storage key a selection's per-project state lives under: tabs and the
+ * terminal layout. This machine's projects keep the bare cwd, which is what
+ * every existing entry was written under; another machine's are prefixed
+ * with its name, since the same path over there is a different project.
+ */
+function scopeOf({ host, cwd }: Selection): string {
+	return host ? `@${host}:${cwd}` : cwd;
+}
+
+/**
+ * The open tabs of ONE project.
+ *
+ * `project` is part of the state rather than tracked alongside it, because the
+ * dangerous bug here is writing one project's tabs under another project's
+ * key: with the project inside the value, every read and write is consistent
+ * by construction and a stale render cannot mix them.
+ *
+ * An entry is a session file, except for a session the server has not
+ * persisted yet, where it is the session id (Snapshot.file is legitimately
+ * optional). Such a key cannot be reopened, so it is placeholder-only: it is
+ * upgraded to the file as soon as the server reports one, and a persisted one
+ * is dropped on restore like any other session that is not on disk.
+ */
+interface Tabs {
+	/** The selection's storage scope (scopeOf), not a bare cwd. */
+	project: string;
+	files: string[];
+	active?: string;
+}
+
+function readTabs(project: string): Tabs {
+	const raw = readStored(`piw:tabs:${project}`);
+	if (!raw) return { project, files: [] };
+	try {
+		const parsed = JSON.parse(raw) as { files?: unknown; active?: unknown };
+		// Storage is user-writable and outlives any format change, so anything
+		// unexpected degrades to "no tabs" instead of throwing during render.
+		const files = Array.isArray(parsed.files)
+			? [...new Set(parsed.files.filter((f): f is string => typeof f === "string"))]
+			: [];
+		const active =
+			typeof parsed.active === "string" && files.includes(parsed.active)
+				? parsed.active
+				: files[0];
+		return { project, files, active };
+	} catch {
+		return { project, files: [] };
+	}
+}
+
+export default function App() {
+	const [sessions, setSessions] = useState<PiSessionInfo[]>([]);
+	/**
+	 * The project whose session list we have actually SEEN, successfully. It
+	 * gates dropping remembered tabs: absence from a list we never received is
+	 * not evidence of absence, and pruning on a failed or restarting-server
+	 * fetch would wipe the whole strip on a transient error.
+	 */
+	const [listedProject, setListedProject] = useState("");
+	/** Why the last session listing failed, shown in place of an empty list. */
+	const [listError, setListError] = useState<string | null>(null);
+	const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
+	/**
+	 * Whether the pane is waiting for a session to open.
+	 *
+	 * `busy` is "the agent is working"; this is "there is not even a
+	 * transcript yet", which is a different thing to show and a different
+	 * thing to end.
+	 */
+	const [opening, setOpening] = useState(false);
+	/**
+	 * The snapshot read synchronously, because attach() has to decide whether
+	 * it is switching sessions or reattaching to the one on screen — and a
+	 * dependency on `snapshot` would rebuild the callback (and with it the
+	 * EventSource wiring) on every streamed delta.
+	 */
+	const snapshotRef = useRef<Snapshot | null>(null);
+	snapshotRef.current = snapshot;
+	const [partial, setPartial] = useState<PiPartial>(emptyPartial);
+	const [busy, setBusy] = useState(false);
+	/**
+	 * The local slash command last sent, and whether it is still working.
+	 *
+	 * omp appends no message for a local command, so nothing in the transcript
+	 * records that it was sent at all; and the prompt ack is acceptance, not
+	 * completion — omp acks `/compact` instantly and reports when the fold is
+	 * done, with nothing streaming in between.
+	 */
+	const [command, setCommand] = useState<{ text: string; running: boolean } | null>(null);
+	const [modelError, setModelError] = useState<string | null>(null);
+	const [listOpen, setListOpen] = useState(false);
+	const [terminalOpen, setTerminalOpen] = useState(readTerminalOpen);
+	/** True once the server's terminal list has been folded in; see below. */
+	const [termsReady, setTermsReady] = useState(false);
+	const [terminalWidth, setTerminalWidth] = useState(readTerminalWidth);
+	/**
+	 * The terminal pane's arrangement for the CURRENT project: its tabs,
+	 * splits and their shares. Per project, restored from storage and then
+	 * reconciled against the shells the server actually has — see the effect
+	 * below and termLayout.ts.
+	 */
+	const [termLayout, setTermLayout] = useState<TermLayout>(EMPTY_LAYOUT);
+	/** The chat+terminal track, measured while dragging the divider. */
+	const splitRow = useRef<HTMLDivElement | null>(null);
+	const [settingsOpen, setSettingsOpen] = useState(false);
+	const [theme, setTheme] = useState<ThemeId>(readTheme);
+	const [showThinking, setShowThinking] = useState(readShowThinking);
+	const [toolMode, setToolMode] = useState<ToolMode>(readToolMode);
+	const [notify, setNotify] = useState(readNotify);
+	const [shortNames, setShortNames] = useState(readShortNames);
+	const esRef = useRef<EventSource | null>(null);
+	/**
+	 * Ticket for the newest attach. An attach whose ticket is no longer the
+	 * current one has been superseded by a later selection, and may not move
+	 * the selection or the pane; see attach().
+	 */
+	const attachSeq = useRef(0);
+	// attach() reconnects by calling itself; a useCallback cannot reference itself.
+	const attachRef = useRef<(file?: string) => Promise<void>>(async () => {});
+	/**
+	 * Every machine's project list, this piw's first. Loaded per machine and
+	 * merged here, never fetched through another piw: each list comes from
+	 * the piw that owns those directories.
+	 */
+	const [hostProjects, setHostProjects] = useState<HostProjects[]>([]);
+	const [selection, setSelection] = useState<Selection>(
+		() => readWindowProject() ?? { host: "", cwd: "" },
+	);
+	const { host, cwd: project } = selection;
+	const scope = scopeOf(selection);
+	const [sessionSort, setSessionSort] = useState<SessionSort>(readSessionSort);
+	/** Null until the first answer: a remote selection cannot be judged before then. */
+	const [hosts, setHosts] = useState<PiwHostStatus[] | null>(null);
+	// Read through a ref where a five-second poll must not rebuild a callback.
+	const hostsRef = useRef(hosts);
+	hostsRef.current = hosts;
+	/**
+	 * Where the selected project's piw answers: "" for this page's own server,
+	 * a machine's origin otherwise — and undefined while that machine is not
+	 * yet known (the list has not arrived) or no longer listed. Every request
+	 * for the selected project goes through this, and none is made while it
+	 * is undefined: a request to the wrong machine is worse than a late one.
+	 */
+	const origin = host === "" ? "" : hosts?.find((h) => h.name === host)?.url;
+	/** This piw's own versions, so the Machines panel can flag one that lags. */
+	const [localVersions, setLocalVersions] = useState<{ piw?: string; omp?: string }>({});
+
+	/*
+	 * index.html applies the stored theme before the first paint, so this is
+	 * not what dresses the app initially — it is the single writer afterwards,
+	 * and on mount it also normalises an attribute that storage set to
+	 * something no longer recognised.
+	 */
+	useEffect(() => applyTheme(theme), [theme]);
+
+	const changeShowThinking = useCallback((show: boolean) => {
+		setShowThinking(show);
+		writeShowThinking(show);
+	}, []);
+
+	const changeToolMode = useCallback((mode: ToolMode) => {
+		setToolMode(mode);
+		writeToolMode(mode);
+	}, []);
+
+	const changeShortNames = useCallback((on: boolean) => {
+		setShortNames(on);
+		writeShortNames(on);
+	}, []);
+
+	/**
+	 * Turning notifications on is what asks the browser for permission: the
+	 * click is the user gesture the prompt requires, and a refused prompt must
+	 * not leave a switch that claims to be on and silently does nothing.
+	 */
+	const changeNotify = useCallback(async (on: boolean) => {
+		if (!on) {
+			setNotify(false);
+			writeNotify(false);
+			return;
+		}
+		if (typeof Notification === "undefined") return;
+		const permission =
+			Notification.permission === "default"
+				? await Notification.requestPermission()
+				: Notification.permission;
+		const granted = permission === "granted";
+		setNotify(granted);
+		writeNotify(granted);
+	}, []);
+
+	/**
+	 * The terminal pane: open/closed, and the divider that sizes it.
+	 *
+	 * Both preferences are written on change rather than in an effect, so a
+	 * pane closed and a window closed in the same second still agree.
+	 */
+	const showTerminal = useCallback((open: boolean) => {
+		setTerminalOpen(open);
+		writeTerminalOpen(open);
+	}, []);
+
+	const toggleTerminal = useCallback(
+		() => showTerminal(!terminalOpen),
+		[showTerminal, terminalOpen],
+	);
+
+	const closeTerminal = useCallback(() => showTerminal(false), [showTerminal]);
+
+	/**
+	 * Restore this project's terminal layout, then intersect it with the
+	 * shells the server has.
+	 *
+	 * Both halves are load-bearing. A stored layout can name terminals that
+	 * are gone (the server was restarted, or another window closed one), which
+	 * would render panes wired to nothing; and the server can have terminals
+	 * the layout does not mention (another window opened one), which without
+	 * adoption would be unreachable — no pane referencing them, so nothing
+	 * able to close them either.
+	 *
+	 * Runs on project switch, not only on mount: the shells are per project.
+	 */
+	useEffect(() => {
+		setTermsReady(false);
+		if (!project || origin === undefined) {
+			setTermLayout(EMPTY_LAYOUT);
+			return;
+		}
+		setTermLayout(parseLayout(readTerminalLayout(scope)));
+
+		let live = true;
+		void (async () => {
+			const r = await fetch(`${origin}/api/terminals?cwd=${encodeURIComponent(project)}`).catch(
+				() => null,
+			);
+			if (!r?.ok || !live) return;
+			const body = (await r.json()) as { terminals?: Array<{ id?: unknown }> };
+			const ids = (body.terminals ?? [])
+				.map((t) => t.id)
+				.filter((id): id is string => typeof id === "string");
+			setTermLayout((current) => reconcile(current, ids));
+			// Gates the pane's "start the first shell" — spawning before the
+			// server has been asked would mint a second shell next to the one
+			// the stored layout was already pointing at.
+			setTermsReady(true);
+		})();
+		return () => {
+			live = false;
+		};
+	}, [project, origin, scope]);
+
+	/**
+	 * Every layout change is written through, so a reload, a crash and a
+	 * second window all see the same arrangement. Not debounced: a divider
+	 * drag is the only high-frequency source and it is already one write per
+	 * pointer event's worth of state, which localStorage handles at a cost
+	 * nobody can measure.
+	 */
+	const changeTermLayout = useCallback(
+		(next: TermLayout) => {
+			setTermLayout(next);
+			if (project) writeTerminalLayout(scope, next);
+		},
+		[project, scope],
+	);
+
+	/** Clamped here, not at the call sites: every path in is a raw number. */
+	const resizeTerminal = useCallback((percent: number) => {
+		setTerminalWidth(clampTerminal(percent));
+	}, []);
+
+	/**
+	 * Drag the divider.
+	 *
+	 * The row is measured once, at pointerdown: it cannot change width while
+	 * the pointer is down, and measuring per move would be a forced layout on
+	 * every frame of the drag. Pointer capture is what keeps the move events
+	 * arriving once the cursor is over the terminal's canvas or outside the
+	 * window, and it ends the gesture for us if the pointer is cancelled.
+	 *
+	 * The width is persisted on release, not per move: a drag is one decision,
+	 * and writing localStorage a hundred times to record it is waste.
+	 */
+	const startDrag = useCallback(
+		(event: React.PointerEvent<HTMLDivElement>) => {
+			if (event.button !== 0) return;
+			const row = splitRow.current?.getBoundingClientRect();
+			if (!row || row.width === 0) return;
+			const divider = event.currentTarget;
+			divider.setPointerCapture(event.pointerId);
+			// Or the browser starts a text selection across both panes instead.
+			event.preventDefault();
+			let latest = terminalWidth;
+			const move = (moved: PointerEvent) => {
+				latest = ((row.right - moved.clientX) / row.width) * 100;
+				resizeTerminal(latest);
+			};
+			const end = () => {
+				divider.removeEventListener("pointermove", move);
+				divider.removeEventListener("pointerup", end);
+				divider.removeEventListener("pointercancel", end);
+				writeTerminalWidth(clampTerminal(latest));
+			};
+			divider.addEventListener("pointermove", move);
+			divider.addEventListener("pointerup", end);
+			divider.addEventListener("pointercancel", end);
+		},
+		[resizeTerminal, terminalWidth],
+	);
+
+	/**
+	 * Keyboard resize, because a separator that only responds to a pointer is
+	 * one that a keyboard user cannot move at all. Left grows the terminal
+	 * (the divider moves left); Home/End go to the advertised bounds.
+	 */
+	const dividerKeys = useCallback(
+		(event: React.KeyboardEvent<HTMLDivElement>) => {
+			const step = event.shiftKey ? 10 : 2;
+			const next =
+				event.key === "ArrowLeft"
+					? terminalWidth + step
+					: event.key === "ArrowRight"
+						? terminalWidth - step
+						: event.key === "Home"
+							? TERMINAL_MIN_PERCENT
+							: event.key === "End"
+								? TERMINAL_MAX_PERCENT
+								: undefined;
+			if (next === undefined) return;
+			event.preventDefault();
+			resizeTerminal(next);
+			writeTerminalWidth(clampTerminal(next));
+		},
+		[resizeTerminal, terminalWidth],
+	);
+
+	/*
+	 * Read through refs inside the SSE handler: `attach` is memoized, and
+	 * making it depend on a preference would tear down and rebuild a live
+	 * EventSource every time one is toggled.
+	 */
+	const notifyRef = useRef(notify);
+	notifyRef.current = notify;
+	const sessionsRef = useRef(sessions);
+	sessionsRef.current = sessions;
+
+	/**
+	 * Announce a finished run — only when the page is not being watched.
+	 *
+	 * On screen and focused, the status line and the tab title already said
+	 * it, and a notification would be a second copy of news you are looking
+	 * at. `tag` is the session, so a session that finishes twice replaces its
+	 * own notification instead of stacking.
+	 */
+	const announce = useCallback((file: string | undefined, body: string) => {
+		if (!notifyRef.current) return;
+		if (typeof Notification === "undefined" || Notification.permission !== "granted")
+			return;
+		if (document.visibilityState === "visible" && document.hasFocus()) return;
+		const info = sessionsRef.current.find((s) => s.path === file);
+		const title = info?.name || info?.firstMessage || "piw";
+		const n = new Notification(title, { body, tag: file ?? "piw" });
+		n.onclick = () => {
+			window.focus();
+			n.close();
+		};
+	}, []);
+
+	const [tabs, setTabs] = useState<Tabs>({ project: "", files: [] });
+	/**
+	 * Tab edits are computed from the CURRENT tabs and then committed, so they
+	 * read through a ref rather than a setState updater: closing a tab has to
+	 * know synchronously which neighbour to attach to, and a queued updater
+	 * cannot tell the caller that.
+	 */
+	const tabsRef = useRef(tabs);
+	const commitTabs = useCallback((next: Tabs) => {
+		tabsRef.current = next;
+		setTabs(next);
+	}, []);
+
+	/**
+	 * Sessions this page has opened successfully, which are therefore live
+	 * server-side whether or not they are on disk. `+ New` creates exactly such
+	 * a session: the JSONL is written lazily, so a brand-new session is absent
+	 * from the listing and must not be mistaken for a deleted one.
+	 */
+	const opened = useRef<Set<string>>(new Set());
+
+	/**
+	 * One machine's project list, from that machine's own piw.
+	 *
+	 * A machine that does not answer keeps an entry with `error` set rather
+	 * than dropping out: a dropdown that is merely shorter looks exactly like
+	 * "no projects there", and the difference is the thing worth showing.
+	 */
+	const loadProjects = useCallback(
+		async (host: string, origin: string, status?: PiwHostStatus): Promise<HostProjects> => {
+			const r = await fetch(`${origin}/api/projects`).catch(() => null);
+			if (!r?.ok) {
+				const error = r ? `HTTP ${r.status}` : host ? unreachable(status) : "not answering";
+				return { host, origin, projects: [], seed: "", error };
+			}
+			const body: unknown = await r.json().catch(() => null);
+			const projects =
+				body && typeof body === "object" && "projects" in body && Array.isArray(body.projects)
+					? body.projects.filter((p): p is string => typeof p === "string")
+					: [];
+			const seed =
+				body && typeof body === "object" && "active" in body && typeof body.active === "string"
+					? body.active
+					: "";
+			return { host, origin, projects, seed };
+		},
+		[],
+	);
+
+	/** Replace one machine's entry. Order is the Machines panel's, applied at render. */
+	const putProjects = useCallback((entry: HostProjects) => {
+		setHostProjects((list) => [...list.filter((e) => e.host !== entry.host), entry]);
+	}, []);
+
+	// This piw's own list and versions, once. The server seeds the list with
+	// its startup cwd, which is also the fallback selection on a first visit.
+	useEffect(() => {
+		void loadProjects("", "").then(putProjects);
+		void (async () => {
+			const r = await fetch("/api/health").catch(() => null);
+			const body: unknown = r?.ok ? await r.json().catch(() => null) : null;
+			if (!body || typeof body !== "object") return;
+			setLocalVersions({
+				piw: "piwVersion" in body && typeof body.piwVersion === "string" ? body.piwVersion : undefined,
+				omp: "ompVersion" in body && typeof body.ompVersion === "string" ? body.ompVersion : undefined,
+			});
+		})();
+	}, [loadProjects, putProjects]);
+
+	/*
+	 * The other machines' lists, one request each, straight to that machine.
+	 *
+	 * Keyed on what would change an answer — a machine added, removed,
+	 * re-addressed, or flipping reachable — and not on the polled array
+	 * itself, which is a new object every five seconds with the same content.
+	 * A machine that comes up gets its list on the poll that noticed.
+	 */
+	const hostsKey = (hosts ?? [])
+		.map((h) => `${h.name}|${h.url}|${h.reachable}|${h.hubOrigins}`)
+		.join("\n");
+	useEffect(() => {
+		if (hosts === null) return;
+		let live = true;
+		for (const h of hosts) {
+			void loadProjects(h.name, h.url, h).then((entry) => {
+				if (live) putProjects(entry);
+			});
+		}
+		// A machine removed since the last poll takes its projects with it.
+		setHostProjects((list) =>
+			list.filter((e) => e.host === "" || hosts.some((h) => h.name === e.host)),
+		);
+		return () => {
+			live = false;
+		};
+		// `hosts` is read for its content, which hostsKey stands for.
+	}, [hostsKey, loadProjects, putProjects]);
+
+	/*
+	 * Keep the selection pointing at a project that exists.
+	 *
+	 * A remembered project can vanish from the list (removed elsewhere); fall
+	 * back rather than polling a cwd that is no longer offered. Whatever
+	 * resolves here is then PINNED to this window, including the value it
+	 * inherited from the shared "last project anywhere" key: a window that
+	 * never touches the dropdown must still keep the project it opened on
+	 * when another window selects something else.
+	 *
+	 * A remote selection is judged only once the machine list has arrived, and
+	 * a machine that is listed but not answering keeps the selection: it shows
+	 * as unreachable, which is the truth, rather than yanking the user to
+	 * another machine's directory because this one had a bad minute.
+	 */
+	useEffect(() => {
+		const local = hostProjects.find((e) => e.host === "");
+		const move = (next: Selection) => {
+			setSelection(next);
+			pinWindowProject(next);
+		};
+		if (host === "") {
+			if (!local || local.error) return;
+			if (project && local.projects.includes(project)) return;
+			move({ host: "", cwd: local.seed });
+			return;
+		}
+		if (hosts === null) return;
+		if (!hosts.some((h) => h.name === host)) {
+			if (local && !local.error) move({ host: "", cwd: local.seed });
+			return;
+		}
+		const entry = hostProjects.find((e) => e.host === host);
+		if (!entry || entry.error) return;
+		if (project && entry.projects.includes(project)) return;
+		move({ host, cwd: entry.seed });
+	}, [host, project, hosts, hostProjects]);
+
+	// Switching projects clears the session list immediately, so the previous
+	// project's sessions never linger under the new project's name.
+	const selectProject = useCallback((next: Selection) => {
+		setSelection(next);
+		pinWindowProject(next);
+		writeStored(LAST_PROJECT_KEY, JSON.stringify(next));
+		setSessions([]);
+		setListedProject("");
+		setListError(null);
+	}, []);
+
+	const addProject = useCallback(
+		async (path: string) => {
+			if (origin === undefined) return;
+			const r = await fetch(`${origin}/api/projects`, {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ path }),
+			}).catch(() => null);
+			const body = (await r?.json().catch(() => ({}))) as {
+				error?: string;
+				projects?: string[];
+			};
+			if (!r?.ok) {
+				alert(body?.error ?? "could not add project");
+				return;
+			}
+			const list = body.projects ?? [];
+			setHostProjects((all) => all.map((e) => (e.host === host ? { ...e, projects: list } : e)));
+			// Select what was just added — adding it and then hunting for it in the
+			// dropdown is a pointless second step.
+			const added = list.at(-1);
+			if (added) selectProject({ host, cwd: added });
+		},
+		[selectProject, host, origin],
+	);
+
+	/**
+	 * Forget a project. The directory and its sessions are untouched — this is
+	 * the view, and omp's store is keyed by cwd either way, so re-adding the
+	 * path brings every session back.
+	 */
+	const removeProject = useCallback(
+		async (path: string) => {
+			if (origin === undefined) return;
+			const r = await fetch(`${origin}/api/projects`, {
+				method: "DELETE",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ path }),
+			}).catch(() => null);
+			if (!r?.ok) return;
+			// Same shape as the POST response; typed once, then read.
+			const body = (await r.json().catch(() => ({}))) as { projects?: string[] };
+			const list = body.projects ?? [];
+			setHostProjects((all) => all.map((e) => (e.host === host ? { ...e, projects: list } : e)));
+			// Removing what you are looking at has to move the selection, or the
+			// panel keeps polling a cwd that is no longer offered.
+			if (!list.includes(path)) {
+				const seed = hostProjects.find((e) => e.host === host)?.seed ?? "";
+				selectProject({ host, cwd: list[0] ?? seed });
+			}
+		},
+		[selectProject, host, origin, hostProjects],
+	);
+
+	/**
+	 * The machine list, polled like the session list.
+	 *
+	 * Polling rather than a one-shot load because every field except the name
+	 * is live: the server re-probes each machine per request, so a dot goes
+	 * green when the remote piw comes up and red when it stops answering,
+	 * without a reload. One request for every machine you have, so the cost is
+	 * the same as the session poll.
+	 */
+	const refreshHosts = useCallback(async () => {
+		const r = await fetch("/api/hosts").catch(() => null);
+		if (!r?.ok) return;
+		setHosts((await r.json()).hosts ?? []);
+	}, []);
+
+	useEffect(() => {
+		void refreshHosts();
+		const id = setInterval(() => void refreshHosts(), 5_000);
+		return () => clearInterval(id);
+	}, [refreshHosts]);
+
+	const mutateHosts = useCallback(
+		async (method: "POST" | "DELETE", body: Record<string, string>) => {
+			const r = await fetch("/api/hosts", {
+				method,
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify(body),
+			}).catch(() => null);
+			const parsed = (await r?.json().catch(() => ({}))) as {
+				error?: string;
+				hosts?: PiwHostStatus[];
+			};
+			// A rejected ssh destination or a taken port is a typo to show, not a
+			// state to render: the list only moves when the server accepted it.
+			if (!r?.ok) {
+				alert(parsed?.error ?? "could not update machines");
+				return;
+			}
+			setHosts(parsed.hosts ?? []);
+		},
+		[],
+	);
+
+	/**
+	 * Jump to a machine: its piw's own startup directory, which is the one
+	 * project every piw is guaranteed to list. A machine whose list has not
+	 * arrived (or did not) has nothing to jump to yet; its dot says why.
+	 */
+	const selectHost = useCallback(
+		(name: string) => {
+			const entry = hostProjects.find((e) => e.host === name);
+			if (!entry || entry.error) return;
+			selectProject({ host: name, cwd: entry.seed });
+		},
+		[hostProjects, selectProject],
+	);
+
+	const refreshSessions = useCallback(async () => {
+		if (!project || origin === undefined) return;
+		const r = await fetch(`${origin}/api/sessions?cwd=${encodeURIComponent(project)}`).catch(
+			() => null,
+		);
+		if (!r?.ok) {
+			// Said out loud, not left as an empty list: no sessions and no answer
+			// look the same in a list, and only one of them is the machine's fault.
+			setListError(
+				r
+					? `HTTP ${r.status}`
+					: host
+						? `${host}: ${unreachable(hostsRef.current?.find((h) => h.name === host))}`
+						: "piw is not answering",
+			);
+			return;
+		}
+		setListError(null);
+		setSessions((await r.json()).sessions);
+		setListedProject(scope);
+	}, [project, origin, host, scope]);
+
+	/**
+	 * Rename a session. omp writes the title (see OmpSession.setName), which is
+	 * why this is a request and not a local edit: the name has to end up in the
+	 * session file, so the TUI and every other piw window read the same one.
+	 *
+	 * Applied optimistically because the server may have to spawn an omp child
+	 * for a session nobody had open — a rename that takes two seconds to appear
+	 * reads as one that did not work. The refetch afterwards is what makes the
+	 * displayed name the stored one either way.
+	 */
+	const renameSession = useCallback(
+		async (session: PiSessionInfo, name: string) => {
+			setSessions((list) =>
+				list.map((s) => (s.path === session.path ? { ...s, name } : s)),
+			);
+			const r = await fetch(`${origin}/api/sessions/rename`, {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ file: session.path, id: session.id, name }),
+			}).catch(() => null);
+			if (!r?.ok) {
+				const body = (await r?.json().catch(() => null)) as { error?: string } | null;
+				alert(body?.error ?? "could not rename this session");
+			}
+			await refreshSessions();
+		},
+		[refreshSessions, origin],
+	);
+
+	/**
+	 * Let omp name the session: `/rename` with no argument, which summarises
+	 * the conversation with omp's configured tiny model.
+	 *
+	 * No optimistic update, because nothing here knows the answer — the server
+	 * waits for omp to write the title and answers with it. It can take
+	 * seconds, so the row says "Naming…" while this is in flight.
+	 */
+	const autoNameSession = useCallback(
+		async (session: PiSessionInfo) => {
+			const r = await fetch(`${origin}/api/sessions/autoname`, {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ file: session.path, id: session.id }),
+			}).catch(() => null);
+			const body = (await r?.json().catch(() => null)) as {
+				name?: string;
+				error?: string;
+			} | null;
+			if (!r?.ok) {
+				alert(body?.error ?? "could not name this session");
+				return;
+			}
+			if (body?.name) {
+				setSessions((list) =>
+					list.map((s) => (s.path === session.path ? { ...s, name: body.name } : s)),
+				);
+			}
+			await refreshSessions();
+		},
+		[refreshSessions, origin],
+	);
+
+	useEffect(() => {
+		void refreshSessions();
+		// Poll so a session working in the background (not attached, not this
+		// tab's active one) still shows its live indicator without user action.
+		const id = setInterval(() => void refreshSessions(), 5_000);
+		return () => clearInterval(id);
+	}, [refreshSessions]);
+
+	/** Stop streaming and show the empty pane. Not an abort: see closeTab. */
+	const detach = useCallback(() => {
+		esRef.current?.close();
+		esRef.current = null;
+		setSnapshot(null);
+		setPartial(emptyPartial());
+		setBusy(false);
+		setModelError(null);
+		// Closing the last tab is not a pending open: the pane must fall back to
+		// "Select a session", not sit on "Opening session…".
+		setOpening(false);
+	}, []);
+
+	/**
+	 * Close a TAB — never the session.
+	 *
+	 * The run keeps going server-side (the first invariant: a detached session
+	 * that is still working is exactly the case that must keep running), the
+	 * JSONL stays on disk, and the session list still lists it. This is also
+	 * the silent-drop path for a remembered session that turned out to be gone,
+	 * because the bookkeeping is identical.
+	 *
+	 * Closing the active tab selects the tab that slid into its slot, so
+	 * closing the rightmost one lands on its left neighbour rather than
+	 * dumping the user on the empty pane.
+	 */
+	const closeTab = useCallback(
+		(file: string) => {
+			const current = tabsRef.current;
+			const index = current.files.indexOf(file);
+			if (index < 0) return;
+			const files = current.files.filter((f) => f !== file);
+			if (current.active !== file) {
+				commitTabs({ ...current, files });
+				return;
+			}
+			const next: string | undefined = files[Math.min(index, files.length - 1)];
+			commitTabs({ ...current, files, active: next });
+			if (next) void attachRef.current(next);
+			else detach();
+		},
+		[commitTabs, detach],
+	);
+
+	/**
+	 * Attach to a session. The server is authoritative: we GET the full state
+	 * and only then start applying deltas. On any doubt we refetch rather than
+	 * trying to repair local state.
+	 */
+	const attach = useCallback(
+		async (file?: string) => {
+			/*
+			 * Creating a session needs a project, and the project list arrives
+			 * asynchronously: pressing `+ New` before it does used to POST a blank
+			 * cwd, which the server resolved to its OWN directory — so the session
+			 * was created against a directory the user never selected. Resuming is
+			 * unaffected (the session header carries the cwd), so only the create
+			 * path waits.
+			 */
+			if ((!file && !project) || origin === undefined) return;
+			// The machine this attach is for; the callbacks below outlive the
+			// render they were created in, and must keep talking to it.
+			const at = origin;
+
+			/*
+			 * Every attach takes a ticket, and a stale ticket may not touch the
+			 * screen.
+			 *
+			 * Opening is slow enough to switch tabs during — so `+ New`, or a
+			 * click on a big session, used to land its answer seconds later and
+			 * yank the user out of whatever they had selected meanwhile. The
+			 * session itself is fine (it exists server-side and gets its tab); it
+			 * is the FOCUS that must not move after the user has moved it.
+			 */
+			const seq = ++attachSeq.current;
+			const superseded = () => attachSeq.current !== seq;
+
+			esRef.current?.close();
+			esRef.current = null;
+			setPartial(emptyPartial());
+			setModelError(null);
+
+			/*
+			 * Blank the pane when this attach is for a DIFFERENT session.
+			 *
+			 * Opening spawns an omp child and reads the whole transcript, so on a
+			 * big session it is seconds. Leaving the previous conversation on
+			 * screen for those seconds made a click in the session list look like
+			 * it had done nothing at all — the tab strip changed, the thing filling
+			 * the window did not. A reattach to the SAME session (an EventSource
+			 * that dropped, a server restart) deliberately keeps its transcript:
+			 * there is nothing new to wait for and blanking it would be a flicker.
+			 */
+			const showing = snapshotRef.current;
+			const same = showing && file && (showing.file === file || showing.id === file);
+			if (!same) {
+				setSnapshot(null);
+				setBusy(false);
+				setOpening(true);
+			}
+
+			const r = await fetch(`${at}/api/sessions/open`, {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				// Never a blank string: the server rejects that, precisely because it
+				// used to mean "the server's own cwd" and silently misfiled sessions.
+				body: JSON.stringify({ file, cwd: project || undefined }),
+			}).catch(() => null);
+
+			// Server unreachable (restarting, or not up yet) is TEMPORARY — keep
+			// trying, and keep the tab. Only a 404 below means the session is gone.
+			if (!r) {
+				// "The server is restarting" resolves by waiting, so this one retries
+				// — unless the user has since asked for a different session, in which
+				// case retrying would eventually steal the pane back.
+				if (!superseded()) setTimeout(() => void attachRef.current(file), 1_000);
+				return;
+			}
+			if (!r.ok) {
+				if (superseded()) return;
+				/*
+				 * Two positive answers cost this tab its slot, and nothing else
+				 * does: 404 means neither the registry nor the disk knows this file,
+				 * and 409 means the file belongs to another project — a session
+				 * remembered under the wrong project's key, which must not be shown
+				 * under the selected one. It keeps running server-side and is
+				 * reachable by selecting its real project. Any other status is the
+				 * server having a bad time, not a missing session, and must not cost
+				 * the user a tab.
+				 */
+				// The retry path above keeps `opening` set, because it really is
+				// still opening. This one is over: the session is gone or is not
+				// this project's, and the pane goes back to its resting text.
+				setOpening(false);
+				if (file && (r.status === 404 || r.status === 409)) closeTab(file);
+				return;
+			}
+
+			const snap = toSnapshot(await r.json());
+
+			/*
+			 * Open the tab from the SERVER's answer, not from the requested file:
+			 * `+ New` passes no file and only the response knows which session was
+			 * created. One code path therefore covers new sessions, list clicks and
+			 * restores. The id is the fallback key for a session with no file yet,
+			 * so two unsaved sessions cannot collide on `undefined`.
+			 *
+			 * The tab is registered even for a superseded attach — the session was
+			 * created, and a created session with no tab is unreachable — but it is
+			 * only SELECTED when this attach is still the one the user is waiting
+			 * for.
+			 */
+			const key = snap.file ?? snap.id;
+			opened.current.add(key);
+			const current = tabsRef.current;
+			if (current.project === scope) {
+				// Replace a placeholder id-keyed tab once the file exists, rather
+				// than ending up with two tabs for one session.
+				const files = current.files.filter((f) => f !== snap.id || f === key);
+				commitTabs({
+					...current,
+					files: files.includes(key) ? files : [...files, key],
+					active: superseded() ? current.active : key,
+				});
+			}
+
+			/*
+			 * Past here is the attached state — transcript, deltas, composer — and
+			 * a superseded attach must claim none of it. Installing its
+			 * EventSource would be the worst of it: the stream of a session nobody
+			 * is looking at, writing into the pane of the one they are.
+			 */
+			if (superseded()) return;
+
+			setOpening(false);
+			setSnapshot(snap);
+			// A mid-stream reattach gets the in-flight message from the server, so
+			// there is never a hole where streamed text should be.
+			setPartial(snap.partial ?? emptyPartial());
+			setBusy(snap.isStreaming);
+
+			const es = new EventSource(`${at}/api/sessions/${snap.id}/events`);
+			esRef.current = es;
+
+			/*
+			 * The id is a handle on a LIVE session and the server can lose it —
+			 * restart, crash, idle eviction. The FILE is the durable identity, so
+			 * reopen through it instead of leaving a tab wired to a dead id. Retry
+			 * on a delay because "server is down" and "server just restarted" look
+			 * identical from here, and only one of them resolves by waiting.
+			 */
+			const reattach = () => {
+				if (esRef.current !== es) return; // superseded by a newer attach
+				es.close();
+				setTimeout(() => {
+					if (esRef.current === es) void attachRef.current(snap.file);
+				}, 1_000);
+			};
+
+			const refetch = async (): Promise<Snapshot | undefined> => {
+				const rr = await fetch(`${at}/api/sessions/${snap.id}`).catch(() => null);
+				if (!rr || rr.status === 404) {
+					reattach();
+					return undefined;
+				}
+				if (!rr.ok) return undefined;
+				const s = toSnapshot(await rr.json());
+				setSnapshot(s);
+				setPartial(s.partial ?? emptyPartial());
+				setBusy(s.isStreaming);
+				return s;
+			};
+
+			/*
+			 * Did this attachment actually WATCH a run? An `idle` also arrives
+			 * for a session that was already finished when we attached, and
+			 * announcing that would mean a notification for merely opening a
+			 * tab. Seeded from the snapshot so a mid-stream reattach still
+			 * counts as watching.
+			 */
+			let worked = snap.isStreaming;
+
+			es.onmessage = (raw) => {
+				let e: PiEvent;
+				try {
+					e = JSON.parse(raw.data);
+				} catch {
+					// A malformed frame must not kill the handler for every later event.
+					void refetch();
+					return;
+				}
+				switch (e.type) {
+					case "text":
+						setBusy(true);
+						// A command that turned into a real turn (`/review`) is no
+						// longer waiting on anything — the turn itself is the answer,
+						// and the transcript now shows it.
+						setCommand(null);
+						worked = true;
+						setPartial((p) => ({ ...p, text: p.text + e.delta }));
+						break;
+					case "thinking":
+						setBusy(true);
+						worked = true;
+						setPartial((p) => ({ ...p, thinking: p.thinking + e.delta }));
+						break;
+					case "tool_start":
+						worked = true;
+						setPartial((p) => ({
+							...p,
+							tools: [...p.tools, { id: e.id, name: e.name, args: e.args }],
+						}));
+						break;
+					case "tool_end":
+						setPartial((p) => ({
+							...p,
+							tools: p.tools.map((t) =>
+								t.id === e.id ? { ...t, result: e.result, isError: e.isError } : t,
+							),
+						}));
+						break;
+					case "message_done":
+						// Refetch rather than appending: the server already settled this
+						// into the session, and its copy is the one that matters.
+						void refetch();
+						break;
+					case "notice":
+						// Appended locally rather than refetched: the answer to a
+						// command is the whole event, and a refetch of a long
+						// transcript to learn one line is the wrong trade.
+						setSnapshot((s) => (s ? { ...s, notices: [...s.notices, e.notice] } : s));
+						// This IS the answer a local command was waiting for; the
+						// command itself stays, as the record of what was asked.
+						setCommand((c) => (c ? { ...c, running: false } : c));
+						break;
+					case "ask":
+						// The agent is blocked on this until it is answered, so it is
+						// also the one event worth a notification: nothing else moves
+						// until the user comes back.
+						setSnapshot((s) => (s ? { ...s, ask: e.ask } : s));
+						if (e.ask) announce(snap.file, askLine(e.ask));
+						break;
+					case "subagents":
+						// Just the roster: no refetch, because a fan-out of eight
+						// children changing activity every second would otherwise be
+						// eight full transcript reads a second.
+						setSnapshot((s) => (s ? { ...s, subagents: e.subagents } : s));
+						break;
+					case "idle":
+						setBusy(false);
+						void (async () => {
+							const settled = await refetch();
+							if (worked) announce(snap.file, replyLine(settled));
+							worked = false;
+						})();
+						void refreshSessions();
+						break;
+					case "error":
+						setBusy(false);
+						setCommand((c) => (c ? { ...c, running: false } : c));
+						if (worked) {
+							worked = false;
+							announce(snap.file, `Failed: ${e.message}`);
+						}
+						setSnapshot((s) => (s ? { ...s, error: e.message } : s));
+						break;
+				}
+			};
+
+			// The browser retries a dropped SSE connection on its own, but gives up
+			// for good on an HTTP error — exactly what a restarted server returns for
+			// an id it no longer has. CLOSED means only we can recover it.
+			es.onerror = () => {
+				if (es.readyState === EventSource.CLOSED) reattach();
+				else void refetch();
+			};
+		},
+		[refreshSessions, project, origin, scope, commitTabs, closeTab],
+	);
+
+	attachRef.current = attach;
+
+	useEffect(() => () => esRef.current?.close(), []);
+
+	/**
+	 * Adopt the tab set of the selected project.
+	 *
+	 * One effect covers both "restore on reload" and "switch project": tabs are
+	 * per-project state, so the only correct reaction to the project changing
+	 * is to swap the whole strip and reattach to its active session. A first
+	 * visit remembers nothing and lands on the empty pane rather than inventing
+	 * a session.
+	 *
+	 * The ref guard is load-bearing under StrictMode, which deliberately
+	 * double-invokes effects in development: without it the restore fires twice
+	 * and the second EventSource replaces the first mid-attach.
+	 */
+	const adopted = useRef("");
+	useEffect(() => {
+		if (!project || origin === undefined || adopted.current === scope) return;
+		adopted.current = scope;
+		const next = readTabs(scope);
+		commitTabs(next);
+		detach();
+		if (next.active) void attach(next.active);
+	}, [project, origin, scope, attach, commitTabs, detach]);
+
+	useEffect(() => {
+		// Never persist the placeholder state that precedes the first adoption;
+		// it belongs to no project.
+		if (tabs.project) {
+			writeStored(
+				`piw:tabs:${tabs.project}`,
+				JSON.stringify({ files: tabs.files, active: tabs.active }),
+			);
+		}
+	}, [tabs]);
+
+	/**
+	 * Drop remembered tabs whose session no longer exists, so a deleted session
+	 * does not come back as a permanently broken tab.
+	 *
+	 * Gated on positive evidence: a session list we actually received for THIS
+	 * project. Sessions this page opened are exempt because the JSONL is
+	 * written lazily — a `+ New` session that has not been prompted yet is
+	 * legitimately absent from the listing while being perfectly alive.
+	 */
+	useEffect(() => {
+		if (!listedProject || listedProject !== tabs.project) return;
+		for (const file of tabs.files) {
+			if (opened.current.has(file)) continue;
+			if (sessions.some((s) => s.path === file)) continue;
+			closeTab(file);
+		}
+	}, [sessions, listedProject, tabs, closeTab]);
+
+	/** Switch tabs, or open a session from the list into one. */
+	const selectTab = useCallback(
+		(file: string) => {
+			const current = tabsRef.current;
+			// Clicking the tab you are already attached to should do nothing; a
+			// re-attach would tear down a live EventSource for no reason.
+			if (current.active === file && esRef.current) return;
+			commitTabs({
+				...current,
+				files: current.files.includes(file) ? current.files : [...current.files, file],
+				active: file,
+			});
+			void attachRef.current(file);
+		},
+		[commitTabs],
+	);
+
+	/**
+	 * Alt+1..9 selects the Nth tab.
+	 *
+	 * Alt and not Ctrl/Cmd: Ctrl/Cmd+1..9 and Ctrl/Cmd+W are the browser's own
+	 * tab bindings, and a web app stealing them is hostile. `code` rather than
+	 * `key` because Alt+digit produces a different character on several
+	 * keyboard layouts (macOS Alt+1 is "¡"), while the physical digit key is
+	 * what the user pressed. preventDefault only once a tab has matched, so
+	 * Alt+7 with three tabs open still reaches the browser.
+	 */
+	useEffect(() => {
+		const onKeyDown = (e: KeyboardEvent) => {
+			if (!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+			const digit = /^Digit([1-9])$/.exec(e.code);
+			if (!digit) return;
+			const file = tabs.files[Number(digit[1]) - 1];
+			if (!file) return;
+			e.preventDefault();
+			selectTab(file);
+		};
+		window.addEventListener("keydown", onKeyDown);
+		return () => window.removeEventListener("keydown", onKeyDown);
+	}, [tabs.files, selectTab]);
+
+	/**
+	 * Ctrl+` toggles the terminal — the binding VS Code, Windows Terminal and
+	 * every editor with a panel already use, so it is the one a hand reaches
+	 * for without being told. `code` again, because the backquote key produces
+	 * a different character on non-US layouts.
+	 *
+	 * Not captured while the terminal itself has focus: Ctrl+` there is a
+	 * keystroke for the shell. Except that closing it from inside is exactly
+	 * what the binding is for in an editor, so it stays global and the shell
+	 * loses one obscure control character it has no binding for anyway.
+	 */
+	useEffect(() => {
+		const onKeyDown = (e: KeyboardEvent) => {
+			if (e.code !== "Backquote" || !e.ctrlKey || e.metaKey || e.altKey) return;
+			e.preventDefault();
+			toggleTerminal();
+		};
+		window.addEventListener("keydown", onKeyDown);
+		return () => window.removeEventListener("keydown", onKeyDown);
+	}, [toggleTerminal]);
+
+	// Tab title reflects activity so switching away doesn't lose the signal —
+	// the one thing a background terminal gives you for free.
+	useEffect(() => {
+		document.title = busy ? "\u25cf piw \u2014 working\u2026" : "piw";
+	}, [busy]);
+
+	// The same signal in the icon, for a tab narrow enough that the title is
+	// clipped to nothing — which is every tab, once a few are open.
+	useEffect(() => {
+		if (!busy) return;
+		return pulseFavicon();
+	}, [busy]);
+
+	// The spinner stops on its own: `/model` and friends change the session
+	// without printing anything, so no answer is ever coming for them and
+	// nothing else would ever take the "running" off.
+	useEffect(() => {
+		if (!command?.running) return;
+		const t = setTimeout(
+			() => setCommand((c) => (c ? { ...c, running: false } : c)),
+			COMMAND_RUNNING_MAX_MS,
+		);
+		return () => clearTimeout(t);
+	}, [command]);
+
+	const send = useCallback(
+		async (text: string, images?: PiImage[]) => {
+			if (!snapshot) return;
+			setBusy(true);
+			// A local command appends no message: this row IS the record that it
+			// was sent. And the ack below is acceptance, not completion — the
+			// answer arrives later as a notice, so it starts out running.
+			const trimmed = text.trim();
+			setCommand(trimmed.startsWith("/") ? { text: trimmed, running: true } : null);
+			const r = await fetch(`${origin}/api/sessions/${snapshot.id}/prompt`, {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ text, images }),
+			});
+
+			// A rejected prompt (unsupported type, too large, 413) never reaches the
+			// session, so no SSE error is coming — surface it here or it is lost and
+			// the UI just sits on a spinner that will never resolve.
+			if (!r.ok) {
+				const body = await r.json().catch(() => ({}) as { error?: string });
+				setBusy(false);
+				setCommand(null);
+				setSnapshot((s) =>
+					s ? { ...s, error: body.error ?? `prompt failed (${r.status})` } : s,
+				);
+				return;
+			}
+
+			const rr = await fetch(`${origin}/api/sessions/${snapshot.id}`);
+			if (rr.ok) setSnapshot(toSnapshot(await rr.json()));
+		},
+		[snapshot, origin],
+	);
+
+	const abort = useCallback(async () => {
+		if (!snapshot) return;
+		await fetch(`${origin}/api/sessions/${snapshot.id}/abort`, { method: "POST" });
+	}, [snapshot, origin]);
+
+	/**
+	 * Cut a `hub` wait short and let the turn carry on.
+	 *
+	 * Abort, then re-prompt. A steering message alone does NOT reach a wait —
+	 * measured against a live session: a prompt sent 11s into a 180s wait had
+	 * not settled the tool 80s later, while an abort settled it in 1.1s and
+	 * returned the wait's normal answer (the running jobs it was watching).
+	 * So the only way to skip one is to end the turn and start the next, and
+	 * the re-prompt is what makes that one tap instead of two.
+	 *
+	 * The nudge is a real user message, visible in the transcript: the agent
+	 * is being told something, and hiding that would make the next turn look
+	 * like it decided to stop waiting on its own.
+	 */
+	const skipWait = useCallback(async () => {
+		if (!snapshot) return;
+		await fetch(`${origin}/api/sessions/${snapshot.id}/abort`, { method: "POST" });
+		await send("Stop waiting — background results deliver themselves. Carry on.");
+	}, [snapshot, origin, send]);
+
+	/**
+	 * Answer the question omp is blocked on.
+	 *
+	 * The panel is cleared optimistically: the `ask` event that confirms it
+	 * comes back over SSE, and leaving the question on screen until it arrives
+	 * would invite a second click on a dialog that is already answered. A 409
+	 * means it was gone before the click landed (timed out, or the turn was
+	 * aborted), which the refetch below then reflects.
+	 */
+	const answerAsk = useCallback(
+		async (askId: string, answer: AskAnswer) => {
+			if (!snapshot) return;
+			setSnapshot((s) => (s ? { ...s, ask: null } : s));
+			const r = await fetch(`${origin}/api/sessions/${snapshot.id}/ask`, {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ askId, ...answer }),
+			});
+			if (r.ok) return;
+			const rr = await fetch(`${origin}/api/sessions/${snapshot.id}`);
+			if (rr.ok) setSnapshot(toSnapshot(await rr.json()));
+		},
+		[snapshot, origin],
+	);
+
+	const changeModel = useCallback(
+		async (model: string) => {
+			if (!snapshot) return;
+			setModelError(null);
+			const r = await fetch(`${origin}/api/sessions/${snapshot.id}/model`, {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ model }),
+			});
+			if (!r.ok) {
+				const body = await r.json().catch(() => ({}));
+				setModelError(body.error ?? "failed to switch model");
+				return;
+			}
+			const rr = await fetch(`${origin}/api/sessions/${snapshot.id}`);
+			if (rr.ok) setSnapshot(await rr.json());
+		},
+		[snapshot, origin],
+	);
+
+	/**
+	 * Reasoning effort. Shares `modelError` with the model switch: both are
+	 * the same control group saying "the session refused that", and a second
+	 * error slot would be a second thing to render in the same corner.
+	 */
+	const changeThinking = useCallback(
+		async (level: string) => {
+			if (!snapshot) return;
+			setModelError(null);
+			const r = await fetch(`${origin}/api/sessions/${snapshot.id}/thinking`, {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ level }),
+			});
+			if (!r.ok) {
+				const body = await r.json().catch(() => ({}));
+				setModelError(body.error ?? "failed to set thinking level");
+				return;
+			}
+			const rr = await fetch(`${origin}/api/sessions/${snapshot.id}`);
+			if (rr.ok) setSnapshot(await rr.json());
+		},
+		[snapshot, origin],
+	);
+
+	// A session created by `+ New` has no JSONL until its first prompt, so
+	// /api/sessions (which lists disk) cannot see it. Show it anyway — in the
+	// list and as a tab title — until the next refresh replaces it with the
+	// real on-disk entry.
+	const shown = useMemo(() => {
+		const file = snapshot?.file;
+		if (!file || sessions.some((s) => s.path === file)) return sessions;
+		const now = new Date().toISOString();
+		return [
+			{
+				id: snapshot.id,
+				path: file,
+				created: now,
+				lastActive: now,
+				messageCount: 0,
+				firstMessage: "",
+			},
+			...sessions,
+		];
+	}, [sessions, snapshot?.id, snapshot?.file]);
+
+	const activeIndex = tabs.active ? tabs.files.indexOf(tabs.active) : -1;
+
+	return (
+		<div className="flex h-full bg-neutral-950 text-neutral-100">
+			<SessionList
+				sessions={shown}
+				listError={listError}
+				onRemoveProject={(p) => void removeProject(p)}
+				activeFile={snapshot?.file}
+				openFiles={tabs.files}
+				projects={hostProjects}
+				selection={selection}
+				origin={origin}
+				hosts={hosts ?? []}
+				localVersions={localVersions}
+				sort={sessionSort}
+				onSort={(next) => {
+					setSessionSort(next);
+					writeSessionSort(next);
+				}}
+				open={listOpen}
+				onToggle={() => setListOpen((o) => !o)}
+				onProject={selectProject}
+				onAddProject={(p) => void addProject(p)}
+				onAddHost={(value) =>
+					// The server tells the two kinds apart by the field; the page
+					// only has to notice that one of them is a URL.
+					void mutateHosts("POST", /^https?:\/\//i.test(value) ? { url: value } : { ssh: value })
+				}
+				onSelectHost={selectHost}
+				onRemoveHost={(name) => void mutateHosts("DELETE", { name })}
+				onSelect={(s) => {
+					selectTab(s.path);
+					// On a narrow viewport the list is a drawer over the chat; having
+					// picked a session, the chat is what you want to see.
+					setListOpen(false);
+				}}
+				onRename={(s, name) => void renameSession(s, name)}
+				onAutoName={autoNameSession}
+				shortNames={shortNames}
+				onNew={() => void attach(undefined)}
+				onSettings={() => setSettingsOpen(true)}
+			/>
+			<div className="flex min-h-0 min-w-0 flex-1 flex-col">
+				<SessionTabs
+					tabs={tabs.files}
+					sessions={shown}
+					active={tabs.active}
+					panelId={CHAT_PANEL_ID}
+					listOpen={listOpen}
+					onSelect={selectTab}
+					shortNames={shortNames}
+					onClose={closeTab}
+					onNew={() => void attach(undefined)}
+					onToggleList={() => setListOpen((o) => !o)}
+					terminalOpen={terminalOpen}
+					onToggleTerminal={toggleTerminal}
+				/>
+				{/* The split. `min-w-0` on the row AND on both panes, or the
+				    terminal's own content width becomes the row's floor and the
+				    divider cannot be dragged left. */}
+				<div ref={splitRow} className="flex min-h-0 min-w-0 flex-1">
+					<div
+						id={CHAT_PANEL_ID}
+						role="tabpanel"
+						aria-labelledby={activeIndex >= 0 ? tabDomId(activeIndex) : undefined}
+						className={`flex min-h-0 min-w-0 flex-1 flex-col ${
+							// A 40% chat column on a phone is two words per line.
+							// Below the breakpoint the terminal is not a split, it
+							// is the view — the same rule the session list follows.
+							terminalOpen ? "narrow:hidden" : ""
+						}`}
+					>
+						<Chat
+							origin={origin ?? ""}
+							snapshot={snapshot}
+							partial={partial}
+							busy={busy}
+							opening={opening}
+							showThinking={showThinking}
+							toolMode={toolMode}
+							command={command}
+							modelError={modelError}
+							onSend={send}
+							onAnswerAsk={answerAsk}
+							onAbort={abort}
+							onSkipWait={skipWait}
+							onModelChange={changeModel}
+							onThinkingChange={changeThinking}
+						/>
+					</div>
+
+					{terminalOpen && project && (
+						<>
+							<div
+								role="separator"
+								aria-orientation="vertical"
+								aria-label="Resize terminal"
+								aria-valuenow={Math.round(terminalWidth)}
+								aria-valuemin={TERMINAL_MIN_PERCENT}
+								aria-valuemax={TERMINAL_MAX_PERCENT}
+								tabIndex={0}
+								onPointerDown={startDrag}
+								onKeyDown={dividerKeys}
+								// The `after` box is the real hit area: a 4px line is
+								// a target you miss, and there is nothing else to
+								// aim at. Hidden when the terminal owns the whole
+								// width, because then there is nothing to resize.
+								className="relative w-1 shrink-0 cursor-col-resize bg-neutral-800 transition-colors duration-150 ease-out after:absolute after:inset-y-0 after:-left-1 after:-right-1 after:content-[''] hover:bg-amber-600 focus-visible:bg-amber-500 focus-visible:outline-none motion-reduce:transition-none narrow:hidden"
+							/>
+							{/*
+							 * The width goes through a custom property so the media
+							 * query can override it in CSS: an inline `flex` would
+							 * beat any class, and deciding the layout from
+							 * `matchMedia` in React means re-rendering the whole tree
+							 * on a window resize to compute what CSS already knows.
+							 */}
+							<div
+								className="flex min-h-0 min-w-0 flex-col narrow:flex-1 wide:[flex:0_0_var(--term-w)]"
+								style={{ "--term-w": `${terminalWidth}%` } as React.CSSProperties}
+							>
+								<TerminalPane
+									cwd={project}
+									origin={origin ?? ""}
+									ready={termsReady}
+									layout={termLayout}
+									onLayout={changeTermLayout}
+									onClose={closeTerminal}
+								/>
+							</div>
+						</>
+					)}
+				</div>
+			</div>
+			<Settings
+				origin={origin ?? ""}
+				open={settingsOpen}
+				theme={theme}
+				onTheme={setTheme}
+				showThinking={showThinking}
+				onShowThinking={changeShowThinking}
+				toolMode={toolMode}
+				onToolMode={changeToolMode}
+				notify={notify}
+				onNotify={(on) => void changeNotify(on)}
+				shortNames={shortNames}
+				onShortNames={changeShortNames}
+				onClose={() => setSettingsOpen(false)}
+			/>
+		</div>
+	);
+}

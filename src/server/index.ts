@@ -1,0 +1,920 @@
+/**
+ * index.ts — HTTP: SSE for events, POST for commands.
+ *
+ * SSE rather than WebSocket on purpose: this is one-directional streaming plus
+ * discrete commands. The browser gives us reconnect semantics for free, and
+ * prompt/abort are plain POSTs. A WebSocket would buy nothing and cost us a
+ * framing/reconnect/ack protocol to write and debug.
+ */
+
+import express from "express";
+import { createServer, type IncomingMessage } from "node:http";
+import { fileURLToPath } from "node:url";
+import { WebSocketServer } from "ws";
+import { dirname, resolve } from "node:path";
+import { existsSync, readFileSync, statSync } from "node:fs";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+import { listModels, setDefaultModel } from "./models.js";
+import { listSessions, sameProject, sessionTitle } from "./sessions.js";
+import {
+	addFavorite,
+	addProject,
+	browse,
+	listFavorites,
+	listProjects,
+	removeFavorite,
+	removeProject,
+} from "./projects.js";
+import { addHost, listHosts, removeHost } from "./hosts.js";
+import { readPersonality, writePersonality } from "./personality.js";
+import { Tunnels } from "./tunnels.js";
+import { apply, status as gitStatus, suggestMessage, type GitPlan } from "./git.js";
+import { nameCommit } from "./autoname.js";
+import { Terminals } from "./terminals.js";
+import { Registry } from "./registry.js";
+import { OMP_BIN, type AskAnswer } from "./omp.js";
+import type { PiImage } from "../shared/types.js";
+import { claimPort } from "./takeover.js";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const ROOT = resolve(__dirname, "../..");
+
+const PORT = Number(process.env.PIW_PORT ?? 8790);
+const CWD = resolve(process.env.PIW_CWD ?? process.argv[2] ?? process.cwd());
+/** "provider/id". Pi's own default may select a provider your plan blocks. */
+const MODEL = process.env.PIW_MODEL;
+
+/**
+ * Browser origins other than this server's own that may call it: the piw
+ * whose page merges this machine into its list. Not derivable from
+ * piw-hosts.json — that file names the machines THIS piw reaches, and the
+ * hub is the machine reaching us — so it is configuration, comma-separated,
+ * e.g. `http://127.0.0.1:8790,https://laptop.tail.ts.net`. Origins never
+ * carry a trailing slash; one typed here is forgiven.
+ *
+ * This is the CSRF boundary, and it matters more than usual: an approved
+ * origin can start an agent run that executes tools on this machine. Never
+ * `*`, and never reflected unconditionally.
+ */
+const HUB_ORIGINS = new Set(
+	(process.env.PIW_HUB_ORIGINS ?? "")
+		.split(",")
+		.map((s) => s.trim().replace(/\/+$/, ""))
+		.filter(Boolean),
+);
+
+/**
+ * Whether a request's Origin may use this server: no Origin (not a browser),
+ * our own origin, or an approved hub. "Our own" is judged by the Host header,
+ * and by X-Forwarded-Host for the tailscale-serve case where the proxy sets
+ * one. Express handles this for fetch through CORS; the terminal WebSocket
+ * has no CORS, so the upgrade handler asks the same question itself.
+ */
+function originAllowed(req: IncomingMessage): boolean {
+	const origin = req.headers.origin;
+	if (!origin) return true;
+	if (HUB_ORIGINS.has(origin)) return true;
+	let host: string;
+	try {
+		host = new URL(origin).host;
+	} catch {
+		return false;
+	}
+	return host === req.headers.host || host === req.headers["x-forwarded-host"];
+}
+
+// Our own package.json, which is the one file that knows piw's version.
+const pkg: unknown = JSON.parse(readFileSync(resolve(ROOT, "package.json"), "utf8"));
+const PIW_VERSION =
+	pkg && typeof pkg === "object" && "version" in pkg && typeof pkg.version === "string"
+		? pkg.version
+		: "unknown";
+
+// Once, at startup: the binary does not change under a running piw, and
+// `omp update` is exactly the case this exists to flag — a restarted piw
+// spawns the new omp, a running one keeps spawning the old. `omp/18.1.21`
+// on stdout; the prefix is dropped, and a missing omp is reported as no
+// version rather than as a failed start, since /api/models already names
+// the ENOENT with the fix.
+const OMP_VERSION = await promisify(execFile)(OMP_BIN, ["--version"], { timeout: 10_000 })
+	.then(({ stdout }) => stdout.trim().replace(/^omp\//, "") || undefined)
+	.catch(() => undefined);
+
+// ---------------------------------------------------------------------------
+// Crash policy.
+//
+// Layer 1 (the workhorse) is the try/catch around every prompt() in
+// registry.ts. These two are the backstop.
+//
+// Layer 2: unhandledRejection almost always originates in one session — a
+// rejection inside an event listener, a detached async inside a tool. Node has
+// crashed the process on these since v15, so surviving is opt-in.
+//
+// Layer 3: uncaughtException is the contentious one. Node's guidance is that
+// the process is in an undefined state and should exit, and that guidance is
+// correct in general — under a supervisor. Every session is persisted, so the
+// worst case of a restart is one exchange rather than the work, and systemd
+// with Restart=on-failure turns a nonzero exit into a logged restart. Without
+// a supervisor, exiting means every other conversation dies for one bug, so
+// the process stays up, marked degraded on /api/health.
+//
+// INVOCATION_ID is set by systemd for every unit it starts and by nothing
+// else here, so it is the fact itself rather than a flag to keep in sync
+// with the unit file.
+// ---------------------------------------------------------------------------
+const SUPERVISED = Boolean(process.env.INVOCATION_ID);
+let degraded = false;
+
+process.on("unhandledRejection", (reason) => {
+	console.error("[piw] unhandledRejection (surviving):", reason);
+});
+
+process.on("uncaughtException", (err) => {
+	if (SUPERVISED) {
+		console.error("[piw] uncaughtException — exiting for the supervisor to restart:", err);
+		process.exit(1);
+	}
+	degraded = true;
+	console.error(
+		"[piw] uncaughtException — PROCESS IS DEGRADED, restart when convenient:",
+		err,
+	);
+});
+
+const registry = new Registry(CWD, MODEL);
+const tunnels = new Tunnels();
+const terminals = new Terminals();
+const app = express();
+// Generous because a prompt body now carries base64 screenshots, and base64
+// inflates by ~33%. The real per-image ceiling is enforced in omp.ts, where a
+// rejection can be reported to the user; hitting THIS limit yields an opaque
+// 413, so it deliberately sits well above the limit that produces a good error.
+app.use(express.json({ limit: "64mb" }));
+
+// Cross-origin only for an approved hub, and only ever the exact origin.
+// Nothing here uses cookies, so no Allow-Credentials: the tailnet or the ssh
+// tunnel is the authentication, and the browser carries nothing to leak.
+//
+// `no-store` on every /api answer, because Express ETags make them
+// revalidatable and a 304 carries no CORS headers — so the browser keeps
+// using the CORS headers of the cached copy. Observed: a machine that had
+// once allowed this page kept "working" after its allowlist was removed,
+// until the cache was bypassed. `Vary: Origin` (set below) does not cover
+// this: the Origin did not change, this server's policy about it did, and
+// nothing in a cache key tracks that. Nothing under /api is worth caching
+// anyway; the page polls it.
+app.use("/api", (req, res, next) => {
+	res.setHeader("Cache-Control", "no-store");
+	const origin = req.headers.origin;
+	if (origin && HUB_ORIGINS.has(origin)) {
+		res.setHeader("Access-Control-Allow-Origin", origin);
+		res.setHeader("Vary", "Origin");
+		if (req.method === "OPTIONS") {
+			res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE");
+			res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+			res.setHeader("Access-Control-Max-Age", "600");
+			res.status(204).end();
+			return;
+		}
+	}
+	next();
+});
+
+app.get("/api/health", (_req, res) => {
+	// `pid` is what lets the NEXT piw take this port without a /proc scan;
+	// see takeover.ts. The versions are for the Machines panel on another
+	// host, which flags a machine that lags the fleet; `hubOrigins` is
+	// whether ANY are configured (never which), so that panel can tell "this
+	// machine was never told about hubs" from "it allows a different page".
+	res.json({
+		ok: true,
+		cwd: CWD,
+		model: MODEL ?? null,
+		degraded,
+		pid: process.pid,
+		piwVersion: PIW_VERSION,
+		ompVersion: OMP_VERSION ?? null,
+		hubOrigins: HUB_ORIGINS.size > 0,
+	});
+});
+
+app.get("/api/models", async (_req, res) => {
+	try {
+		res.json({ models: await listModels() });
+	} catch (err) {
+		res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+	}
+});
+
+/** Persist "provider/id" as omp's own startup default, for future sessions. */
+app.post("/api/default-model", async (req, res) => {
+	const model = typeof req.body?.model === "string" ? req.body.model : undefined;
+	if (!model) return res.status(400).json({ error: "model required" });
+	try {
+		await setDefaultModel(model);
+		// A prewarmed session booted under the OLD default, and handing that to
+		// the next `+ New` would quietly ignore the change the user just made.
+		registry.discardSpares();
+		res.json({ ok: true });
+	} catch (err) {
+		res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
+	}
+});
+
+/**
+ * Projects: the directories whose sessions we show. A project IS a cwd — omp
+ * already partitions sessions by working directory, so this list is the only
+ * new state in the feature.
+ */
+app.get("/api/projects", (_req, res) => {
+	res.json({ projects: listProjects(CWD), active: CWD });
+});
+
+app.post("/api/projects", (req, res) => {
+	const path = typeof req.body?.path === "string" ? req.body.path : "";
+	if (!path.trim()) return res.status(400).json({ error: "path required" });
+	try {
+		// addProject validates existence + directory-ness: the path comes from the
+		// browser, and a typo would otherwise mint a session dir for a ghost cwd.
+		res.json({ projects: addProject(CWD, path) });
+	} catch (err) {
+		res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
+	}
+});
+
+app.delete("/api/projects", (req, res) => {
+	const path = typeof req.body?.path === "string" ? req.body.path : "";
+	res.json({ projects: removeProject(CWD, path) });
+});
+
+/**
+ * Subdirectories of one directory, for the project picker.
+ *
+ * A GET with the path in the query string, so browsing is a plain navigation
+ * the browser can cache and retry: this reads the filesystem and changes
+ * nothing. Unreadable or missing paths are a 400 with the OS message (EACCES,
+ * ENOENT) — the picker shows it and stays where it was, which is the only
+ * useful answer to "that folder is not yours to read".
+ */
+app.get("/api/browse", (req, res) => {
+	const path = typeof req.query.path === "string" ? req.query.path : "";
+	try {
+		res.json(browse(path));
+	} catch (err) {
+		res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
+	}
+});
+
+/**
+ * Favourites: directories pinned in the picker, as one-click starting points.
+ *
+ * Server-side state rather than a browser preference, because these are paths
+ * on the machine piw runs on — a per-origin copy would follow the browser to
+ * a machine where the paths mean nothing.
+ */
+app.get("/api/favorites", (_req, res) => {
+	res.json({ favorites: listFavorites() });
+});
+
+app.post("/api/favorites", (req, res) => {
+	const path = typeof req.body?.path === "string" ? req.body.path : "";
+	if (!path.trim()) return res.status(400).json({ error: "path required" });
+	try {
+		res.json({ favorites: addFavorite(path) });
+	} catch (err) {
+		res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
+	}
+});
+
+app.delete("/api/favorites", (req, res) => {
+	const path = typeof req.body?.path === "string" ? req.body.path : "";
+	res.json({ favorites: removeFavorite(path) });
+});
+
+/**
+ * Personality: omp's own `<agent dir>/PERSONALITY.md`, edited in place.
+ *
+ * The only agent-facing file the settings dialog touches, and there is no
+ * piw-side copy of it — every open re-reads the file, every save replaces it.
+ * A new session picks up the change because each session is its own omp child;
+ * sessions already running keep the prompt they were started with.
+ */
+app.get("/api/personality", (_req, res) => {
+	res.json(readPersonality());
+});
+
+app.put("/api/personality", (req, res) => {
+	if (typeof req.body?.content !== "string") {
+		return res.status(400).json({ error: "content required" });
+	}
+	try {
+		res.json(writePersonality(req.body.content));
+	} catch (err) {
+		res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
+	}
+});
+
+/**
+ * Machines: the other piw instances this one can point a browser window at.
+ *
+ * There is no proxying here and no cross-machine session list. A host is an
+ * ssh destination plus the loopback port its piw is forwarded to; piw keeps
+ * that forward up (tunnels.ts) and the browser opens a window on it, so from
+ * the moment you switch machines the page is talking to the remote piw
+ * directly, with the remote's own credentials and its own sessions.
+ */
+app.get("/api/hosts", async (_req, res) => {
+	res.json({ hosts: await tunnels.status(listHosts()) });
+});
+
+app.post("/api/hosts", async (req, res) => {
+	try {
+		// addHost validates the destination and the port: both arrive from the
+		// browser, and PORT is passed so this server's own port cannot be
+		// forwarded to a remote.
+		const hosts = addHost(req.body, PORT);
+		tunnels.sync(hosts);
+		res.json({ hosts: await tunnels.status(hosts) });
+	} catch (err) {
+		res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
+	}
+});
+
+app.delete("/api/hosts", async (req, res) => {
+	const name = typeof req.body?.name === "string" ? req.body.name : "";
+	try {
+		const hosts = removeHost(name);
+		tunnels.sync(hosts);
+		res.json({ hosts: await tunnels.status(hosts) });
+	} catch (err) {
+		res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
+	}
+});
+
+/** Flat, read-only session list for one project. No tree — use the TUI for branching. */
+app.get("/api/sessions", async (req, res) => {
+	try {
+		const cwd = typeof req.query.cwd === "string" && req.query.cwd ? req.query.cwd : CWD;
+		const sessions = await listSessions(cwd);
+
+		/*
+		 * The list poll is also the only continuous signal of which project the
+		 * user is looking at, which is exactly what `+ New` will need a warm
+		 * session for. Guarded on the directory existing for the same reason the
+		 * open route is: omp cannot be launched in a directory that is not there.
+		 */
+		if (existsSync(cwd) && statSync(cwd).isDirectory()) registry.prewarm(cwd);
+
+		// Streaming status only exists for sessions the registry has open (cached
+		// or attached); everything on disk but not live is implicitly idle.
+		const streamingIds = registry.streamingIds();
+		res.json({
+			sessions: sessions.map((s) => ({
+				...s,
+				isStreaming: streamingIds.has(s.id),
+			})),
+		});
+	} catch (err) {
+		res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+	}
+});
+
+/**
+ * Rename a session.
+ *
+ * Addressed by file OR by id, because both callers are real: the session list
+ * knows files (a row may be a session nobody has opened), and an open tab
+ * knows its live id. omp does the write — see OmpSession.setName — so the new
+ * title lands in the JSONL and the TUI shows the same name.
+ */
+app.post("/api/sessions/rename", async (req, res) => {
+	const file = typeof req.body?.file === "string" ? req.body.file : undefined;
+	const id = typeof req.body?.id === "string" ? req.body.id : undefined;
+	const name = typeof req.body?.name === "string" ? req.body.name.trim() : "";
+	if (!file && !id) return res.status(400).json({ error: "file or id required" });
+	if (!name) return res.status(400).json({ error: "name required" });
+	try {
+		res.json({ name: await registry.rename(id, file, name) });
+	} catch (err) {
+		res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
+	}
+});
+
+/**
+ * Ask omp to name the session itself.
+ *
+ * `/rename` with no argument is omp's own command for this: it summarises the
+ * recent conversation with the configured tiny model and writes the result as
+ * the title. piw does not generate the name — asking a model for a good title
+ * is exactly the job omp's titler already does, with the model the user
+ * configured for it.
+ *
+ * The command answers asynchronously (it is a local command: no turn, no
+ * `agent_end`), so this watches for the result rather than returning
+ * immediately. A caller that got a 200 with the old name back would have to
+ * invent its own polling, and the session list's 5s tick is too slow to read
+ * as a response to a click.
+ *
+ * Two outcomes are watched for, because omp reports them on two different
+ * channels: a new title in the file, or a notice saying it could not produce
+ * one — which is what happens when the tiny title model is unavailable or
+ * answers with something unusable. Waiting out the full timeout on a failure
+ * omp already reported would be 30 seconds of pretending.
+ */
+const AUTONAME_TIMEOUT_MS = 45_000;
+const AUTONAME_POLL_MS = 250;
+
+app.post("/api/sessions/autoname", async (req, res) => {
+	const file = typeof req.body?.file === "string" ? req.body.file : undefined;
+	const id = typeof req.body?.id === "string" ? req.body.id : undefined;
+	if (!file && !id) return res.status(400).json({ error: "file or id required" });
+	try {
+		const entry = await registry.acquire(id, file);
+		const path = entry.session.file;
+		if (!path) return res.status(400).json({ error: "session has no file yet" });
+		const before = await sessionTitle(path);
+		const noticesBefore = entry.notices.length;
+		await registry.prompt(entry.id, "/rename");
+
+		const deadline = Date.now() + AUTONAME_TIMEOUT_MS;
+		while (Date.now() < deadline) {
+			const { promise, resolve } = Promise.withResolvers<void>();
+			setTimeout(resolve, AUTONAME_POLL_MS);
+			await promise;
+
+			const title = await sessionTitle(path);
+			if (title && title !== before) return res.json({ name: title });
+
+			const said = entry.notices
+				.slice(noticesBefore)
+				.find((n) => /session title/i.test(n.text));
+			if (said) return res.status(502).json({ error: said.text });
+		}
+		res.status(504).json({ error: "omp did not answer /rename — try renaming by hand" });
+	} catch (err) {
+		res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
+	}
+});
+
+/** Open an existing session (by file) or create a new one. Returns a full snapshot. */
+app.post("/api/sessions/open", async (req, res) => {
+	try {
+		const file = typeof req.body?.file === "string" ? req.body.file : undefined;
+		/*
+		 * Only used when CREATING (no file): resuming reads cwd from the session
+		 * header.
+		 *
+		 * A blank cwd is a client bug, not "unspecified", and it used to be
+		 * silent and expensive: "" falls through `cwd ?? this.cwd` and Node's
+		 * spawn treats it as "inherit", so the child landed in the SERVER's own
+		 * directory. The session was then created against a project the user had
+		 * not selected — piw's own parent directory, in the case that found this
+		 * — and its tools read and wrote the wrong tree. The browser sends a
+		 * blank cwd whenever a session is created before /api/projects has
+		 * answered, so this is reachable by clicking `+ New` early.
+		 */
+		const rawCwd = typeof req.body?.cwd === "string" ? req.body.cwd.trim() : "";
+		if (typeof req.body?.cwd === "string" && !rawCwd) {
+			return res.status(400).json({ error: "cwd must not be blank" });
+		}
+		// Omitting cwd entirely still means "this server's project", which is what
+		// a single-project launch (PIW_CWD) relies on.
+		const cwd = rawCwd || undefined;
+		if (cwd && !file && !(existsSync(cwd) && statSync(cwd).isDirectory())) {
+			return res.status(400).json({ error: `not a directory: ${cwd}` });
+		}
+		const model = typeof req.body?.model === "string" ? req.body.model : undefined;
+
+		/*
+		 * Opening a nonexistent path CREATES a session there, which is right for
+		 * `+ New` (no file given) and wrong for "resume this file": a client
+		 * restoring a remembered session that has since been deleted would
+		 * resurrect it as an empty ghost instead of being told it is gone.
+		 *
+		 * But absence on disk does NOT mean gone: omp writes the JSONL lazily, so a
+		 * session created by `+ New` and not yet prompted has a path and no file.
+		 * Reloading right after `+ New` must not 404. The registry is therefore the
+		 * first authority and the filesystem only the fallback — known to the
+		 * server means live, whatever the disk says.
+		 */
+		if (file && !registry.hasFile(file) && !existsSync(file)) {
+			return res.status(404).json({ error: "session file not found" });
+		}
+
+		const entry = await registry.acquire(undefined, file, model, cwd);
+
+		/*
+		 * A session's project is its own: openSession launches the child in the
+		 * cwd from the file's header, whatever the client asked for. So a
+		 * remembered tab naming a session that belongs to ANOTHER project would
+		 * otherwise be served here and displayed under the selected one — which
+		 * is how the wrong-project session found in the wild stayed visible.
+		 *
+		 * Checked on the live session rather than on the file's header, because a
+		 * session created and not yet prompted has no file on disk to read a
+		 * header from, and the registry is the authority for exactly that case.
+		 * Compared canonically: a cwd recorded through a symlink is the same
+		 * project. The session stays open — it is somebody's, just not this
+		 * project's.
+		 */
+		if (cwd && !(await sameProject(entry.session.cwd, cwd))) {
+			return res.status(409).json({
+				error: `session belongs to ${entry.session.cwd}`,
+				cwd: entry.session.cwd,
+			});
+		}
+
+		res.json(registry.snapshot(entry, entry.id));
+	} catch (err) {
+		res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+	}
+});
+
+/**
+ * Full snapshot. The client calls this on attach and whenever it is in any
+ * doubt — refetching the whole thing is always correct and always cheap enough.
+ */
+app.get("/api/sessions/:id", (req, res) => {
+	const entry = registry.get(req.params.id);
+	if (!entry) return res.status(404).json({ error: "not found" });
+	res.json(registry.snapshot(entry, req.params.id));
+});
+
+/**
+ * Event stream. Disconnecting does NOT abort the run — that is only ever an
+ * explicit user action via /abort.
+ */
+app.get("/api/sessions/:id/events", (req, res) => {
+	const entry = registry.get(req.params.id);
+	if (!entry) return res.status(404).end();
+
+	res.writeHead(200, {
+		"Content-Type": "text/event-stream",
+		"Cache-Control": "no-cache, no-transform",
+		Connection: "keep-alive",
+		"X-Accel-Buffering": "no",
+	});
+	res.write(": connected\n\n");
+
+	const detach = registry.attach(req.params.id, (event) => {
+		res.write(`data: ${JSON.stringify(event)}\n\n`);
+	});
+
+	const keepalive = setInterval(() => res.write(": ping\n\n"), 15_000);
+
+	req.on("close", () => {
+		clearInterval(keepalive);
+		detach();
+	});
+});
+
+/** Shape-check attachments here so malformed input 400s instead of reaching omp. */
+function parseImages(raw: unknown): PiImage[] {
+	if (!Array.isArray(raw)) return [];
+	return raw.map((i: any) => {
+		if (typeof i?.data !== "string" || typeof i?.mimeType !== "string") {
+			throw new Error("each image needs { data, mimeType }");
+		}
+		return { data: i.data, mimeType: i.mimeType };
+	});
+}
+
+app.post("/api/sessions/:id/prompt", async (req, res) => {
+	const text = typeof req.body?.text === "string" ? req.body.text : "";
+
+	let images: PiImage[];
+	try {
+		images = parseImages(req.body?.images);
+	} catch (err) {
+		return res
+			.status(400)
+			.json({ error: err instanceof Error ? err.message : String(err) });
+	}
+
+	// An image alone is a legitimate prompt ("what is this?" is implied by
+	// pasting a screenshot), so emptiness is only an error when BOTH are empty.
+	if (!text.trim() && images.length === 0)
+		return res.status(400).json({ error: "empty prompt" });
+	if (!registry.get(req.params.id)) return res.status(404).json({ error: "not found" });
+
+	// Fire and forget. registry.prompt resolves once omp ACCEPTS the prompt,
+	// which is not when the run finishes — the turn plays out over SSE either
+	// way, and scheduling failures are caught inside registry.prompt and
+	// delivered as an error event rather than as an HTTP status.
+	void registry.prompt(req.params.id, text, images);
+	res.json({ ok: true });
+});
+
+app.post("/api/sessions/:id/abort", async (req, res) => {
+	await registry.abort(req.params.id);
+	res.json({ ok: true });
+});
+
+/**
+ * Answer the question omp is blocked on.
+ *
+ * `askId` is omp's own request id and is required: a click and a timeout can
+ * cross, and an answer without it would land on whichever dialog happened to
+ * be open. A stale one is a 409, not an error — the page simply has an old
+ * panel on screen and its next snapshot will say so.
+ */
+app.post("/api/sessions/:id/ask", (req, res) => {
+	const askId = typeof req.body?.askId === "string" ? req.body.askId : "";
+	if (!askId) return res.status(400).json({ error: "askId required" });
+	if (!registry.get(req.params.id)) return res.status(404).json({ error: "not found" });
+
+	const body = req.body ?? {};
+	const answer: AskAnswer | null =
+		typeof body.value === "string"
+			? { value: body.value }
+			: typeof body.confirmed === "boolean"
+				? { confirmed: body.confirmed }
+				: body.cancelled === true
+					? { cancelled: true }
+					: null;
+	if (!answer)
+		return res
+			.status(400)
+			.json({ error: "answer needs one of value, confirmed, cancelled" });
+
+	if (!registry.answerAsk(req.params.id, askId, answer))
+		return res.status(409).json({ error: "that question is no longer open" });
+	res.json({ ok: true });
+});
+
+app.post("/api/sessions/:id/model", async (req, res) => {
+	const model = typeof req.body?.model === "string" ? req.body.model : undefined;
+	if (!model) return res.status(400).json({ error: "model required" });
+	try {
+		await registry.setModel(req.params.id, model);
+		res.json({ ok: true });
+	} catch (err) {
+		res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
+	}
+});
+
+/**
+ * Git: what the commit button can offer, and doing it.
+ *
+ * `cwd` is the project, not the server's own: the button belongs to the
+ * session on screen, and a piw serving several projects would otherwise
+ * commit in whichever one it was started in.
+ */
+app.get("/api/git", async (req, res) => {
+	const cwd = typeof req.query.cwd === "string" && req.query.cwd ? req.query.cwd : CWD;
+	const [state, message] = await Promise.all([gitStatus(cwd), suggestMessage(cwd)]);
+	res.json({ ...state, suggestion: message });
+});
+
+/**
+ * The commit message, written by a model that read the diff.
+ *
+ * Its own endpoint rather than a flag on the POST above, because `apply` is
+ * deterministic git and stays that way: the name is chosen, shown and
+ * editable BEFORE anything is staged, and a plan that quietly spawned a
+ * model mid-commit would be a surprise inside the one operation here that
+ * must not have any.
+ *
+ * 502, not 500: the failure is always the model or its credentials, and the
+ * UI offers the file-list suggestion instead.
+ */
+app.post("/api/git/name", async (req, res) => {
+	const cwd = typeof req.body?.cwd === "string" && req.body.cwd ? req.body.cwd : CWD;
+	try {
+		res.json({ message: await nameCommit(cwd) });
+	} catch (err) {
+		res.status(502).json({ error: err instanceof Error ? err.message : String(err) });
+	}
+});
+
+app.post("/api/git", async (req, res) => {
+	const cwd = typeof req.body?.cwd === "string" && req.body.cwd ? req.body.cwd : CWD;
+	const plan: GitPlan = {
+		branch:
+			typeof req.body?.branch === "string" && req.body.branch
+				? req.body.branch
+				: undefined,
+		message: typeof req.body?.message === "string" ? req.body.message : undefined,
+		push: req.body?.push === true,
+		pr: req.body?.pr === true,
+	};
+	if (!plan.branch && plan.message === undefined && !plan.push && !plan.pr)
+		return res.status(400).json({ error: "nothing to do" });
+
+	const result = await apply(cwd, plan);
+	// 200 either way: a refused commit ("nothing to commit") is an answer the
+	// UI shows verbatim, not a transport failure.
+	res.json(result);
+});
+
+app.post("/api/sessions/:id/thinking", async (req, res) => {
+	const level = typeof req.body?.level === "string" ? req.body.level : undefined;
+	if (!level) return res.status(400).json({ error: "level required" });
+	try {
+		await registry.setThinkingLevel(req.params.id, level);
+		res.json({ ok: true });
+	} catch (err) {
+		res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
+	}
+});
+
+/**
+ * Terminals: HTTP creates, lists and kills them; the SHELL itself talks over
+ * the WebSocket below, because a terminal is bidirectional and SSE is not.
+ * Everything else in this app is request/response or server-push, so this is
+ * the one place that needed a second protocol.
+ *
+ * The list is what lets a reloaded client recover: it persists a layout of
+ * ids and this says which of them still exist.
+ */
+app.get("/api/terminals", (req, res) => {
+	const cwd = typeof req.query.cwd === "string" ? req.query.cwd : undefined;
+	res.json({ terminals: terminals.list(cwd) });
+});
+
+app.post("/api/terminals", (req, res) => {
+	const cwd = typeof req.body?.cwd === "string" && req.body.cwd ? req.body.cwd : CWD;
+	const cols = Number(req.body?.cols) || 80;
+	const rows = Number(req.body?.rows) || 24;
+	try {
+		const term = terminals.create(cwd, cols, rows);
+		res.json({ id: term.id, cwd: term.cwd, running: true });
+	} catch (err) {
+		res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
+	}
+});
+
+app.delete("/api/terminals/:id", (req, res) => {
+	terminals.close(req.params.id);
+	res.json({ ok: true });
+});
+
+/*
+ * An unknown /api path is a 404, and it has to be declared BEFORE the SPA
+ * fallback below. Otherwise the catch-all answers it with index.html and a
+ * 200, so a client calling an endpoint this build does not have gets HTML
+ * where it expected JSON — which is exactly how a browser running new code
+ * against an older server presents as a control stuck on "loading…" rather
+ * than as a version mismatch.
+ */
+app.use("/api", (_req, res) => {
+	res.status(404).json({ error: "no such endpoint" });
+});
+
+// In production serve the built client; in dev, Vite proxies /api here instead.
+const dist = resolve(ROOT, "dist");
+if (existsSync(dist)) {
+	app.use(express.static(dist));
+	app.get("*", (_req, res) => res.sendFile(resolve(dist, "index.html")));
+}
+
+const server = createServer(app);
+
+/**
+ * The terminal socket: `/api/terminal/socket?id=<terminal>`.
+ *
+ * `noServer` and a manual upgrade, not `new WebSocketServer({ server })`,
+ * because this process has exactly one WebSocket path and everything else on
+ * the port is HTTP — an attached-to-server ws would answer upgrades on any
+ * path, including a typo'd one, with a socket that then goes silent.
+ *
+ * Messages are JSON in both directions. `input` is not raw frames: a resize
+ * has to travel the same ordered channel as the keystrokes around it, or a
+ * full-screen program redraws at the wrong size for exactly as long as the
+ * two are out of order.
+ */
+const sockets = new WebSocketServer({ noServer: true });
+
+server.on("upgrade", (req, socket, head) => {
+	const url = new URL(req.url ?? "/", "http://127.0.0.1");
+	// A foreign page cannot fetch a terminal id without passing CORS, but a
+	// socket to a guessed one would be a shell; refuse at the same boundary.
+	if (url.pathname !== "/api/terminal/socket" || !originAllowed(req)) {
+		socket.destroy();
+		return;
+	}
+	const id = url.searchParams.get("id") ?? "";
+	const cols = Number(url.searchParams.get("cols")) || 80;
+	const rows = Number(url.searchParams.get("rows")) || 24;
+
+	sockets.handleUpgrade(req, socket, head, (ws) => {
+		/*
+		 * Creating is the POST above, never this: a socket that created its own
+		 * terminal would mint a second shell every time a flaky connection
+		 * reconnected, and the client's layout would be pointing at the first
+		 * one. An unknown id is therefore an error, which is exactly the state
+		 * a restored layout hits after the server has been restarted.
+		 */
+		if (!terminals.get(id)) {
+			ws.send(JSON.stringify({ type: "error", message: "no such terminal" }));
+			ws.close();
+			return;
+		}
+
+		terminals.resize(id, cols, rows);
+		const detach = terminals.attach(id, (e) => {
+			if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(e));
+		});
+
+		ws.on("message", (raw) => {
+			let msg: unknown;
+			try {
+				msg = JSON.parse(String(raw));
+			} catch {
+				return;
+			}
+			if (!msg || typeof msg !== "object") return;
+			const m = msg as { type?: unknown; data?: unknown; cols?: unknown; rows?: unknown };
+			if (m.type === "input" && typeof m.data === "string") terminals.write(id, m.data);
+			else if (
+				m.type === "resize" &&
+				typeof m.cols === "number" &&
+				typeof m.rows === "number"
+			)
+				terminals.resize(id, m.cols, m.rows);
+		});
+
+		// Detach only. The shell keeps running: closing a tab mid-build must
+		// not kill the build, which is the same promise sessions make.
+		ws.on("close", detach);
+		ws.on("error", detach);
+	});
+});
+
+// Loopback only, and the exposure is worse than credential theft: anyone who
+// reaches this port can start an agent run, and the omp children execute tools
+// with PIW_APPROVAL_MODE (yolo by default) against this machine. Tunnel it
+// (ssh -L) or put it on a private overlay network; never bind it publicly.
+/*
+ * Restarting piw is always a takeover: the port is fixed, and the thing
+ * holding it is the piw you are replacing. Doing it by hand (find the pid,
+ * kill it, start again) was three steps of pure ceremony, so the server does
+ * it — but ONLY after the occupant identifies itself as a piw on
+ * /api/health. PIW_TAKEOVER=0 restores the old "fail and tell you" behaviour,
+ * which is what you want under a supervisor that could otherwise have two
+ * units killing each other in a loop.
+ */
+if (process.env.PIW_TAKEOVER !== "0") {
+	try {
+		await claimPort(PORT);
+	} catch (err) {
+		console.error(`[piw] ${err instanceof Error ? err.message : String(err)}`);
+		process.exit(1);
+	}
+}
+
+server.listen(PORT, "127.0.0.1", () => {
+	console.log(`[piw] http://127.0.0.1:${PORT}  cwd=${CWD}`);
+	// Tunnels come up with the server rather than on first request: a machine
+	// you added should be reachable when you go looking, and starting them
+	// here means a failed bind exits without leaving ssh children behind.
+	tunnels.sync(listHosts());
+});
+
+// Failing to bind is not a session-scoped error, so "survive and degrade" is
+// the wrong policy: it leaves a live process with no listener. Exit loudly.
+server.on("error", (err: NodeJS.ErrnoException) => {
+	console.error(
+		err.code === "EADDRINUSE"
+			? `[piw] port ${PORT} already in use — kill the other server or set PIW_PORT`
+			: `[piw] listen failed: ${err.message}`,
+	);
+	process.exit(1);
+});
+
+for (const sig of ["SIGINT", "SIGTERM"] as const) {
+	process.on(sig, () => {
+		registry.disposeAll();
+		tunnels.stop();
+		// SIGHUP to each shell, so a restart does not leave orphaned children
+		// holding the project's files (and, under takeover, its ports).
+		terminals.disposeAll();
+		server.close(() => process.exit(0));
+		/*
+		 * closeAllConnections is not belt-and-braces here, it is the only thing
+		 * that makes shutdown terminate. server.close() stops accepting new
+		 * sockets and then waits for the open ones to end — and an SSE stream
+		 * never ends on its own, so a single attached browser tab kept the
+		 * process alive indefinitely (measured: still running 20s after SIGTERM).
+		 * Under `Restart=always` that turns every restart into a TimeoutStopSec
+		 * wait followed by SIGKILL.
+		 */
+		server.closeAllConnections();
+		/*
+		 * An upgraded socket is no longer one of the server's HTTP
+		 * connections, so closeAllConnections does not touch it while
+		 * server.close() still waits for it: one attached terminal tab was
+		 * enough to leave this process alive with its listener already closed
+		 * — a state systemd reads as "running", so Restart=always never fires
+		 * and the port stays dead until somebody kills the pid by hand.
+		 */
+		for (const ws of sockets.clients) ws.terminate();
+		/*
+		 * And a backstop for any handle nobody anticipated. unref'd, so it
+		 * cannot delay a shutdown that completes on its own; it only bounds
+		 * one that does not.
+		 */
+		setTimeout(() => process.exit(0), 2_000).unref();
+	});
+}
