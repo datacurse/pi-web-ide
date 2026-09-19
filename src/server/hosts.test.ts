@@ -2,7 +2,7 @@
 import { addHost, listHosts, removeHost } from "./hosts.js";
 import assert from "node:assert/strict";
 
-const PORT = 8790;
+const PORT = 8890;
 const before = listHosts();
 assert(!before.some((h) => h.name.startsWith("piw-test")), "test hosts must not pre-exist");
 
@@ -20,7 +20,7 @@ const added = addHost({ ssh: "piw-test" }, PORT);
 const host = added.find((h) => h.name === "piw-test");
 assert(host && "ssh" in host, "added as a tunnel host");
 assert(host.port > PORT, "auto-assigned port is above ours");
-assert.equal(host.remotePort, 8790, "remote piw default");
+assert.equal(host.remotePort, 8890, "remote piw default");
 assert.equal(host.autostart, true, "piw owns the tunnel by default");
 
 // The name is the identity the UI addresses, so a second one must not slip in.

@@ -34,13 +34,13 @@ import { nameCommit } from "./autoname.js";
 import { Terminals } from "./terminals.js";
 import { Registry } from "./registry.js";
 import { OMP_BIN, type AskAnswer } from "./omp.js";
-import type { PiImage } from "../shared/types.js";
+import { PRODUCT, type PiImage } from "../shared/types.js";
 import { claimPort } from "./takeover.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, "../..");
 
-const PORT = Number(process.env.PIW_PORT ?? 8790);
+const PORT = Number(process.env.PIW_PORT ?? 8890);
 const CWD = resolve(process.env.PIW_CWD ?? process.argv[2] ?? process.cwd());
 /** "provider/id". Pi's own default may select a provider your plan blocks. */
 const MODEL = process.env.PIW_MODEL;
@@ -189,6 +189,7 @@ app.get("/api/health", (_req, res) => {
 	// machine was never told about hubs" from "it allows a different page".
 	res.json({
 		ok: true,
+		product: PRODUCT,
 		cwd: CWD,
 		model: MODEL ?? null,
 		degraded,

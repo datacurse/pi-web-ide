@@ -16,7 +16,7 @@ export default defineConfig({
 		host: "127.0.0.1",
 		proxy: {
 			"/api": {
-				target: `http://127.0.0.1:${process.env.PIW_PORT ?? 8790}`,
+				target: `http://127.0.0.1:${process.env.PIW_PORT ?? 8890}`,
 				changeOrigin: true,
 				// The terminal is a WebSocket on /api/terminal/socket, and a proxy
 				// entry without this answers its upgrade with a 200 and no socket

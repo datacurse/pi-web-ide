@@ -7,6 +7,14 @@
  */
 
 /**
+ * What this server is. `/api/health` reports it, and both the port takeover
+ * and the Machines panel refuse to act on a health body that does not carry
+ * it — an omp-era piw on a neighbouring port answers `/api/health` too, and
+ * mistaking one for the other means killing it or listing its sessions here.
+ */
+export const PRODUCT = "pi-web-ide";
+
+/**
  * A base64 image. `data` is RAW base64 with no `data:` URL prefix, because
  * that is exactly what the SDK's ImageContent wants — stripping the prefix at
  * the browser edge means there is precisely one representation on the wire and

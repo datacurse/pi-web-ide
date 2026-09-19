@@ -21,7 +21,7 @@ import type { PiwHost, PiwTunnelHost } from "../shared/types.js";
 const FILE = join(homedir(), ".omp", "agent", "piw-hosts.json");
 
 /** What a remote piw listens on, absent a reason to think otherwise. */
-const DEFAULT_REMOTE_PORT = 8790;
+const DEFAULT_REMOTE_PORT = 8890;
 
 /** A label has to fit a 288px panel and name a browser window; 32 is plenty. */
 const MAX_NAME = 32;

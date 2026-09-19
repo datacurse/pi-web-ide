@@ -7,15 +7,17 @@
  * on the same port on purpose — so the server now does the killing itself.
  *
  * The safety property that makes that acceptable: it kills ONLY a process it
- * has positively identified as another piw, by asking the port. `/api/health`
- * answers `{ ok: true, cwd }`, and nothing else on the machine does. An
- * unrecognised occupant is left alone and the startup fails exactly as before
- * — a coding agent's web UI must not be in the business of killing whatever
- * program happens to hold a port.
+ * has positively identified as another pi-web-ide, by asking the port.
+ * `/api/health` answers `{ ok: true, product: "pi-web-ide", cwd }`, and
+ * nothing else on the machine does — in particular an omp-era piw on a
+ * neighbouring port answers without `product` and is left alone, and startup
+ * fails exactly as before. A coding agent's web UI must not be in the
+ * business of killing whatever program happens to hold a port.
  */
 
 import { readFileSync, readdirSync, readlinkSync } from "node:fs";
 import { connect } from "node:net";
+import { PRODUCT } from "../shared/types.js";
 
 /** How long the occupant gets to answer, exit politely, and then die. */
 const PROBE_MS = 1_000;
@@ -30,10 +32,13 @@ interface Occupant {
 /**
  * Ask the port who it is.
  *
- * A piw answers `/api/health`; a `pid` comes back from any build that has
- * this file. Older builds do not report one, so the pid is resolved from
- * /proc as a fallback — that case is precisely the upgrade this feature was
- * written for, and it would be absurd to fail it.
+ * Only a pi-web-ide is ours to kill, and the proof is `product` in its
+ * `/api/health`. An omp-era piw answers `/api/health` with `{ ok, cwd }` and
+ * no `product`, so it reads as a stranger and startup fails instead — which
+ * is the whole point while both installs run side by side.
+ *
+ * A `pid` comes back from any build that has this file; older ones do not
+ * report one, so it is resolved from /proc as a fallback.
  */
 async function identify(port: number): Promise<Occupant | undefined> {
 	let body: unknown;
@@ -50,8 +55,9 @@ async function identify(port: number): Promise<Occupant | undefined> {
 	}
 
 	if (typeof body !== "object" || body === null) return undefined;
-	const health = body as { ok?: unknown; cwd?: unknown; pid?: unknown };
+	const health = body as { ok?: unknown; cwd?: unknown; pid?: unknown; product?: unknown };
 	if (health.ok !== true || typeof health.cwd !== "string") return undefined;
+	if (health.product !== PRODUCT) return undefined;
 
 	const pid = typeof health.pid === "number" ? health.pid : listenerPid(port);
 	return pid === undefined ? undefined : { pid, cwd: health.cwd };
@@ -150,18 +156,18 @@ export async function claimPort(port: number): Promise<void> {
 	const occupant = await identify(port);
 	if (!occupant) {
 		throw new Error(
-			`port ${port} is held by something that is not piw — stop it or set PIW_PORT`,
+			`port ${port} is held by something that is not ${PRODUCT} — stop it or set PIW_PORT`,
 		);
 	}
 
 	console.log(
-		`[piw] port ${port} held by another piw (pid ${occupant.pid}, cwd=${occupant.cwd}) — stopping it`,
+		`[piw] port ${port} held by another ${PRODUCT} (pid ${occupant.pid}, cwd=${occupant.cwd}) — stopping it`,
 	);
 	try {
 		process.kill(occupant.pid, "SIGTERM");
 	} catch (err) {
 		const reason = err instanceof Error ? err.message : String(err);
-		throw new Error(`could not signal the piw on port ${port} (pid ${occupant.pid}): ${reason}`);
+		throw new Error(`could not signal the server on port ${port} (pid ${occupant.pid}): ${reason}`);
 	}
 
 	if (await waitForRelease(port, TERM_GRACE_MS)) return;
