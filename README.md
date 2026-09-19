@@ -884,8 +884,8 @@ Three details that are the difference between a summary and a lie:
 - **The phrase list is capped at three**, then `+5 more`. A run of forty
   calls across eight tools is a sentence nobody reads, wrapped over two lines
   where the point was to have one.
-- **A tool with no phrase still summarises**, as `hub ×2`, so the harness can
-  grow a tool without this going stale or — worse — wrong.
+- **A tool with no phrase still summarises**, as `mcp_fetch ×2`, so a package
+  can add a tool without this going stale or — worse — wrong.
 
 While a turn streams there are at most two lines: the calls that have settled
 are one group, and the call in flight is the streaming row's own group, which
@@ -1051,30 +1051,74 @@ worse than no button. It reads from state, while the follow-the-stream logic
 keeps using a ref — that one is read on every frame of a stream, and a
 re-render per scroll event would cost more than the button is worth.
 
-## The wait that never ends
+## Packages
 
-A turn that parks itself is a turn that looks stuck. The status line says
-`Running hub…`, and then nothing moves for twenty minutes — from the browser
-there is no way to tell waiting from hanging, and both look like a collapsed
-tool call.
+A pi package bundles extensions, skills, prompt templates and themes, and pi
+already owns installing them: `packages` in `~/.pi/agent/settings.json` is
+the desired state, and pi installs anything missing at startup. So this
+screen is a view over that array on every machine at once, plus the two
+things a fleet needs that one machine does not.
 
-**The wait banner** replaces the status line whenever the running tool is
-`hub` `wait`: what it is waiting on and the ceiling it was given (`Waiting on
-background work · up to 15m`). `Running hub…` was true and useless, and the
-difference matters because that call is how a turn parks itself for twenty
-minutes: results of finished jobs deliver themselves, so an agent that waits
-is usually polling for something that already arrived, and a job id expires
-about five minutes after it settles — after which a bare wait degrades into
-waiting for a message nothing is going to send.
+**One row per package, one column per machine.** "The orangepi is missing
+pi-lens" is a thing to see, not to discover when a session there behaves
+differently. Each cell is that machine's installed version, with `pinned`,
+`filtered` and `off` where they apply, and update/remove on hover. Every
+request goes straight to the machine it concerns; nothing is proxied.
 
-**Skip is abort plus a re-prompt**, because nothing else reaches a wait.
-Measured against a live session: a steering message sent 11s into a 180s
-wait had not settled the call 80s later, while an abort settled it in 1.1s
-and returned the wait's own answer (the jobs it was watching). So the button
-ends the turn and immediately starts the next one with a visible user
-message — the work the agent was waiting for lands in that next turn by
-itself. A hidden nudge would have made the agent look like it changed its
-mind on its own.
+**Search is the npm gallery** — packages carrying the `pi-package` keyword —
+asked through this server, so there is no third origin to allow and npm
+learns nothing about who is browsing. Git-only packages cannot appear there,
+which is what **Add by source** is for. The install dialog shows the
+resolved, *pinned* source, what the package contains, its repository and
+preview, the machines to install on, and one sentence that does not go away:
+packages run with full system access on every machine ticked.
+
+**A session open at install time cannot see the package.** pi reads
+extensions, skills and prompt templates when a child starts, so the server
+records which package epoch each session was spawned under and the chat says
+so, with a restart button. The restart disposes the child and reopens from
+the session file: same id, same transcript, new process. It is refused
+mid-turn, because a restart there loses the turn — and for the same reason a
+successful install discards prewarmed spares, so the next `+ New` is not
+stale before anybody types.
+
+### The manifest
+
+Installing on three machines from a browser leaves the fourth — the one that
+was asleep — behind forever. So the **Fleet** tab is a desired state, not a
+fan-out: the hub keeps `<state dir>/packages.json`, and reconciliation runs
+in the hub's *server*, on a timer and whenever a machine comes back. A
+machine that was off catches up with no tab open anywhere.
+
+```json
+{
+  "version": 1,
+  "packages": [
+    { "source": "npm:pi-web-access@0.30.0" },
+    { "source": "git:github.com/you/pi-config@v3", "exclude": ["tg"] }
+  ]
+}
+```
+
+Every source must be **pinned**, and that is enforced at write time. A pin is
+what makes "the fleet runs the same code" true rather than aspirational, and
+it turns an upgrade into one reviewable edit instead of a race between
+machines' clocks. `exclude` names machines that must not get a package.
+
+Reconciliation installs what is missing and re-installs what is pinned
+differently — `pi install <source>@<newpin>` moves a pin in place rather than
+adding a second entry. It never removes: a package on a machine but not in
+the manifest is reported **unmanaged** and left alone, with an `adopt` button
+that takes it into the manifest at the version it is running. A failure is
+contained to one machine and one package, with npm's own last line as the
+reason; the next pass retries.
+
+Two kinds of package are deliberately outside this. A project's own
+`.pi/settings.json` is committed and git is its sync, so it is listed
+read-only under "This project". And pi itself is per machine: extensions
+declare pi's packages as peer dependencies, so version skew is how a package
+works on one box and throws on another — the screen shows each machine's pi
+version with its own update button, never one button for the fleet.
 
 ## Terminal
 

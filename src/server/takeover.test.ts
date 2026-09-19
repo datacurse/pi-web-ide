@@ -1,9 +1,9 @@
 // Run: node --import tsx src/server/takeover.test.ts
 //
 // The coexistence guard, which is the one bug in this project that kills
-// something: an omp-era piw answers `/api/health` too, and a takeover that
-// trusted `{ ok: true }` alone would SIGTERM the server hosting the session
-// that is building this one. So a fake occupant is stood up on a scratch
+// something: the previous install's web UI answers `/api/health` too, and a
+// takeover that trusted `{ ok: true }` alone would SIGTERM the server hosting
+// the session that is building this one. So a fake occupant is stood up on a
 // port, and the test asserts both halves: startup fails, and the occupant is
 // still answering afterwards.
 import assert from "node:assert/strict";

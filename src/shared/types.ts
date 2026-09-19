@@ -293,6 +293,40 @@ export interface PiwPackageInfo {
 	weeklyDownloads?: number;
 }
 
+/** One line of the fleet manifest: a pinned source, and who must not get it. */
+export interface PiwManifestEntry {
+	source: string;
+	/** Machine names that must NOT receive this package. */
+	exclude?: string[];
+}
+
+/** The hub's desired state for every machine. */
+export interface PiwManifest {
+	version: 1;
+	packages: PiwManifestEntry[];
+}
+
+/** What reconciliation last did to one package on one machine. */
+export type PiwPackageState =
+	| { state: "ok"; version: string | null }
+	| { state: "installing" }
+	| { state: "failed"; reason: string; log: string }
+	| { state: "excluded" }
+	/** Installed there, absent from the manifest. Never removed automatically. */
+	| { state: "unmanaged"; version: string | null };
+
+export interface PiwMachineState {
+	reachable: boolean;
+	/** ISO timestamp of the last attempt, reachable or not. */
+	at: string;
+	error?: string;
+	/** Keyed by package identity. */
+	packages: Record<string, PiwPackageState>;
+}
+
+/** `GET /api/fleet`: keyed by machine name, "" being the hub itself. */
+export type PiwFleetStatus = Record<string, PiwMachineState>;
+
 /**
  * One other machine running its own piw.
  *

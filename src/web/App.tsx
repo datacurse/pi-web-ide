@@ -1789,6 +1789,7 @@ export default function App() {
 			<Packages
 				open={packagesOpen}
 				onChanged={() => void reloadSnapshot()}
+				cwd={selection.cwd}
 				machines={[
 					{ name: "", origin: "" },
 					...(hosts ?? [])

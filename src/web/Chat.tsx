@@ -301,22 +301,21 @@ const SUMMARY_PHRASES = 3;
 /**
  * How a run of calls reads once it is one line.
  *
- * A tool absent from this table still summarises — as `name ×3` — so the
- * harness can grow a tool without this going stale or wrong. Each entry takes
- * the count and returns the whole phrase, because English plurals are not a
- * suffix: "searched 3 times" and "updated the todos" do not share a shape.
+ * pi's built-in tools, and nothing else: a tool absent from this table still
+ * summarises — as `name ×3` — so an installed package can add one without
+ * this going stale or, worse, wrong. Each entry takes the count and returns
+ * the whole phrase, because English plurals are not a suffix: "searched 3
+ * times" and "listed a directory" do not share a shape.
  */
 const TOOL_PHRASES: Record<string, (n: number) => string> = {
 	bash: (n) => (n === 1 ? "ran a command" : `ran ${n} commands`),
+	powershell: (n) => (n === 1 ? "ran a command" : `ran ${n} commands`),
 	read: (n) => (n === 1 ? "read a file" : `read ${n} files`),
 	edit: (n) => (n === 1 ? "edited a file" : `edited ${n} files`),
 	write: (n) => (n === 1 ? "wrote a file" : `wrote ${n} files`),
 	grep: (n) => (n === 1 ? "grepped" : `grepped ${n} times`),
-	glob: (n) => (n === 1 ? "listed files" : `listed files ${n} times`),
-	eval: (n) => (n === 1 ? "ran a cell" : `ran ${n} cells`),
-	task: (n) => (n === 1 ? "spawned a subagent" : `spawned ${n} subagents`),
-	todo: () => "updated the todos",
-	web_search: (n) => (n === 1 ? "searched the web" : `searched the web ${n} times`),
+	find: (n) => (n === 1 ? "found files" : `found files ${n} times`),
+	ls: (n) => (n === 1 ? "listed a directory" : `listed ${n} directories`),
 };
 
 /**

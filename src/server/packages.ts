@@ -293,6 +293,40 @@ export async function list(): Promise<PiwPackage[]> {
 	return out;
 }
 
+/**
+ * A project's own packages, from its `.pi/settings.json`.
+ *
+ * Read-only and never checked against disk: these are installed into the
+ * project's `.pi/npm`, by pi, at startup, and the file usually lives in
+ * someone's repository. Showing them keeps "why does this project have an
+ * extra command" answerable without leaving the browser; writing them is
+ * git's job, not ours.
+ */
+export function listProject(cwd: string): PiwPackage[] {
+	let raw: unknown;
+	try {
+		raw = JSON.parse(readFileSync(join(cwd, ".pi", "settings.json"), "utf8"));
+	} catch {
+		// No project settings is the normal case, not an error.
+		return [];
+	}
+	if (!isRecord(raw) || !Array.isArray(raw.packages)) return [];
+
+	const out: PiwPackage[] = [];
+	for (const entry of raw.packages) {
+		const source = typeof entry === "string" ? entry : isRecord(entry) ? entry.source : undefined;
+		if (typeof source !== "string") continue;
+		const parsed = parseSource(source);
+		if (!parsed) continue;
+		if (isRecord(entry)) {
+			parsed.filtered = ["extensions", "skills", "prompts", "themes"].some((k) => k in entry);
+			parsed.autoload = entry.autoload !== false;
+		}
+		out.push(parsed);
+	}
+	return out;
+}
+
 export async function view(): Promise<PackagesView> {
 	return { packages: await list(), epoch, busy: running };
 }

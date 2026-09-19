@@ -37,6 +37,7 @@ import { PI_BIN, type AskAnswer } from "./agent.js";
 import { PRODUCT, type PiImage } from "../shared/types.js";
 import * as packages from "./packages.js";
 import { info, search } from "./gallery.js";
+import * as fleet from "./fleet.js";
 import { claimPort } from "./takeover.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -848,6 +849,69 @@ app.get("/api/packages/info", async (req, res) => {
 });
 
 /**
+ * The open project's own packages, read-only.
+ *
+ * `pi install -l` writes `.pi/settings.json`, the project commits it, and pi
+ * installs anything missing at startup once the project is trusted. Git is
+ * the sync for these, so this server shows them and changes nothing: a
+ * second writer of a file that is in someone's repository is a merge
+ * conflict waiting to be blamed on the wrong tool.
+ */
+app.get("/api/packages/project", (req, res) => {
+	const cwd = typeof req.query.cwd === "string" && req.query.cwd ? req.query.cwd : CWD;
+	res.json({ cwd, packages: packages.listProject(cwd) });
+});
+
+/**
+ * The fleet manifest: one desired state every machine converges on.
+ *
+ * Reconciliation runs in this server, not in the browser, so a machine that
+ * was asleep when the manifest changed catches up on its own. These routes
+ * only read, write and trigger.
+ */
+app.get("/api/fleet", async (_req, res) => {
+	res.json({
+		manifest: fleet.readManifest(),
+		status: fleet.readStatus(),
+		hosts: await tunnels.status(listHosts()),
+	});
+});
+
+app.put("/api/fleet", async (req, res) => {
+	try {
+		const manifest = fleet.writeManifest(req.body);
+		// Reconcile immediately: the edit IS the instruction, and waiting for
+		// the next poll would make a manifest change look like it did nothing.
+		const status = await fleet.reconcile(tunnels);
+		registry.discardSpares();
+		res.json({ manifest, status });
+	} catch (err) {
+		res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
+	}
+});
+
+app.post("/api/fleet/sync", async (_req, res) => {
+	try {
+		res.json({ status: await fleet.reconcile(tunnels) });
+	} catch (err) {
+		res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+	}
+});
+
+/** Take an unmanaged package into the manifest, pinned at what it runs now. */
+app.post("/api/fleet/adopt", async (req, res) => {
+	const source = typeof req.body?.source === "string" ? req.body.source : "";
+	const installed = typeof req.body?.installed === "string" ? req.body.installed : null;
+	if (!source) return res.status(400).json({ error: "source required" });
+	try {
+		const manifest = fleet.adopt(source, installed);
+		res.json({ manifest, status: await fleet.reconcile(tunnels) });
+	} catch (err) {
+		res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
+	}
+});
+
+/**
  * Terminals: HTTP creates, lists and kills them; the SHELL itself talks over
  * the WebSocket below, because a terminal is bidirectional and SSE is not.
  * Everything else in this app is request/response or server-push, so this is
@@ -993,12 +1057,19 @@ if (process.env.PIW_TAKEOVER !== "0") {
 	}
 }
 
+let stopWatching: (() => void) | undefined;
+
 server.listen(PORT, "127.0.0.1", () => {
 	console.log(`[piw] http://127.0.0.1:${PORT}  cwd=${CWD}`);
 	// Tunnels come up with the server rather than on first request: a machine
 	// you added should be reachable when you go looking, and starting them
 	// here means a failed bind exits without leaving ssh children behind.
 	tunnels.sync(listHosts());
+	// And the fleet converges from here on: a machine that comes back gets
+	// the manifest without anybody opening a tab. The first pass also
+	// reconciles THIS machine, so a manifest edited by hand between two runs
+	// takes effect on start.
+	stopWatching = fleet.watch(tunnels);
 });
 
 // Failing to bind is not a session-scoped error, so "survive and degrade" is
@@ -1014,6 +1085,7 @@ server.on("error", (err: NodeJS.ErrnoException) => {
 
 for (const sig of ["SIGINT", "SIGTERM"] as const) {
 	process.on(sig, () => {
+		stopWatching?.();
 		registry.disposeAll();
 		tunnels.stop();
 		// SIGHUP to each shell, so a restart does not leave orphaned children

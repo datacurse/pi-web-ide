@@ -14,10 +14,13 @@
 import { useCallback, useEffect, useState } from "react";
 import { X } from "@phosphor-icons/react";
 import type {
+	PiwFleetStatus,
+	PiwManifest,
 	PiwMutation,
 	PiwPackage,
 	PiwPackageInfo,
 	PiwPackagesView,
+	PiwPackageState,
 	PiwSearchHit,
 } from "../shared/types.js";
 
@@ -92,6 +95,7 @@ export function Packages({
 	open,
 	onChanged,
 	machines,
+	cwd,
 	onClose,
 }: {
 	open: boolean;
@@ -99,9 +103,12 @@ export function Packages({
 	onChanged: () => void;
 	/** This machine first, then every reachable remote. */
 	machines: PackageMachine[];
+	/** The project on screen, whose own `.pi/settings.json` is shown read-only. */
+	cwd: string;
 	onClose: () => void;
 }) {
-	const [tab, setTab] = useState<"installed" | "search">("installed");
+	const [tab, setTab] = useState<"installed" | "search" | "fleet">("installed");
+	const [project, setProject] = useState<{ cwd: string; packages: PiwPackage[] } | null>(null);
 	const [states, setStates] = useState<Record<string, MachineState>>({});
 	const [log, setLog] = useState<{ title: string; text: string } | null>(null);
 	const [adding, setAdding] = useState<PiwPackageInfo | { source: string } | null>(null);
@@ -128,8 +135,18 @@ export function Packages({
 	);
 
 	useEffect(() => {
-		if (open) void refresh();
-	}, [open, refresh]);
+		if (!open) return;
+		void refresh();
+		// The project's own `.pi/settings.json`, read-only: it is committed and
+		// git is its sync, so this is here to answer "why does this project
+		// have an extra command", not to be edited.
+		void getJson<{ cwd: string; packages: PiwPackage[] }>(
+			"",
+			`/api/packages/project?cwd=${encodeURIComponent(cwd)}`,
+		)
+			.then(setProject)
+			.catch(() => setProject(null));
+	}, [open, refresh, cwd]);
 
 	/**
 	 * Run one mutation on one machine and fold the answer back in.
@@ -186,7 +203,7 @@ export function Packages({
 			<div className="flex items-center gap-3 border-b border-neutral-800 px-3 py-2">
 				<h2 className="text-sm font-semibold tracking-tight">Packages</h2>
 				<div className="flex gap-1">
-					{(["installed", "search"] as const).map((t) => (
+					{(["installed", "search", "fleet"] as const).map((t) => (
 						<button
 							key={t}
 							onClick={() => setTab(t)}
@@ -222,11 +239,12 @@ export function Packages({
 			</div>
 
 			<div className="min-h-0 flex-1 overflow-y-auto p-3">
-				{tab === "installed" ? (
+				{tab === "installed" && (
 					<Installed
 						machines={machines}
 						states={states}
 						rows={rows}
+						project={project}
 						onAdd={() => setAdding({ source: "" })}
 						onUpdate={(m, source) =>
 							void mutate(m, `update ${source}`, "/api/packages/update", {
@@ -246,9 +264,9 @@ export function Packages({
 							void mutate(m, "update pi", "/api/packages/update-pi", { method: "POST" })
 						}
 					/>
-				) : (
-					<Search origin={machines[0]?.origin ?? ""} onPick={setAdding} />
 				)}
+				{tab === "search" && <Search origin={machines[0]?.origin ?? ""} onPick={setAdding} />}
+				{tab === "fleet" && <Fleet machines={machines} onChanged={onChanged} />}
 			</div>
 
 			{adding && (
@@ -287,6 +305,7 @@ function Installed({
 	machines,
 	states,
 	rows,
+	project,
 	onAdd,
 	onUpdate,
 	onRemove,
@@ -295,6 +314,7 @@ function Installed({
 	machines: PackageMachine[];
 	states: Record<string, MachineState>;
 	rows: Row[];
+	project: { cwd: string; packages: PiwPackage[] } | null;
 	onAdd: () => void;
 	onUpdate: (machine: PackageMachine, source: string) => void;
 	onRemove: (machine: PackageMachine, source: string) => void;
@@ -435,7 +455,300 @@ function Installed({
 					))}
 				</div>
 			</div>
+
+			{project && project.packages.length > 0 && (
+				<div className="mt-6 border-t border-neutral-900 pt-3">
+					<h3 className="text-[10px] tracking-wide text-neutral-500 uppercase">
+						This project — {project.cwd}
+					</h3>
+					<p className="mt-1 max-w-prose text-xs text-neutral-500">
+						From the project's own <span className="font-mono">.pi/settings.json</span>. pi installs
+						these at startup once the project is trusted, and the file is usually committed — so git
+						is their sync, and they are read-only here.
+					</p>
+					<ul className="mt-2 space-y-0.5">
+						{project.packages.map((p) => (
+							<li key={p.source} className="font-mono text-xs text-neutral-300">
+								{p.source}
+								{p.filtered && <span className="ml-2 text-[10px] text-neutral-500">filtered</span>}
+								{!p.autoload && <span className="ml-2 text-[10px] text-neutral-500">off</span>}
+							</li>
+						))}
+					</ul>
+				</div>
+			)}
 		</>
+	);
+}
+
+/**
+ * The manifest, and what every machine has done about it.
+ *
+ * This is the only tab that describes a fleet rather than a machine. The
+ * table below it is a report, not a control surface: reconciliation happens
+ * in the hub's server on a timer and when a machine comes back, so what is
+ * shown here is the last thing that actually happened, timestamp included.
+ */
+function Fleet({
+	machines,
+	onChanged,
+}: {
+	machines: PackageMachine[];
+	onChanged: () => void;
+}) {
+	const [manifest, setManifest] = useState<PiwManifest>({ version: 1, packages: [] });
+	const [status, setStatus] = useState<PiwFleetStatus>({});
+	const [draft, setDraft] = useState<string | null>(null);
+	const [error, setError] = useState<string | null>(null);
+	const [busy, setBusy] = useState(false);
+
+	const load = useCallback(async () => {
+		try {
+			const body = await getJson<{ manifest: PiwManifest; status: PiwFleetStatus }>(
+				"",
+				"/api/fleet",
+			);
+			setManifest(body.manifest);
+			setStatus(body.status);
+		} catch (err) {
+			setError(err instanceof Error ? err.message : String(err));
+		}
+	}, []);
+
+	useEffect(() => {
+		void load();
+	}, [load]);
+
+	/**
+	 * The manifest is edited as JSON, on purpose.
+	 *
+	 * It is a short list of pinned sources with the occasional `exclude`, it
+	 * is a file the owner may also edit by hand or commit, and a form would
+	 * hide exactly the field — `exclude` — that is worth seeing in full. The
+	 * server validates every entry and says which one it refused.
+	 */
+	const text = draft ?? `${JSON.stringify(manifest, null, "\t")}\n`;
+
+	const save = async () => {
+		setBusy(true);
+		setError(null);
+		try {
+			const parsed: unknown = JSON.parse(text);
+			const r = await fetch("/api/fleet", {
+				method: "PUT",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify(parsed),
+			});
+			const body: unknown = await r.json();
+			if (!r.ok) {
+				setError(
+					isRecordLike(body) && typeof body.error === "string" ? body.error : `save failed (${r.status})`,
+				);
+				return;
+			}
+			if (isRecordLike(body)) {
+				setManifest(body.manifest as PiwManifest);
+				setStatus(body.status as PiwFleetStatus);
+			}
+			setDraft(null);
+			onChanged();
+		} catch (err) {
+			setError(err instanceof Error ? err.message : String(err));
+		} finally {
+			setBusy(false);
+		}
+	};
+
+	const sync = async () => {
+		setBusy(true);
+		try {
+			const body = await getJson<{ status: PiwFleetStatus }>("", "/api/fleet/sync");
+			setStatus(body.status);
+			onChanged();
+		} catch (err) {
+			setError(err instanceof Error ? err.message : String(err));
+		} finally {
+			setBusy(false);
+		}
+	};
+
+	const adopt = async (source: string, version: string | null) => {
+		setBusy(true);
+		try {
+			const r = await fetch("/api/fleet/adopt", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({ source, installed: version }),
+			});
+			const body: unknown = await r.json();
+			if (!r.ok) {
+				setError(isRecordLike(body) && typeof body.error === "string" ? body.error : "adopt failed");
+				return;
+			}
+			await load();
+			onChanged();
+		} finally {
+			setBusy(false);
+		}
+	};
+
+	// Every machine the status knows about, plus every machine on screen: a
+	// machine that has never been reconciled still needs a column.
+	const names = [...new Set([...machines.map((m) => m.name), ...Object.keys(status)])];
+	const identities = [
+		...new Set(names.flatMap((n) => Object.keys(status[n]?.packages ?? {}))),
+	].sort();
+
+	return (
+		<>
+			<div className="flex items-start gap-3">
+				<div className="min-w-0 flex-1">
+					<h3 className="text-[10px] tracking-wide text-neutral-500 uppercase">Manifest</h3>
+					<p className="mt-1 max-w-prose text-xs text-neutral-500">
+						One desired state for the fleet. Every source must be pinned, because a pin is what
+						makes every machine run the same code. A machine that was off catches up on its own when
+						it comes back — nothing here fans out.
+					</p>
+					<textarea
+						value={text}
+						onChange={(e) => {
+							setDraft(e.target.value);
+							setError(null);
+						}}
+						spellCheck={false}
+						rows={10}
+						className="mt-2 w-full resize-y rounded border border-neutral-800 bg-neutral-900 p-2 font-mono text-xs text-neutral-200 outline-none focus:border-neutral-600"
+					/>
+					<div className="mt-2 flex items-center gap-2">
+						<button
+							onClick={() => void save()}
+							disabled={busy || draft === null}
+							className="rounded bg-amber-500 px-3 py-1 text-xs font-medium text-neutral-950 transition-colors duration-150 ease-out enabled:hover:bg-amber-400 disabled:opacity-40 motion-reduce:transition-none"
+						>
+							Save and reconcile
+						</button>
+						<button
+							onClick={() => void sync()}
+							disabled={busy}
+							className="rounded border border-neutral-700 px-3 py-1 text-xs text-neutral-200 transition-colors duration-150 ease-out enabled:hover:bg-neutral-900 disabled:opacity-40 motion-reduce:transition-none"
+						>
+							Sync now
+						</button>
+						{draft !== null && (
+							<button
+								onClick={() => {
+									setDraft(null);
+									setError(null);
+								}}
+								className="rounded px-2 py-1 text-xs text-neutral-500 hover:text-neutral-200"
+							>
+								revert
+							</button>
+						)}
+						{busy && <span className="text-xs text-amber-400">working…</span>}
+					</div>
+					{error && <p className="mt-2 text-xs text-red-400">{error}</p>}
+				</div>
+			</div>
+
+			<h3 className="mt-6 text-[10px] tracking-wide text-neutral-500 uppercase">Convergence</h3>
+			<table className="mt-1 w-full border-collapse text-sm">
+				<thead>
+					<tr className="border-b border-neutral-800 text-left text-[10px] tracking-wide text-neutral-500 uppercase">
+						<th className="py-1 pr-3 font-normal">Package</th>
+						{names.map((n) => (
+							<th key={n} className="py-1 pr-3 font-normal">
+								{n || "this machine"}
+								{status[n] && !status[n].reachable && (
+									<span className="ml-1 text-amber-400" title={status[n].error}>
+										unreachable
+									</span>
+								)}
+							</th>
+						))}
+					</tr>
+				</thead>
+				<tbody>
+					{identities.map((identity) => (
+						<tr key={identity} className="border-b border-neutral-900 align-top">
+							<td className="py-1.5 pr-3 font-mono text-xs text-neutral-100">{identity}</td>
+							{names.map((n) => {
+								const st = status[n]?.packages[identity];
+								return (
+									<td key={n} className="py-1.5 pr-3 text-xs">
+										<StateCell
+											state={st}
+											onAdopt={
+												st?.state === "unmanaged"
+													? () => void adopt(sourceOf(identity), st.version)
+													: undefined
+											}
+										/>
+									</td>
+								);
+							})}
+						</tr>
+					))}
+					{identities.length === 0 && (
+						<tr>
+							<td colSpan={names.length + 1} className="py-6 text-center text-xs text-neutral-500">
+								Nothing reconciled yet. Save a manifest, or press Sync now.
+							</td>
+						</tr>
+					)}
+				</tbody>
+			</table>
+			<p className="mt-2 text-[10px] text-neutral-600">
+				{names
+					.filter((n) => status[n])
+					.map((n) => `${n || "this machine"}: ${new Date(status[n].at).toLocaleTimeString()}`)
+					.join(" · ")}
+			</p>
+		</>
+	);
+}
+
+/** A package identity back to the source that installs it. npm is the only guess worth making. */
+function sourceOf(identity: string): string {
+	return identity.includes("/") && identity.includes(".") ? `git:${identity}` : `npm:${identity}`;
+}
+
+function isRecordLike(v: unknown): v is Record<string, unknown> {
+	return typeof v === "object" && v !== null;
+}
+
+function StateCell({
+	state,
+	onAdopt,
+}: {
+	state: PiwPackageState | undefined;
+	onAdopt?: () => void;
+}) {
+	if (!state) return <span className="text-neutral-700">—</span>;
+	if (state.state === "ok")
+		return <span className="font-mono text-emerald-400">{state.version ?? "ok"}</span>;
+	if (state.state === "installing") return <span className="text-amber-400">installing…</span>;
+	if (state.state === "excluded") return <span className="text-neutral-500">excluded</span>;
+	if (state.state === "failed")
+		return (
+			<span className="text-red-400" title={state.log}>
+				{state.reason}
+			</span>
+		);
+	return (
+		<span className="text-neutral-400">
+			<span className="font-mono">{state.version ?? "installed"}</span>
+			<span className="ml-1 text-[10px]">unmanaged</span>
+			{onAdopt && (
+				<button
+					onClick={onAdopt}
+					title="Add it to the manifest at the version it is running"
+					className="ml-2 rounded border border-neutral-700 px-1 text-[10px] text-neutral-300 hover:bg-neutral-800"
+				>
+					adopt
+				</button>
+			)}
+		</span>
 	);
 }
 
