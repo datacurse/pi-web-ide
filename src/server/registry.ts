@@ -19,6 +19,7 @@
  */
 
 import { emptyPartial, openSession, type AskAnswer, type PiSession } from "./agent.js";
+import { currentEpoch } from "./packages.js";
 import type { PiEvent, PiImage, PiNotice, PiPartial, Snapshot } from "../shared/types.js";
 
 export type { Snapshot };
@@ -59,6 +60,13 @@ interface Entry {
 	 * claimed yet — see Registry.prewarm.
 	 */
 	spareFor: string | null;
+	/**
+	 * The package epoch this child was SPAWNED under. pi reads extensions,
+	 * skills and prompt templates once, at startup, so a session older than
+	 * the newest install cannot see what was installed — which is a thing to
+	 * tell the user, not to fix behind their back.
+	 */
+	epoch: number;
 	subscribers: Set<(e: PiEvent) => void>;
 	unsubscribe: () => void;
 }
@@ -175,6 +183,7 @@ export class Registry {
 			notices: [],
 			lastActivity: Date.now(),
 			spareFor,
+			epoch: currentEpoch(),
 			subscribers: new Set(),
 			unsubscribe: () => {},
 		};
@@ -363,7 +372,46 @@ export class Registry {
 			thinkingLevels: entry.session.thinkingLevels,
 			contextTokens: entry.session.contextTokens,
 			contextWindow: entry.session.contextWindow,
+			/**
+			 * This child was spawned before the newest package install, so it
+			 * cannot see what was installed. The UI offers a restart; nothing
+			 * here acts on it.
+			 */
+			stale: entry.epoch !== currentEpoch(),
 		};
+	}
+
+	/**
+	 * Restart a session's child so it picks up newly installed packages.
+	 *
+	 * Dispose and reopen from the file: extensions load at process start, so
+	 * there is no cheaper way to make an open session see a new one. The
+	 * conversation survives because it is on disk and the id is derived from
+	 * the file — verified in docs/pi-facts.md §0.4.
+	 *
+	 * Refused mid-stream, and that refusal is the point: killing a child
+	 * halfway through a turn loses the turn, and "your session picked up the
+	 * package" is never worth that.
+	 */
+	async restart(id: string): Promise<Entry & { id: string }> {
+		const entry = this.entries.get(id);
+		if (!entry) throw new Error(`unknown session: ${id}`);
+		if (entry.streaming || entry.session.isStreaming)
+			throw new Error("cannot restart a session while it is streaming");
+		const file = entry.session.file;
+		if (!file) throw new Error("this session has no file yet — prompt it once first");
+
+		// Subscribers are attached to THIS entry, so they are moved across
+		// rather than dropped: a tab watching the session must not go silent
+		// because the user clicked restart in another panel.
+		const subscribers = entry.subscribers;
+		entry.unsubscribe();
+		entry.session.dispose();
+		this.entries.delete(id);
+
+		const fresh = await this.acquire(undefined, file);
+		for (const s of subscribers) fresh.subscribers.add(s);
+		return fresh;
 	}
 
 	/**

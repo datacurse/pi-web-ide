@@ -965,6 +965,7 @@ export function Chat({
 	onThinkingChange,
 	onCommandMenu,
 	onCompact,
+	onRestart,
 }: {
 	snapshot: Snapshot | null;
 	/** Where this project's piw answers: "" for this page's own server, else a machine's origin with no trailing slash. */
@@ -997,6 +998,8 @@ export function Chat({
 	onCommandMenu: () => void;
 	/** Fold the conversation into a summary. Refused while a turn is running. */
 	onCompact: () => void;
+	/** Replace this session's pi child so it sees newly installed packages. */
+	onRestart: () => void;
 }) {
 	const [text, setText] = useState("");
 	const [images, setImages] = useState<PiImage[]>([]);
@@ -1511,6 +1514,36 @@ export function Chat({
 						<div className="chat-gutter my-3">
 							<div className="chat-measure rounded border border-red-900 bg-red-950/40 px-3 py-2 text-sm text-red-300">
 								{snapshot.error}
+							</div>
+						</div>
+					)}
+
+					{/*
+					 * A package was installed after this child started. pi reads
+					 * extensions, skills and prompt templates once, at startup, so
+					 * this session cannot see it until the process is replaced —
+					 * which is offered, never done automatically, because a restart
+					 * mid-turn would lose the turn.
+					 */}
+					{snapshot.stale && (
+						<div className="chat-gutter my-3">
+							<div className="chat-measure flex items-center gap-3 rounded border border-amber-900 bg-amber-950/30 px-3 py-2 text-sm text-amber-300">
+								<span className="min-w-0 flex-1">
+									Packages changed since this session started. Its commands and skills are the
+									old set until it restarts.
+								</span>
+								<button
+									onClick={onRestart}
+									disabled={busy}
+									title={
+										busy
+											? "Finish the turn first — a restart mid-turn loses it"
+											: "Replace this session's pi process; the conversation is kept"
+									}
+									className="shrink-0 rounded border border-amber-800 px-2 py-0.5 text-xs transition-colors duration-150 ease-out enabled:hover:bg-amber-900/40 disabled:opacity-50 motion-reduce:transition-none"
+								>
+									Restart session
+								</button>
 							</div>
 						</div>
 					)}

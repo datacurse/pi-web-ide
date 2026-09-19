@@ -120,6 +120,7 @@ export function SessionList({
 	shortNames,
 	onNew,
 	onSettings,
+	onPackages,
 }: {
 	sessions: PiSessionInfo[];
 	/** Why the listing failed, when it did; shown instead of "No sessions yet". */
@@ -161,6 +162,7 @@ export function SessionList({
 	shortNames: boolean;
 	onNew: () => void;
 	onSettings: () => void;
+	onPackages: () => void;
 }) {
 	const { host, cwd: project } = selection;
 	const current = projects.find((e) => e.host === host);
@@ -525,12 +527,21 @@ export function SessionList({
 				*/}
 				<div className="border-t border-neutral-800 p-1.5">
 					<button
+						onClick={onPackages}
+						title="Packages installed on every machine"
+						className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-xs text-neutral-400 transition-colors duration-150 ease-out hover:bg-neutral-900 hover:text-neutral-200 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 motion-reduce:transition-none"
+					>
+						{/* Text presentation selector on both: a bare symbol renders
+						    as a colour emoji on several platforms, which this chrome
+						    is not. */}
+						<span aria-hidden>{"\u25a6\ufe0e"}</span>
+						Packages
+					</button>
+					<button
 						onClick={onSettings}
 						title="Settings"
 						className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-xs text-neutral-400 transition-colors duration-150 ease-out hover:bg-neutral-900 hover:text-neutral-200 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 motion-reduce:transition-none"
 					>
-						{/* Text presentation selector: bare U+2699 renders as a color
-						    emoji on several platforms, which this chrome is not. */}
 						<span aria-hidden>{"\u2699\ufe0e"}</span>
 						Settings
 					</button>

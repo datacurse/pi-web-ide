@@ -217,6 +217,80 @@ export interface Snapshot {
 	 */
 	contextTokens: number;
 	contextWindow: number;
+	/**
+	 * This session's pi child started before the newest package install, so
+	 * it does not have the newly installed extensions, skills or prompt
+	 * templates — pi reads those once, at startup. The UI offers a restart;
+	 * the server never restarts a session on its own.
+	 */
+	stale: boolean;
+}
+
+/**
+ * One entry of pi's `packages` array, plus what is actually on disk.
+ *
+ * `identity` is pi's own rule for "the same package": the npm name, the git
+ * URL without its ref, or the resolved absolute path. Two machines agree on
+ * a package when their identities match, which is what lets the screen put
+ * one row across a fleet.
+ */
+export interface PiwPackage {
+	/** Exactly as written in settings.json. */
+	source: string;
+	kind: "npm" | "git" | "local";
+	identity: string;
+	/** The version or ref the source pins, or null for an unpinned source. */
+	pinned: string | null;
+	/** What is on disk: a package.json version, or a short git HEAD. */
+	installed: string | null;
+	/** Written in object form with resource filters: it loads only part of itself. */
+	filtered: boolean;
+	/** `autoload: false` — installed, but not loaded unless a project asks for it. */
+	autoload: boolean;
+}
+
+/** `GET /api/packages` on one machine. */
+export interface PiwPackagesView {
+	packages: PiwPackage[];
+	/** Bumped on every successful mutation; a session started under an older one is stale. */
+	epoch: number;
+	/** A mutation is running here. The next request will wait rather than fail. */
+	busy: boolean;
+	piVersion: string | null;
+}
+
+/** What a package mutation did, as the screen reports it. */
+export interface PiwMutation {
+	ok: boolean;
+	/** The tail of pi's combined output: what npm or git said, verbatim. */
+	log: string;
+	/** One line, when it failed. */
+	reason?: string;
+}
+
+/** One npm gallery hit: a package carrying the `pi-package` keyword. */
+export interface PiwSearchHit {
+	name: string;
+	version: string;
+	description?: string;
+	publisher?: string;
+	published?: string;
+	repository?: string;
+}
+
+/** One package in detail, as the install dialog shows it. */
+export interface PiwPackageInfo {
+	name: string;
+	/** The newest published version — what an install would pin to. */
+	latest: string;
+	description?: string;
+	publisher?: string;
+	published?: string;
+	repository?: string;
+	contains: { extensions: number; skills: number; prompts: number; themes: number };
+	image?: string;
+	video?: string;
+	weeklyDownloads?: number;
 }
 
 /**

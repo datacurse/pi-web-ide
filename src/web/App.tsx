@@ -15,6 +15,7 @@ import { Chat } from "./Chat.js";
 import { TerminalPane } from "./Terminal.js";
 import { EMPTY_LAYOUT, parseLayout, reconcile, type TermLayout } from "./termLayout.js";
 import { Settings } from "./Settings.js";
+import { Packages, type PackageMachine } from "./Packages.js";
 import {
 	applyTheme,
 	readNotify,
@@ -92,6 +93,7 @@ function toSnapshot(raw: Partial<Snapshot>): Snapshot {
 		thinkingLevels: Array.isArray(raw.thinkingLevels) ? raw.thinkingLevels : [],
 		contextTokens: typeof raw.contextTokens === "number" ? raw.contextTokens : 0,
 		contextWindow: typeof raw.contextWindow === "number" ? raw.contextWindow : 0,
+		stale: raw.stale === true,
 	};
 }
 
@@ -344,6 +346,7 @@ export default function App() {
 	/** The chat+terminal track, measured while dragging the divider. */
 	const splitRow = useRef<HTMLDivElement | null>(null);
 	const [settingsOpen, setSettingsOpen] = useState(false);
+	const [packagesOpen, setPackagesOpen] = useState(false);
 	const [theme, setTheme] = useState<ThemeId>(readTheme);
 	const [showThinking, setShowThinking] = useState(readShowThinking);
 	const [toolMode, setToolMode] = useState<ToolMode>(readToolMode);
@@ -1477,6 +1480,39 @@ export default function App() {
 	}, [snapshot, origin]);
 
 	/**
+	 * Replace this session's pi child so it picks up a newly installed
+	 * package. The transcript comes back from the server's fresh snapshot —
+	 * the conversation is on disk, only the process changed.
+	 */
+	const restart = useCallback(async () => {
+		if (!snapshot) return;
+		const r = await fetch(`${origin}/api/sessions/${snapshot.id}/restart`, { method: "POST" });
+		const body: unknown = await r.json().catch(() => null);
+		if (r.ok && body && typeof body === "object") {
+			setSnapshot(toSnapshot(body as Partial<Snapshot>));
+			return;
+		}
+		const reason =
+			body && typeof body === "object" && "error" in body && typeof body.error === "string"
+				? body.error
+				: "could not restart this session";
+		setSnapshot((s) => (s ? { ...s, error: reason } : s));
+	}, [snapshot, origin]);
+
+	/**
+	 * Re-read the open session's snapshot.
+	 *
+	 * For facts that change OUTSIDE the event stream — a package installed
+	 * from the Packages screen makes this session stale, and nothing in the
+	 * session's own frames will ever say so.
+	 */
+	const reloadSnapshot = useCallback(async () => {
+		if (!snapshot) return;
+		const r = await fetch(`${origin}/api/sessions/${snapshot.id}`);
+		if (r.ok) setSnapshot(toSnapshot(await r.json()));
+	}, [snapshot, origin]);
+
+	/**
 	 * Re-read the slash command catalog when the composer's picker opens.
 	 *
 	 * pi pushes nothing when the set changes, and it does change under a live
@@ -1635,6 +1671,7 @@ export default function App() {
 				shortNames={shortNames}
 				onNew={() => void attach(undefined)}
 				onSettings={() => setSettingsOpen(true)}
+				onPackages={() => setPackagesOpen(true)}
 			/>
 			<div className="flex min-h-0 min-w-0 flex-1 flex-col">
 				<SessionTabs
@@ -1683,6 +1720,7 @@ export default function App() {
 							onThinkingChange={changeThinking}
 							onCommandMenu={refreshCommands}
 							onCompact={compact}
+							onRestart={restart}
 						/>
 					</div>
 
@@ -1742,6 +1780,22 @@ export default function App() {
 				shortNames={shortNames}
 				onShortNames={changeShortNames}
 				onClose={() => setSettingsOpen(false)}
+			/>
+			{/*
+			 * Every machine this page can reach, this one first. A host that is
+			 * not answering, or that turned out to be another product, is left
+			 * out entirely: its packages are not ours to list or to change.
+			 */}
+			<Packages
+				open={packagesOpen}
+				onChanged={() => void reloadSnapshot()}
+				machines={[
+					{ name: "", origin: "" },
+					...(hosts ?? [])
+						.filter((h) => h.reachable && !h.foreign)
+						.map((h): PackageMachine => ({ name: h.name, origin: h.url })),
+				]}
+				onClose={() => setPackagesOpen(false)}
 			/>
 		</div>
 	);

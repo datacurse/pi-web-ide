@@ -35,6 +35,8 @@ import { Terminals } from "./terminals.js";
 import { Registry } from "./registry.js";
 import { PI_BIN, type AskAnswer } from "./agent.js";
 import { PRODUCT, type PiImage } from "../shared/types.js";
+import * as packages from "./packages.js";
+import { info, search } from "./gallery.js";
 import { claimPort } from "./takeover.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -644,6 +646,20 @@ app.post("/api/sessions/:id/compact", async (req, res) => {
 });
 
 /**
+ * Restart this session's pi child, so it picks up packages installed since
+ * it started. The conversation is on disk and the id comes from the file, so
+ * the session survives; only the process is replaced.
+ */
+app.post("/api/sessions/:id/restart", async (req, res) => {
+	try {
+		const entry = await registry.restart(req.params.id);
+		res.json(registry.snapshot(entry, entry.id));
+	} catch (err) {
+		res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
+	}
+});
+
+/**
  * Answer the question pi is blocked on.
  *
  * `askId` is pi's own request id and is required: a click and a timeout can
@@ -748,6 +764,86 @@ app.post("/api/sessions/:id/thinking", async (req, res) => {
 		res.json({ ok: true });
 	} catch (err) {
 		res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
+	}
+});
+
+/**
+ * Packages: what this machine has installed, and changing it.
+ *
+ * These routes are remote code execution by design — a pi package's
+ * extensions are code and its skills instruct the model — which is the same
+ * class of exposure as /api/terminals, already on this port. They inherit
+ * that boundary and must not widen it: same loopback listener, same origin
+ * guard, no new surface.
+ */
+app.get("/api/packages", async (_req, res) => {
+	try {
+		res.json({ piVersion: PI_VERSION ?? null, ...(await packages.view()) });
+	} catch (err) {
+		res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+	}
+});
+
+/** A mutation answers with its own outcome; the log tail is the interesting part. */
+function mutation(
+	res: express.Response,
+	work: () => Promise<{ ok: boolean; log: string; reason?: string }>,
+): Promise<void> {
+	return work().then(
+		(result) => {
+			// A prewarmed spare booted under the OLD package set, and handing
+			// that to the next `+ New` would give somebody a session that is
+			// stale before they have typed anything.
+			if (result.ok) registry.discardSpares();
+			// 200 either way: a refused install is an answer the screen shows
+			// verbatim, not a transport failure.
+			res.json(result);
+		},
+		(err: unknown) => {
+			// Only validation lands here, and it is the user's input that is wrong.
+			res.status(400).json({
+				ok: false,
+				log: "",
+				reason: err instanceof Error ? err.message : String(err),
+			});
+		},
+	);
+}
+
+app.post("/api/packages", async (req, res) => {
+	const source = typeof req.body?.source === "string" ? req.body.source : "";
+	if (!source) return res.status(400).json({ ok: false, log: "", reason: "source required" });
+	await mutation(res, () => packages.install(source));
+});
+
+app.delete("/api/packages", async (req, res) => {
+	const source = typeof req.body?.source === "string" ? req.body.source : "";
+	if (!source) return res.status(400).json({ ok: false, log: "", reason: "source required" });
+	await mutation(res, () => packages.remove(source));
+});
+
+app.post("/api/packages/update", async (req, res) => {
+	const source = typeof req.body?.source === "string" ? req.body.source : undefined;
+	await mutation(res, () => packages.update(source));
+});
+
+/** Update the pi CLI on THIS machine. Per machine, never fleet-wide in one click. */
+app.post("/api/packages/update-pi", async (_req, res) => {
+	await mutation(res, () => packages.updateSelf());
+});
+
+app.get("/api/packages/search", async (req, res) => {
+	const q = typeof req.query.q === "string" ? req.query.q : "";
+	res.json(await search(q));
+});
+
+app.get("/api/packages/info", async (req, res) => {
+	const name = typeof req.query.name === "string" ? req.query.name : "";
+	if (!name) return res.status(400).json({ error: "name required" });
+	try {
+		res.json(await info(name));
+	} catch (err) {
+		res.status(502).json({ error: err instanceof Error ? err.message : String(err) });
 	}
 });
 
