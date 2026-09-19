@@ -1,34 +1,70 @@
-#!/usr/bin/env bash
+#!/bin/sh
 #
-# install.sh — put piw under systemd --user on this machine.
+# install.sh — put pi-web-ide under systemd --user on this machine.
 #
 # Idempotent: safe to re-run after `git pull`, a `pnpm build`, or an edit to the
-# env file. Never uses sudo — piw is a user service holding user credentials, so
-# there is nothing here that root should own.
+# env file. Never uses sudo — pi-web-ide is a user service holding user
+# credentials, so there is nothing here that root should own.
+#
+# Flags:
+#   --dry-run            print every file that would be written and every
+#                        systemctl command that would run; change nothing
 #
 # Env knobs:
 #   PIW_INSTALL_COPY=1   copy the unit instead of symlinking it
 #
-set -euo pipefail
+set -eu
 
-here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+dry=0
+for arg in "$@"; do
+	case "$arg" in
+	--dry-run) dry=1 ;;
+	*)
+		printf 'pi-web-ide install: unknown argument: %s\n' "$arg" >&2
+		exit 1
+		;;
+	esac
+done
+
+here="$(cd "$(dirname "$0")" && pwd)"
 repo="$(cd "$here/.." && pwd)"
 
-unit_name="piw.service"
+unit_name="pi-web-ide.service"
 # The unit dir honours XDG_CONFIG_HOME because that is where `systemctl --user`
 # actually looks. The env file does NOT: the unit references it as
-# %h/.config/piw/env, and systemd has no XDG-aware specifier, so both sides
-# must stay literally $HOME/.config to agree.
+# %h/.config/pi-web-ide/env, and systemd has no XDG-aware specifier, so both
+# sides must stay literally $HOME/.config to agree.
 unit_dir="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
-conf_dir="$HOME/.config/piw"
+conf_dir="$HOME/.config/pi-web-ide"
 env_file="$conf_dir/env"
+env_example="pi-web-ide.env.example"
 dropin_dir="$unit_dir/$unit_name.d"
 dropin="$dropin_dir/10-workdir.conf"
 
-say() { printf 'piw install: %s\n' "$*"; }
+say() { printf 'pi-web-ide install: %s\n' "$*"; }
 fail() {
-	printf 'piw install: %s\n' "$*" >&2
+	printf 'pi-web-ide install: %s\n' "$*" >&2
 	exit 1
+}
+
+# A dry run has to be able to describe a machine it refuses to install on, so a
+# blocker is a line in the plan there and an abort everywhere else.
+problem() {
+	if [ "$dry" = 1 ]; then
+		say "WOULD FAIL: $*"
+	else
+		fail "$*"
+	fi
+}
+
+# The one place a systemctl command is issued, so --dry-run has exactly one
+# thing to intercept.
+run() {
+	if [ "$dry" = 1 ]; then
+		say "would run: $*"
+	else
+		"$@"
+	fi
 }
 
 # Created once, then owned by the user: re-running install.sh must never
@@ -37,24 +73,30 @@ fail() {
 # instructions that reference a file we declined to create is worse than
 # useless.
 ensure_env_file() {
-	mkdir -p "$conf_dir"
 	if [ -f "$env_file" ]; then
 		say "kept existing $env_file"
 		return
 	fi
-	sed "s|@HOME@|$HOME|g" "$here/piw.env.example" >"$env_file"
-	# No secrets today — credentials live in ~/.omp/agent/auth.json — but this
+	if [ "$dry" = 1 ]; then
+		say "would create $env_file from $env_example (mode 0600)"
+		return
+	fi
+	mkdir -p "$conf_dir"
+	sed "s|@HOME@|$HOME|g" "$here/$env_example" >"$env_file"
+	# No secrets today — credentials live in ~/.pi/agent/auth.json — but this
 	# is service configuration in a dotfile directory, so 0600 costs nothing
 	# and is already right if a token ever lands here.
 	chmod 0600 "$env_file"
-	say "created $env_file from piw.env.example — review it"
+	say "created $env_file from $env_example — review it"
 }
 
 # PIW_PORT from the installed env file, defaulting exactly as index.ts does.
 # Last match wins, which is what systemd does with a repeated key.
 read_port() {
-	local p
-	p="$(sed -n 's/^PIW_PORT=\([0-9][0-9]*\).*/\1/p' "$env_file" | tail -1)"
+	p=""
+	if [ -f "$env_file" ]; then
+		p="$(sed -n 's/^PIW_PORT=\([0-9][0-9]*\).*/\1/p' "$env_file" | tail -1)"
+	fi
 	printf '%s' "${p:-8890}"
 }
 
@@ -62,11 +104,11 @@ read_port() {
 # Preflight.
 # ---------------------------------------------------------------------------
 for cmd in systemctl loginctl sed install; do
-	command -v "$cmd" >/dev/null 2>&1 || fail "required command not found: $cmd"
+	command -v "$cmd" >/dev/null 2>&1 || problem "required command not found: $cmd"
 done
 
-[ -f "$here/$unit_name" ] || fail "missing $here/$unit_name"
-[ -f "$here/piw.env.example" ] || fail "missing $here/piw.env.example"
+[ -f "$here/$unit_name" ] || problem "missing $here/$unit_name"
+[ -f "$here/$env_example" ] || problem "missing $here/$env_example"
 
 ensure_env_file
 
@@ -77,8 +119,11 @@ ensure_env_file
 # a "successful" install and nothing running. Print the exact fallback instead.
 if ! systemctl --user show-environment >/dev/null 2>&1; then
 	port_hint="$(read_port)"
-	cat >&2 <<EOF
-piw install: no systemd user manager on this machine.
+	if [ "$dry" = 1 ]; then
+		say "WOULD FAIL: no systemd user manager on this machine"
+	else
+		cat >&2 <<EOF
+pi-web-ide install: no systemd user manager on this machine.
 
   \`systemctl --user\` is unavailable, so there is nothing to install into.
   On WSL, enable it by putting the following in /etc/wsl.conf and running
@@ -87,53 +132,73 @@ piw install: no systemd user manager on this machine.
       [boot]
       systemd=true
 
-  Until then, run piw detached by hand. This survives the shell that starts it
-  but NOT a reboot, and nothing will restart it if it dies:
+  Until then, run the server detached by hand. This survives the shell that
+  starts it but NOT a reboot, and nothing will restart it if it dies:
 
-      mkdir -p "\$HOME/.local/state/piw"
+      mkdir -p "\$HOME/.local/state/pi-web-ide"
       cd $repo
       set -a; . "$env_file"; set +a
-      setsid nohup pnpm start >>"\$HOME/.local/state/piw/piw.log" 2>&1 </dev/null &
+      setsid nohup pnpm start >>"\$HOME/.local/state/pi-web-ide/server.log" 2>&1 </dev/null &
 
-  Then: http://127.0.0.1:$port_hint   (log: ~/.local/state/piw/piw.log)
+  Then: http://127.0.0.1:$port_hint   (log: ~/.local/state/pi-web-ide/server.log)
 EOF
-	exit 1
+		exit 1
+	fi
 fi
 
 # The unit starts the production server, which serves dist/ itself. Without a
 # build it would come up healthy and serve nothing, so refuse early rather than
 # hand back a green `systemctl status` that lies.
-[ -d "$repo/dist" ] || fail "no $repo/dist — run \`pnpm build\` first"
+[ -d "$repo/dist" ] || problem "no $repo/dist — run \`pnpm build\` first"
 
 # ---------------------------------------------------------------------------
 # Unit file. Symlink by default so `git pull` updates it (a daemon-reload is
 # still required, and this script does one). Copy when the checkout lives
 # somewhere the user manager may not be able to read, or on request.
 # ---------------------------------------------------------------------------
-mkdir -p "$unit_dir"
-
-if [ "${PIW_INSTALL_COPY:-}" = "1" ]; then
-	install -m 0644 "$here/$unit_name" "$unit_dir/$unit_name"
-	say "copied $unit_dir/$unit_name"
+if [ "$dry" = 1 ]; then
+	say "would create $unit_dir"
 else
-	ln -sfn "$here/$unit_name" "$unit_dir/$unit_name"
-	say "linked $unit_dir/$unit_name -> $here/$unit_name"
+	mkdir -p "$unit_dir"
 fi
 
-# The shipped unit hardcodes WorkingDirectory=%h/code/piw because that is where
-# the checkout lives on every machine so far. A drop-in, rather than rewriting
-# the unit, keeps the unit file itself identical everywhere and diffable against
-# git — and lets us delete the override cleanly when it is not needed.
-if [ "$repo" = "$HOME/code/piw" ]; then
-	if [ -e "$dropin" ]; then
-		rm -f "$dropin"
-		rmdir "$dropin_dir" 2>/dev/null || true
-		say "removed stale WorkingDirectory drop-in"
+if [ "${PIW_INSTALL_COPY:-}" = "1" ]; then
+	if [ "$dry" = 1 ]; then
+		say "would copy $here/$unit_name -> $unit_dir/$unit_name (mode 0644)"
+	else
+		install -m 0644 "$here/$unit_name" "$unit_dir/$unit_name"
+		say "copied $unit_dir/$unit_name"
 	fi
+else
+	if [ "$dry" = 1 ]; then
+		say "would link $unit_dir/$unit_name -> $here/$unit_name"
+	else
+		ln -sfn "$here/$unit_name" "$unit_dir/$unit_name"
+		say "linked $unit_dir/$unit_name -> $here/$unit_name"
+	fi
+fi
+
+# The shipped unit hardcodes WorkingDirectory=%h/code/pi-web-ide because that
+# is where the checkout lives on every machine so far. A drop-in, rather than
+# rewriting the unit, keeps the unit file itself identical everywhere and
+# diffable against git — and lets us delete the override cleanly when it is not
+# needed.
+if [ "$repo" = "$HOME/code/pi-web-ide" ]; then
+	if [ -e "$dropin" ]; then
+		if [ "$dry" = 1 ]; then
+			say "would remove stale WorkingDirectory drop-in $dropin"
+		else
+			rm -f "$dropin"
+			rmdir "$dropin_dir" 2>/dev/null || true
+			say "removed stale WorkingDirectory drop-in"
+		fi
+	fi
+elif [ "$dry" = 1 ]; then
+	say "would write $dropin (WorkingDirectory=$repo)"
 else
 	mkdir -p "$dropin_dir"
 	cat >"$dropin" <<EOF
-# Generated by deploy/install.sh. Checkout is not at \$HOME/code/piw.
+# Generated by deploy/install.sh. Checkout is not at \$HOME/code/pi-web-ide.
 [Service]
 WorkingDirectory=$repo
 EOF
@@ -143,14 +208,22 @@ fi
 # ---------------------------------------------------------------------------
 # Activate.
 # ---------------------------------------------------------------------------
-systemctl --user daemon-reload
-systemctl --user enable "$unit_name" >/dev/null
-systemctl --user restart "$unit_name"
+run systemctl --user daemon-reload
+if [ "$dry" = 1 ]; then
+	say "would run: systemctl --user enable $unit_name"
+else
+	systemctl --user enable "$unit_name" >/dev/null
+fi
+run systemctl --user restart "$unit_name"
 
 port="$(read_port)"
 
 echo
-systemctl --user --no-pager --full status "$unit_name" || true
+if [ "$dry" = 1 ]; then
+	say "would run: systemctl --user --no-pager --full status $unit_name"
+else
+	systemctl --user --no-pager --full status "$unit_name" || true
+fi
 echo
 say "http://127.0.0.1:$port"
 say "logs:    journalctl --user -u $unit_name -f"

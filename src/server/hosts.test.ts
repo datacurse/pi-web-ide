@@ -1,6 +1,13 @@
 // Run: node --import tsx src/server/hosts.test.ts
 import { addHost, listHosts, removeHost } from "./hosts.js";
 import assert from "node:assert/strict";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+// The machine list is written under PIW_STATE_DIR, so the test gets its own
+// and never rewrites the developer's real one.
+process.env.PIW_STATE_DIR = mkdtempSync(join(tmpdir(), "piw-hosts-"));
 
 const PORT = 8890;
 const before = listHosts();

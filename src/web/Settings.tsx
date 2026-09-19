@@ -354,11 +354,12 @@ export function Settings({
 				</fieldset>
 
 				{/*
-				  The one control here that is not browser-local: it edits omp's own
-				  PERSONALITY.md in place. The path is shown because a field that
-				  silently writes a file somewhere is worse than no field, and the
-				  hint says when the change lands — each session is its own omp
-				  child, so a running session keeps the prompt it started with.
+				  The one control here that is not browser-local: it edits this
+				  server's own personality.md, in the state directory. The path is
+				  shown because a field that silently writes a file somewhere is
+				  worse than no field, and the hint says when the change lands —
+				  the file is handed to each child as `--append-system-prompt` at
+				  spawn, so a running session keeps the prompt it started with.
 				*/}
 				<fieldset className="m-0 mt-4 border-0 p-0">
 					<legend className="mb-2 text-[10px] tracking-wide text-neutral-500 uppercase">
@@ -366,7 +367,7 @@ export function Settings({
 					</legend>
 					<label className="block px-2">
 						<span className="text-sm text-neutral-300">
-							Replaces omp's personality block
+							Appended to every new session's system prompt
 						</span>
 						<span className="mt-0.5 block font-mono text-[10px] break-all text-neutral-500">
 							{loadError ? (
@@ -390,7 +391,7 @@ export function Settings({
 							placeholder={
 								loadError
 									? "Unavailable."
-									: "Empty means omp uses the preset selected by its `personality` setting."
+									: "Empty means nothing is appended."
 							}
 							className="mt-2 block w-full resize-y rounded border border-neutral-800 bg-neutral-900 p-2 font-mono text-xs text-neutral-200 outline-none focus-visible:border-neutral-600"
 						/>

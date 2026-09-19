@@ -86,7 +86,7 @@ function optionValue(host: string, cwd: string): string {
  * Left panel: flat, read-only list of EVERY session in the project.
  *
  * Read-only means no delete, no archive, no rename: the session file is
- * omp's, and a UI that deletes an agent's memory should have to be very sure
+ * pi's, and a UI that deletes an agent's memory should have to be very sure
  * of itself. The list shows what is on disk; managing it is the TUI's job.
  *
  * "Every" also means every machine's: the project picker lists each
@@ -134,8 +134,8 @@ export function SessionList({
 	origin: string | undefined;
 	/** Other machines running their own piw. Empty on a single-machine setup. */
 	hosts: PiwHostStatus[];
-	/** This piw's versions, for flagging a machine that lags. */
-	localVersions: { piw?: string; omp?: string };
+	/** This server's versions, for flagging a machine that lags. */
+	localVersions: { piw?: string; pi?: string };
 	sort: SessionSort;
 	onSort: (sort: SessionSort) => void;
 	/** Drawer state. Only observable at <=768px, where this is an overlay. */
@@ -149,12 +149,12 @@ export function SessionList({
 	onRemoveHost: (name: string) => void;
 	onSelectHost: (name: string) => void;
 	onSelect: (s: PiSessionInfo) => void;
-	/** Rename one session. omp owns the title, so this is a server round trip. */
+	/** Rename one session. pi owns the name, so this is a server round trip. */
 	onRename: (s: PiSessionInfo, name: string) => void;
 	/**
-	 * Hand the naming to omp: it summarises the conversation with its own tiny
-	 * model. Awaited, so the row can say it is working — this one can take
-	 * seconds, unlike the local derivation.
+	 * Hand the naming to the server: a one-shot `pi -p` child turns the
+	 * session's opening request into a title. Awaited, so the row can say it
+	 * is working — this one can take seconds, unlike the local derivation.
 	 */
 	onAutoName: (s: PiSessionInfo) => Promise<void>;
 	/** Label unnamed sessions by a short name from the first prompt. */
@@ -216,7 +216,7 @@ export function SessionList({
 	 * a resize — which is also every gesture that means "not this".
 	 */
 	const [menu, setMenu] = useState<{ path: string; x: number; y: number } | null>(null);
-	/** The row waiting on omp's titler, so it can say so instead of looking idle. */
+	/** The row waiting on a generated name, so it can say so instead of looking idle. */
 	const [naming, setNaming] = useState<string | null>(null);
 
 	useEffect(() => {
@@ -367,8 +367,8 @@ export function SessionList({
 				  `created` is the default and the only one that cannot move on
 				  its own: it is the header timestamp, written once. Ordering by
 				  file mtime — which is what this list used to do — meant a
-				  session jumped to the top just from being opened, because omp
-				  appends bookkeeping rows and rewrites the title line on resume.
+				  session jumped to the top just from being opened, so `active`
+				  reads the timestamp of the last message in the file instead.
 				*/}
 				<div className="flex items-center justify-between border-b border-neutral-800 px-2 py-1">
 					<span className="text-[10px] tracking-wide text-neutral-500 uppercase">
@@ -573,8 +573,8 @@ export function SessionList({
 					</button>
 					{/*
 					  The two automatic options, cheapest first. Naming from the
-					  first prompt is local and instant; summarising asks omp's
-					  titler, which costs a model call and a few seconds.
+					  first prompt is local and instant; summarising spends a model
+					  call and a few seconds on the opening request.
 					*/}
 					<button
 						role="menuitem"
@@ -597,9 +597,9 @@ export function SessionList({
 						}}
 						className="block w-full px-3 py-1.5 text-left text-neutral-200 transition-colors duration-150 ease-out hover:bg-neutral-800 focus-visible:bg-neutral-800 focus-visible:outline-none motion-reduce:transition-none"
 					>
-						Summarise with omp
+						Summarise with pi
 						<span className="block text-[10px] text-neutral-500">
-							Asks omp to title the conversation
+							Asks pi to title the conversation
 						</span>
 					</button>
 				</div>

@@ -1,21 +1,20 @@
-# piw
+# pi-web-ide
 
-A deliberately thin web UI for the **omp** coding agent (a pi fork, shipped as
-the `omp` binary; `omp/18.1.21` here). Two panels: session list on the left,
-chat on the right.
+A deliberately thin web UI for the **pi** coding agent (`pi/0.85.1` here).
+Two panels: session list on the left, chat on the right.
 
-piw does not link an agent SDK. It spawns `omp --mode rpc-ui` and talks JSONL
+piw does not link an agent SDK. It spawns `pi --mode rpc` and talks JSONL
 over stdio, so the agent is a *binary* dependency rather than an npm one.
 
 ```bash
 pnpm install
-pnpm dev                     # server :8790 + vite :5480
+pnpm dev                     # server :8890 + vite :5480
 pnpm build && pnpm start     # single process, serves dist/ itself
 ```
 
 Point it at a workspace with `PIW_CWD=/path/to/project` (or pass the path as
 the first argument). `PIW_MODEL=provider/id` overrides the model,
-`PIW_OMP_BIN=/path/to/omp` the binary. To run it as a background service on a
+`PIW_PI_BIN=/path/to/pi` the binary. To run it as a background service on a
 machine, see [Deployment](#deployment).
 
 Another machine with its own piw is added from the **Machines** panel in the
@@ -23,7 +22,7 @@ bottom-left corner: give it an ssh destination (piw keeps an `ssh -L` forward
 up) or the origin its piw answers at (`tailscale serve`), and its projects
 join the picker on this page. See [Multiple machines](#multiple-machines).
 
-**Restarting takes the port.** Starting piw while an older piw holds `:8790`
+**Restarting takes the port.** Starting piw while an older piw holds `:8890`
 kills the old one and binds — restarting is never anything else, and "find
 the pid, kill it, start again" was three steps of ceremony. It only ever
 kills a process that identifies itself as piw on `/api/health`; an
@@ -37,19 +36,20 @@ supervisor where two units could otherwise kill each other in a loop. See
 These are decisions, not omissions. Scope creep should have to argue with this
 list:
 
-- no plugins, no goal mode, no subagents
+- no plugins, no goal mode
 - no file tree, no multi-user
 - no NESTED terminal splits: each terminal tab is one row or one column of
   shells, never a tree. Panes inside panes are tmux's job, and tmux is one
   command away — see [Terminal](#terminal)
 - no settings *page* — one dialog. Everything in it is browser-local (theme,
   whether thinking is shown) with exactly one exception: the personality
-  field, which edits omp's own `PERSONALITY.md` in place. The rule it bends
-  was "no second place to look", and a field that reads and writes the real
-  file keeps that: there is no piw-side copy. Everything else that changes how
-  the agent runs still belongs in omp's config
-- no session **tree** — the list is flat and read-only; use the TUI for
-  `/tree` branching
+  field, which edits the extra system-prompt text this server passes to every
+  session it starts (`~/.config/pi-web-ide/personality.md`). The rule it bends
+  was "no second place to look", and a field that reads and writes that file
+  in place keeps it: there is no second copy of it anywhere. Everything else
+  that changes how the agent runs still belongs in pi's own config
+- no session **tree** — the list is flat and read-only; forking a session is
+  the TUI's job
 - no tab reordering and no drag-drop. Tabs are ordered by when you opened
   them, which is information; a hand-sorted strip is another piece of state to
   persist, reconcile and debug for no gain
@@ -57,10 +57,10 @@ list:
   dependency, no plugin chain) and user text stays `whitespace-pre-wrap`,
   because you typed it and know what it says. Math is the one exception: see
   [Math](#math)
-- no unattended approvals. Blocking questions — `ask`, `confirm`, approvals —
-  are answered in the browser (see [Questions](#questions)), but a session
-  running with nobody attached would block on one, so children run in `yolo`
-  by default (`PIW_APPROVAL_MODE`)
+- no approval gate to configure — pi has none, and a browser has no terminal
+  to answer one on. The blocking questions an extension does raise — `ask`,
+  `confirm` — are answered in the browser (see [Questions](#questions)),
+  though a session left running with nobody attached will sit on one
 - no image *generation*, no file attachments beyond images, no clipboard
   history — pasting a screenshot is in scope; a file manager is not
 - no central gateway across machines, and no merged cross-machine session
@@ -72,15 +72,17 @@ list:
 
 ```
 src/shared/types.ts       wire contract, zero imports — FROZEN
-src/server/omp.ts         THE RPC BOUNDARY — only file that spawns or speaks to omp
-src/server/sessions.ts    session list, parsed from ~/.omp/agent/sessions
-src/server/models.ts      model catalog + startup default, via `omp models --json`
+src/server/agent.ts       THE RPC BOUNDARY — only file that spawns or speaks to pi
+src/server/sessions.ts    session list, parsed from ~/.pi/agent/sessions
+src/server/models.ts      model catalog + startup default, asked of pi over RPC
 src/server/registry.ts    session cache + server-authoritative message state
 src/server/index.ts       SSE for events, POST for commands
-src/server/takeover.ts    claims :8790 from the previous piw on startup
-src/server/hosts.ts       the machine list (~/.omp/agent/piw-hosts.json)
+src/server/takeover.ts    claims :8890 from the previous piw on startup
+src/server/state.ts       ~/.config/pi-web-ide, where this server keeps its own state
+src/server/hosts.ts       the machine list (~/.config/pi-web-ide/hosts.json)
 src/server/tunnels.ts     supervises one `ssh -L` child per machine
-src/server/personality.ts omp's PERSONALITY.md, read and replaced in place
+src/server/autoname.ts    one-shot `pi -p` children: commit messages, session names
+src/server/personality.ts the extra system-prompt text, read and replaced in place
 src/server/terminals.ts   one login shell per project, on a real PTY
 src/server/git.ts         branch/commit/push/PR, argv-only, no shell
 src/web/commands.ts       slash-command completion rules for the composer
@@ -90,9 +92,8 @@ src/web/                  React: SessionTabs + SessionList + Chat + Machines + S
 ```
 
 `types.ts` keeps its `Pi*` names (`PiEvent`, `PiMessage`, `PiBlock`,
-`PiPartial`, `Snapshot`, `PiSessionInfo`, `PiImage`). omp's own npm package is
-still `@oh-my-pi/pi-coding-agent`, so the prefix is not a lie, and renaming
-2500 lines to change a prefix buys nothing.
+`PiPartial`, `Snapshot`, `PiSessionInfo`, `PiImage`): the agent on the other
+end of the wire is pi, so the prefix says exactly what those shapes are.
 
 SSE rather than WebSocket, because this is one-directional streaming plus
 discrete commands. The browser gives us reconnect semantics for free and
@@ -106,8 +107,9 @@ you are restarting. So startup claims it: probe the port, ask who is there,
 stop them, bind.
 
 "Ask who is there" is the whole safety argument. `/api/health` answers
-`{ ok: true, cwd, pid }` and nothing else on the machine does, so an occupant
-that does not answer that shape is **not** killed — startup fails with the
+`{ ok: true, product: "pi-web-ide", cwd, pid }` and nothing else on the
+machine does, so an occupant that does not name itself that way is **not**
+killed — startup fails with the
 old message instead. A web UI for a coding agent has no business killing
 whatever program happens to hold a port, and "it was on my port" is not
 identification.
@@ -143,38 +145,38 @@ least twice upstream (`AuthStorage` + `ModelRegistry` → `discoverAuthStorage` 
 `ModelRuntime.create`) and the npm scope moved `@mariozechner/*` →
 `@earendil-works/*`, while the agent's actual behavior stayed put.
 
-`omp --mode rpc-ui` removes the reason for the rule instead of restating it: it
-is a documented, versioned wire contract — commands in, frames out — negotiated
-explicitly at startup. A protocol that says `protocolVersion: 2` is a thing you
-can code against; a constructor is not. Two more properties fall out of it:
+`pi --mode rpc` removes the reason for the rule instead of restating it: it is
+a documented wire contract — commands in, frames out, strict JSONL — rather
+than a constructor whose shape is whatever the SDK settled on this week. Two
+more properties fall out of it:
 
 - **Process isolation per session.** One child per open conversation. A tool
   that wedges its host, an OOM inside one turn, or a panic in the agent takes
   down that child and nothing else. In-process, all of it was one heap.
-- **Restartability.** Conversation state lives in omp's own JSONL under
-  `~/.omp/agent/sessions/<cwd>/`, so a child is disposable: `-r <file>`
+- **Restartability.** Conversation state lives in pi's own JSONL under
+  `~/.pi/agent/sessions/<cwd>/`, so a child is disposable: `--session <file>`
   rehydrates one for the cost of a spawn. Restarting the server loses at most
   an in-flight turn, never the work — which is what makes running piw under a
   supervisor with `Restart=always` a reasonable thing to do.
 
 The cost is real and worth naming: everything is async, and nothing can be read
-out of a live object. `omp.ts` therefore keeps a small server-side mirror of
+out of a live object. `agent.ts` therefore keeps a small server-side mirror of
 each session (messages, model, streaming) fed by the frame stream, so
 `messages()` can stay synchronous for its callers.
 
-It also normalizes omp's frame types down to the same six events the UI already
+It also normalizes pi's frame types down to the same six events the UI already
 consumed: `text`, `thinking`, `tool_start`, `tool_end`, `message_done`, `idle`,
 `error`. That is why `types.ts` did not have to change, and why the browser has
 never seen an `assistantMessageEvent`.
 
 Sessions are listed by reading the JSONL store directly rather than by asking
-the CLI, for two reasons documented in `sessions.ts`: rpc-ui is one subprocess
-per *open* session, so enumeration would mean spawning a process just to list
-(~1s of Node startup per poll); and the per-project directory name is not a
-usable key, because the cwd encoding is inconsistent (`/tmp/omprpc-x` →
-`-tmp-omprpc-x`, but `/mnt/c/Users/loki` → `--mnt-c-Users-loki--`).
-Reimplementing that encoding would be a guess that fails by returning an empty
-list. Every session file carries its own `cwd` in a `session` header entry, so
+the CLI, for two reasons documented in `sessions.ts`: RPC mode is one
+subprocess per *open* session, so enumeration would mean spawning a process
+just to list (~1s of Node startup per poll); and the per-project directory
+name is not a usable key, because the cwd encoding is lossy (`/tmp/pi-probe` →
+`--tmp-pi-probe--`, with every separator becoming a character the path may
+already contain). Reimplementing that encoding would be a guess that fails by
+returning an empty list. Every session file carries its own `cwd` in a `session` header entry, so
 we scan the store and filter on that.
 
 ## Image attachments
@@ -184,13 +186,13 @@ use the same path. Images ride along with the next prompt.
 
 Three things are deliberate:
 
-- **Raw base64 on the wire, no `data:` prefix.** That is what omp's image
+- **Raw base64 on the wire, no `data:` prefix.** That is what pi's image
   content wants, so the prefix is stripped once at the browser edge and there
   is a single representation everywhere else.
 - **No resizing here.** The in-process version shrank screenshots through the
-  SDK's Photon/WASM `resizeImage`. Across RPC the image is omp's to normalize
+  SDK's Photon/WASM `resizeImage`. Across RPC the image is pi's to normalize
   for the provider, and the only way to keep resizing in piw would be a native
-  image dependency — a large cost for a step the agent already owns. `omp.ts`
+  image dependency — a large cost for a step the agent already owns. `agent.ts`
   validates instead (type allowlist, non-empty, 20MB ceiling) and passes the
   bytes through. A rejection here is reportable to the user; a provider 400 is
   not.
@@ -218,10 +220,10 @@ A model with no block at all reports an empty list and the control is not
 rendered.
 
 Setting it is `set_thinking_level`, and the **validation is on our side of the
-boundary on purpose**: omp answers `success: true` to any string, including
+boundary on purpose**: pi answers `success: true` to any string, including
 `"bogus"`, and the session then reports *no* level at all — a state worse than
 the one the user asked for, and invisible until a later turn reasons
-differently. `omp.ts` rejects a level outside the model's list, the route
+differently. `agent.ts` rejects a level outside the model's list, the route
 answers 400, and the session keeps the level it had. Switching models re-reads
 the whole set, because the new model's levels are its own.
 
@@ -229,13 +231,12 @@ Unlike a model switch, this is allowed mid-stream: it applies from the next
 turn, so there is no in-flight request for it to disturb.
 
 **Context usage** is measured, never estimated, and it comes from the session
-rather than from the transcript: `get_state.contextUsage` is omp's own
+rather than from the transcript: `get_session_stats.contextUsage` is pi's own
 occupancy for this conversation, already including the system prompt, the tool
 schemas and the cached prefix that a token count computed in the browser would
 miss. The distinction is load-bearing after a compaction — the newest
 assistant message's `usage.totalTokens` still describes the prefix that was
-just folded away (measured: `21417` from the session against a stale `23276`
-on the message), so a meter fed from messages reads full until the next turn.
+just folded away, so a meter fed from messages reads full until the next turn.
 During a turn the streamed `usage` keeps it live; every settle, compaction and
 model switch re-reads it.
 
@@ -245,58 +246,49 @@ a compaction. It is hidden for a model that declares no window.
 
 ## Slash commands answer below the transcript
 
-Anything typed into the composer goes to omp as a prompt, so omp's own
-commands work — `/compact`, `/context`, `/usage`, `/shake`, `/session`. They
-are **local** commands, though: they run no turn, append no message, and emit
-no `agent_end`. Their entire output arrives as `command_output` frames, and
-maintenance talks through `notice` frames alongside them. piw used to drop
-both, which is why `/compact` looked like it had done nothing at all — the
-context was rewritten, the meter still read 345k, and the transcript still
-showed the folded-away history.
+Anything typed into the composer goes to pi as a prompt, so the commands this
+project's extensions, prompt templates and skills define work. Some of them
+are **local**: pi handles them itself, which means no turn, no message
+appended, and no `agent_start`. Their entire output is whatever `notify` the
+extension chooses to send, and pi's own maintenance — a compaction, an
+auto-retry — talks through the same one-way channel. piw used to drop all of
+it, which is why such a command looked like it had done nothing at all.
 
 Now those frames land under the transcript as notice lines (info neutral,
 warnings amber, failures red), they are part of the snapshot so a reload or a
 dropped `EventSource` does not lose them, and the next prompt clears them:
 the answer to a command belongs to that command.
 
-Two ordering details cost a while to find:
+Three details cost a while to find:
 
-- **The ack is not the completion.** A local command answers
-  `{ agentInvoked: false }` *immediately*, then does the work: `/compact`
-  acknowledges, and prints `Compaction complete. Tokens: 22519 -> 18940`
-  seconds later. So the re-read cannot hang off the ack — it would read the
-  pre-compaction session straight back. `command_output` is the only evidence
-  the command had an effect, so that is the trigger, coalesced (400ms) because
-  a command may print many lines and re-reading a long session is megabytes a
-  time.
-- **Nothing else tells a client the transcript changed.** After the re-read
-  lands, the session emits one `idle`, which is what makes an attached browser
-  refetch. A local command really is idle: there was no turn.
-- **The command itself is never in the transcript.** A local command appends
-  no message, so the `/compact remote` you typed disappears with the composer
-  text: the session shows the notice and no question. And because the ack
-  lands in milliseconds, the status line reads `Idle` while the work runs —
-  `/compact` on a 272k-token session spent ~30 seconds looking exactly like a
-  dropped keystroke. So the composer echoes what it sent as a user row,
-  marked `running…` until the answer arrives (a notice, a real turn, or an
-  error), and the row stays afterwards as the question its notice answers.
-  Both are cleared by the next prompt. The spinner gives up after two
-  minutes, because a command that changes the session without printing —
-  `/model`, `/thinking` — has no answer coming at all.
+- **There is no "the agent was not invoked" field.** A prompt is acknowledged
+  with a plain `{ success: true }` whether it reached the model or not, and a
+  local command then emits nothing further — no `agent_start`, no
+  `agent_settled`. The absence is the only evidence there is, so it is timed:
+  a prompt beginning with `/` that has produced no `agent_start` within 1.5s
+  is settled as local.
+- **Nothing tells a client the transcript changed.** Settling as local
+  re-reads the transcript and the session stats and then emits one `idle`,
+  which is what makes an attached browser refetch. A local command really is
+  idle: there was no turn.
+- **The command itself is never in the transcript.** It appends no message, so
+  the `/compact` you typed disappears with the composer text, and the ack
+  lands in milliseconds while the work runs on. So the composer echoes what it
+  sent as a user row, marked `working…` until the answer arrives (a notice, a
+  real turn, or an error), and the row stays afterwards as the question its
+  notice answers. Both are cleared by the next prompt.
 
 A compaction boundary is rendered as a divider — `COMPACTED — CONTEXT STARTS
-HERE` — that expands to the summary. It is the same session entry omp's TUI
-shows as `── 📷 compacted ──`: everything above it is out of the model's
+HERE` — that expands to the summary: everything above it is out of the model's
 context and only the summary remains. Its text comes from the entry's
 `summary` field, not `content`, which a `compactionSummary` message does not
-have at all — reading `content` rendered the boundary as a blank row, so
-`omp.test.ts` pins it.
+have at all — reading `content` rendered the boundary as a blank row.
 
 ### The picker
 
 Typing `/` at the start of an empty composer raises the command list, the way
-the CLI does: 45 rows with their argument hints and descriptions, narrowing as
-you type. ↑/↓ move, Tab completes the highlighted row, Enter takes it too
+the CLI does: one row per command with its description and a dim tag saying
+where it came from (`extension`, `prompt`, `skill`), narrowing as you type. ↑/↓ move, Tab completes the highlighted row, Enter takes it too
 (with one exception, below), Escape hides the list for the text it was
 showing (typing another character brings it back), and the mouse works on
 `mousedown` rather than `click`, because `click` lands after the blur and the
@@ -306,35 +298,34 @@ Not a modal, deliberately. The list is only useful *while* you keep typing
 into the box it is completing, and a dialog would take the keyboard away and
 put a backdrop over the transcript you are writing about.
 
-Accepting a row always leaves a trailing space, and that is what chains: `/fa`
-then Tab gives `/fast `, which is exactly the state that lists `on`, `off`,
-`status`; Tab again gives `/fast on `, at which point the list closes
-because there is nothing left to name. The picker opens only while the WHOLE
-composer is one unfinished command, so `and/or` is prose, a slash on a second
-line belongs to the sentence above it, and `/compact soft focus on X` is
-arguments being written rather than a name to complete. `commands.test.ts`
+Accepting a row always leaves a trailing space, because every pi command that
+takes arguments takes them as free text after the name — `/skill:review the
+auth change` — so one keypress leaves the caret where the argument goes. The
+picker opens only while the WHOLE composer is one unfinished command, so
+`and/or` is prose, a slash on a second line belongs to the sentence above it,
+and `/compact soft focus on X` is arguments being written rather than a name
+to complete. Matching is prefix-first and then substring, which is what makes
+a long skill name findable from its distinctive middle. `commands.test.ts`
 pins those rules.
 
 The exception: Enter **sends** when the highlighted row would only add the
-trailing space you are missing. `/fast status` + Enter runs `/fast status`
-instead of costing a second Enter, while `/fa` + Enter still completes to
-`/fast `. Found by typing a whole command into the box and watching it not
-run.
+trailing space you are missing. `/compact` + Enter runs `/compact` instead of
+costing a second Enter, while `/co` + Enter still completes. Found by typing a
+whole command into the box and watching it not run.
 
-The catalog comes from the session, never from a table in piw:
-`get_available_commands` at open, plus omp's `available_commands_update`
-pushes when a plugin or extension changes the set. Which commands exist
-depends on the project's extensions, plugins and `.omp/commands` files, so a
+The catalog comes from the session, never from a table in piw: `get_commands`
+when the session opens, re-read whenever the menu is raised. Which commands
+exist depends on the project's `.pi/extensions`, `.pi/prompts` and
+`.pi/skills` — and on whichever packages are installed globally — so a
 hardcoded list would confidently offer commands the agent does not have. It
-rides in the snapshot (~12 KB for 45 commands, trimmed of `source` and the
-per-subcommand `usage` strings) because it is per-session state, like the
-model or the thinking levels.
+rides in the snapshot because it is per-session state, like the model or the
+thinking levels.
 
 ## Opening a session blanks the pane
 
 Clicking a session in the list has always switched the tab immediately, but
 the window kept showing the PREVIOUS conversation until the open resolved —
-and opening spawns an omp child and reads the whole transcript, which on a
+and opening spawns a pi child and reads the whole transcript, which on a
 706-message session is ~6s. A click that changes a strip at the top of the
 screen and nothing else reads as a click that did nothing, so the pane now
 blanks and says `Opening session…`.
@@ -412,7 +403,7 @@ read and written whole, and switching projects cannot corrupt the other
 project's entry.
 
 The session **file** is the identity, not the id. It is the stable on-disk
-identity, it is exactly what `/api/sessions/open` takes, and `omp -r <file>`
+identity, it is exactly what `/api/sessions/open` takes, and `pi --session <file>`
 resumes to the same session — so a restored tab travels the same path a click
 would, and survives both a server restart and an idle eviction that
 invalidates the in-memory id. Storage rather than the URL because this is
@@ -502,7 +493,7 @@ shared.
 ## What a session is called
 
 Three sources, one precedence, resolved in `src/web/sessionName.ts` so the
-session list and the tab strip cannot disagree: **a name omp holds**, else
+session list and the tab strip cannot disagree: **a name pi holds**, else
 **the first user message**, else the uuid half of the filename.
 
 **Right-clicking a row** opens its menu (the keyboard's own menu key raises
@@ -515,7 +506,7 @@ sessions, not naming them. Three items, cheapest first:
 | --- | --- | --- |
 | **Rename…** | the row becomes an input | none |
 | **Name from first prompt** | derived locally, written immediately | one rename request |
-| **Summarise with omp** | omp titles the conversation with its tiny model | a model call, seconds |
+| **Summarise with pi** | a one-shot `pi` child reads the opening request and titles it | a model call, seconds |
 
 The menu closes on a click, Escape, a scroll (captured, since a scroll inside
 the list does not bubble) or a resize — every gesture that would make its
@@ -526,38 +517,35 @@ of you, and the new name lands exactly where the old one was. Enter commits;
 Escape *and* a click elsewhere both cancel, because committing on blur would
 write a half-typed name from a misclick.
 
-Every write goes through omp, not through the file: `POST
-/api/sessions/rename` → `Registry.rename` → `set_session_name`. omp owns the
-title. It keeps it in a fixed-width line-1 `title` entry (which is why that
-entry carries a `pad` field), rewrites it in place, and marks a user-set name
-so its own auto-titler stops replacing it — reimplementing that slot format
-from piw, against a file omp is still appending to, is the kind of clever that
-corrupts transcripts. The name therefore shows up in the TUI and in every
-other piw window too.
+Every write goes through pi, not through the file: `POST
+/api/sessions/rename` → `Registry.rename` → `set_session_name`, which appends
+a `session_info` entry to the JSONL and wins over every earlier one. pi owns
+the name: that file is one pi has open and is still appending to, so writing
+the entry ourselves is the kind of clever that corrupts transcripts. The name
+therefore shows up in the TUI and in every other piw window too.
 
 A rename addresses the session by **file or id**, because both callers are
 real: a list row may be a session nobody has opened, while an open tab knows
-its live id. Renaming a cold session costs one `omp` spawn (~2.5s, measured at
-5.9s cold on the machine this was written on) since omp is the writer, so the
-client applies the new name optimistically and refetches after — a rename that
-takes seconds to appear reads as one that did not work.
+its live id. Renaming a cold session costs one `pi` spawn, since pi is the
+writer, so the client applies the new name optimistically and refetches after
+— a rename that takes seconds to appear reads as one that did not work.
 
-### Summarise with omp
+### Summarise with pi
 
-`POST /api/sessions/autoname` sends omp its own `/rename` **with no
-argument**, which summarises the recent conversation with the configured tiny
-model and writes the result as the title. piw does not generate that name:
-asking a model for a good title is a job omp already does, with the model the
-user chose for it.
+pi has no titler of its own, so `POST /api/sessions/autoname` writes the name
+here: the session's FIRST user turn (the request it was opened to serve, not
+its most recent detour) is handed to a separate one-shot `pi -p --no-session`
+child, and the sentence that comes back is written through
+`set_session_name`. That write is synchronous, so there is nothing to poll
+for and no second channel to watch.
 
-It is a *local* command — no turn, no `agent_end` — so the route watches for
-the outcome on the two channels omp reports it on: a changed title in the
-file (`sessionTitle`, which reads line 1 only, 8 KiB, no transcript), or a
-notice saying it could not produce one. The second case is real and fast to
-hit: on a 82-message session here omp answered *"Could not generate a session
-title. Use /rename &lt;title&gt; to set one."* in 4.7s, and returning that
-sentence beats waiting out a 45s timeout to say something vaguer. While the
-request is in flight the row reads `Naming…`.
+The child is the same shape as the commit namer in `autoname.ts` — no tools,
+no extensions, no skills, no prompt templates, no context files, no thinking
+— because the job is one short label about text that is already in the
+prompt, and every discovery pass is pure latency on a click.
+`PIW_NAMING_MODEL` picks the model; unset means pi's default. A session with
+no messages yet has nothing to summarise and is refused as such, and while
+the request is in flight the row reads `Naming…`.
 
 **Name from first prompt** is the same derivation as the short-names
 preference, written permanently instead of only displayed. It is deliberately
@@ -595,10 +583,10 @@ same promise the restored tab strip already makes.
 
 Drafts are **per session**, keyed by session id, so switching tabs swaps
 composers instead of carrying one half-written message into another
-conversation. The id and not the file: omp derives the id from the filename,
-so it is the same after a reload, while the *file* only appears once a new
-session is first prompted — keying on it would move the draft out from under a
-composer being typed into.
+conversation. The id and not the file: a session keeps its id across a
+reload, while the *file* is not listed until a new session is first prompted
+— keying on it would move the draft out from under a composer being typed
+into.
 
 Three things this is careful about:
 
@@ -624,12 +612,12 @@ paths with a fake `localStorage` that has a settable ceiling.
 
 ## Projects
 
-A project IS a cwd. omp already partitions its store by working directory
-(`~/.omp/agent/sessions/<encoded-cwd>/`) and every session header carries its
+A project IS a cwd. pi already partitions its store by working directory
+(`~/.pi/agent/sessions/<encoded-cwd>/`) and every session header carries its
 own `cwd`, so piw models nothing extra: the picker at the top of the session
-list swaps which directory's sessions are listed, and `+ New` launches omp in
+list swaps which directory's sessions are listed, and `+ New` launches pi in
 that directory. The list of directories you care about is a flat array in
-`~/.omp/agent/piw-projects.json`.
+`~/.config/pi-web-ide/projects.json`.
 
 `+` opens a folder explorer over the **server's** filesystem
 (`src/web/DirectoryPicker.tsx`, fed by `GET /api/browse`). The browser's own
@@ -663,7 +651,7 @@ rows narrow on the keystroke and not on a round trip.
 
 **Pinned folders** are the shortcut row under the breadcrumb: the star pins
 the directory being listed, a chip jumps back to it, and its `×` unpins.
-They live on the SERVER (`~/.omp/agent/piw-favorites.json`, `/api/favorites`)
+They live on the SERVER (`~/.config/pi-web-ide/favorites.json`, `/api/favorites`)
 and not in `localStorage`, because they are paths on the machine piw runs on:
 a per-origin copy would follow the browser to a machine where those paths mean
 nothing, and a second piw port on the same host would silently get its own
@@ -676,7 +664,7 @@ browsing alone, showing the OS message (`EACCES`, `ENOENT`) instead.
 
 `×` removes the selected project **from the list only**: the directory and its
 sessions stay on disk, and re-adding the path brings all of them back, because
-omp's store was keyed by cwd the whole time. The startup project (`PIW_CWD`)
+pi's store was keyed by cwd the whole time. The startup project (`PIW_CWD`)
 has no `×` — the server seeds it back on every read, so a button for it would
 appear to do nothing.
 
@@ -692,12 +680,11 @@ active**. Each row shows the timestamp it is being sorted by, and its tooltip
 carries both, so the order is always explained by what you can see.
 
 The list used to be ordered by the session file's **mtime**, and that was
-wrong in a way worth recording. omp appends rows that are not conversation —
-`custom`, `thinking_level_change` — and rewrites the line-1 `title` entry in
-place; a bare *resume* does both. So opening an old session bumped its mtime,
-which shoved it to the top of the list and relabelled it "just now" while its
-message count sat unchanged. The list reordered itself just from being looked
-at.
+wrong in a way worth recording. pi appends rows that are not conversation —
+`session_info`, `model_change`, `thinking_level_change` — and a bare *resume*
+writes some of them. So opening an old session bumped its mtime, which shoved
+it to the top of the list and relabelled it "just now" while its message count
+sat unchanged. The list reordered itself just from being looked at.
 
 `created` is `session.timestamp` from the file's header, written once and
 never touched again. `lastActive` is the timestamp of the last `message`
@@ -708,12 +695,15 @@ conversation has no use in this list.
 ## Personality
 
 The settings dialog has one field that is not browser-local: it edits
-`<agent dir>/PERSONALITY.md`, the file omp substitutes for the text of the
-personality preset selected by its `personality` setting. The dialog names the
-absolute path it writes, because a box that silently writes a file somewhere
-is worse than no box.
+`~/.config/pi-web-ide/personality.md`, extra system-prompt text this server
+owns. pi has no personality file and no such setting — the only way to add
+text to a system prompt is `--append-system-prompt`, which takes a path and
+is read at spawn — so the file is ours, and it lives in the state directory
+with everything else this server persists. The dialog names the absolute path
+it writes, because a box that silently writes a file somewhere is worse than
+no box.
 
-There is no piw-side copy and no template: the field is read from disk every
+There is no second copy and no template: the field is read from disk every
 time the dialog opens, saving replaces the file byte for byte (plus the
 trailing newline a text file should have), and an edit made in `$EDITOR`
 shows up on the next open. Unsaved edits suppress that reload, since a
@@ -722,23 +712,23 @@ refetch mid-typing would throw away the paragraph you just wrote.
 Three details that are the feature rather than incidental:
 
 - **A save lands on the next session, not the current one.** Each session is
-  its own omp child and its system prompt is built at spawn, so sessions
+  its own pi child and its system prompt is built at spawn, so sessions
   already running keep the personality they started with. The status line says
   so instead of implying a live effect.
-- **Clearing the box is how you turn the override off.** omp falls back to the
-  configured preset for an empty or unreadable file, so nothing here deletes
-  anything — "empty" is a valid state with a documented meaning, and a web UI
-  quietly removing a file you wrote is not.
+- **Clearing the box is how you turn the override off.** An empty file is not
+  passed to the next spawn at all, so nothing here deletes anything — "empty"
+  is a valid state with a documented meaning, and a web UI quietly removing a
+  file you wrote is not.
 - **The write is atomic.** Temp file plus `rename(2)` in the same directory,
   because `writeFileSync` truncates first: a crash mid-write would otherwise
-  leave omp reading half a personality on every future session. There is a
-  256 KB cap for the same class of reason — a paste accident would otherwise
+  leave half a personality on disk for every future session to read. There is
+  a 256 KB cap for the same class of reason — a paste accident would otherwise
   ride along in every request.
 
-Only the agent directory is consulted (`~/.omp/agent` by default); omp has no
-project-level personality lookup, so neither does this. `PIW_AGENT_DIR`
-relocates what piw reads and writes, which is how the test works on a temp
-directory instead of your real file.
+There is no project-level personality: one file, named in the dialog, for
+every session this server starts. `PIW_STATE_DIR` relocates it along with the
+rest of this server's state, which is how the test works on a temp directory
+instead of your real file.
 
 ## Themes
 
@@ -1026,14 +1016,15 @@ every action anybody asks for is a subset of those four:
 - **`Auto-name` writes the real message.** The file list says what was
   touched and nothing about what was done, so the button next to it hands
   the diff to a model and puts the answer in the box, where it is still
-  editable. It is a separate `omp -p --no-session` process, not the session
+  editable. It is a separate `pi -p --no-session` process, not the session
   on screen: naming a commit must not append a turn to the transcript you
   are reading, inherit that session's tools, or queue behind a run that is
-  still going. Everything optional is off — no tools, no LSP, no
-  extensions, no skills, no rules, no thinking — because the job is one
-  sentence about a diff that is already in the prompt: 4.6s instead of 22.5s
-  on this repo's own 20 kB diff, which is the cap on how much patch is sent.
-  The `smol` model role is used when one is set, otherwise omp's default.
+  still going. Everything optional is off — no tools, no extensions, no
+  skills, no prompt templates, no context files, no thinking — because the
+  job is one sentence about a diff that is already in the prompt: 4.9s
+  instead of 22.5s on this repo's own 20 kB diff, which is also the cap on
+  how much patch is sent. `PIW_NAMING_MODEL` picks the model; unset means
+  pi's default.
 - **`Auto-name commits` in the menu skips the dialog entirely.** Toggled on,
   `Commit & Push` is one click: the message is written by the model and the
   branch (for the `Create Branch` actions) is the dated `piw/` suggestion.
@@ -1060,33 +1051,21 @@ worse than no button. It reads from state, while the follow-the-stream logic
 keeps using a ref — that one is read on every frame of a stream, and a
 re-render per scroll event would cost more than the button is worth.
 
-## Children, and the wait that never ends
+## The wait that never ends
 
-A session that delegates is a session that looks stuck. The agent spawns
-four workers, the status line says `Running task…`, and then nothing moves
-for ten minutes — from the browser there was no way to tell a fan-out from a
-hang. The TUI has Agent Hub for this; piw had a collapsed tool call.
+A turn that parks itself is a turn that looks stuck. The status line says
+`Running hub…`, and then nothing moves for twenty minutes — from the browser
+there is no way to tell waiting from hanging, and both look like a collapsed
+tool call.
 
-Two rows above the composer fix it:
-
-- **The roster**, one chip per live child: the specialist it runs as
-  (`scout`, `task`, …) and what it is doing. It comes from omp's own
-  `get_subagents`, which lists only children that have not settled — so the
-  row appears when the fan-out starts and empties itself when the last child
-  reports back. The push frames (`subagent_lifecycle`, `subagent_progress`,
-  off until piw asks for them with `set_subagent_subscription`) are used as a
-  TRIGGER to re-read that list, coalesced at 150ms, rather than merged by
-  hand into a second copy of a state omp already keeps. A child's chip says
-  the first line of its brief that is not a `# Heading`, because "Target" is
-  not a description of work.
-- **The wait banner**, which replaces the status line whenever the running
-  tool is `hub` `wait`: what it is waiting on and the ceiling it was given
-  (`Waiting on background work · up to 15m`). `Running hub…` was true and
-  useless, and the difference matters because that call is how a turn parks
-  itself for twenty minutes: results of finished jobs deliver themselves, so
-  an agent that waits is usually polling for something that already arrived,
-  and a job id expires about five minutes after it settles — after which a
-  bare wait degrades into waiting for a message no subagent will send.
+**The wait banner** replaces the status line whenever the running tool is
+`hub` `wait`: what it is waiting on and the ceiling it was given (`Waiting on
+background work · up to 15m`). `Running hub…` was true and useless, and the
+difference matters because that call is how a turn parks itself for twenty
+minutes: results of finished jobs deliver themselves, so an agent that waits
+is usually polling for something that already arrived, and a job id expires
+about five minutes after it settles — after which a bare wait degrades into
+waiting for a message nothing is going to send.
 
 **Skip is abort plus a re-prompt**, because nothing else reaches a wait.
 Measured against a live session: a steering message sent 11s into a 180s
@@ -1192,7 +1171,7 @@ of the track and not pixels, so the same browser used at 1280 and at 2560
 keeps the proportion instead of restoring a pane that does not fit.
 
 **This is shell access on the port.** It is not a new exposure — the agent
-already runs tools in `yolo` on this machine, which is strictly more than a
+already runs tools unattended on this machine, which is strictly more than a
 shell — but it is a much more obvious one, so: loopback only, tunnel it, see
 [Security](#security).
 
@@ -1327,18 +1306,16 @@ tool-call timeline (the Stripe docs pattern), not wider prose.
 
 ## `+ New` is instant because a session is already warm
 
-Creating a session is one `omp` spawn, and a spawn does not reach its `ready`
-frame for ~1.8s — extension and skill discovery happen first — with a few
-round trips after it. That was the whole of the 2–3s that `+ New` used to sit
-there for, and none of it can be made faster *on* the click. So it is paid
-before the click: the server keeps **one unclaimed, fully-ready session** for
-the project on screen, and `+ New` claims it. Measured on the same machine,
-`POST /api/sessions/open` went from 2313ms to 4ms.
+Creating a session is one `pi` spawn, and that spawn pays for package,
+extension and skill discovery before it answers anything — the couple of
+seconds `+ New` used to sit there for, none of which can be made faster *on*
+the click. So it is paid before the click: the server keeps **one unclaimed,
+fully-ready session** for the project on screen, and `+ New` claims it, which
+turns the wait into a map lookup.
 
-What makes this cheap rather than clever is that omp writes the session JSONL
-**lazily**: a child that has never been prompted leaves nothing on disk (and
-nothing on a clean `stdin` close either — verified). So a spare is invisible to
-the session list, invisible to the TUI, and free to throw away.
+What makes this cheap rather than clever is that a child that has never been
+prompted writes **no messages** to its JSONL. So a spare is invisible to the
+session list, invisible to the TUI, and free to throw away.
 
 The rules around it are all about never handing somebody a session they did not
 ask for:
@@ -1396,29 +1373,28 @@ Three layers, decreasing confidence:
    limping.
 
 The real safety net is persistence, not the handlers: conversation state is
-omp's own JSONL, which makes all three layers optimizations rather than
+pi's own JSONL, which makes all three layers optimizations rather than
 load-bearing.
 
 ## Four things found the hard way
 
-All four are documented in `omp.ts` where they bite.
+All four are documented in `agent.ts` where they bite.
 
-**A failed turn does not throw.** omp reports provider errors (401s, quota,
+**A failed turn does not throw.** pi reports provider errors (401s, quota,
 overload) as an assistant message with `stopReason: "error"`, empty content,
 and `errorMessage` set. The command resolves normally. Without an explicit
 branch on that stop reason the UI renders a blank assistant message and never
 learns anything went wrong — the exact silent failure this design was supposed
 to prevent. Verified against a real 401.
 
-**Protocol v1 truncates large frames.** v1 caps a physical stdout frame at
-1 MiB and drops the rest; a big file read or a long diff clears that easily, so
-staying on v1 means silently corrupted tool results. piw reads
-`supportedProtocolVersions` off the ready frame and asks for 2 when it is on
-offer, which splits oversized frames into a base64 `rpc_chunk` sequence.
-Failing to negotiate is not fatal — v1 still works — but it is worth a line in
-the log. The reassembly contract is then enforced strictly: chunks must arrive
-uninterrupted, in index order, with a matching decoded length, because quietly
-concatenating anything else hands malformed JSON to the UI.
+**`agent_end` is not the idle signal.** A run can end and then continue: a
+retry, a compaction retry or a queued message all follow one, and the
+`messages` field it carries describes only the run that just ended, so
+assigning it truncates the transcript. `agent_settled` is the frame that means
+pi will not continue on its own, and it is the only thing that puts a session
+back to idle. The exception is a prompt pi handled locally, which produces no
+agent frames at all — and no "the agent was not invoked" field either, so the
+absence of `agent_start` is timed instead (1.5s).
 
 **Split stdout on raw `0x0A` bytes, not on decoded strings.** A frame can be a
 megabyte of UTF-8 arriving in arbitrary pieces; decoding each piece
@@ -1426,19 +1402,20 @@ independently corrupts any multi-byte character straddling a chunk boundary.
 `0x0A` never appears inside a multi-byte UTF-8 sequence, so splitting first and
 decoding whole lines is the only safe order.
 
-**omp sends UI requests nobody asked for.** Two `extension_ui_request` frames
-(`setWidget`) arrive before this host sends a single command. Display-only
-methods — `notify`, `setStatus`, `setWidget`, `setTitle` — expect no response
-and are dropped, because there is no status line or widget rail here to render
-them in. The blocking ones (`confirm`, `input`, `select`, `editor`) are the
-trap: left unanswered they stall the extension that asked, which from the
-browser is indistinguishable from a hung agent. They are put to the user; see
+**`extension_ui_request` carries two unrelated things.** The display-only
+methods — `setStatus`, `setWidget`, `setTitle`, `set_editor_text` — expect no
+response and are dropped, because there is no status line or widget rail here
+to render them in; `notify` is the exception, and it lands as a notice,
+because it is the only output a locally handled command produces. The
+blocking ones (`confirm`, `input`, `select`, `editor`) are the trap: left
+unanswered they stall the extension that asked, which from the browser is
+indistinguishable from a hung agent. They are put to the user; see
 **Questions** below.
 
 ## Questions
 
-The `ask` tool, an extension's `confirm`, a tool approval: all of them arrive
-as one blocking `extension_ui_request`, and omp waits inside the tool call
+The `ask` tool and an extension's `confirm` and `select`: all of them arrive
+as one blocking `extension_ui_request`, and pi waits inside the tool call
 until it is answered. piw used to **cancel** every one of them, on the
 reasoning that answering on the user's behalf is the one thing here that could
 do real damage. It was the wrong conclusion from a correct premise: the third
@@ -1449,12 +1426,12 @@ should have been.
 
 So the question is rendered in the transcript, under the work that led to it:
 
-- `select` — one button per option, with omp's positional `optionDetails`
-  descriptions underneath. `Other (type your own)` is one of omp's own
-  options, and picking it makes omp send the follow-up `editor` request, which
+- `select` — one button per option, with pi's positional `optionDetails`
+  descriptions underneath. `Other (type your own)` is one of pi's own
+  options, and picking it makes pi send the follow-up `editor` request, which
   renders as the field.
 - `confirm` — Yes / No, answered as `{ confirmed }`.
-- `input` / `editor` — a field, prefilled with omp's `value`. Enter answers a
+- `input` / `editor` — a field, prefilled with pi's `value`. Enter answers a
   one-line `input`; `editor` is multi-line, so there it is Ctrl+Enter.
 - **Cancel** stays, and it is not a close button: it sends a real
   cancellation, which fails the tool call and lets the turn end. A question
@@ -1462,10 +1439,10 @@ So the question is rendered in the transcript, under the work that led to it:
 
 Four details, each of which was a bug first:
 
-- **The answer carries omp's request id**, and the server checks it against
+- **The answer carries pi's request id**, and the server checks it against
   the question it is actually waiting on. A click and a timeout cross
   routinely; without the check, the answer to the question you saw would be
-  delivered to the one omp asked next. A stale id is a `409`, and the client
+  delivered to the one pi asked next. A stale id is a `409`, and the client
   refetches instead of showing an error.
 - **The question is in the snapshot, not only in the event.** The agent stays
   blocked across a reload, and a question that lived in an event stream would
@@ -1473,7 +1450,7 @@ Four details, each of which was a bug first:
 - **It is not a modal.** A modal would have to be dismissable to be honest
   about the agent still waiting — and a dismissed question is a stalled
   session with nothing on screen saying why.
-- **omp's titles are TUI text.** The `editor` that follows a picker's "Other"
+- **pi's titles are TUI text.** The `editor` that follows a picker's "Other"
   carries the whole rendered picker as its title — question, every option,
   every description, `Enter your response:` — with Nerd Font radio glyphs in
   front of the options. Those glyphs are private-use codepoints that mean
@@ -1484,11 +1461,6 @@ A question also raises a desktop notification when the tab is in the
 background, under the same rules as a finished run: it is the one event where
 nothing moves until you come back.
 
-Approvals ride the same path, so `PIW_APPROVAL_MODE=always-ask` now works
-here instead of guaranteeing a stall. `yolo` stays the default anyway, because
-the thing this host is for is a session that keeps running with no browser
-attached — and an approval nobody is there to answer blocks the turn until
-somebody opens the page.
 
 ## Multiple machines
 
@@ -1502,33 +1474,33 @@ piw — from this page, at that piw's own origin. No proxy, no second window.
 
 ```
 ┌ piw ─────────── ┐
-│ [orangepi ▾]    │   this machine      ~/code/piw
+│ [orangepi ▾]    │   this machine      ~/code/pi-web-ide
 │                 │                     ~/code/ftp-db
 │ 12 SESSIONS     │   orangepi          ~/code/sensors
 │ …               │   tg — up, but PIW_HUB_ORIGINS is not set on it
 │ MACHINES      + │
-│ ● orangepi :8791│
+│ ● orangepi :8891│
 │ ● tg    direct  │
 └─────────────────┘
 ```
 
-A machine is one of two things, and `piw-hosts.json` holds both kinds:
+A machine is one of two things, and `hosts.json` holds both kinds:
 
 - **An ssh destination.** piw forwards a local port to that host's piw and the
   page reaches it at `http://127.0.0.1:<port>`. Adding `orangepi` writes one
-  entry to `~/.omp/agent/piw-hosts.json` and starts the equivalent of
+  entry to `~/.config/pi-web-ide/hosts.json` and starts the equivalent of
 
   ```bash
   ssh -N -T -o BatchMode=yes -o ExitOnForwardFailure=yes \
       -o ServerAliveInterval=15 -o ServerAliveCountMax=3 \
-      -L 8791:127.0.0.1:8790 orangepi
+      -L 8891:127.0.0.1:8890 orangepi
   ```
 
   The local port is assigned for you (first free above `PIW_PORT`), so two
   machines never collide.
 
 - **An origin.** `https://opi.tail.ts.net`, say, from `tailscale serve
-  --bg 8790` on that host: the remote stays bound to loopback and Tailscale
+  --bg 8890` on that host: the remote stays bound to loopback and Tailscale
   terminates TLS on its tailnet name. No tunnel, nothing for piw to
   supervise, and HTTP/2 — which matters, because a page holding an event
   stream plus a few terminal sockets to one host is counting against the
@@ -1539,8 +1511,8 @@ A machine is one of two things, and `piw-hosts.json` holds both kinds:
 
 The remote piw has to agree to be driven from this page. Each request from
 here arrives cross-origin, so the remote answers with CORS only for origins
-named in its `PIW_HUB_ORIGINS` (`deploy/piw.env.example`): through a forward
-that is this page's own loopback origin, `http://127.0.0.1:8790`; through
+named in its `PIW_HUB_ORIGINS` (`deploy/pi-web-ide.env.example`): through a
+forward that is this page's own loopback origin, `http://127.0.0.1:8890`; through
 `tailscale serve` it is this machine's tailnet name. The terminal's WebSocket
 has no CORS, so the upgrade handler checks the same list. A refusal and a
 machine being down look identical from a browser, so the page asks its own
@@ -1548,12 +1520,12 @@ server, which probed the machine directly: `/api/health` reports whether any
 hub origins are configured there (never which), and the message says the one
 thing that applies — *not answering*, *up, but `PIW_HUB_ORIGINS` is not set
 on it*, or *up, but its `PIW_HUB_ORIGINS` does not include
-`http://127.0.0.1:8790`*. Every `/api` answer is `Cache-Control: no-store`
+`http://127.0.0.1:8890`*. Every `/api` answer is `Cache-Control: no-store`
 for a related reason: a 304 carries no CORS headers, so a browser revalidating
 a cached answer would keep the allow it saw last time.
 
 Per-project state — the tab strip, the terminal layout — is keyed by machine
-*and* directory (`piw:tabs:@orangepi:/home/…`), because `~/code/piw` exists
+*and* directory (`piw:tabs:@orangepi:/home/…`), because `~/code/pi-web-ide` exists
 on all of them and its sessions on one have nothing to do with the same path
 on another. This machine's projects keep the bare-cwd keys they always had.
 
@@ -1564,7 +1536,7 @@ costs a reconnect and never a turn. That is what makes supervision cheap
 enough to be worth having — one child process per machine, restarted with
 capped backoff (1s → 2 → 5 → 10 → 30s, reset after 30s of uptime), instead of
 a per-machine systemd unit that is a second config surface to keep in sync
-with `piw-hosts.json` and exists only on Linux. Set `"autostart": false` on an
+with `hosts.json` and exists only on Linux. Set `"autostart": false` on an
 entry for a forward that should outlive piw; piw then only reports on it.
 
 The dot is deliberately not "is ssh alive":
@@ -1575,10 +1547,10 @@ The dot is deliberately not "is ssh alive":
 | amber | the forward is up and nothing answered — piw is not running over there |
 | red | our ssh exited (tooltip carries its last stderr line), or a direct origin did not answer |
 | grey | `autostart: false` and unreachable — your tunnel, not ours |
-| `≠` | that piw or its omp is not the version this machine has; tooltip says which |
+| `≠` | that piw or its pi is not the version this machine has; tooltip says which |
 
-The version mark exists because `omp update` on one box does not restart the
-piw there, and a piw keeps spawning the omp it started with: `/api/health`
+The version mark exists because `pi update --self` on one box does not restart
+the piw there, and a piw keeps spawning the pi it started with: `/api/health`
 reports both versions, and the panel compares them to this machine's. Restart
 that piw and the mark goes.
 
@@ -1604,7 +1576,7 @@ this piw's only part in it is knowing where they answer.
   says so in the session list; `orangepi` is unaffected. A laptop that sleeps
   mid-run loses a connection, not the run: the agent is a child of the
   remote piw, not of this one, and the page re-attaches when it wakes.
-- **Each host owns its credentials.** `~/.omp/agent/auth.json` never leaves the
+- **Each host owns its credentials.** `~/.pi/agent/auth.json` never leaves the
   machine it was created on, and a compromised host exposes one host's keys.
 - **The agent runs where the code is.** Sessions are partitioned by cwd, and a
   cwd only means something on the machine that has it. A gateway would have to
@@ -1614,7 +1586,7 @@ Still one project at a time: the picker chooses a machine and a directory
 together, and the session poll stays one request. A view of every machine's
 sessions at once would be every machine's session files parsed on every tick.
 
-Note the one consequence of `piw-hosts.json` being per-machine rather than
+Note the one consequence of `hosts.json` being per-machine rather than
 per-process: two piws on one host (a dev server on `PIW_PORT=8890` alongside
 the service, with `PIW_TAKEOVER=0`) both try to supervise the same forwards,
 and the loser sits in backoff with `EADDRINUSE` in its tooltip. That is the
@@ -1623,18 +1595,18 @@ port and the older one is gone.
 
 ## Deployment
 
-`deploy/` installs piw as a **systemd user service** on one machine:
+`deploy/` installs pi-web-ide as a **systemd user service** on one machine:
 
 ```
-deploy/piw.service      systemd user unit: pnpm start, Restart=always, journald
-deploy/piw.env.example  template for ~/.config/piw/env
-deploy/install.sh        idempotent installer, no sudo
+deploy/pi-web-ide.service      systemd user unit: pnpm start, Restart=always, journald
+deploy/pi-web-ide.env.example  template for ~/.config/pi-web-ide/env
+deploy/install.sh              idempotent installer, no sudo; --dry-run prints the plan
 ```
 
 ```bash
 pnpm build && ./deploy/install.sh
 loginctl enable-linger $USER          # once per machine; install.sh checks
-journalctl --user -u piw -f
+journalctl --user -u pi-web-ide -f
 ```
 
 A *user* unit, not a system unit, because the process holds the same provider
@@ -1649,16 +1621,16 @@ Four details that are easy to get wrong:
   torn down when your last session ends, so the service dies the moment you log
   out of ssh — precisely when you wanted the agent to keep working.
 - **systemd user units do not source your shell profile.** The inherited PATH
-  usually omits `~/.local/bin` (where `omp` lives) and any fnm/nvm shim (where
+  usually omits the directory `pi` lives in and any fnm/nvm shim (where
   `node` and `pnpm` live). The unit therefore execs through a login shell —
   `/usr/bin/env /bin/bash -lc "exec pnpm start"` — which picks both up from the
   profile you already maintain instead of pinning a node version into a unit
   file. `exec` is load-bearing: without it systemd supervises the shell and
-  `SIGTERM` never reaches the server. Set `PIW_OMP_BIN` if you would rather not
+  `SIGTERM` never reaches the server. Set `PIW_PI_BIN` if you would rather not
   depend on the profile.
 - **The unit adds no network exposure of its own.** No bind-address knob exists
   to set by accident — `index.ts` passes the literal `127.0.0.1` to `listen()`.
-  There is deliberately no `IPAddressAllow=`/`PrivateNetwork=` either: the omp
+  There is deliberately no `IPAddressAllow=`/`PrivateNetwork=` either: the pi
   children live in this cgroup and must reach provider APIs, so such a rule
   would be inert or would break the agent.
 - **Crashes exit under systemd and survive without it.** An
@@ -1674,13 +1646,15 @@ Four details that are easy to get wrong:
 
 `install.sh` refuses to run where `systemctl --user` is unavailable — plain WSL
 without `systemd=true` in `/etc/wsl.conf`, or a container — and prints the
-`setsid nohup` command to run piw by hand instead of reporting a success it did
-not achieve.
+`setsid nohup` command to run the server by hand instead of reporting a success
+it did not achieve. `--dry-run` prints every file it would write and every
+`systemctl` command it would run, and changes nothing.
 
 ## Security
 
-omp reads `~/.omp/agent/auth.json`, so provider credentials are in the child
-processes piw spawns, on the machine piw runs on. The server binds `127.0.0.1`
+pi reads `~/.pi/agent/auth.json` and `~/.pi/agent/provider-keys.json`, so
+provider credentials are in the child processes piw spawns, on the machine
+piw runs on. The server binds `127.0.0.1`
 only. For remote access use a tunnel — the Machines panel manages one per host
 (`ssh -L`, key auth, `BatchMode=yes`) — or `tailscale serve`, which gives the
 loopback port a tailnet HTTPS name without changing the bind; never a
@@ -1694,13 +1668,18 @@ for the origins in its `PIW_HUB_ORIGINS`, exact and never a wildcard, and the
 terminal's WebSocket upgrade checks the same list. That list is the CSRF
 boundary: a page allowed there can start an agent run on this machine.
 
-The children run in `yolo` approval mode by default (see the non-goals): piw
-is a tool for driving an agent over code you own, on a host you control, and
-it should be deployed on that basis. `PIW_APPROVAL_MODE=always-ask` is a real
-option now that approvals render as [questions](#questions) — at the cost that
-a detached run stops at the first one until somebody opens the page.
+The children run their tools unattended (see the non-goals): pi has no
+approval gate, and a browser has no terminal to answer one on. piw is a tool
+for driving an agent over code you own, on a host you control, and it should
+be deployed on that basis. A blocking question an extension does raise still
+renders as a [question](#questions) — at the cost that a detached run stops at
+it until somebody opens the page.
 
 The [terminal](#terminal) is an interactive login shell on the same port, and
 it makes that trust boundary impossible to misread: whoever reaches this port
-has your shell. It is not a new capability — an agent running tools in `yolo`
-is strictly more — but treat the port accordingly.
+has your shell. It is not a new capability — an agent running tools
+unattended is strictly more — but treat the port accordingly.
+
+## History
+
+Forked from omp-web-ide@omp-final, which ran on the omp agent.

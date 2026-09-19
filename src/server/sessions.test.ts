@@ -31,6 +31,7 @@ interface Fixture {
 	dir: string;
 	uuid: string;
 	cwd: string;
+	/** Written as a `session_info` entry, the way `set_session_name` does. */
 	title?: string;
 	/** Seconds since epoch; sets mtime, which must NOT decide the order. */
 	mtime: number;
@@ -46,7 +47,6 @@ function write(f: Fixture): string {
 	mkdirSync(dir, { recursive: true });
 	const file = join(dir, `${f.created.replace(/[:.]/g, "-")}_${f.uuid}.jsonl`);
 	const head = [
-		JSON.stringify({ type: "title", v: 1, title: f.title ?? "", source: "auto", pad: "    " }),
 		JSON.stringify({
 			type: "session",
 			version: 3,
@@ -55,7 +55,10 @@ function write(f: Fixture): string {
 			cwd: f.cwd,
 		}),
 	];
-	writeFileSync(file, `${[...head, ...f.lines].join("\n")}\n${f.torn ?? ""}`);
+	// A name is a `session_info` entry appended after the fact, exactly as
+	// `set_session_name` writes one.
+	const tail = f.title ? [JSON.stringify({ type: "session_info", id: "s1", name: f.title })] : [];
+	writeFileSync(file, `${[...head, ...f.lines, ...tail].join("\n")}\n${f.torn ?? ""}`);
 	utimesSync(file, f.mtime, f.mtime);
 	return file;
 }
@@ -85,9 +88,8 @@ const assistantMsg = (timestamp = "2026-09-14T10:00:09.000Z") =>
 // Non-message entry types must not inflate messageCount.
 const noise = [
 	JSON.stringify({ type: "model_change", id: "m", model: "anthropic/claude-opus-5" }),
-	JSON.stringify({ type: "custom", customType: "tool_execution_start", data: {} }),
-	JSON.stringify({ type: "credential_pin", id: "c", provider: "anthropic" }),
-	JSON.stringify({ type: "title_change", id: "t", title: "old title" }),
+	JSON.stringify({ type: "thinking_level_change", id: "t", level: "medium" }),
+	JSON.stringify({ type: "compaction", id: "k", summary: "folded" }),
 ];
 
 /*
@@ -105,13 +107,17 @@ const misfiled = write({
 	dir: "-this-name-is-a-lie",
 	uuid: "00000000-0000-0000-0000-00000000000a",
 	cwd: projectA,
-	title: "misfiled but mine",
 	created: "2026-09-14T09:00:00.000Z",
 	mtime: 3000,
 	lines: [
 		userMsg("first words", false, "2026-09-14T09:00:05.000Z"),
 		...noise,
 		assistantMsg("2026-09-14T09:00:09.000Z"),
+		// Renamed twice. pi appends one `session_info` per rename instead of
+		// rewriting a slot, so a reader that took the first would show the name
+		// this session used to have.
+		JSON.stringify({ type: "session_info", id: "s1", name: "misfiled but mine" }),
+		JSON.stringify({ type: "session_info", id: "s2", name: "renamed once more" }),
 	],
 });
 
@@ -179,13 +185,14 @@ assert.deepEqual(
 const tornInfo = a[0];
 assert.equal(tornInfo.messageCount, 2, "torn trailing line is skipped, not counted");
 assert.equal(tornInfo.firstMessage, "padded and very", "first text block, trimmed");
-assert.equal(tornInfo.name, undefined, "an empty omp title is not a name");
+assert.equal(tornInfo.name, undefined, "a session nobody named has no name");
 assert.equal(tornInfo.lastActive, "2026-09-14T11:10:00.000Z", "last message, not last line");
 
-// Noise entries are not messages; the live `title` entry wins over the stale
-// `title_change` history below it.
+// Noise entries are not messages, and the LAST `session_info` is the live
+// name: pi appends one per rename rather than rewriting a slot, so a reader
+// that took the first would show the name the session used to have.
 assert.equal(a[1].messageCount, 2, "only message entries count");
-assert.equal(a[1].name, "misfiled but mine", "line-1 title entry is the live title");
+assert.equal(a[1].name, "renamed once more", "the last session_info wins");
 assert.equal(a[1].id, "00000000-0000-0000-0000-00000000000a", "id from the session header");
 assert.equal(a[1].created, "2026-09-14T09:00:00.000Z", "created from session.timestamp");
 assert.equal(a[1].lastActive, "2026-09-14T09:00:09.000Z", "lastActive from the last message");
@@ -203,19 +210,19 @@ assert.deepEqual(
 assert.deepEqual(await listSessions(join(tmp, "gone")), [], "missing cwd lists nothing");
 
 /*
- * THE REGRESSION. Resuming a session appends bookkeeping rows (`custom`,
- * `thinking_level_change`) and rewrites the line-1 title, so the file grows
- * and its mtime jumps while the conversation stands still. That used to move
- * the session to the top of the list and relabel it "just now" with an
+ * THE REGRESSION. Resuming a session appends bookkeeping rows — pi writes a
+ * `model_change` and a `thinking_level_change` on every start — so the file
+ * grows and its mtime jumps while the conversation stands still. That used to
+ * move the session to the top of the list and relabel it "just now" with an
  * unchanged message count.
  */
 appendFileSync(
 	oldest,
 	`${JSON.stringify({
-		type: "custom",
-		customType: "session_resumed",
+		type: "thinking_level_change",
+		id: "tl1",
 		timestamp: "2026-09-17T23:59:00.000Z",
-		data: {},
+		level: "off",
 	})}\n`,
 );
 utimesSync(oldest, 8000, 8000);

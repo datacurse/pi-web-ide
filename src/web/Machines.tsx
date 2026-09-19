@@ -4,41 +4,49 @@ import type { PiwHostStatus } from "../shared/types.js";
 /**
  * How a host's dot is coloured, and what each colour actually claims.
  *
- * The distinction that matters is between "our ssh child is alive" and "a piw
- * answered through it": the first proves nothing about the machine at the
- * other end, so only the second is green. Amber is specifically the state
- * worth telling apart — the forward is up and the remote piw is not running,
- * which is a fix on that machine, not here. A direct host has no forward to
- * be half-up, so it is green or red.
+ * The distinction that matters is between "our ssh child is alive" and "a
+ * pi-web-ide answered through it": the first proves nothing about the machine
+ * at the other end, so only the second is green. Amber is specifically the
+ * state worth telling apart — the forward is up and the remote server is not
+ * running, which is a fix on that machine, not here. A direct host has no
+ * forward to be half-up, so it is green or red.
+ *
+ * `foreign` is the coexistence case: something answered `/api/health` without
+ * naming itself as this product, which is what another agent's web server on
+ * a port forwarded here by habit looks like. Amber, and none of its data is
+ * shown — its sessions are another product's.
  */
 function dot(host: PiwHostStatus): { className: string; label: string } {
-	if (host.reachable) return { className: "bg-emerald-400", label: "piw is answering" };
-	if (host.tunnel === "direct") return { className: "bg-red-400", label: "no piw answering" };
+	if (host.foreign) {
+		return { className: "bg-amber-400", label: "not a pi-web-ide server" };
+	}
+	if (host.reachable) return { className: "bg-emerald-400", label: "answering" };
+	if (host.tunnel === "direct") return { className: "bg-red-400", label: "nothing answering" };
 	if (host.tunnel === "running") {
-		return { className: "bg-amber-400", label: "tunnel up, no piw answering" };
+		return { className: "bg-amber-400", label: "tunnel up, nothing answering" };
 	}
 	if (host.tunnel === "backoff") {
 		return { className: "bg-red-400", label: host.error ?? "tunnel down, retrying" };
 	}
-	return { className: "bg-neutral-600", label: "not reachable (tunnel not managed by piw)" };
+	return { className: "bg-neutral-600", label: "not reachable (tunnel not managed here)" };
 }
 
 /**
- * A machine whose piw or omp is not the version this page's piw has. One
- * line, both names, so the fix is obvious from the tooltip: the fleet is
- * meant to be on one version, and `omp update` on one box without a piw
- * restart is exactly how it stops being.
+ * A machine whose pi-web-ide or pi is not the version this page's server
+ * has. One line, both names, so the fix is obvious from the tooltip: the
+ * fleet is meant to be on one version, and `pi update --self` on one box
+ * without a server restart is exactly how it stops being.
  */
 function skew(
 	host: PiwHostStatus,
-	local: { piw?: string; omp?: string },
+	local: { piw?: string; pi?: string },
 ): string | undefined {
 	const lines: string[] = [];
 	if (host.piwVersion && local.piw && host.piwVersion !== local.piw) {
-		lines.push(`piw ${host.piwVersion} here, ${local.piw} on this machine`);
+		lines.push(`pi-web-ide ${host.piwVersion} here, ${local.piw} on this machine`);
 	}
-	if (host.ompVersion && local.omp && host.ompVersion !== local.omp) {
-		lines.push(`omp ${host.ompVersion} here, ${local.omp} on this machine`);
+	if (host.piVersion && local.pi && host.piVersion !== local.pi) {
+		lines.push(`pi ${host.piVersion} here, ${local.pi} on this machine`);
 	}
 	return lines.length ? lines.join("\n") : undefined;
 }
@@ -64,7 +72,7 @@ export function Machines({
 	hosts: PiwHostStatus[];
 	/** The machine the project picker is on; "" for this one. */
 	selected: string;
-	localVersions: { piw?: string; omp?: string };
+	localVersions: { piw?: string; pi?: string };
 	/** An ssh destination or an http(s) origin; the server tells them apart. */
 	onAdd: (value: string) => void;
 	onRemove: (name: string) => void;
@@ -82,7 +90,7 @@ export function Machines({
 						// browser cannot read ~/.ssh/config, and the server validates
 						// what it is handed.
 						const value = prompt(
-							"Machine: an ssh destination (alias, or user@host), or the origin its piw answers at (https://host.tail.ts.net):",
+							"Machine: an ssh destination (alias, or user@host), or the origin its pi-web-ide answers at (https://host.tail.ts.net):",
 						);
 						if (value?.trim()) onAdd(value.trim());
 					}}

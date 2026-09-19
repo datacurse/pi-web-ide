@@ -2,15 +2,16 @@
  * The wire contract between server and browser.
  *
  * Deliberately in its own module with ZERO imports: if these types lived in
- * omp.ts, a stray value-import from the client would drag the RPC boundary and
- * node:child_process into the browser bundle. Here that is impossible.
+ * agent.ts, a stray value-import from the client would drag the RPC boundary
+ * and node:child_process into the browser bundle. Here that is impossible.
  */
 
 /**
  * What this server is. `/api/health` reports it, and both the port takeover
  * and the Machines panel refuse to act on a health body that does not carry
- * it — an omp-era piw on a neighbouring port answers `/api/health` too, and
- * mistaking one for the other means killing it or listing its sessions here.
+ * it — a server from the previous install on a neighbouring port answers
+ * `/api/health` too, and mistaking one for the other means killing it or
+ * listing its sessions here.
  */
 export const PRODUCT = "pi-web-ide";
 
@@ -33,10 +34,10 @@ export type PiBlock =
 
 export interface PiMessage {
 	/**
-	 * `compaction` is omp's `compactionSummary` entry: the history it folded
-	 * away, as one summary. Its own role because it is not something anyone
-	 * SAID — rendering it as an ordinary message makes a session look like it
-	 * opened with a wall of third-person notes about itself.
+	 * `compaction` is pi's `compactionSummary` message role: the history it
+	 * folded away, as one summary. Its own role because it is not something
+	 * anyone SAID — rendering it as an ordinary message makes a session look
+	 * like it opened with a wall of third-person notes about itself.
 	 */
 	role: "user" | "assistant" | "toolResult" | "compaction" | "other";
 	blocks: PiBlock[];
@@ -44,12 +45,13 @@ export interface PiMessage {
 }
 
 /**
- * A line omp printed OUTSIDE the conversation: the output of a local slash
- * command (`/compact`, `/cost`, `/tree`), or a warning from maintenance.
+ * A line that belongs to the session but to no message: an extension's
+ * fire-and-forget `notify`, or the compaction and auto-retry notices this
+ * server synthesises from pi's own frames.
  *
- * These have no message to belong to — a local command never starts a turn —
- * so without a channel of their own the whole answer to a command is dropped
- * and the command looks like it did nothing.
+ * These have no message to belong to — an extension slash command never
+ * starts a turn — so without a channel of their own the whole answer to a
+ * command is dropped and the command looks like it did nothing.
  */
 export interface PiNotice {
 	level: "info" | "warning" | "error";
@@ -57,75 +59,52 @@ export interface PiNotice {
 }
 
 /**
- * One slash command the session offers, as `get_available_commands` reports
- * it. Narrowed to what a picker shows: omp's own entries carry per-subcommand
- * `usage` strings and source metadata that would triple the size of every
- * snapshot for text nobody reads in a two-line row.
- *
- * `subcommands` is one level deep because omp's are — `/compact soft`,
- * `/mcp add` — and a tree the data never contains is a tree not worth having.
+ * One slash command the session offers, as `get_commands` reports it.
+ * Narrowed to what a picker shows: pi also reports a `sourceInfo` record of
+ * paths and scopes that has no place in a two-line row.
  */
 export interface PiCommand {
 	name: string;
 	description?: string;
-	/** Argument shape, e.g. `[on|off|status]`. */
-	hint?: string;
-	aliases?: string[];
-	subcommands?: Array<{ name: string; description?: string }>;
+	/** `extension`, `prompt` or `skill` — shown as the row's right-hand tag. */
+	source?: string;
 }
 
 /**
- * A question omp is BLOCKED on: the `ask` tool, an extension's `confirm`, a
- * tool approval. All of them arrive as one `extension_ui_request`, and the
+ * A question pi is BLOCKED on: an extension's `select`, `confirm`, `input` or
+ * `editor`. All of them arrive as one `extension_ui_request`, and the
  * extension that sent it waits for the answer — so an unanswered one is
  * indistinguishable, from the browser, from a hung agent.
  *
- * `id` is omp's own request id and has to come back with the answer: it is
- * what tells omp which waiting dialog this is, and answering a stale id would
+ * `id` is pi's own request id and has to come back with the answer: it is
+ * what tells pi which waiting dialog this is, and answering a stale id would
  * answer a question the user never saw.
  */
 export interface PiAsk {
 	id: string;
 	/**
 	 * `select` renders the options, `confirm` two buttons, `text` a field.
-	 * omp's `input` and `editor` collapse into `text` — the difference is a
+	 * pi's `input` and `editor` collapse into `text` — the difference is a
 	 * one-line prompt versus a full editor, which `multiline` carries.
 	 */
 	kind: "select" | "confirm" | "text";
 	title?: string;
 	message?: string;
-	/** `select` only. Descriptions are omp's positional `optionDetails`. */
-	options?: Array<{ label: string; description?: string }>;
-	/** `text` only: omp's prefill, and whether it expects more than a line. */
+	/** `select` only. pi sends plain option strings. */
+	options?: Array<{ label: string }>;
+	/** `text` only: pi's prefill, and whether it expects more than a line. */
 	value?: string;
 	multiline?: boolean;
 }
 
 /**
- * An answer to a `PiAsk`, exactly as omp's `extension_ui_response` accepts
+ * An answer to a `PiAsk`, exactly as pi's `extension_ui_response` accepts
  * it: a picked or typed `value`, a `confirmed` boolean, or `cancelled` for a
  * question the user declined. Cancelling is a real answer and not a way to
- * dismiss the panel — omp treats it as the dialog being dismissed, which for
+ * dismiss the panel — pi treats it as the dialog being dismissed, which for
  * the `ask` tool fails the tool call.
  */
 export type AskAnswer = { value: string } | { confirmed: boolean } | { cancelled: true };
-
-/**
- * One live child session, as omp's `get_subagents` reports it.
- *
- * Only the RUNNING ones: omp drops a subagent from this list the moment it
- * reaches a terminal status, which is exactly what a roster wants — a child
- * that has finished has delivered its result into the transcript, and the
- * transcript is where it belongs from then on.
- */
-export interface PiSubagent {
-	id: string;
-	/** Which specialist: `scout`, `task`, `reviewer`, … */
-	agent: string;
-	/** What it was told to do, or what it is doing now if omp knows. */
-	description: string;
-	status: string;
-}
 
 /**
  * The normalized event union. pi emits ~25 event shapes; these are the ones
@@ -136,11 +115,16 @@ export type PiEvent =
 	| { type: "text"; delta: string }
 	| { type: "thinking"; delta: string }
 	| { type: "tool_start"; id: string; name: string; args: unknown }
+	/**
+	 * Streaming tool output. `result` is CUMULATIVE — pi's `partialResult`
+	 * carries everything produced so far — so a consumer replaces the card's
+	 * output with it rather than appending.
+	 */
+	| { type: "tool_update"; id: string; result: string }
 	| { type: "tool_end"; id: string; name: string; isError: boolean; result: string }
 	| { type: "message_done"; message: PiMessage }
 	| { type: "notice"; notice: PiNotice }
 	| { type: "ask"; ask: PiAsk | null }
-	| { type: "subagents"; subagents: PiSubagent[] }
 	| { type: "idle" }
 	| { type: "error"; message: string };
 
@@ -151,8 +135,8 @@ export interface PiSessionInfo {
 	created: string;
 	/**
 	 * The last real conversation activity: the timestamp of the last `message`
-	 * entry in the session file, NOT the file's mtime. omp appends bookkeeping
-	 * rows (and rewrites the title line) when a session is merely resumed, so
+	 * entry in the session file, NOT the file's mtime. pi appends bookkeeping
+	 * rows (`session_info`, `model_change`) when a session is merely resumed, so
 	 * an mtime-ordered list reshuffles itself just from being looked at.
 	 */
 	lastActive: string;
@@ -193,7 +177,7 @@ export interface Snapshot {
 	 */
 	notices: PiNotice[];
 	/**
-	 * The question omp is blocked on, or null. In the snapshot and not only an
+	 * The question pi is blocked on, or null. In the snapshot and not only an
 	 * event because the agent stays blocked across a reload: a question that
 	 * lived only in an event would leave the session waiting forever on a
 	 * dialog no page can show any more.
@@ -202,8 +186,8 @@ export interface Snapshot {
 	/**
 	 * Slash commands this session accepts, for the composer's picker. Per
 	 * session and not global: the set depends on the project's extensions,
-	 * plugins and `.omp/commands` files, so a catalog shared across sessions
-	 * would offer commands one of them does not have.
+	 * skills and prompt templates under `.pi/`, so a catalog shared across
+	 * sessions would offer commands one of them does not have.
 	 */
 	commands: PiCommand[];
 	/**
@@ -214,32 +198,25 @@ export interface Snapshot {
 	 */
 	supportsImages: boolean;
 	/**
-	 * Reasoning effort as omp reports it, and the levels this model accepts
-	 * ("off" first). Both come from the session rather than a catalog: the set
-	 * is per-model (`claude-opus-5` has no "minimal", `claude-haiku-4-5` has
-	 * no "max"), and omp ACCEPTS an unknown level and then reports no level at
-	 * all — so the list is what makes a picker safe to offer.
+	 * Reasoning effort as pi reports it, and the levels this model accepts
+	 * (`get_available_thinking_levels`). Both come from the session rather
+	 * than a catalog: the set is per-model, and pi ACCEPTS an unknown level
+	 * and then reports no level at all — so the list is what makes a picker
+	 * safe to offer. Empty when the model offers no real choice.
 	 */
 	thinkingLevel: string | undefined;
 	thinkingLevels: string[];
 	/**
-	 * Context occupancy against the model's window, as omp itself accounts for
-	 * it (`get_state.contextUsage`): cache reads, system prompt and tools
-	 * included, and it DROPS after a compaction. Read from the session rather
-	 * than from the transcript's newest `usage.totalTokens`, because that
-	 * number still describes the pre-compaction prefix and would leave the
-	 * meter reading full until the next turn. `contextWindow` is 0 for a model
-	 * that does not declare one.
+	 * Context occupancy against the model's window, as pi itself accounts for
+	 * it (`get_session_stats.contextUsage`): cache reads, system prompt and
+	 * tools included, and it DROPS after a compaction. Read from the session
+	 * rather than from the transcript's newest `usage.totalTokens`, because
+	 * that number still describes the pre-compaction prefix and would leave
+	 * the meter reading full until the next turn. `contextWindow` is 0 for a
+	 * model that does not declare one.
 	 */
 	contextTokens: number;
 	contextWindow: number;
-	/**
-	 * The children this session has running right now. In the snapshot as well
-	 * as in the event stream because a reload mid-fan-out would otherwise show
-	 * a session that is busy for no visible reason — which is the state three
-	 * sessions sat in while their parent waited on a subagent nobody could see.
-	 */
-	subagents: PiSubagent[];
 }
 
 /**
@@ -288,15 +265,22 @@ export type PiwHostStatus = PiwHost & {
 	/** Where the browser reaches this host's piw, for both kinds. */
 	url: string;
 	/**
-	 * A piw answered `/api/health` at `url`. This is the only status worth a
-	 * green dot: a live ssh child proves nothing about the machine at the
-	 * other end.
+	 * A pi-web-ide answered `/api/health` at `url`. This is the only status
+	 * worth a green dot: a live ssh child proves nothing about the machine at
+	 * the other end.
 	 */
 	reachable: boolean;
+	/**
+	 * False when something answered `/api/health` but did not identify itself
+	 * as this product — an older piw on a port that was forwarded here by
+	 * habit. Its sessions are not ours to list and its packages are not ours
+	 * to manage, so the panel says so instead of showing them.
+	 */
+	foreign?: boolean;
 	remoteCwd?: string;
 	/** What the remote reports, so the page can flag a host that lags the fleet. */
 	piwVersion?: string;
-	ompVersion?: string;
+	piVersion?: string;
 	/**
 	 * Whether the remote has ANY hub origins configured. Absent from an older
 	 * piw. Separates "never told about hubs" from "allows a different page"

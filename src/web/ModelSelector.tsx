@@ -136,7 +136,7 @@ export function ModelSelector({
 					onChange={(e) => onThinkingChange(e.target.value)}
 					className="rounded-full bg-transparent px-2 py-1 font-mono text-xs text-neutral-300 hover:bg-neutral-800"
 				>
-					{/* omp can report a level outside the model's own list (a
+					{/* pi can report a level outside the model's own list (a
 					    session resumed under a different model). Show it rather
 					    than silently displaying the wrong one. */}
 					{thinkingLevel !== undefined && !thinkingLevels.includes(thinkingLevel) && (

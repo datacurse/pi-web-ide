@@ -9,9 +9,10 @@
  *
  * Keyed by SESSION, so switching tabs swaps composers instead of carrying one
  * half-written message between conversations. The key is the session id, which
- * omp derives from the session filename and is therefore the same id after a
- * reload — unlike the file, which appears only once a new session is prompted
- * and would move the draft out from under a composer being typed into.
+ * pi reports from `get_state` as soon as the child is up and is therefore the
+ * same id after a reload — unlike the file, which appears only once a new
+ * session is prompted and would move the draft out from under a composer
+ * being typed into.
  *
  * Text and images are two entries on purpose. The text is rewritten on every
  * keystroke and a pasted screenshot is megabytes of base64: one entry would

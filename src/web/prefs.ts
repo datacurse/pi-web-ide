@@ -95,9 +95,9 @@ export function writeShowThinking(show: boolean): void {
  *
  * Off by default, because the full first line is strictly more information
  * and the list truncates it anyway. On, the rows read like titles — see
- * sessionName.ts for the derivation. Either way a name omp holds (yours, via
- * rename, or one omp's titler produced) wins: this only decides how a session
- * with NO name is described.
+ * sessionName.ts for the derivation. Either way a name pi holds (yours, via
+ * rename, or one the naming child produced) wins: this only decides how a
+ * session with NO name is described.
  */
 export function readShortNames(): boolean {
 	return readStored(SHORT_NAMES_KEY) === "1";
@@ -213,8 +213,8 @@ export function writeGitAutoName(on: boolean): void {
  * its own: a session's creation timestamp is written once, in its header.
  * `active` answers a different and equally real question ("what was I last
  * working on"), and is computed from the last message in the file rather than
- * from the file's mtime — omp touches the file on resume, so an mtime order
- * reshuffles from merely opening a session.
+ * from the file's mtime — bookkeeping entries, such as the `session_info` a
+ * rename appends, move the mtime without the conversation having moved.
  */
 export const SESSION_SORTS = [
 	{ id: "created", label: "Created" },

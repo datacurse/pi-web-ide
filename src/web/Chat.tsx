@@ -15,7 +15,6 @@ import {
 	Check,
 	Plus,
 	Square,
-	Users,
 	X,
 } from "@phosphor-icons/react";
 import { AnsiHtml } from "fancy-ansi/react";
@@ -28,7 +27,6 @@ import type {
 	PiMessage,
 	PiNotice,
 	PiPartial,
-	PiSubagent,
 	Snapshot,
 } from "../shared/types.js";
 import { ModelSelector } from "./ModelSelector.js";
@@ -38,7 +36,7 @@ import type { ToolMode } from "./prefs.js";
 import { clearDraft, readDraft, writeDraftImages, writeDraftText } from "./drafts.js";
 import { completionOptions, parseCompletion, type CommandOption } from "./commands.js";
 
-/** Mirrors the server's allowlist; see SUPPORTED_IMAGE_MIME in omp.ts. */
+/** Mirrors the server's allowlist; see SUPPORTED_IMAGE_MIME in agent.ts. */
 const SUPPORTED_IMAGE_MIME = [
 	"image/png",
 	"image/jpeg",
@@ -457,31 +455,55 @@ function compactTokens(n: number): string {
 }
 
 /**
- * How full the context is, next to the status line.
+ * How full the context is, next to the status line — and the only way to
+ * compact from here.
  *
- * The number is omp's own `usage.totalTokens` from the last assistant turn,
- * not an estimate: it already counts the system prompt, the tools and the
- * cached prefix, which is exactly the part a token count computed in the
- * browser would miss and be wrong by. It goes amber at 75% and red at 90%,
- * the band where the next long tool result triggers a compaction.
+ * The number is pi's own `contextUsage` from `get_session_stats` (see
+ * `fetchState` in src/server/agent.ts), not an estimate: it already counts
+ * the system prompt, the tools and the cached prefix, which is exactly the
+ * part a token count computed in the browser would miss and be wrong by, and
+ * unlike the newest turn's `usage` it follows a compaction back down. It goes
+ * amber at 75% and red at 90%, the band where the next long tool result
+ * triggers a compaction.
+ *
+ * Clicking it compacts, because the meter is where you are already looking
+ * when you decide to: pi's own `/compact` is a TUI command and is not in the
+ * catalog the composer offers, so without this a browser session can only
+ * wait for the automatic fold at the threshold.
  */
-function ContextMeter({ tokens, window: limit }: { tokens: number; window: number }) {
+function ContextMeter({
+	tokens,
+	window: limit,
+	busy,
+	onCompact,
+}: {
+	tokens: number;
+	window: number;
+	busy: boolean;
+	onCompact: () => void;
+}) {
 	if (limit <= 0 || tokens <= 0) return null;
 	const share = Math.min(1, tokens / limit);
 	const percent = Math.round(share * 100);
 	const tone =
 		share >= 0.9 ? "text-red-400" : share >= 0.75 ? "text-amber-400" : "text-neutral-500";
 	return (
-		<span
-			className={`flex shrink-0 items-center gap-1.5 font-mono text-xs ${tone}`}
-			title={`${tokens.toLocaleString()} of ${limit.toLocaleString()} context tokens used, as of the last assistant turn`}
+		<button
+			onClick={onCompact}
+			disabled={busy}
+			title={
+				busy
+					? `${tokens.toLocaleString()} of ${limit.toLocaleString()} context tokens used — finish the turn to compact`
+					: `${tokens.toLocaleString()} of ${limit.toLocaleString()} context tokens used. Click to compact the conversation into a summary.`
+			}
+			className={`flex shrink-0 items-center gap-1.5 rounded font-mono text-xs transition-colors duration-150 ease-out enabled:hover:text-neutral-200 disabled:cursor-default focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 motion-reduce:transition-none ${tone}`}
 		>
 			<span aria-hidden className="h-1 w-10 overflow-hidden rounded-full bg-neutral-800">
 				<span className="block h-full bg-current" style={{ width: `${percent}%` }} />
 			</span>
 			{compactTokens(tokens)}/{compactTokens(limit)}
-			<span className="sr-only"> context tokens used</span>
-		</span>
+			<span className="sr-only"> context tokens used; compact the conversation</span>
+		</button>
 	);
 }
 
@@ -519,112 +541,6 @@ function StatusLine({ busy, partial }: { busy: boolean; partial: PiPartial }) {
 		<div className="flex items-center gap-2 py-1.5 text-xs text-amber-400">
 			<span className="font-mono">{spinner}</span>
 			<span>{label}</span>
-		</div>
-	);
-}
-
-/**
- * What a running `hub` wait is waiting for, or null when none is running.
- *
- * A wait is the one tool call that can sit for twenty minutes having already
- * decided nothing will happen: the job it watched may have expired, and a
- * bare wait then degrades into waiting for a message no subagent is going to
- * send. The status line says "Running hub…" for that, which is true and
- * useless, so this reads the arguments and says what it is actually doing.
- */
-function waitingOn(partial: PiPartial): { ids: string[]; from?: string; limitMs?: number } | null {
-	const call = [...partial.tools].reverse().find((t) => t.result === undefined);
-	if (!call || call.name !== "hub") return null;
-	// The hub tool's own argument object, as the schema in the tool card
-	// declares it — every field still checked before it is used.
-	const args = call.args as { op?: unknown; ids?: unknown; from?: unknown; timeoutMs?: unknown };
-	if (!args || typeof args !== "object" || args.op !== "wait") return null;
-	return {
-		ids: Array.isArray(args.ids) ? args.ids.filter((v): v is string => typeof v === "string") : [],
-		from: typeof args.from === "string" ? args.from : undefined,
-		limitMs: typeof args.timeoutMs === "number" ? args.timeoutMs : undefined,
-	};
-}
-
-/** "1200000" -> "20m". A wait's ceiling is interesting in minutes, never in ms. */
-function humanMs(ms: number): string {
-	if (ms === 0) return "forever";
-	if (ms < 60_000) return `${Math.round(ms / 1000)}s`;
-	return `${Math.round(ms / 60_000)}m`;
-}
-
-/**
- * The escape hatch for a parked turn.
- *
- * Skipping is abort + re-prompt, because nothing else reaches a wait: a
- * steering message sent into one does not settle it (measured: still running
- * 80s later), while an abort settles it in about a second. So the button
- * ends the turn and immediately starts the next one, which is the shape the
- * user wants anyway — the results the agent was waiting for deliver
- * themselves into that next turn.
- */
-function WaitBanner({
-	wait,
-	onSkip,
-}: {
-	wait: { ids: string[]; from?: string; limitMs?: number };
-	onSkip: () => void;
-}) {
-	const target = wait.from
-		? `a message from ${wait.from}`
-		: wait.ids.length > 0
-			? wait.ids.join(", ")
-			: "background work";
-	return (
-		<div className="flex min-w-0 items-center gap-2 text-xs text-amber-400">
-			<span className="truncate">
-				Waiting on {target}
-				{wait.limitMs !== undefined && ` · up to ${humanMs(wait.limitMs)}`}
-			</span>
-			<button
-				onClick={onSkip}
-				title="Stop waiting and continue the turn"
-				className="shrink-0 rounded-full border border-neutral-700 px-2 py-0.5 text-neutral-300 transition-colors duration-150 ease-out hover:bg-neutral-800 hover:text-neutral-100 motion-reduce:transition-none"
-			>
-				Skip
-			</button>
-		</div>
-	);
-}
-
-/**
- * The children this session has running, as one line of chips.
- *
- * Delegation is otherwise invisible from a browser: the TUI has Agent Hub,
- * piw had a collapsed `task` tool call and a spinner. A session that is busy
- * because eight scouts are reading files looks exactly like a session that
- * is stuck, and telling those apart is the whole job of this row.
- *
- * Read-only on purpose. Steering a child means opening its transcript, which
- * is omp's own surface (`history://<id>`) and not something to rebuild here.
- */
-function SubagentRoster({ subagents }: { subagents: PiSubagent[] }) {
-	if (subagents.length === 0) return null;
-	return (
-		<div className="chat-gutter pt-1">
-			<div className="chat-measure flex flex-wrap items-center gap-1.5 text-xs text-neutral-500">
-				<Users size={12} />
-				<span>
-					{subagents.length} {subagents.length === 1 ? "child" : "children"}
-				</span>
-				{subagents.map((s) => (
-					<span
-						key={s.id}
-						title={s.description || s.id}
-						className="max-w-48 truncate rounded-full border border-neutral-800 px-2 py-0.5 font-mono text-neutral-400"
-					>
-						{s.agent}
-						{s.description && (
-							<span className="ml-1 font-sans text-neutral-600">{s.description}</span>
-						)}
-					</span>
-				))}
-			</div>
 		</div>
 	);
 }
@@ -775,14 +691,13 @@ function Notices({ notices }: { notices: PiNotice[] }) {
 }
 
 /**
- * A local slash command, echoed as the user row omp never writes.
+ * A local slash command, echoed as the user row pi never writes.
  *
  * Two separate gaps, one row: a local command appends NO message, so the
  * `/compact remote` you typed vanished from the transcript the moment the box
- * cleared; and the prompt ack arrives before the work (`/compact` on a full
- * context acks instantly, reports ~30s later), so nothing said it was still
- * going either. Ephemeral like the notice it belongs to — the next prompt
- * clears both.
+ * cleared; and the prompt ack is acceptance and not completion, so nothing
+ * said it was still going either. Ephemeral like the notice it belongs to —
+ * the next prompt clears both.
  */
 function CommandRow({ command, running }: { command: string; running: boolean }) {
 	const spinner = useSpinner(running);
@@ -802,13 +717,13 @@ function CommandRow({ command, running }: { command: string; running: boolean })
 }
 
 /**
- * Text omp wrote for a terminal, made safe for a browser.
+ * Text written for a terminal, made safe for a browser.
  *
- * omp's prompts carry Nerd Font glyphs — the radio marks in front of a
- * picker's options, U+F10C and friends. Those are PRIVATE USE codepoints:
- * they mean something only to a font the terminal has and the browser does
- * not, so every one of them renders as a tofu box. The trailing space goes
- * with the glyph, or each line would start with a stray indent.
+ * A pi extension's dialogs carry Nerd Font glyphs — the radio marks in front
+ * of a picker's options, U+F10C and friends. Those are PRIVATE USE
+ * codepoints: they mean something only to a font the terminal has and the
+ * browser does not, so every one of them renders as a tofu box. The trailing
+ * space goes with the glyph, or each line would start with a stray indent.
  */
 const GLYPHS = /[\u{E000}-\u{F8FF}\u{F0000}-\u{FFFFD}\u{100000}-\u{10FFFD}]+[ \t]?/gu;
 
@@ -817,7 +732,7 @@ function plain(text: string): string {
 }
 
 /**
- * The question omp is blocked on, put to the user.
+ * The question pi is blocked on, put to the user.
  *
  * This is the `ask` tool's whole point and it used to be unreachable from a
  * browser: the host cancelled every blocking `extension_ui_request`, so the
@@ -829,7 +744,7 @@ function plain(text: string): string {
  * question is a session stalled with nothing on screen saying why. Here it
  * sits where the answer belongs, under the work that led to it.
  *
- * `Cancel` is kept, and it is not a close button: it sends omp a real
+ * `Cancel` is kept, and it is not a close button: it sends pi a real
  * cancellation, which fails the `ask` call and lets the turn end. That is the
  * only way out of a question the user does not want to answer, and hiding it
  * would leave the only escape hatch being to abort the turn.
@@ -858,12 +773,13 @@ function AskPanel({
 		<div className="chat-gutter my-3">
 			<div className="chat-measure rounded border border-amber-900/70 bg-amber-950/20 px-3 py-3">
 				{/*
-				 * The title is NOT a short label. omp composes it in the TUI's
-				 * terms: the `editor` that follows a picker's "Other" carries the
-				 * whole rendered picker — question, every option, its description,
-				 * "Enter your response:" — as one multi-line string. Uppercasing
-				 * that shouted a paragraph, and collapsing the newlines ran it into
-				 * one line, so it is rendered as the text it is.
+				 * The title is NOT a short label. The extension that asks composes
+				 * it in the TUI's terms: the `editor` that follows a picker's
+				 * "Other" carries the whole rendered picker — question, every
+				 * option, its description, "Enter your response:" — as one
+				 * multi-line string. Uppercasing that shouted a paragraph, and
+				 * collapsing the newlines ran it into one line, so it is rendered
+				 * as the text it is.
 				 */}
 				{ask.title && (
 					<div className="text-sm whitespace-pre-wrap text-amber-200/90">
@@ -885,11 +801,6 @@ function AskPanel({
 								className="block w-full rounded border border-neutral-800 bg-neutral-900/60 px-3 py-2 text-left text-sm transition-colors duration-150 ease-out hover:border-amber-800 hover:bg-neutral-900 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-amber-400 motion-reduce:transition-none"
 							>
 								<span className="text-neutral-100">{o.label}</span>
-								{o.description && (
-									<span className="mt-0.5 block text-xs text-neutral-400">
-										{o.description}
-									</span>
-								)}
 							</button>
 						))}
 					</div>
@@ -926,7 +837,7 @@ function AskPanel({
 							onChange={(e) => setText(e.target.value)}
 							onKeyDown={(e) => {
 								// Enter answers, as it does in the composer. A multiline
-								// question (omp's `editor`) needs newlines, so there it takes
+								// question (an `editor` dialog) needs newlines, so there it takes
 								// the modifier that the composer uses for the opposite.
 								if (e.key !== "Enter") return;
 								if (ask.multiline && !(e.metaKey || e.ctrlKey)) return;
@@ -1014,7 +925,7 @@ function CommandPicker({
 					}`}
 				>
 					<span className="font-mono text-neutral-100">{o.label}</span>
-					{o.hint && <span className="font-mono text-xs text-neutral-500">{o.hint}</span>}
+					{o.source && <span className="font-mono text-xs text-neutral-500">{o.source}</span>}
 					{o.description && (
 						<span className="truncate text-xs text-neutral-400">{o.description}</span>
 					)}
@@ -1050,9 +961,10 @@ export function Chat({
 	onAnswerAsk,
 	onSend,
 	onAbort,
-	onSkipWait,
 	onModelChange,
 	onThinkingChange,
+	onCommandMenu,
+	onCompact,
 }: {
 	snapshot: Snapshot | null;
 	/** Where this project's piw answers: "" for this page's own server, else a machine's origin with no trailing slash. */
@@ -1072,17 +984,19 @@ export function Chat({
 	modelError?: string | null;
 	/**
 	 * The local slash command last sent, verbatim, and whether it is still
-	 * working. omp appends no message for one, so this is the only record of
+	 * working. pi appends no message for one, so this is the only record of
 	 * it on screen; see App.tsx for its lifetime.
 	 */
 	command?: { text: string; running: boolean } | null;
 	onSend: (text: string, images?: PiImage[]) => void;
 	onAnswerAsk: (askId: string, answer: AskAnswer) => void;
 	onAbort: () => void;
-	/** Cut a running `hub` wait short: abort, then continue the turn. */
-	onSkipWait: () => void;
 	onModelChange: (model: string) => void;
 	onThinkingChange: (level: string) => void;
+	/** The composer's `/` picker just opened; re-read the command catalog. */
+	onCommandMenu: () => void;
+	/** Fold the conversation into a summary. Refused while a turn is running. */
+	onCompact: () => void;
 }) {
 	const [text, setText] = useState("");
 	const [images, setImages] = useState<PiImage[]>([]);
@@ -1163,6 +1077,17 @@ export function Chat({
 	// A changed option list makes the old index meaningless — and keeping it
 	// would accept a row the user never looked at.
 	useEffect(() => setSelected(0), [text]);
+
+	/*
+	 * The moment the composer becomes a command word is the moment to ask the
+	 * session what commands it has. Keyed on `completing` rather than on the
+	 * text, so holding a `/` and typing a name is one request, not one per
+	 * keystroke; the server-side half is cached for 30s on top of that.
+	 */
+	const completing = completion !== null;
+	useEffect(() => {
+		if (completing) onCommandMenu();
+	}, [completing, onCommandMenu]);
 
 	/*
 	 * Follow the stream only while the reader is already AT the bottom.
@@ -1354,7 +1279,7 @@ export function Chat({
 		return (
 			<main className="flex flex-1 items-center justify-center text-sm text-neutral-500">
 				{/*
-				  Opening a session spawns an omp child and reads the whole
+				  Opening a session spawns a pi child and reads the whole
 				  transcript, which on a big session or a Pi is seconds. Showing the
 				  old session's messages while that happens made a click look like
 				  it did nothing, so the pane blanks immediately and says what it is
@@ -1476,9 +1401,6 @@ export function Chat({
 		(showThinking && partial.thinking) ||
 		(showTools && partial.tools.length > 0);
 
-	// Read off the same partial the transcript renders, so the banner and the
-	// tool card can never disagree about whether a wait is still running.
-	const wait = busy ? waitingOn(partial) : null;
 
 	// The streaming block is one more assistant row, so it follows the same
 	// rule: label it only when the last settled row was someone else. A
@@ -1594,10 +1516,6 @@ export function Chat({
 					)}
 				</div>
 
-				{/* Above the status line, because a fan-out is the reason the line
-				    below says "Running task…" and then nothing for ten minutes. */}
-				<SubagentRoster subagents={snapshot.subagents} />
-
 				{/*
 				 * Status, context meter and git sit in the READING column, not the
 				 * wide track, and no rule separates them from the transcript: the
@@ -1607,17 +1525,12 @@ export function Chat({
 				<div className="chat-gutter py-2">
 					<div className="chat-measure flex items-center justify-between gap-2">
 						<div className="flex min-w-0 items-center gap-3">
-							{/* A wait REPLACES the status line: "Running hub…" is true
-							    and says nothing, and the two together would be one
-							    sentence split across two clauses that disagree. */}
-							{wait ? (
-								<WaitBanner wait={wait} onSkip={onSkipWait} />
-							) : (
-								<StatusLine busy={busy} partial={partial} />
-							)}
+							<StatusLine busy={busy} partial={partial} />
 							<ContextMeter
 								tokens={snapshot.contextTokens}
 								window={snapshot.contextWindow}
+								busy={busy}
+								onCompact={onCompact}
 							/>
 						</div>
 						{/*

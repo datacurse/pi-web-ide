@@ -4,74 +4,43 @@ import { completionOptions, parseCompletion } from "./commands.js";
 import type { PiCommand } from "../shared/types.js";
 
 const catalog: PiCommand[] = [
-	{ name: "model", description: "Show current model selection", aliases: ["models"] },
-	{
-		name: "compact",
-		description: "Compact the conversation",
-		hint: "[soft|remote]",
-		subcommands: [
-			{ name: "soft", description: "Summarize locally" },
-			{ name: "remote", description: "Summarize via the provider" },
-		],
-	},
-	{ name: "context", description: "Show context usage" },
+	{ name: "compact", description: "Compact the conversation", source: "extension" },
+	{ name: "context", description: "Show context usage", source: "extension" },
+	{ name: "skill:brave-search", description: "Web search", source: "skill" },
 ];
 
-// The picker opens on a bare slash, and every command is a candidate.
-assert.deepEqual(parseCompletion("/"), { kind: "command", query: "" });
-assert.equal(completionOptions(catalog, { kind: "command", query: "" }).length, 3);
+// The picker opens on the command word and only on it.
+assert.deepEqual(parseCompletion("/"), { query: "" });
+assert.deepEqual(parseCompletion("/co"), { query: "co" });
 
-// A slash is only a command at the start of an otherwise empty composer.
-// Prose that happens to contain one must not raise a picker.
-assert.equal(parseCompletion("and/or"), null);
-assert.equal(parseCompletion("/compact\nand more"), null);
-assert.equal(parseCompletion("tell me about /compact"), null);
+// A slash mid-sentence is prose, not a command: "and/or" must not open a panel
+// over the composer while someone is writing.
+assert.equal(parseCompletion("do it and/or skip"), null);
+assert.equal(parseCompletion("/compact\nmore"), null);
 
-// Arguments past the subcommand word are the user's text, not a name we can
-// complete, so the picker gets out of the way.
-assert.equal(parseCompletion("/compact soft focus on the tunnels"), null);
-
-// Accepting a command leaves a trailing space, and THAT is the state that
-// offers its subcommands — one keypress chains into the next list.
-assert.deepEqual(parseCompletion("/compact "), { kind: "sub", name: "compact", query: "" });
-assert.deepEqual(
-	completionOptions(catalog, { kind: "sub", name: "compact", query: "" }).map((o) => o.insert),
-	["/compact soft ", "/compact remote "],
-);
-// ...and a completed subcommand closes it again.
-assert.equal(parseCompletion("/compact soft "), null);
-
-// A command with no subcommands has nothing to offer once it is named.
-assert.deepEqual(completionOptions(catalog, { kind: "sub", name: "context", query: "" }), []);
+// Past the name the user is writing an argument, which the picker cannot help
+// with — and a panel covering the text being typed is worse than no panel.
+assert.equal(parseCompletion("/compact soft"), null);
+assert.equal(parseCompletion("/compact "), null);
 
 // Prefix matches rank above substring ones: typing "co" wants /compact and
-// /context before it wants anything that merely contains "co".
+// /context first, not a skill that merely contains "co".
+const co = completionOptions(catalog, { query: "co" }).map((o) => o.label);
+assert.deepEqual(co, ["/compact", "/context"]);
+
+// Substring matching is what makes a long skill name findable from its
+// distinctive middle, which is rarely its first letters.
 assert.deepEqual(
-	completionOptions(
-		[...catalog, { name: "add-dir", description: "no relation, contains no co" }],
-		{ kind: "command", query: "co" },
-	).map((o) => o.label),
-	["/compact", "/context"],
+	completionOptions(catalog, { query: "brave" }).map((o) => o.label),
+	["/skill:brave-search"],
 );
 
-// Aliases match, but the row inserts the canonical name: the subcommand list
-// and every later lookup are keyed by it.
-const aliased = completionOptions(catalog, { kind: "command", query: "models" });
-assert.deepEqual(
-	aliased.map((o) => o.insert),
-	["/model "],
-);
-assert.equal(aliased[0]?.label, "/model");
+// Accepting a row leaves the caret where the argument goes.
+assert.equal(completionOptions(catalog, { query: "com" })[0].insert, "/compact ");
 
-// Subcommand rows read as the word they are; a leading slash would claim a
-// top-level command that does not exist.
-assert.equal(
-	completionOptions(catalog, { kind: "sub", name: "compact", query: "so" })[0]?.label,
-	"soft",
-);
+// The source tag rides along, so the picker can say where a command came from.
+assert.equal(completionOptions(catalog, { query: "brave" })[0].source, "skill");
 
-// An unknown command completes to nothing rather than to everything.
-assert.deepEqual(completionOptions(catalog, { kind: "command", query: "zzz" }), []);
-assert.deepEqual(completionOptions(catalog, { kind: "sub", name: "zzz", query: "" }), []);
+assert.deepEqual(completionOptions(catalog, { query: "zzz" }), []);
 
 console.log("ok");

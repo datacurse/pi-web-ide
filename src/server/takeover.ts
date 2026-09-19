@@ -9,10 +9,10 @@
  * The safety property that makes that acceptable: it kills ONLY a process it
  * has positively identified as another pi-web-ide, by asking the port.
  * `/api/health` answers `{ ok: true, product: "pi-web-ide", cwd }`, and
- * nothing else on the machine does — in particular an omp-era piw on a
- * neighbouring port answers without `product` and is left alone, and startup
- * fails exactly as before. A coding agent's web UI must not be in the
- * business of killing whatever program happens to hold a port.
+ * nothing else on the machine does — in particular a server from the previous
+ * install on a neighbouring port answers without `product` and is left alone,
+ * and startup fails exactly as before. A coding agent's web UI must not be in
+ * the business of killing whatever program happens to hold a port.
  */
 
 import { readFileSync, readdirSync, readlinkSync } from "node:fs";
@@ -33,7 +33,7 @@ interface Occupant {
  * Ask the port who it is.
  *
  * Only a pi-web-ide is ours to kill, and the proof is `product` in its
- * `/api/health`. An omp-era piw answers `/api/health` with `{ ok, cwd }` and
+ * `/api/health`. An older piw answers `/api/health` with `{ ok, cwd }` and
  * no `product`, so it reads as a stranger and startup fails instead — which
  * is the whole point while both installs run side by side.
  *

@@ -7,56 +7,44 @@
  * itself is a list with a highlight.
  *
  * The catalog comes from the session (`Snapshot.commands`), never from a table
- * in here: which commands exist depends on the project's extensions, plugins
- * and `.omp/commands` files, and a hardcoded list would confidently offer a
- * command the agent does not have.
+ * in here: which commands exist depends on the project's extensions, skills
+ * and prompt templates under `.pi/`, and a hardcoded list would confidently
+ * offer a command the agent does not have.
  */
 
 import type { PiCommand } from "../shared/types.js";
 
-/** What the composer is currently completing. */
-export type Completion =
-	/** The command word itself: `/`, `/co`. */
-	| { kind: "command"; query: string }
-	/** A subcommand of a named command: `/fast `, `/compact so`. */
-	| { kind: "sub"; name: string; query: string };
+/** What the composer is currently completing: the command word itself. */
+export interface Completion {
+	/** The text after the slash: "" for a bare `/`, "co" for `/co`. */
+	query: string;
+}
 
 /**
  * One row of the picker. `insert` replaces the whole composer text; `label`
- * is the row as it reads, which is why it carries its own leading slash: a
- * command IS `/compact`, a subcommand is `soft`, and printing `/soft` would
- * claim a command that does not exist.
+ * is the row as it reads, which is why it carries its own leading slash.
  */
 export interface CommandOption {
 	insert: string;
 	label: string;
 	description?: string;
-	/** Argument shape, e.g. `[on|off|status]`. Only on command rows. */
-	hint?: string;
+	/** `extension`, `prompt` or `skill`, shown as a dim tag on the right. */
+	source?: string;
 }
 
 /**
  * Read the composer text as a completion in progress, or nothing.
  *
  * Deliberately strict: the picker opens only while the WHOLE composer is one
- * unfinished command. A slash mid-sentence is prose ("and/or"), a slash on the
- * second line belongs to whatever the first line is saying, and text past the
- * subcommand word — `/compact soft focus on X` — is arguments the user is
- * writing, not a name the picker can help with.
- *
- * The trailing-space cases are what make picking feel right: `/fast ` matches
- * with an empty subcommand query, so accepting a command with subcommands
- * immediately offers them, while `/fast on ` matches nothing and the panel
- * closes.
+ * unfinished command word. A slash mid-sentence is prose ("and/or"), a slash
+ * on the second line belongs to whatever the first line is saying, and text
+ * after the name is the argument the user is writing, not a name the picker
+ * can help with.
  */
 export function parseCompletion(text: string): Completion | null {
 	if (text.includes("\n")) return null;
-	const m = /^\/(\S*)(?:\s+(\S*))?$/.exec(text);
-	if (!m) return null;
-	const name = m[1] ?? "";
-	const sub = m[2];
-	if (sub === undefined) return { kind: "command", query: name };
-	return { kind: "sub", name, query: sub };
+	const m = /^\/(\S*)$/.exec(text);
+	return m ? { query: m[1] ?? "" } : null;
 }
 
 /** Case-insensitive, prefix-first ranking. `-1` means "no match". */
@@ -70,43 +58,19 @@ function rank(candidate: string, query: string): number {
 /**
  * The rows to show for a completion, best match first.
  *
- * Aliases match but are never rows of their own: `/models` finds `model`, and
- * the row still inserts the canonical name, because that is the name the rest
- * of the catalog (and the subcommand list) is keyed by.
- *
- * Every command row inserts a TRAILING SPACE. That is what lets one keypress
- * chain: `/fa` + Enter gives `/fast `, which is the state that lists `on`,
- * `off`, `status`.
+ * Every row inserts a TRAILING SPACE, because every pi command that takes
+ * arguments takes them as free text after the name: `/skill:review the auth
+ * change`. One keypress leaves the caret where the argument goes.
  */
 export function completionOptions(commands: PiCommand[], completion: Completion): CommandOption[] {
-	if (completion.kind === "sub") {
-		const parent = commands.find(
-			(c) => c.name === completion.name || c.aliases?.includes(completion.name),
-		);
-		if (!parent?.subcommands) return [];
-		return parent.subcommands
-			.map((s) => ({ s, r: rank(s.name, completion.query) }))
-			.filter(({ r }) => r >= 0)
-			.sort((a, b) => a.r - b.r)
-			.map(({ s }) => ({
-				insert: `/${parent.name} ${s.name} `,
-				label: s.name,
-				...(s.description ? { description: s.description } : {}),
-			}));
-	}
-
 	return commands
-		.map((c) => {
-			const ranks = [c.name, ...(c.aliases ?? [])].map((n) => rank(n, completion.query));
-			const best = ranks.filter((r) => r >= 0).sort((a, b) => a - b)[0];
-			return { c, r: best === undefined ? -1 : best };
-		})
+		.map((c) => ({ c, r: rank(c.name, completion.query) }))
 		.filter(({ r }) => r >= 0)
-		.sort((a, b) => a.r - b.r)
+		.sort((a, b) => a.r - b.r || a.c.name.localeCompare(b.c.name))
 		.map(({ c }) => ({
 			insert: `/${c.name} `,
 			label: `/${c.name}`,
 			...(c.description ? { description: c.description } : {}),
-			...(c.hint ? { hint: c.hint } : {}),
+			...(c.source ? { source: c.source } : {}),
 		}));
 }

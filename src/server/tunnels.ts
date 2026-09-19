@@ -14,9 +14,9 @@
  */
 
 import { spawn, type ChildProcess } from "node:child_process";
-import type { PiwHost, PiwHostStatus, PiwTunnelHost } from "../shared/types.js";
+import { PRODUCT, type PiwHost, type PiwHostStatus, type PiwTunnelHost } from "../shared/types.js";
 
-/** Same escape hatch as PIW_OMP_BIN: a unit's PATH is not your shell's. */
+/** Same escape hatch as PIW_PI_BIN: a unit's PATH is not your shell's. */
 const SSH_BIN = process.env.PIW_SSH_BIN ?? "ssh";
 
 /**
@@ -224,7 +224,7 @@ export class Tunnels {
 }
 
 /**
- * Ask an origin whether a piw is behind it.
+ * Ask an origin whether a pi-web-ide is behind it.
  *
  * Deliberately not takeover.ts's `identify`: that one falls back to /proc to
  * find a pid, which on this side of a tunnel would resolve the LOCAL ssh
@@ -233,7 +233,13 @@ export class Tunnels {
  * remote reports them, so the page can show which host lags.
  */
 async function probe(origin: string): Promise<
-	| { remoteCwd: string; piwVersion?: string; ompVersion?: string; hubOrigins?: boolean }
+	| {
+			remoteCwd: string;
+			foreign: boolean;
+			piwVersion?: string;
+			piVersion?: string;
+			hubOrigins?: boolean;
+	  }
 	| undefined
 > {
 	try {
@@ -245,10 +251,13 @@ async function probe(origin: string): Promise<
 		if (!("cwd" in health) || typeof health.cwd !== "string") return undefined;
 		return {
 			remoteCwd: health.cwd,
+			// An older piw answers this endpoint too, and a forward pointed at
+			// one would otherwise show up as a healthy member of the fleet.
+			foreign: !("product" in health) || health.product !== PRODUCT,
 			piwVersion:
 				"piwVersion" in health && typeof health.piwVersion === "string" ? health.piwVersion : undefined,
-			ompVersion:
-				"ompVersion" in health && typeof health.ompVersion === "string" ? health.ompVersion : undefined,
+			piVersion:
+				"piVersion" in health && typeof health.piVersion === "string" ? health.piVersion : undefined,
 			hubOrigins:
 				"hubOrigins" in health && typeof health.hubOrigins === "boolean" ? health.hubOrigins : undefined,
 		};

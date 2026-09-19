@@ -92,8 +92,6 @@ function toSnapshot(raw: Partial<Snapshot>): Snapshot {
 		thinkingLevels: Array.isArray(raw.thinkingLevels) ? raw.thinkingLevels : [],
 		contextTokens: typeof raw.contextTokens === "number" ? raw.contextTokens : 0,
 		contextWindow: typeof raw.contextWindow === "number" ? raw.contextWindow : 0,
-		// An older server sends none, and the roster simply never appears.
-		subagents: Array.isArray(raw.subagents) ? raw.subagents : [],
 	};
 }
 
@@ -126,7 +124,7 @@ function replyLine(snapshot: Snapshot | undefined): string {
  * is blocked until it is answered.
  */
 function askLine(ask: PiAsk): string {
-	const line = (ask.message || ask.title || "omp is waiting for an answer").trim();
+	const line = (ask.message || ask.title || "pi is waiting for an answer").trim();
 	return line.length > 140 ? `${line.slice(0, 140)}…` : line;
 }
 
@@ -324,10 +322,10 @@ export default function App() {
 	/**
 	 * The local slash command last sent, and whether it is still working.
 	 *
-	 * omp appends no message for a local command, so nothing in the transcript
+	 * pi appends no message for a local command, so nothing in the transcript
 	 * records that it was sent at all; and the prompt ack is acceptance, not
-	 * completion — omp acks `/compact` instantly and reports when the fold is
-	 * done, with nothing streaming in between.
+	 * completion — an extension command is acked at once and whatever it has
+	 * to say arrives later as a notification, with nothing streaming between.
 	 */
 	const [command, setCommand] = useState<{ text: string; running: boolean } | null>(null);
 	const [modelError, setModelError] = useState<string | null>(null);
@@ -385,8 +383,8 @@ export default function App() {
 	 * is undefined: a request to the wrong machine is worse than a late one.
 	 */
 	const origin = host === "" ? "" : hosts?.find((h) => h.name === host)?.url;
-	/** This piw's own versions, so the Machines panel can flag one that lags. */
-	const [localVersions, setLocalVersions] = useState<{ piw?: string; omp?: string }>({});
+	/** This server's own versions, so the Machines panel can flag one that lags. */
+	const [localVersions, setLocalVersions] = useState<{ piw?: string; pi?: string }>({});
 
 	/*
 	 * index.html applies the stored theme before the first paint, so this is
@@ -663,7 +661,7 @@ export default function App() {
 		setHostProjects((list) => [...list.filter((e) => e.host !== entry.host), entry]);
 	}, []);
 
-	// This piw's own list and versions, once. The server seeds the list with
+	// This server's own list and versions, once. It seeds the list with
 	// its startup cwd, which is also the fallback selection on a first visit.
 	useEffect(() => {
 		void loadProjects("", "").then(putProjects);
@@ -673,7 +671,7 @@ export default function App() {
 			if (!body || typeof body !== "object") return;
 			setLocalVersions({
 				piw: "piwVersion" in body && typeof body.piwVersion === "string" ? body.piwVersion : undefined,
-				omp: "ompVersion" in body && typeof body.ompVersion === "string" ? body.ompVersion : undefined,
+				pi: "piVersion" in body && typeof body.piVersion === "string" ? body.piVersion : undefined,
 			});
 		})();
 	}, [loadProjects, putProjects]);
@@ -784,8 +782,8 @@ export default function App() {
 
 	/**
 	 * Forget a project. The directory and its sessions are untouched — this is
-	 * the view, and omp's store is keyed by cwd either way, so re-adding the
-	 * path brings every session back.
+	 * the view, and pi's session store is keyed by cwd either way, so re-adding
+	 * the path brings every session back.
 	 */
 	const removeProject = useCallback(
 		async (path: string) => {
@@ -890,11 +888,12 @@ export default function App() {
 	}, [project, origin, host, scope]);
 
 	/**
-	 * Rename a session. omp writes the title (see OmpSession.setName), which is
-	 * why this is a request and not a local edit: the name has to end up in the
-	 * session file, so the TUI and every other piw window read the same one.
+	 * Rename a session. pi owns the name (PiSession.setName in
+	 * src/server/agent.ts sends `set_session_name`), which is why this is a
+	 * request and not a local edit: the name has to end up in the session
+	 * file, so the TUI and every other piw window read the same one.
 	 *
-	 * Applied optimistically because the server may have to spawn an omp child
+	 * Applied optimistically because the server may have to spawn a pi child
 	 * for a session nobody had open — a rename that takes two seconds to appear
 	 * reads as one that did not work. The refetch afterwards is what makes the
 	 * displayed name the stored one either way.
@@ -919,11 +918,12 @@ export default function App() {
 	);
 
 	/**
-	 * Let omp name the session: `/rename` with no argument, which summarises
-	 * the conversation with omp's configured tiny model.
+	 * Let the server name the session: a one-shot `pi -p` child turns the
+	 * session's opening request into a title, which the server writes with
+	 * `set_session_name`.
 	 *
 	 * No optimistic update, because nothing here knows the answer — the server
-	 * waits for omp to write the title and answers with it. It can take
+	 * waits for that child and answers with the name it produced. It can take
 	 * seconds, so the row says "Naming…" while this is in flight.
 	 */
 	const autoNameSession = useCallback(
@@ -1044,7 +1044,7 @@ export default function App() {
 			/*
 			 * Blank the pane when this attach is for a DIFFERENT session.
 			 *
-			 * Opening spawns an omp child and reads the whole transcript, so on a
+			 * Opening spawns a pi child and reads the whole transcript, so on a
 			 * big session it is seconds. Leaving the previous conversation on
 			 * screen for those seconds made a click in the session list look like
 			 * it had done nothing at all — the tab strip changed, the thing filling
@@ -1241,11 +1241,12 @@ export default function App() {
 						setSnapshot((s) => (s ? { ...s, ask: e.ask } : s));
 						if (e.ask) announce(snap.file, askLine(e.ask));
 						break;
-					case "subagents":
-						// Just the roster: no refetch, because a fan-out of eight
-						// children changing activity every second would otherwise be
-						// eight full transcript reads a second.
-						setSnapshot((s) => (s ? { ...s, subagents: e.subagents } : s));
+					case "tool_update":
+						// Cumulative output: replace, never append.
+						setPartial((p) => ({
+							...p,
+							tools: p.tools.map((t) => (t.id === e.id ? { ...t, result: e.result } : t)),
+						}));
 						break;
 					case "idle":
 						setBusy(false);
@@ -1462,27 +1463,47 @@ export default function App() {
 	}, [snapshot, origin]);
 
 	/**
-	 * Cut a `hub` wait short and let the turn carry on.
-	 *
-	 * Abort, then re-prompt. A steering message alone does NOT reach a wait —
-	 * measured against a live session: a prompt sent 11s into a 180s wait had
-	 * not settled the tool 80s later, while an abort settled it in 1.1s and
-	 * returned the wait's normal answer (the running jobs it was watching).
-	 * So the only way to skip one is to end the turn and start the next, and
-	 * the re-prompt is what makes that one tap instead of two.
-	 *
-	 * The nudge is a real user message, visible in the transcript: the agent
-	 * is being told something, and hiding that would make the next turn look
-	 * like it decided to stop waiting on its own.
+	 * Fold the conversation. The transcript and the meter move when
+	 * `compaction_end` arrives over SSE, not here — a compaction takes a model
+	 * call, and pretending otherwise would blank the meter before the summary
+	 * exists. A refusal (mid-turn) is shown where every other session error is.
 	 */
-	const skipWait = useCallback(async () => {
+	const compact = useCallback(async () => {
 		if (!snapshot) return;
-		await fetch(`${origin}/api/sessions/${snapshot.id}/abort`, { method: "POST" });
-		await send("Stop waiting — background results deliver themselves. Carry on.");
-	}, [snapshot, origin, send]);
+		const r = await fetch(`${origin}/api/sessions/${snapshot.id}/compact`, { method: "POST" });
+		if (r.ok) return;
+		const body = await r.json().catch(() => ({}) as { error?: string });
+		setSnapshot((s) => (s ? { ...s, error: body.error ?? "could not compact" } : s));
+	}, [snapshot, origin]);
 
 	/**
-	 * Answer the question omp is blocked on.
+	 * Re-read the slash command catalog when the composer's picker opens.
+	 *
+	 * pi pushes nothing when the set changes, and it does change under a live
+	 * session: installing a package, or dropping a file in `.pi/prompts`, adds
+	 * commands the child only sees when asked. Asking on every `/` keystroke
+	 * would be a round trip per character, so the answer is good for half a
+	 * minute — a package install is not a keystroke.
+	 */
+	const commandsFetchedAt = useRef<{ id: string; at: number } | null>(null);
+	const refreshCommands = useCallback(async () => {
+		if (!snapshot) return;
+		const last = commandsFetchedAt.current;
+		if (last && last.id === snapshot.id && Date.now() - last.at < 30_000) return;
+		commandsFetchedAt.current = { id: snapshot.id, at: Date.now() };
+		const r = await fetch(`${origin}/api/sessions/${snapshot.id}/commands`, {
+			method: "POST",
+		}).catch(() => null);
+		if (!r?.ok) return;
+		const body: unknown = await r.json().catch(() => null);
+		if (!body || typeof body !== "object" || !("commands" in body)) return;
+		const commands = body.commands;
+		if (!Array.isArray(commands)) return;
+		setSnapshot((s) => (s && s.id === snapshot.id ? { ...s, commands } : s));
+	}, [snapshot, origin]);
+
+	/**
+	 * Answer the question pi is blocked on.
 	 *
 	 * The panel is cleared optimistically: the `ask` event that confirms it
 	 * comes back over SSE, and leaving the question on screen until it arrives
@@ -1658,9 +1679,10 @@ export default function App() {
 							onSend={send}
 							onAnswerAsk={answerAsk}
 							onAbort={abort}
-							onSkipWait={skipWait}
 							onModelChange={changeModel}
 							onThinkingChange={changeThinking}
+							onCommandMenu={refreshCommands}
+							onCompact={compact}
 						/>
 					</div>
 

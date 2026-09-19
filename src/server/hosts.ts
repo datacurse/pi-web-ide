@@ -8,17 +8,17 @@
  * does not know anything about the remote's projects. The page talks to each
  * machine's piw at that machine's own origin.
  *
- * The store is a flat JSON array next to omp's own state, for the same reason
- * projects.ts uses one: this list is the only new persistent state in the
- * feature, and a file the user can read and edit by hand is a feature.
+ * The store is a flat JSON array in this server's own state directory, for
+ * the same reason projects.ts uses one: this list is the only new persistent
+ * state in the feature, and a file the user can read and edit by hand is a
+ * feature. It is NOT inherited from the previous install: those entries name
+ * forward ports that server still owns, pointing at remotes where an older
+ * piw is listening.
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
-import { dirname, join } from "node:path";
+import { readFileSync } from "node:fs";
+import { statePath, writeStateFile } from "./state.js";
 import type { PiwHost, PiwTunnelHost } from "../shared/types.js";
-
-const FILE = join(homedir(), ".omp", "agent", "piw-hosts.json");
 
 /** What a remote piw listens on, absent a reason to think otherwise. */
 const DEFAULT_REMOTE_PORT = 8890;
@@ -34,7 +34,7 @@ const MAX_NAME = 32;
 export function listHosts(): PiwHost[] {
 	let raw: unknown;
 	try {
-		raw = JSON.parse(readFileSync(FILE, "utf8"));
+		raw = JSON.parse(readFileSync(statePath("hosts.json"), "utf8"));
 	} catch {
 		// Missing or corrupt file means "no machines yet", which is the normal
 		// state of a fresh install and not an error.
@@ -192,6 +192,5 @@ function coerce(raw: unknown): PiwHost | undefined {
 }
 
 function save(hosts: PiwHost[]): void {
-	if (!existsSync(dirname(FILE))) mkdirSync(dirname(FILE), { recursive: true });
-	writeFileSync(FILE, JSON.stringify(hosts, null, "\t"));
+	writeStateFile(statePath("hosts.json"), JSON.stringify(hosts, null, "\t"), 0o644);
 }

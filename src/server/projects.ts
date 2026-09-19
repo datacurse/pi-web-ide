@@ -2,26 +2,24 @@
  * projects.ts — the directories piw knows about: the ones whose sessions it
  * shows, the ones pinned in the picker, and the listing that feeds the picker.
  *
- * A "project" is just a cwd. omp already stores sessions per working directory
- * (~/.omp/agent/sessions/<encoded-cwd>/) and each session header carries `cwd`,
+ * A "project" is just a cwd. pi already stores sessions per working directory
+ * (~/.pi/agent/sessions/<encoded-cwd>/) and each session header carries `cwd`,
  * so there is nothing to model here beyond remembering which directories the
- * user cares about. A flat JSON array next to omp's own state is the whole
- * store, and favourites are a second array of exactly the same shape.
+ * user cares about. A flat JSON array in this server's state directory is the
+ * whole store, and favourites are a second array of exactly the same shape.
+ *
+ * Both lists are inherited once from an omp-era install if this one has none:
+ * they are just paths, they are equally true for either product, and retyping
+ * a dozen project directories is a pointless tax. See state.ts.
  */
 
-import {
-	existsSync,
-	mkdirSync,
-	readdirSync,
-	readFileSync,
-	statSync,
-	writeFileSync,
-} from "node:fs";
+import { existsSync, readdirSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
+import { legacyPath, readStateFile, statePath, writeStateFile } from "./state.js";
 import type { PiwDirEntry, PiwDirListing } from "../shared/types.js";
 
-const FILE = join(homedir(), ".omp", "agent", "piw-projects.json");
+const PROJECTS = "projects.json";
 /**
  * Pinned directories for the picker. Server-side and not `localStorage`
  * because these are paths on THIS machine: the browser may be reaching piw
@@ -29,25 +27,25 @@ const FILE = join(homedir(), ".omp", "agent", "piw-projects.json");
  * machine's folders — and a second piw port on the same host would silently
  * have its own set.
  */
-const FAVORITES_FILE = join(homedir(), ".omp", "agent", "piw-favorites.json");
+const FAVORITES = "favorites.json";
 
-/**
- * Before the omp cutover this list lived next to pi's state. Reading the old
- * path when the new one is absent means an existing install keeps its
- * projects; the first write lands in the new location and the legacy file is
- * ignored from then on. Deleting it is the user's call, not ours.
- */
-const LEGACY_FILE = join(homedir(), ".pi", "agent", "piw-projects.json");
+/** What the omp-era install called the same two lists. */
+const LEGACY: Record<string, string> = {
+	[PROJECTS]: "piw-projects.json",
+	[FAVORITES]: "piw-favorites.json",
+};
 
 /** A stored flat array of paths, or nothing when the file is absent or corrupt. */
-function read(file: string): string[] | null {
+function read(name: string): string[] | null {
+	const text = readStateFile(statePath(name), legacyPath(LEGACY[name]));
+	if (text === undefined) return null;
 	try {
-		const raw: unknown = JSON.parse(readFileSync(file, "utf8"));
+		const raw: unknown = JSON.parse(text);
 		if (!Array.isArray(raw)) return null;
 		return raw.filter((p): p is string => typeof p === "string");
 	} catch {
-		// Missing or corrupt file is not an error: it just means "nothing stored
-		// here yet".
+		// A corrupt file is not an error: it just means "nothing stored here
+		// yet". Overwriting it on the next add is the only sane recovery.
 		return null;
 	}
 }
@@ -66,7 +64,7 @@ function requireDir(path: string): string {
 }
 
 export function listProjects(seed: string): string[] {
-	const stored = read(FILE) ?? read(LEGACY_FILE) ?? [];
+	const stored = read(PROJECTS) ?? [];
 	// The startup cwd is always present — piw launched against a directory must
 	// be able to show that directory's sessions without an explicit add.
 	return stored.includes(seed) ? stored : [seed, ...stored];
@@ -75,13 +73,13 @@ export function listProjects(seed: string): string[] {
 /**
  * Add a directory. The path arrives from the browser, so it is validated here
  * rather than trusted: a nonexistent or non-directory cwd would otherwise make
- * omp create a session directory for a typo.
+ * pi create a session directory for a typo.
  */
 export function addProject(seed: string, path: string): string[] {
 	const dir = requireDir(path);
 	const next = listProjects(seed);
 	if (!next.includes(dir)) next.push(dir);
-	save(FILE, next);
+	save(PROJECTS, next);
 	return next;
 }
 
@@ -95,14 +93,14 @@ export function addProject(seed: string, path: string): string[] {
  * make every shortcut cost a session poll.
  */
 export function listFavorites(): string[] {
-	return read(FAVORITES_FILE) ?? [];
+	return read(FAVORITES) ?? [];
 }
 
 export function addFavorite(path: string): string[] {
 	const dir = requireDir(path);
 	const next = listFavorites();
 	if (!next.includes(dir)) next.push(dir);
-	save(FAVORITES_FILE, next);
+	save(FAVORITES, next);
 	return next;
 }
 
@@ -112,7 +110,7 @@ export function addFavorite(path: string): string[] {
  */
 export function removeFavorite(path: string): string[] {
 	const next = listFavorites().filter((p) => p !== expand(path));
-	save(FAVORITES_FILE, next);
+	save(FAVORITES, next);
 	return next;
 }
 
@@ -172,11 +170,10 @@ export function browse(path: string): PiwDirListing {
 /** Remove a directory from the list. Sessions on disk are untouched. */
 export function removeProject(seed: string, path: string): string[] {
 	const next = listProjects(seed).filter((p) => p !== path);
-	save(FILE, next);
+	save(PROJECTS, next);
 	return next;
 }
 
-function save(file: string, paths: string[]): void {
-	mkdirSync(dirname(file), { recursive: true });
-	writeFileSync(file, JSON.stringify(paths, null, "\t"));
+function save(name: string, paths: string[]): void {
+	writeStateFile(statePath(name), JSON.stringify(paths, null, "\t"), 0o644);
 }

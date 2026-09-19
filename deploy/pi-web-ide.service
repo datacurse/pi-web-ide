@@ -1,21 +1,23 @@
-# piw — systemd *user* unit.
+# pi-web-ide — systemd *user* unit.
 #
-# Installed to ~/.config/systemd/user/piw.service by deploy/install.sh and
-# driven with `systemctl --user`. A user unit rather than a system unit because
-# this process holds the same provider credentials the interactive agent uses
-# (~/.omp/agent/auth.json) and therefore must run as the human who owns them. A
-# system unit would need a service account, a copy of those credentials, and a
-# policy for who may reach the socket — all of it solving a problem we do not
-# have.
+# Installed to ~/.config/systemd/user/pi-web-ide.service by deploy/install.sh
+# and driven with `systemctl --user`. A user unit rather than a system unit
+# because this process holds the same provider credentials the interactive
+# agent uses: pi keeps its OAuth tokens in ~/.pi/agent/auth.json (mode 0600)
+# and plain API keys in ~/.pi/agent/provider-keys.json, so the unit must run
+# as the user who owns those files — or a provider key must be supplied
+# through the environment file. A system unit would need a service account, a
+# copy of those credentials, and a policy for who may reach the socket — all
+# of it solving a problem we do not have.
 #
 # Sessions only survive logout with linger enabled:
 #   loginctl enable-linger $USER
 
 [Unit]
-Description=piw (web UI for the omp coding agent)
+Description=pi-web-ide (web UI for the pi coding agent)
 # Deliberately no Wants=/After=network-online.target. The server binds
 # 127.0.0.1, and loopback is up before any network target, so ordering on
-# network-online would add boot latency and buy nothing. The omp child
+# network-online would add boot latency and buy nothing. The pi child
 # processes do reach provider APIs, but they are spawned on demand — long after
 # boot — and a transient DNS failure there is already reported as a turn error.
 
@@ -25,23 +27,23 @@ Type=simple
 # %h, never a hardcoded /home/loki: the same file is installed on every machine
 # (local, orangepi, tg) and the account names differ. Override with a drop-in if
 # your checkout is elsewhere — install.sh writes one for you.
-WorkingDirectory=%h/code/piw
+WorkingDirectory=%h/code/pi-web-ide
 
 # Required, not optional (no leading `-`). Every PIW_* variable has a default,
-# but the default for PIW_CWD is the process cwd — i.e. the piw checkout — so a
+# but the default for PIW_CWD is the process cwd — i.e. the checkout — so a
 # missing env file would not fail, it would start a perfectly healthy server
 # pointed at the wrong workspace. Refusing to start is the louder, cheaper
 # outcome.
-EnvironmentFile=%h/.config/piw/env
+EnvironmentFile=%h/.config/pi-web-ide/env
 
 # A login shell, matching the other user units on this host. systemd user units
-# inherit a minimal PATH: no ~/.local/bin, no fnm shims. piw needs two things
-# off PATH — `node`/`pnpm` (fnm-managed, exported from ~/.profile) and the `omp`
-# binary itself (~/.local/bin/omp), which omp.ts spawns once per open session.
+# inherit a minimal PATH: no ~/.local/bin, no fnm shims. The server needs two
+# things off PATH — `node`/`pnpm` (fnm-managed, exported from ~/.profile) and
+# the `pi` binary itself, which agent.ts spawns once per open session.
 # `bash -lc` picks both up from the profile the user already maintains instead
 # of pinning a node version into this file, which would break on the next
-# upgrade. Set PIW_OMP_BIN in the env file if you would rather the service not
-# depend on the shell profile for omp.
+# upgrade. Set PIW_PI_BIN in the env file if you would rather the service not
+# depend on the shell profile for pi.
 #
 # `exec` is load-bearing: without it systemd supervises bash, MAINPID is the
 # shell, and SIGTERM never reaches the server's own handlers.
@@ -51,25 +53,25 @@ Restart=always
 RestartSec=2
 # The default start limit (5 starts within 10s) still applies, on purpose: a
 # broken build should stop flapping and sit in `failed`, where `journalctl
-# --user -u piw` explains why, rather than respawning forever.
+# --user -u pi-web-ide` explains why, rather than respawning forever.
 
-# Default KillMode=control-group is exactly right here. omp.ts runs one child
+# Default KillMode=control-group is exactly right here. agent.ts runs one child
 # process per open session and they live in this cgroup, so a stop must take
 # them with it. index.ts handles SIGTERM and closes child stdin first, which is
-# omp's clean shutdown path (the child exits 0 and disposes its session);
+# pi's clean shutdown path (the child exits and disposes its session);
 # TimeoutStopSec is the backstop for a child that ignores it.
 TimeoutStopSec=15
 
 StandardOutput=journal
 StandardError=journal
-SyslogIdentifier=piw
+SyslogIdentifier=pi-web-ide
 
 # This unit adds no network exposure of its own, which is the whole security
 # story:
 #   - Nothing here can change the bind address. index.ts passes "127.0.0.1" to
 #     listen() as a literal; there is no host env var to set by accident.
 #   - No IPAddressAllow=/IPAddressDeny=. Pinning this cgroup to loopback looks
-#     attractive until you remember the omp children are in it and must reach
+#     attractive until you remember the pi children are in it and must reach
 #     provider APIs, at which point the rule is either inert or breaks the
 #     agent.
 #   - No PrivateNetwork=, for the same reason.

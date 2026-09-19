@@ -1,30 +1,29 @@
 /**
- * sessions.ts — the session list, read straight off omp's on-disk store.
+ * sessions.ts — the session list, read straight off pi's on-disk store.
  *
- * omp persists one JSONL file per conversation under
- * `~/.omp/agent/sessions/<encoded-cwd>/<ISO-timestamp>_<uuid>.jsonl`, and we
+ * pi persists one JSONL file per conversation under
+ * `~/.pi/agent/sessions/<encoded-cwd>/<ISO-timestamp>_<uuid>.jsonl`, and we
  * parse those files ourselves rather than asking the CLI. Two reasons:
  *
- * 1. `omp --mode rpc-ui` is one subprocess per *open* session. Listing is a
+ * 1. `pi --mode rpc` is one subprocess per *open* session. Listing is a
  *    whole-store question, so routing it through a subprocess would mean
- *    spawning one just to enumerate — ~1s of Node startup per poll.
- * 2. The directory name is NOT a usable key. The cwd encoding is inconsistent
- *    (`/tmp/omprpc-x` → `-tmp-omprpc-x`, but `/mnt/c/Users/loki` →
- *    `--mnt-c-Users-loki--`), so reimplementing it would be a guess that
- *    silently returns an empty list. Every session file carries its own
- *    `{"type":"session",...,"cwd":"..."}` header entry, which is authoritative.
- *    We therefore scan all project directories and filter on that field.
+ *    spawning one just to enumerate — ~1s of startup per poll.
+ * 2. The directory name is NOT a usable key. The cwd encoding is lossy
+ *    (`/tmp/pi-probe` → `--tmp-pi-probe--`; every separator becomes the same
+ *    character the path may already contain), so reimplementing it would be a
+ *    guess that silently returns an empty list. Every session file carries its
+ *    own `{"type":"session","version":3,"id":…,"cwd":…}` header entry, which is
+ *    authoritative. We therefore scan all project directories and filter on it.
  *
- * The entry types omp writes are: `session`, `title`, `title_change`,
- * `model_change`, `thinking_level_change`, `credential_pin`, `ttsr_injection`,
- * `custom`, `custom_message`, and `message`. Only `message` is a conversation
- * turn (`message.role` is `user` | `assistant` | `toolResult`); everything else
- * is metadata or tool-execution telemetry.
+ * The entry types pi writes are: `session`, `session_info`, `model_change`,
+ * `thinking_level_change`, `compaction` and `message`. Only `message` is a
+ * conversation turn (`message.role` is `user` | `assistant` | `toolResult`);
+ * everything else is metadata.
  */
 
 import { createReadStream } from "node:fs";
 import type { Stats } from "node:fs";
-import { open, readdir, realpath, stat } from "node:fs/promises";
+import { readdir, realpath, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, join, resolve } from "node:path";
 import { createInterface } from "node:readline";
@@ -53,13 +52,14 @@ interface Parsed {
 	/**
 	 * The timestamp of the LAST `message` entry.
 	 *
-	 * Not the file's mtime and not the last line: omp appends `custom`,
-	 * `thinking_level_change` and `title` rows for things that are not
+	 * Not the file's mtime and not the last line: pi appends `session_info`,
+	 * `thinking_level_change` and `model_change` rows for things that are not
 	 * conversation — including on a bare resume, which is why merely opening a
-	 * session used to shove it to the top of an mtime-ordered list with its
-	 * message count unchanged.
+	 * session would otherwise shove it to the top of an mtime-ordered list
+	 * with its message count unchanged.
 	 */
 	lastMessage?: string;
+	/** The session's display name, from the last `session_info` entry. */
 	title?: string;
 	firstMessage: string;
 	messageCount: number;
@@ -70,17 +70,9 @@ interface Parsed {
  *
  * Sessions reach several MB (tool output dominates), the list is polled every
  * few seconds, and `messageCount` needs every line — so a cold read is a full
- * pass and must happen at most once per version of the file. `size` + `mtimeMs`
- * is the version: omp only ever appends to the transcript, and the one entry it
- * rewrites in place (the line-1 `title`, which is why that entry carries a
- * `pad` field) still bumps mtime.
- *
- * We deliberately do NOT resume from a stored byte offset on append. It would
- * be faster still, but a title that outgrows its padding forces omp to rewrite
- * the file with a different line-1 length, shifting every later offset — and a
- * desynced resume reads JSON from the middle of a line, which fails as silent
- * corruption rather than an error. A full pass per change is cheap and cannot
- * be wrong.
+ * pass and must happen at most once per version of the file. `size` +
+ * `mtimeMs` is the version: pi only ever appends to a session file, so a
+ * change is always a longer file or a newer mtime, never a rewrite in place.
  */
 const cache = new Map<string, Parsed>();
 
@@ -89,8 +81,7 @@ export async function listSessions(cwd: string): Promise<PiSessionInfo[]> {
 	// Read per call, not captured at import: the tests point PIW_SESSION_ROOT at
 	// a temp dir, and a module-level constant would bake in whatever the env
 	// held when this module first loaded.
-	const root =
-		process.env.PIW_SESSION_ROOT ?? join(homedir(), ".omp", "agent", "sessions");
+	const root = process.env.PIW_SESSION_ROOT ?? join(homedir(), ".pi", "agent", "sessions");
 	// Symlink resolution is memoized per call, never across calls: a cwd that
 	// gets moved or a symlink that is retargeted must not be answered from a
 	// cache that nothing invalidates.
@@ -115,8 +106,9 @@ export async function listSessions(cwd: string): Promise<PiSessionInfo[]> {
 					if (name.endsWith(".jsonl")) files.push(join(root, dir, name));
 				}
 			} catch {
-				// Deleted between the two readdirs. omp reaps old project
-				// directories, so losing a race here is routine, not a failure.
+				// Deleted between the two readdirs: a session file or a whole
+				// project directory can vanish under us, so losing this race is
+				// routine, not a failure.
 			}
 		}),
 	);
@@ -165,36 +157,16 @@ export async function sessionHeaderCwd(file: string): Promise<string | undefined
 }
 
 /**
- * The session's CURRENT title, read from line 1 only.
+ * The session's CURRENT name, which pi persists as the LAST `session_info`
+ * entry in the file rather than in a rewritable slot.
  *
- * omp keeps the live title in a fixed-width line-1 `title` entry and rewrites
- * it in place, so one line is the whole answer — and this is polled while
- * waiting for omp's titler to produce a name, which is why it opens 8 KiB
- * rather than streaming a multi-megabyte transcript. Empty string covers
- * every "no title": unreadable file, torn line, a session omp has not titled.
+ * That means the whole file has to be read — but `readParsed` caches on
+ * size+mtime, and a rename appends, so the poll that waits for a name costs
+ * one stat per tick and one parse when the name actually lands. Empty string
+ * covers every "no name": unreadable file, torn line, a session nobody named.
  */
 export async function sessionTitle(file: string): Promise<string> {
-	try {
-		const handle = await open(resolve(file));
-		try {
-			const { buffer, bytesRead } = await handle.read(Buffer.alloc(8192), 0, 8192, 0);
-			const text = buffer.toString("utf8", 0, bytesRead);
-			const newline = text.indexOf("\n");
-			// No newline in 8 KiB means line 1 is not the title slot omp writes;
-			// parsing a prefix of some other entry would be worse than nothing.
-			if (newline < 0) return "";
-			const entry = JSON.parse(text.slice(0, newline)) as {
-				type?: unknown;
-				title?: unknown;
-			};
-			if (entry?.type !== "title" || typeof entry.title !== "string") return "";
-			return entry.title;
-		} finally {
-			await handle.close();
-		}
-	} catch {
-		return "";
-	}
+	return (await readParsed(resolve(file)))?.title ?? "";
 }
 
 async function readParsed(file: string): Promise<Parsed | undefined> {
@@ -241,7 +213,7 @@ async function parse(
 			try {
 				entry = JSON.parse(line) as Record<string, unknown>;
 			} catch {
-				// omp appends live, so the final line of an active session is
+				// pi appends live, so the final line of an active session is
 				// regularly half-written. Skipping is the correct reading of a
 				// torn line; throwing would blank the whole list mid-turn.
 				continue;
@@ -252,28 +224,18 @@ async function parse(
 					if (typeof entry.id === "string") out.id = entry.id;
 					if (typeof entry.cwd === "string") out.cwd = entry.cwd;
 					if (typeof entry.timestamp === "string") out.created = entry.timestamp;
-					// The header also carries a `title`, but only as it stood
-					// when the session was created; the line-1 `title` entry is
-					// the one omp keeps current. Only take it as a fallback.
-					if (!out.title && typeof entry.title === "string" && entry.title) {
-						out.title = entry.title;
-					}
 					if (headerOnly) return out;
 					break;
-				case "title":
-					// Rewritten in place on every rename, so this is the live
-					// title regardless of the `title_change` history below it.
-					if (typeof entry.title === "string" && entry.title) out.title = entry.title;
+				case "session_info":
+					// Appended on every rename, so the LAST one is the live name.
+					if (typeof entry.name === "string" && entry.name) out.title = entry.name;
 					break;
 				case "message": {
-					// Every `message` entry counts, `toolResult` rows included,
-					// and `custom_message` never does. The badge is a "how big is
-					// this session" signal, not a rendered-row count — it cannot
-					// be the latter anyway, since the chat panel folds tool
-					// results into their originating tool call. Counting exactly
-					// what pi's SessionManager.list counted keeps the number
-					// stable across the migration instead of introducing a second
-					// notion of session size.
+					// Every `message` entry counts, `toolResult` rows included.
+					// The badge is a "how big is this session" signal, not a
+					// rendered-row count — it cannot be the latter anyway, since
+					// the chat panel folds tool results into their originating
+					// tool call.
 					out.messageCount++;
 					if (!out.firstMessage) out.firstMessage = userText(entry.message);
 					// Last one wins: the entries are in file order, so this ends
@@ -299,7 +261,7 @@ async function parse(
 /**
  * The preview text of a user turn, or "" for anything else.
  *
- * omp stores user content as a block array; a pasted screenshot makes the first
+ * pi stores user content as a block array; a pasted screenshot makes the first
  * block an `image`, so we look for the first `text` block rather than assuming
  * index 0.
  */
@@ -326,16 +288,15 @@ function project(file: string, p: Parsed): PiSessionInfo {
 		path: file,
 		created: iso(p.created, p.birthtimeMs || p.mtimeMs),
 		// mtime is deliberately NOT reported. It answers "when was this file
-		// last written", which a resume or a title rewrite satisfies, and the
-		// list has no use for a timestamp that moves without the conversation.
-		// The fallback below is for a session whose messages predate timestamped
-		// entries; it is the closest thing the file still knows.
+		// last written", which a bare resume satisfies, and the list has no use
+		// for a timestamp that moves without the conversation. The fallback
+		// below is for a session whose messages predate timestamped entries.
 		lastActive: iso(p.lastMessage, p.mtimeMs),
 		messageCount: p.messageCount,
 		firstMessage: p.firstMessage,
 	};
-	// Left unset when omp has no title yet (it writes an empty one immediately),
-	// because the UI falls back to `firstMessage` only for a falsy name.
+	// Left unset when the session has never been named, because the UI falls
+	// back to `firstMessage` only for a falsy name.
 	if (p.title) info.name = p.title;
 	return info;
 }

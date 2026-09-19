@@ -14,11 +14,11 @@
  *      and then debug why they disagree.
  *
  * Eviction is lossless: everything is on disk, so dropping an entry is a cache
- * decision, not data loss. Reopening costs one `omp` spawn — measured at
- * ~2.5s, against the ~30 minutes of idleness that triggers eviction.
+ * decision, not data loss. Reopening costs one `pi` spawn, against the ~30
+ * minutes of idleness that triggers eviction.
  */
 
-import { emptyPartial, openSession, type AskAnswer, type OmpSession } from "./omp.js";
+import { emptyPartial, openSession, type AskAnswer, type PiSession } from "./agent.js";
 import type { PiEvent, PiImage, PiNotice, PiPartial, Snapshot } from "../shared/types.js";
 
 export type { Snapshot };
@@ -35,12 +35,12 @@ const MAX_NOTICES = 40;
 
 /**
  * Prewarming is the whole reason `+ New` feels instant; set PIW_PREWARM=0 to
- * trade that back for one fewer idle `omp` child.
+ * trade that back for one fewer idle `pi` child.
  */
 const PREWARM = process.env.PIW_PREWARM !== "0";
 
 interface Entry {
-	session: OmpSession;
+	session: PiSession;
 	/** Server-side accumulation so a mid-stream reattach sees partial text, not a hole. */
 	partial: PiPartial;
 	streaming: boolean;
@@ -166,7 +166,7 @@ export class Registry {
 	 * is a real session, and the accumulation must already be running by the
 	 * time a client is handed it.
 	 */
-	private install(session: OmpSession, spareFor: string | null): Entry & { id: string } {
+	private install(session: PiSession, spareFor: string | null): Entry & { id: string } {
 		const entry: Entry = {
 			session,
 			partial: emptyPartial(),
@@ -196,6 +196,12 @@ export class Registry {
 				case "tool_start":
 					entry.partial.tools.push({ id: e.id, name: e.name, args: e.args });
 					break;
+				case "tool_update": {
+					// Cumulative, so replace rather than append.
+					const running = entry.partial.tools.find((t) => t.id === e.id);
+					if (running) running.result = e.result;
+					break;
+				}
 				case "tool_end": {
 					const t = entry.partial.tools.find((t) => t.id === e.id);
 					if (t) {
@@ -240,11 +246,11 @@ export class Registry {
 	/**
 	 * Have one new session ready before anybody asks for one.
 	 *
-	 * `+ New` is a single `omp` spawn away from a snapshot, and that spawn takes
-	 * ~1.8s to reach its ready frame because omp does extension and skill
-	 * discovery first. Nothing makes it faster ON the click, so pay it before
-	 * the click: an unprompted omp child writes no JSONL (measured), which makes
-	 * a spare invisible to the session list and free to throw away.
+	 * `+ New` is a single `pi` spawn away from a snapshot, and that spawn pays
+	 * for package, extension and skill discovery before it answers anything.
+	 * Nothing makes it faster ON the click, so pay it before the click: an
+	 * unprompted child writes no messages to its JSONL, which makes a spare
+	 * invisible to the session list and free to throw away.
 	 *
 	 * Called from the list poll, so the spare follows the project on screen and
 	 * its idle clock is reset for as long as that page is open; close the page
@@ -357,12 +363,11 @@ export class Registry {
 			thinkingLevels: entry.session.thinkingLevels,
 			contextTokens: entry.session.contextTokens,
 			contextWindow: entry.session.contextWindow,
-			subagents: entry.session.subagents,
 		};
 	}
 
 	/**
-	 * Switch the model on an existing session. Disallowed mid-stream: omp has no
+	 * Switch the model on an existing session. Disallowed mid-stream: pi has no
 	 * defined behavior for swapping models under an in-flight request, and
 	 * "stop, then switch" is a confusing implicit action to take on behalf of
 	 * the user.
@@ -378,7 +383,7 @@ export class Registry {
 
 	/**
 	 * Set the reasoning effort. Allowed mid-stream, unlike a model switch:
-	 * omp applies it to the next turn, there is no in-flight request to
+	 * pi applies it to the next turn, there is no in-flight request to
 	 * confuse, and "wait for the agent to finish before you can tell it to
 	 * think harder next time" is a rule with nothing behind it.
 	 */
@@ -393,10 +398,10 @@ export class Registry {
 	 * Rename a session, opening it from disk if it is not already live.
 	 *
 	 * Renaming from the session list has to work on a session nobody has
-	 * attached to, and omp is the only writer of the title — so this goes
+	 * attached to, and pi is the only writer of the name — so this goes
 	 * through `acquire`, paying one spawn for a session that was cold. That
 	 * entry then sits in the cache like any other and is idle-evicted
-	 * normally; the title itself is already on disk.
+	 * normally; the name itself is already on disk.
 	 */
 	async rename(
 		id: string | undefined,
@@ -453,7 +458,21 @@ export class Registry {
 	}
 
 	/**
-	 * Answer the question omp is blocked on. Not a `prompt`: the agent is
+	 * Compact on demand. Refused mid-stream: pi would queue it behind the
+	 * running turn, and a button that appears to do nothing for two minutes
+	 * is worse than one that says why it did nothing.
+	 */
+	async compact(id: string): Promise<void> {
+		const entry = this.entries.get(id);
+		if (!entry) throw new Error(`unknown session: ${id}`);
+		if (entry.streaming || entry.session.isStreaming)
+			throw new Error("cannot compact while streaming");
+		entry.lastActivity = Date.now();
+		await entry.session.compact();
+	}
+
+	/**
+	 * Answer the question pi is blocked on. Not a `prompt`: the agent is
 	 * inside a tool call waiting on a dialog, so this goes straight back
 	 * through the UI sub-protocol and the turn continues where it stopped.
 	 * False means the question is gone (timed out, withdrawn, aborted) and the
@@ -511,7 +530,7 @@ export class Registry {
 		const now = Date.now();
 		for (const [id, entry] of this.entries) {
 			// INVARIANT 1. Both checks matter: `streaming` is our accumulated view,
-			// `isStreaming` is what the omp child last reported, and either being
+			// `isStreaming` is what the pi child last reported, and either being
 			if (entry.streaming || entry.session.isStreaming) continue;
 			if (entry.subscribers.size > 0) continue;
 			if (now - entry.lastActivity < IDLE_EVICT_MS) continue;

@@ -53,6 +53,31 @@ There is no `--approval-mode`, no `--no-lsp`, no `--no-rules`, no `--no-title`.
 
 Subcommands: `pi install|remove|uninstall|update|list|config|auth`.
 
+### `--no-extensions` disables PROVIDERS, not just commands
+
+Found while wiring `autoname.ts`, and it is a trap worth stating plainly: a pi
+provider can be an installed package. `npm:pi-sub-anthropic` is one, and it is
+what supplies the subscription credential for the default model here. A child
+started with `--no-extensions` therefore cannot authenticate that model at all
+— it falls back to the plain `anthropic` OAuth entry in `auth.json` and every
+call fails with the provider's own 400:
+
+```
+400 {"type":"error","error":{"type":"invalid_request_error","message":
+"Third-party apps now draw from your extra usage, not your plan limits. …"}}
+```
+
+Measured, same prompt, same machine:
+
+| flags | result |
+|---|---|
+| `pi -p --no-extensions …` | 400 in 1.3 s, every time |
+| `pi -p …` (extensions on) | `ping` in 3.2 s |
+
+So one-shot children (commit and session naming) keep extension discovery on
+and pay ~3 s. Only `--no-skills`, `--no-prompt-templates`, `--no-context-files`
+and `--no-tools` are safe latency savings.
+
 ## 0.2 Startup frame
 
 `pi --mode rpc --no-session` emits **nothing** unprompted (3 s observation window,

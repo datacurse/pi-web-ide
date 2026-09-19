@@ -16,7 +16,7 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { listModels, setDefaultModel } from "./models.js";
-import { listSessions, sameProject, sessionTitle } from "./sessions.js";
+import { listSessions, sameProject } from "./sessions.js";
 import {
 	addFavorite,
 	addProject,
@@ -30,15 +30,34 @@ import { addHost, listHosts, removeHost } from "./hosts.js";
 import { readPersonality, writePersonality } from "./personality.js";
 import { Tunnels } from "./tunnels.js";
 import { apply, status as gitStatus, suggestMessage, type GitPlan } from "./git.js";
-import { nameCommit } from "./autoname.js";
+import { nameCommit, nameSession } from "./autoname.js";
 import { Terminals } from "./terminals.js";
 import { Registry } from "./registry.js";
-import { OMP_BIN, type AskAnswer } from "./omp.js";
+import { PI_BIN, type AskAnswer } from "./agent.js";
 import { PRODUCT, type PiImage } from "../shared/types.js";
 import { claimPort } from "./takeover.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, "../..");
+
+/*
+ * Variables the previous product read, and this one does not.
+ *
+ * Silence would be the expensive failure here: somebody copies an env file
+ * onto a systemd box, the service starts, and the wrong binary or the wrong
+ * directory is only discovered when a session behaves strangely an hour
+ * later. So it is a refusal to start, naming the replacement.
+ */
+const RETIRED: Record<string, string> = {
+	PIW_OMP_BIN: "PIW_PI_BIN",
+	PIW_APPROVAL_MODE: "nothing — pi has no approval modes",
+	PIW_AGENT_DIR: "PIW_STATE_DIR (this server's own files) or PI_CODING_AGENT_DIR (pi's)",
+};
+for (const [name, replacement] of Object.entries(RETIRED)) {
+	if (process.env[name] === undefined) continue;
+	console.error(`[piw] ${name} is no longer read. Use ${replacement}.`);
+	process.exit(2);
+}
 
 const PORT = Number(process.env.PIW_PORT ?? 8890);
 const CWD = resolve(process.env.PIW_CWD ?? process.argv[2] ?? process.cwd());
@@ -46,11 +65,11 @@ const CWD = resolve(process.env.PIW_CWD ?? process.argv[2] ?? process.cwd());
 const MODEL = process.env.PIW_MODEL;
 
 /**
- * Browser origins other than this server's own that may call it: the piw
+ * Browser origins other than this server's own that may call it: the server
  * whose page merges this machine into its list. Not derivable from
- * piw-hosts.json — that file names the machines THIS piw reaches, and the
+ * hosts.json — that file names the machines THIS server reaches, and the
  * hub is the machine reaching us — so it is configuration, comma-separated,
- * e.g. `http://127.0.0.1:8790,https://laptop.tail.ts.net`. Origins never
+ * e.g. `http://127.0.0.1:8890,https://laptop.tail.ts.net`. Origins never
  * carry a trailing slash; one typed here is forgiven.
  *
  * This is the CSRF boundary, and it matters more than usual: an approved
@@ -91,14 +110,13 @@ const PIW_VERSION =
 		? pkg.version
 		: "unknown";
 
-// Once, at startup: the binary does not change under a running piw, and
-// `omp update` is exactly the case this exists to flag — a restarted piw
-// spawns the new omp, a running one keeps spawning the old. `omp/18.1.21`
-// on stdout; the prefix is dropped, and a missing omp is reported as no
-// version rather than as a failed start, since /api/models already names
-// the ENOENT with the fix.
-const OMP_VERSION = await promisify(execFile)(OMP_BIN, ["--version"], { timeout: 10_000 })
-	.then(({ stdout }) => stdout.trim().replace(/^omp\//, "") || undefined)
+// Once, at startup: the binary does not change under a running server, and
+// `pi update --self` is exactly the case this exists to flag — a restarted
+// server spawns the new pi, a running one keeps spawning the old. A missing
+// pi is reported as no version rather than as a failed start, since
+// /api/models already names the ENOENT with the fix.
+const PI_VERSION = await promisify(execFile)(PI_BIN, ["--version"], { timeout: 10_000 })
+	.then(({ stdout }) => stdout.trim() || undefined)
 	.catch(() => undefined);
 
 // ---------------------------------------------------------------------------
@@ -147,9 +165,10 @@ const tunnels = new Tunnels();
 const terminals = new Terminals();
 const app = express();
 // Generous because a prompt body now carries base64 screenshots, and base64
-// inflates by ~33%. The real per-image ceiling is enforced in omp.ts, where a
-// rejection can be reported to the user; hitting THIS limit yields an opaque
-// 413, so it deliberately sits well above the limit that produces a good error.
+// inflates by ~33%. The real per-image ceiling is enforced in agent.ts, where
+// a rejection can be reported to the user; hitting THIS limit yields an
+// opaque 413, so it deliberately sits well above the limit that produces a
+// good error.
 app.use(express.json({ limit: "64mb" }));
 
 // Cross-origin only for an approved hub, and only ever the exact origin.
@@ -195,7 +214,7 @@ app.get("/api/health", (_req, res) => {
 		degraded,
 		pid: process.pid,
 		piwVersion: PIW_VERSION,
-		ompVersion: OMP_VERSION ?? null,
+		piVersion: PI_VERSION ?? null,
 		hubOrigins: HUB_ORIGINS.size > 0,
 	});
 });
@@ -208,7 +227,7 @@ app.get("/api/models", async (_req, res) => {
 	}
 });
 
-/** Persist "provider/id" as omp's own startup default, for future sessions. */
+/** Persist "provider/id" as pi's own startup default, for future sessions. */
 app.post("/api/default-model", async (req, res) => {
 	const model = typeof req.body?.model === "string" ? req.body.model : undefined;
 	if (!model) return res.status(400).json({ error: "model required" });
@@ -224,7 +243,7 @@ app.post("/api/default-model", async (req, res) => {
 });
 
 /**
- * Projects: the directories whose sessions we show. A project IS a cwd — omp
+ * Projects: the directories whose sessions we show. A project IS a cwd — pi
  * already partitions sessions by working directory, so this list is the only
  * new state in the feature.
  */
@@ -294,12 +313,13 @@ app.delete("/api/favorites", (req, res) => {
 });
 
 /**
- * Personality: omp's own `<agent dir>/PERSONALITY.md`, edited in place.
+ * Personality: extra system-prompt text this server owns, at
+ * `<state dir>/personality.md`.
  *
- * The only agent-facing file the settings dialog touches, and there is no
- * piw-side copy of it — every open re-reads the file, every save replaces it.
- * A new session picks up the change because each session is its own omp child;
- * sessions already running keep the prompt they were started with.
+ * pi has no personality file of its own; the text is passed to each child as
+ * `--append-system-prompt`. A new session picks up a change because each
+ * session is its own pi child; sessions already running keep the prompt they
+ * were started with.
  */
 app.get("/api/personality", (_req, res) => {
 	res.json(readPersonality());
@@ -363,7 +383,7 @@ app.get("/api/sessions", async (req, res) => {
 		 * The list poll is also the only continuous signal of which project the
 		 * user is looking at, which is exactly what `+ New` will need a warm
 		 * session for. Guarded on the directory existing for the same reason the
-		 * open route is: omp cannot be launched in a directory that is not there.
+		 * open route is: pi cannot be launched in a directory that is not there.
 		 */
 		if (existsSync(cwd) && statSync(cwd).isDirectory()) registry.prewarm(cwd);
 
@@ -386,8 +406,8 @@ app.get("/api/sessions", async (req, res) => {
  *
  * Addressed by file OR by id, because both callers are real: the session list
  * knows files (a row may be a session nobody has opened), and an open tab
- * knows its live id. omp does the write — see OmpSession.setName — so the new
- * title lands in the JSONL and the TUI shows the same name.
+ * knows its live id. pi does the write — see PiSession.setName — so the name
+ * lands in the JSONL as a `session_info` entry and the TUI shows it too.
  */
 app.post("/api/sessions/rename", async (req, res) => {
 	const file = typeof req.body?.file === "string" ? req.body.file : undefined;
@@ -403,56 +423,32 @@ app.post("/api/sessions/rename", async (req, res) => {
 });
 
 /**
- * Ask omp to name the session itself.
+ * Name the session from its opening request.
  *
- * `/rename` with no argument is omp's own command for this: it summarises the
- * recent conversation with the configured tiny model and writes the result as
- * the title. piw does not generate the name — asking a model for a good title
- * is exactly the job omp's titler already does, with the model the user
- * configured for it.
- *
- * The command answers asynchronously (it is a local command: no turn, no
- * `agent_end`), so this watches for the result rather than returning
- * immediately. A caller that got a 200 with the old name back would have to
- * invent its own polling, and the session list's 5s tick is too slow to read
- * as a response to a click.
- *
- * Two outcomes are watched for, because omp reports them on two different
- * channels: a new title in the file, or a notice saying it could not produce
- * one — which is what happens when the tiny title model is unavailable or
- * answers with something unusable. Waiting out the full timeout on a failure
- * omp already reported would be 30 seconds of pretending.
+ * pi has no `/rename` command and no titler of its own, so the name is
+ * generated here by one stateless print-mode child (see autoname.ts) and
+ * written through `set_session_name`, which is synchronous and needs no
+ * polling.
  */
-const AUTONAME_TIMEOUT_MS = 45_000;
-const AUTONAME_POLL_MS = 250;
-
 app.post("/api/sessions/autoname", async (req, res) => {
 	const file = typeof req.body?.file === "string" ? req.body.file : undefined;
 	const id = typeof req.body?.id === "string" ? req.body.id : undefined;
 	if (!file && !id) return res.status(400).json({ error: "file or id required" });
 	try {
 		const entry = await registry.acquire(id, file);
-		const path = entry.session.file;
-		if (!path) return res.status(400).json({ error: "session has no file yet" });
-		const before = await sessionTitle(path);
-		const noticesBefore = entry.notices.length;
-		await registry.prompt(entry.id, "/rename");
-
-		const deadline = Date.now() + AUTONAME_TIMEOUT_MS;
-		while (Date.now() < deadline) {
-			const { promise, resolve } = Promise.withResolvers<void>();
-			setTimeout(resolve, AUTONAME_POLL_MS);
-			await promise;
-
-			const title = await sessionTitle(path);
-			if (title && title !== before) return res.json({ name: title });
-
-			const said = entry.notices
-				.slice(noticesBefore)
-				.find((n) => /session title/i.test(n.text));
-			if (said) return res.status(502).json({ error: said.text });
+		// The FIRST user turn: the request the session was opened to serve.
+		// Later turns are follow-ups and would name the session after its most
+		// recent detour.
+		const opening = entry.session
+			.messages()
+			.find((m) => m.role === "user")
+			?.blocks.filter((b) => b.kind === "text")
+			.map((b) => b.text)
+			.join("\n");
+		if (!opening?.trim()) {
+			return res.status(400).json({ error: "this session has no messages to name yet" });
 		}
-		res.status(504).json({ error: "omp did not answer /rename — try renaming by hand" });
+		res.json({ name: await registry.rename(entry.id, undefined, await nameSession(entry.session.cwd, opening)) });
 	} catch (err) {
 		res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
 	}
@@ -493,8 +489,8 @@ app.post("/api/sessions/open", async (req, res) => {
 		 * restoring a remembered session that has since been deleted would
 		 * resurrect it as an empty ghost instead of being told it is gone.
 		 *
-		 * But absence on disk does NOT mean gone: omp writes the JSONL lazily, so a
-		 * session created by `+ New` and not yet prompted has a path and no file.
+		 * But absence on disk does NOT mean gone: the JSONL is written lazily, so
+		 * a session created by `+ New` and not yet prompted has a path and no file.
 		 * Reloading right after `+ New` must not 404. The registry is therefore the
 		 * first authority and the filesystem only the fallback — known to the
 		 * server means live, whatever the disk says.
@@ -543,6 +539,25 @@ app.get("/api/sessions/:id", (req, res) => {
 });
 
 /**
+ * Re-read this session's slash commands.
+ *
+ * pi pushes nothing when the set changes — installing a package, or editing
+ * a prompt template in `.pi/prompts`, changes what `/` should offer with no
+ * event to say so. The composer therefore asks when its menu opens, and
+ * caches the answer briefly; a session's catalog changes on the order of a
+ * package install, not a keystroke.
+ */
+app.post("/api/sessions/:id/commands", async (req, res) => {
+	const entry = registry.get(req.params.id);
+	if (!entry) return res.status(404).json({ error: "not found" });
+	try {
+		res.json({ commands: await entry.session.refreshCommands() });
+	} catch (err) {
+		res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+	}
+});
+
+/**
  * Event stream. Disconnecting does NOT abort the run — that is only ever an
  * explicit user action via /abort.
  */
@@ -570,7 +585,7 @@ app.get("/api/sessions/:id/events", (req, res) => {
 	});
 });
 
-/** Shape-check attachments here so malformed input 400s instead of reaching omp. */
+/** Shape-check attachments here so malformed input 400s instead of reaching pi. */
 function parseImages(raw: unknown): PiImage[] {
 	if (!Array.isArray(raw)) return [];
 	return raw.map((i: any) => {
@@ -599,7 +614,7 @@ app.post("/api/sessions/:id/prompt", async (req, res) => {
 		return res.status(400).json({ error: "empty prompt" });
 	if (!registry.get(req.params.id)) return res.status(404).json({ error: "not found" });
 
-	// Fire and forget. registry.prompt resolves once omp ACCEPTS the prompt,
+	// Fire and forget. registry.prompt resolves once pi ACCEPTS the prompt,
 	// which is not when the run finishes — the turn plays out over SSE either
 	// way, and scheduling failures are caught inside registry.prompt and
 	// delivered as an error event rather than as an HTTP status.
@@ -613,9 +628,25 @@ app.post("/api/sessions/:id/abort", async (req, res) => {
 });
 
 /**
- * Answer the question omp is blocked on.
+ * Compact the conversation.
  *
- * `askId` is omp's own request id and is required: a click and a timeout can
+ * Answers as soon as pi accepts the command; the fold itself arrives as
+ * `compaction_start` / `compaction_end` over SSE, which is what moves the
+ * transcript and the context meter.
+ */
+app.post("/api/sessions/:id/compact", async (req, res) => {
+	try {
+		await registry.compact(req.params.id);
+		res.json({ ok: true });
+	} catch (err) {
+		res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
+	}
+});
+
+/**
+ * Answer the question pi is blocked on.
+ *
+ * `askId` is pi's own request id and is required: a click and a timeout can
  * cross, and an answer without it would land on whichever dialog happened to
  * be open. A stale one is a 409, not an error — the page simply has an old
  * panel on screen and its next snapshot will say so.
@@ -844,8 +875,9 @@ server.on("upgrade", (req, socket, head) => {
 });
 
 // Loopback only, and the exposure is worse than credential theft: anyone who
-// reaches this port can start an agent run, and the omp children execute tools
-// with PIW_APPROVAL_MODE (yolo by default) against this machine. Tunnel it
+// reaches this port can start an agent run, and the pi children execute every
+// tool they choose — there are no approval modes to fall back on, and they are
+// spawned with `--approve` so that project-local extensions load. Tunnel it
 // (ssh -L) or put it on a private overlay network; never bind it publicly.
 /*
  * Restarting piw is always a takeover: the port is fixed, and the thing
