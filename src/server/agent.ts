@@ -291,6 +291,23 @@ export function healDanglingToolCalls(messages: AgentMessage[]): AgentMessage[] 
 }
 
 /**
+ * Is this a message a reader is supposed to see?
+ *
+ * pi 0.86 began PERSISTING the system prompt as a `system` message at the
+ * head of every session, with `content: ""` and the real text under
+ * `sections`. `get_messages` returns it, so without this filter every
+ * transcript opens with a blank row above the first thing anybody said —
+ * observed on a 0.86.0 box while the hub was still on 0.85.1.
+ *
+ * Dropped rather than rendered: the system prompt is configuration, it is
+ * the same on every turn, and the personality half of it is already editable
+ * in Settings.
+ */
+export function isConversation(m: AgentMessage): boolean {
+	return m.role !== "system";
+}
+
+/**
  * Stitch tool results onto their originating calls and drop the now-redundant
  * toolResult messages, so the UI renders one row per tool invocation.
  */
@@ -946,7 +963,7 @@ export async function openSession(opts: OpenOptions): Promise<PiSession> {
 			return pendingAsk;
 		},
 		messages() {
-			return stitch(messages.map(toPiMessage));
+			return stitch(messages.filter(isConversation).map(toPiMessage));
 		},
 		async prompt(text: string, images?: PiImage[]) {
 			// Convert BEFORE sending: a bad attachment should surface as a rejected
@@ -1224,7 +1241,7 @@ export function toEvents(frame: Record<string, unknown>): PiEvent[] {
 
 		case "message_end": {
 			const m = frame.message;
-			if (!isRecord(m)) return [];
+			if (!isRecord(m) || !isConversation(m)) return [];
 			/*
 			 * IMPORTANT: a failed turn does NOT produce an error frame. A
 			 * provider error (401, quota, overload) arrives as an assistant

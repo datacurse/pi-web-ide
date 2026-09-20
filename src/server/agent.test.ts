@@ -6,6 +6,7 @@ import { dirname, join } from "node:path";
 import {
 	FrameReader,
 	healDanglingToolCalls,
+	isConversation,
 	spawnArgs,
 	toAsk,
 	toCommands,
@@ -199,6 +200,23 @@ assert.deepEqual(
 	}),
 	[{ type: "notice", notice: { level: "warning", text: "retry 1/3 in 2s: 529 overloaded" } }],
 );
+
+/*
+ * pi 0.86 persists the system prompt as a `system` message at the head of
+ * every session — `content: ""`, the real text under `sections` — and
+ * `get_messages` hands it back. Rendered, it is a blank row above the first
+ * thing anybody said, which is what a 0.86.0 machine showed while the hub
+ * was still on 0.85.1.
+ */
+const systemMessage = {
+	role: "system",
+	content: "",
+	sections: { preamble: "You are an expert coding assistant operating inside pi…" },
+	timestamp: 3,
+};
+assert.equal(isConversation(systemMessage), false);
+assert.equal(isConversation({ role: "user", content: "hi" }), true);
+assert.deepEqual(toEvents({ type: "message_end", message: systemMessage }), []);
 
 // ---------------------------------------------------------------------------
 // Messages

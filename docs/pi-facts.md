@@ -299,3 +299,50 @@ Confirmed by curl:
   (`{extensions,skills,prompts,themes,image,video}`), `version`, `repository`, `keywords`.
 - Downloads: `https://api.npmjs.org/downloads/point/last-week/<name>` →
   `{downloads, start, end, package}`. Works for unscoped names.
+
+---
+
+## Why the fleet is pinned to pi 0.85.1
+
+Found during the rollout, on a machine that installed `pi` fresh and therefore
+got 0.86.0 while the hub was still on 0.85.1.
+
+**Symptom.** Every turn answers without tools. Asked to read a file with a
+random token in it, the model says "I don't have access to a file system".
+No error, no warning, nothing in the session file — the assistant message
+simply has `stopReason: "stop"` and no `toolCall` block.
+
+**It is not the harness.** `pi -p "Read secret.txt…"` behaves identically, so
+nothing about `--mode rpc`, `--approve` or our spawn args is involved.
+Downgrading the same machine to 0.85.1 and re-running the same prompt returns
+the token.
+
+**Cause.** 0.86.0's breaking changes include:
+
+> Changed inherited pi-ai provider stream inputs from `Context` to normalized
+> `TranscriptContext` values. Custom providers must read system prompts and
+> tool declarations from `context.messages` with `getCurrentSystemPrompt()`
+> and `getCurrentTools()`.
+
+The subscription provider here is a *package* — `npm:pi-sub-anthropic`, last
+published 2026-08-29, three weeks before pi 0.86.0 — so it was built against
+the old contract and declares no tools under the new one. A provider package
+that has not caught up costs you every tool, silently.
+
+**Rule.** Pin pi itself across the fleet, and move it deliberately after
+checking that the provider package has been republished. `pi update --self`
+is per machine and never automatic for exactly this reason, and the Packages
+screen shows each machine's pi version so the skew is visible.
+
+```bash
+npm i -g @earendil-works/pi-coding-agent@0.85.1
+```
+
+## 0.86.0 persists the system prompt as a message
+
+Also found on that machine, and fixed rather than avoided: 0.86 writes the
+system prompt into the session as a `system` message — `content: ""`, the
+real text under a `sections` object — and `get_messages` returns it. Rendered
+naively that is a blank row above the first thing anybody said. `agent.ts`
+drops `system` messages from both the transcript and the event stream
+(`isConversation`), so the fleet can move to 0.86 whenever the provider does.
