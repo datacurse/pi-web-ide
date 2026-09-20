@@ -346,3 +346,29 @@ real text under a `sections` object — and `get_messages` returns it. Rendered
 naively that is a blank row above the first thing anybody said. `agent.ts`
 drops `system` messages from both the transcript and the event stream
 (`isConversation`), so the fleet can move to 0.86 whenever the provider does.
+
+## npm 12 refuses `pi-sub-anthropic`'s remote dependency
+
+Another rollout finding, and a reason not to put the provider package in the
+fleet manifest. `pi-sub-anthropic@0.1.6` depends transitively on
+
+```
+@modelcontextprotocol/core@https://pkg.pr.new/modelcontextprotocol/typescript-sdk/@modelcontextprotocol/core@3b205e7
+```
+
+a `remote`-type specifier. npm 12 disables those by default:
+
+```
+npm error code EALLOWREMOTE
+npm error Fetching packages of type "remote" have been disabled
+```
+
+So a *re*install of the provider fails on a machine running npm 12 (this
+one) and succeeds on npm 10 (tg). Both already have it on disk from an
+earlier install, so nothing is broken — but a reconcile that tried to
+install it would fail forever on the npm-12 box.
+
+Consequence: the subscription provider is **bootstrap**, not fleet-managed.
+Install it once when setting a machine up, by writing it into
+`~/.pi/agent/settings.json` before the first `pi` start, and leave it out of
+`packages.json`.
