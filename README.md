@@ -69,7 +69,7 @@ list:
 
 ## Architecture
 
-```
+```text
 src/shared/types.ts       wire contract, zero imports — FROZEN
 src/server/agent.ts       THE RPC BOUNDARY — only file that spawns or speaks to pi
 src/server/sessions.ts    session list, parsed from ~/.pi/agent/sessions
@@ -1530,7 +1530,6 @@ A question also raises a desktop notification when the tab is in the
 background, under the same rules as a finished run: it is the one event where
 nothing moves until you come back.
 
-
 ## Multiple machines
 
 There is one pwi per machine — `local`, `orangepi`, `tg` — each running its
@@ -1581,7 +1580,7 @@ code that was working rather than whatever published since.
 
 `deploy/` installs pi-web-ide as a **systemd user service** on one machine:
 
-```
+```text
 deploy/pi-web-ide.service      systemd user unit: pnpm start, Restart=always, journald
 deploy/pi-web-ide.env.example  template for ~/.config/pi-web-ide/env
 deploy/install.sh              idempotent installer, no sudo; --dry-run prints the plan

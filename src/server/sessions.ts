@@ -160,19 +160,6 @@ export async function sessionHeaderCwd(file: string): Promise<string | undefined
 }
 
 /**
- * The session's CURRENT name, which pi persists as the LAST `session_info`
- * entry in the file rather than in a rewritable slot.
- *
- * That means the whole file has to be read — but `readParsed` caches on
- * size+mtime, and a rename appends, so the poll that waits for a name costs
- * one stat per tick and one parse when the name actually lands. Empty string
- * covers every "no name": unreadable file, torn line, a session nobody named.
- */
-export async function sessionTitle(file: string): Promise<string> {
-	return (await readParsed(resolve(file)))?.title ?? "";
-}
-
-/**
  * When the last message in the FILE was written, as epoch ms.
  *
  * For asking "has anyone else appended to this session?". Timestamps are the

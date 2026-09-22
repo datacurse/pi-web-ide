@@ -51,20 +51,13 @@ import type {
 	PiImage,
 	PiMessage,
 	PiPartial,
-	PiSessionInfo,
 } from "../shared/types.js";
 
-export type {
-	AskAnswer,
-	PiAsk,
-	PiBlock,
-	PiCommand,
-	PiEvent,
-	PiImage,
-	PiMessage,
-	PiPartial,
-	PiSessionInfo,
-};
+// Re-exported for callers that already import from this module. `PiBlock` and
+// `PiSessionInfo` are deliberately absent: everyone who needs them takes them
+// from `shared/types.js` directly, and a re-export nobody imports is just a
+// second name for the same type.
+export type { AskAnswer, PiAsk, PiCommand, PiEvent, PiImage, PiMessage, PiPartial };
 
 /**
  * A systemd user unit gets a minimal PATH that usually omits the directory an
