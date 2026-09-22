@@ -21,6 +21,14 @@
  * (messages, model, streaming) fed by the event stream. `messages()` stays
  * synchronous for callers; the mirror is what makes that possible.
  *
+ * The mirror's blind spot: it reflects what THIS child emits. A session is
+ * the FILE, and a second pi writing the same file — an orphan left by a port
+ * takeover, an agent started by hand in the same cwd — produces turns no
+ * event here ever carries, so `messages()` silently stops growing while the
+ * file does not. `registry.refreshIfFileIsAhead` is the correction, and the
+ * README section "A session is the file, not the child" records why it
+ * compares timestamps rather than mtimes or counts.
+ *
  * Everything arriving from the child is external input and is typed `unknown`,
  * narrowed through `isRecord` and explicit field checks. The wire is the one
  * place where a structural assumption turns into a silent rendering bug.

@@ -1381,6 +1381,70 @@ The real safety net is persistence, not the handlers: conversation state is
 pi's own JSONL, which makes all three layers optimizations rather than
 load-bearing.
 
+## A session is the file, not the child
+
+The bug that cost the most to find, and the one whose wrong fixes are worth
+keeping written down.
+
+**The symptom.** A browser tab sits on a transcript that has stopped growing.
+The sidebar's message count keeps climbing — 539, 638, 751 — so the server
+plainly knows the conversation continues. Reloading changes nothing. Hard
+reloading changes nothing. The page is not stuck: it is being told this.
+
+**The cause.** `agent.ts` builds its message list from `message_end` events
+its own child emits, and `resyncMessages` corrects it by asking that same
+child. Both are blind to a turn written by a *different* pi against the same
+session file. That is not exotic: `takeover.ts` kills the old **server** by
+pid and its children outlive it, still attached and still writing; an agent
+started by hand in the same cwd derives the same session file from the same
+header. One conversation, two readers, only one of them rendering.
+
+Nothing flagged it. `stale` compares package epochs, not the list against the
+file. The sidebar was right the whole time, because `listSessions` reads the
+file while the snapshot serves the child's memory — one server answering
+`680` and `67` about the same session in the same second.
+
+**What did not work**, in order, because each failure is a different lesson:
+
+1. *Clearing the sticky error* (`e432991`). A real bug and a real fix — an
+   error from a dead child was re-served on every reload, and the error was
+   what prevented prompting. It just was not this bug.
+2. *A boot id on `/api/health`* (`e329603`). Correct, cheap, and aimed at
+   bundle skew after a deploy. Also not this bug: the tab was not running
+   stale JS, it was being served a stale list.
+3. *Comparing the file's mtime* (`3ed2fa8`, reverted in `f3fd90a`). Right
+   shape, wrong trigger. A live foreign writer keeps mtime **permanently**
+   ahead, so the condition never went false: every snapshot read reopened the
+   session and spawned a pi child, one per request. Worse than the staleness
+   it chased. The tests passed because `restart` was mocked as a no-op spy —
+   a spy that changes nothing cannot tell a fix from an infinite loop.
+4. *Comparing message counts.* Abandoned before shipping, by measuring first:
+   the file held **690** raw `message` entries against a **67**-message
+   rendered transcript. Tool results fold into their call and compaction
+   replaces many entries with one, so the counts differ by hundreds while
+   both sides are correct. It would have looped exactly like mtime.
+5. *Comparing timestamps, on the wrong route* (`fc23175`). The logic was
+   right and verified — on `GET /api/sessions/:id`, which a reloading browser
+   never calls.
+
+**What worked** (`1ca575f`). Compare the newest message in the **file**
+against the newest we hold, and reopen when the file is ahead — on
+`POST /api/sessions/open`, which is the path a restored tab actually takes.
+`acquire` hands back the entry already in the map, message list and all, so
+the reattach path is exactly where the question needs asking.
+
+Timestamps are the one quantity both sides agree on, and the comparison
+**converges**: after reopening, our newest *is* the file's newest, so it goes
+quiet until someone writes again. `registry.test.ts` asserts that property
+directly — five reads, one reopen — with a `restart` that advances the
+timestamp the way a real reopen does.
+
+**The habit worth stealing.** Every wrong fix was verified against the
+mechanism ("my code does what I intended") instead of the symptom ("the
+frozen tab is gone"). Curl the route the browser actually calls, and watch
+the side effect — process ages, not just the response body — or a spawn loop
+looks exactly like success.
+
 ## Four things found the hard way
 
 All four are documented in `agent.ts` where they bite.
