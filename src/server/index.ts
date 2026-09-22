@@ -503,6 +503,9 @@ app.post("/api/sessions/open", async (req, res) => {
 app.get("/api/sessions/:id", (req, res) => {
 	const entry = registry.get(req.params.id);
 	if (!entry) return res.status(404).json({ error: "not found" });
+	// Asking for the session fresh is how a reload starts, and an error from a
+	// turn that is no longer running has nothing to say about it.
+	registry.clearDeadError(req.params.id);
 	res.json(registry.snapshot(entry, req.params.id));
 });
 
@@ -532,6 +535,9 @@ app.post("/api/sessions/:id/commands", async (req, res) => {
 app.get("/api/sessions/:id/events", (req, res) => {
 	const entry = registry.get(req.params.id);
 	if (!entry) return res.status(404).end();
+	// Same reasoning as the snapshot route: a client attaching a new stream is
+	// not the client that saw the old failure.
+	registry.clearDeadError(req.params.id);
 
 	res.writeHead(200, {
 		"Content-Type": "text/event-stream",

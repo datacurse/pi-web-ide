@@ -45,6 +45,12 @@ interface Entry {
 	/** Server-side accumulation so a mid-stream reattach sees partial text, not a hole. */
 	partial: PiPartial;
 	streaming: boolean;
+	/**
+	 * The last turn's failure, or null. Cleared by the next prompt, and by
+	 * `clearDeadError` when a client reattaches to a session that is not
+	 * streaming — an error is about a turn, and a turn nobody is running any
+	 * more cannot still be failing.
+	 */
 	error: string | null;
 	/**
 	 * What local slash commands answered, newest last. Accumulated server-side
@@ -546,6 +552,25 @@ export class Registry {
 
 	get(id: string): Entry | undefined {
 		return this.entries.get(id);
+	}
+
+	/**
+	 * Forget an error left by a turn that is no longer running.
+	 *
+	 * `error` was only ever cleared by the NEXT prompt, which is a trap when
+	 * the error is what stops you prompting: a provider 400 from a child that
+	 * has since died is re-served on every reload, and the conversation looks
+	 * broken forever. It outlives the process that caused it, because the entry
+	 * is rebuilt from disk while the string is not.
+	 *
+	 * A streaming session is left alone — there the error IS the live state of
+	 * the turn on screen, and clearing it would hide a failure as it happens.
+	 */
+	clearDeadError(id: string): void {
+		const entry = this.entries.get(id);
+		if (!entry) return;
+		if (entry.streaming || entry.session.isStreaming) return;
+		entry.error = null;
 	}
 
 	/**
