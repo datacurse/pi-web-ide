@@ -503,7 +503,17 @@ app.post("/api/sessions/open", async (req, res) => {
 			});
 		}
 
-		res.json(registry.snapshot(entry, entry.id));
+		/*
+		 * This is the reattach path, not just the create path: restoring a tab
+		 * opens the remembered file, and `acquire` hands back the entry already
+		 * in the map — with the message list its child accumulated, which is the
+		 * one that goes stale when another pi writes the same session. Checking
+		 * only on GET /api/sessions/:id missed it, because a reload comes
+		 * through here first.
+		 */
+		await registry.refreshIfFileIsAhead(entry.id);
+		const fresh = registry.get(entry.id) ?? entry;
+		res.json(registry.snapshot(fresh, entry.id));
 	} catch (err) {
 		res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
 	}
