@@ -14,6 +14,7 @@ import { WebSocketServer } from "ws";
 import { dirname, resolve } from "node:path";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { execFile } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { promisify } from "node:util";
 import { listModels, setDefaultModel } from "./models.js";
 import { listSessions, sameProject } from "./sessions.js";
@@ -191,6 +192,17 @@ process.on("uncaughtException", (err) => {
 	);
 });
 
+/**
+ * This process, as a value a page can compare against.
+ *
+ * A restart replaces the JS and CSS the browser is running, but the page
+ * that was already open keeps the old bundle: a tab left overnight talks to
+ * a server built from different source, and the failure is silent and
+ * strange rather than loud. `pid` would almost do — it is already here — but
+ * it is reused after enough churn, and a random value cannot be.
+ */
+const BOOT = randomUUID();
+
 const registry = new Registry(CWD, MODEL);
 const terminals = new Terminals();
 const app = express();
@@ -219,6 +231,7 @@ app.get("/api/health", (_req, res) => {
 		model: MODEL ?? null,
 		degraded,
 		pid: process.pid,
+		boot: BOOT,
 		pwiVersion: PWI_VERSION,
 		piVersion: PI_VERSION ?? null,
 	});

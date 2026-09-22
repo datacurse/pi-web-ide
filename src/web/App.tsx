@@ -1242,6 +1242,48 @@ export default function App() {
 		return pulseFavicon();
 	}, [busy]);
 
+	/*
+	 * Notice when the server we are talking to is not the one that served this
+	 * page.
+	 *
+	 * The session layer already survives a restart — the EventSource reattaches
+	 * through the file — so this is about the BUNDLE: the JS and CSS in this tab
+	 * are from the old build, and a page left open across a deploy runs code
+	 * that no longer matches the server. The failures that produces are quiet
+	 * and confusing, so say it plainly instead.
+	 *
+	 * A banner and not an automatic reload: a reload mid-run would throw away
+	 * the transcript on screen for a reason the user never asked about. Drafts
+	 * are written on every keystroke, so taking it is cheap whenever they like.
+	 */
+	const [restarted, setRestarted] = useState(false);
+	useEffect(() => {
+		let boot: string | undefined;
+		let live = true;
+		const check = async () => {
+			const r = await fetch("/api/health").catch(() => null);
+			if (!live || !r?.ok) return; // down is not restarted; say nothing yet
+			const body: unknown = await r.json().catch(() => null);
+			const seen =
+				body && typeof body === "object" && "boot" in body && typeof body.boot === "string"
+					? body.boot
+					: undefined;
+			// An older server has no `boot` at all, and cannot be compared. Saying
+			// nothing is right: it is exactly the case this banner is wrong about.
+			if (!seen) return;
+			if (boot === undefined) boot = seen;
+			else if (seen !== boot) setRestarted(true);
+		};
+		void check();
+		// Slow on purpose. This is a background fact, not a thing to poll hard:
+		// the cost of noticing a minute late is a stale tab for a minute.
+		const t = setInterval(() => void check(), 30_000);
+		return () => {
+			live = false;
+			clearInterval(t);
+		};
+	}, []);
+
 	// The spinner stops on its own: `/model` and friends change the session
 	// without printing anything, so no answer is ever coming for them and
 	// nothing else would ever take the "running" off.
@@ -1461,6 +1503,31 @@ export default function App() {
 
 	return (
 		<div className="flex h-full bg-neutral-950 text-neutral-100">
+			{/*
+			  Fixed, and above everything: the point is that it is visible whichever
+			  pane you are looking at. Dismissible because a tab you are only reading
+			  does not have to act on it.
+			*/}
+			{restarted && (
+				<div className="fixed inset-x-0 top-0 z-50 flex items-center justify-center gap-3 border-b border-amber-800 bg-amber-950/95 px-3 py-1.5 text-sm text-amber-200">
+					<span>pwi restarted — this page is running the previous build.</span>
+					<button
+						type="button"
+						onClick={() => location.reload()}
+						className="rounded border border-amber-700 px-2 py-0.5 hover:bg-amber-900"
+					>
+						Reload
+					</button>
+					<button
+						type="button"
+						onClick={() => setRestarted(false)}
+						className="text-amber-400 hover:text-amber-200"
+						aria-label="Dismiss"
+					>
+						✕
+					</button>
+				</div>
+			)}
 			<SessionList
 				sessions={shown}
 				listError={listError}
