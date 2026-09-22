@@ -455,6 +455,11 @@ export function SessionList({
 						<span aria-hidden>{"\u2699\ufe0e"}</span>
 						Settings
 					</button>
+					{/* Which build this machine is actually running — the thing you
+					    read out loud when two machines disagree. */}
+					<p className="px-2 pt-1 text-[10px] text-neutral-600" title="Version + git commit; * means uncommitted changes">
+						v{__APP_VERSION__}
+					</p>
 				</div>
 			</aside>
 
