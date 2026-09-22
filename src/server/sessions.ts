@@ -172,6 +172,25 @@ export async function sessionTitle(file: string): Promise<string> {
 	return (await readParsed(resolve(file)))?.title ?? "";
 }
 
+/**
+ * When the last message in the FILE was written, as epoch ms.
+ *
+ * For asking "has anyone else appended to this session?". Timestamps are the
+ * one quantity both sides of that question agree on: the raw entry count
+ * cannot be compared against a rendered transcript, because a `message` entry
+ * is not a rendered row (tool results fold into their call, and compaction
+ * replaces many entries with one).
+ *
+ * Undefined when the file is unreadable or holds no timestamped message —
+ * both meaning "no basis to claim it is ahead".
+ */
+export async function lastMessageAt(file: string): Promise<number | undefined> {
+	const ts = (await readParsed(resolve(file)))?.lastMessage;
+	if (!ts) return undefined;
+	const ms = Date.parse(ts);
+	return Number.isNaN(ms) ? undefined : ms;
+}
+
 async function readParsed(file: string): Promise<Parsed | undefined> {
 	let st: Stats;
 	try {

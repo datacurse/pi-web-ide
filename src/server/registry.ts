@@ -20,6 +20,7 @@
 
 import { emptyPartial, openSession, type AskAnswer, type PiSession } from "./agent.js";
 import { currentEpoch } from "./packages.js";
+import { lastMessageAt } from "./sessions.js";
 import type { PiEvent, PiImage, PiNotice, PiPartial, Snapshot } from "../shared/types.js";
 
 export type { Snapshot };
@@ -33,6 +34,15 @@ const SWEEP_INTERVAL_MS = 60_000;
  * dozens; the last screenful is what anyone reads.
  */
 const MAX_NOTICES = 40;
+
+/**
+ * How far ahead of our newest message the file may be before we treat it as
+ * somebody else's writing.
+ *
+ * Absorbs clock jitter and the gap between a child stamping a message and the
+ * line landing on disk. Real divergence is minutes, not seconds.
+ */
+const FOREIGN_WRITE_MARGIN_MS = 5_000;
 
 /**
  * Prewarming is the whole reason `+ New` feels instant; set PWI_PREWARM=0 to
@@ -571,6 +581,54 @@ export class Registry {
 		if (!entry) return;
 		if (entry.streaming || entry.session.isStreaming) return;
 		entry.error = null;
+	}
+
+	/**
+	 * Reopen when the session FILE holds messages this child never saw.
+	 *
+	 * A session is the file; a child is one reader of it. The message list is
+	 * built from events THIS child emits, so a turn written by any other pi
+	 * against the same file is invisible here and the transcript freezes at
+	 * whatever our child last said — while the sidebar, which counts the file,
+	 * keeps climbing. That is the shape of the bug: one conversation, two
+	 * readers, and only one of them rendering.
+	 *
+	 * Compared by TIMESTAMP, not by count. The raw entry count cannot be
+	 * compared against a rendered transcript: tool results fold into their call
+	 * and compaction replaces many entries with one, so counts differ by
+	 * hundreds while both sides are correct. Timestamps are the one quantity
+	 * both agree on.
+	 *
+	 * The comparison converges, which is the property that matters: after
+	 * reopening, our newest message IS the file's newest, so the condition goes
+	 * false and stays false until someone writes again. An earlier attempt
+	 * compared the file's mtime instead and spawned a child on every single
+	 * read, because a live foreign writer keeps mtime permanently ahead.
+	 */
+	async refreshIfFileIsAhead(id: string): Promise<void> {
+		const entry = this.entries.get(id);
+		if (!entry) return;
+		// Mid-turn the writer is ours, and reopening would kill the turn.
+		if (entry.streaming || entry.session.isStreaming) return;
+		const file = entry.session.file;
+		if (!file) return;
+
+		const onDisk = await lastMessageAt(file);
+		if (onDisk === undefined) return;
+
+		const ours = entry.session.messages().at(-1)?.timestamp ?? 0;
+		// No messages yet is not evidence of a foreign write: a freshly opened
+		// session legitimately has an empty list and a file full of history.
+		if (!ours) return;
+		if (onDisk <= ours + FOREIGN_WRITE_MARGIN_MS) return;
+
+		try {
+			await this.restart(id);
+		} catch {
+			// Refused (a turn started under us) or the reopen failed. The list we
+			// have stands and the next read tries again: never worse than not
+			// having looked.
+		}
 	}
 
 	/**
