@@ -9,9 +9,6 @@
 // The registry needs a live pi to construct, so these drive the method
 // against the entry shape it actually touches rather than a spawned child.
 import assert from "node:assert/strict";
-import { mkdtempSync, utimesSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { test } from "node:test";
 import { Registry } from "./registry.js";
 
@@ -21,35 +18,10 @@ function fakeEntry(error: string | null, streaming: boolean, sessionStreaming = 
 }
 
 /** A registry with `entries` populated directly: no child process involved. */
-function registryWith(id: string, entry: unknown): Registry {
+function registryWith(id: string, entry: ReturnType<typeof fakeEntry>): Registry {
 	const registry = Object.create(Registry.prototype) as Registry;
 	(registry as unknown as { entries: Map<string, unknown> }).entries = new Map([[id, entry]]);
 	return registry;
-}
-
-/** A session file whose mtime is `mtimeMs`, for the foreign-write check. */
-function sessionFileAt(mtimeMs: number): string {
-	const file = join(mkdtempSync(join(tmpdir(), "pwi-registry-")), "session.jsonl");
-	writeFileSync(file, "");
-	utimesSync(file, new Date(mtimeMs), new Date(mtimeMs));
-	return file;
-}
-
-/** An entry as `refreshIfForeignWrites` reads it, with a `restart` spy. */
-function refreshCase(opts: { fileMtime: number; lastEventAt: number; streaming?: boolean }) {
-	const calls: string[] = [];
-	const entry = {
-		error: null,
-		streaming: opts.streaming ?? false,
-		lastEventAt: opts.lastEventAt,
-		session: { isStreaming: false, file: sessionFileAt(opts.fileMtime) },
-	};
-	const registry = registryWith("s", entry);
-	// The real one spawns pi; here it only records that it was reached.
-	(registry as unknown as { restart: (id: string) => Promise<void> }).restart = async (id) => {
-		calls.push(id);
-	};
-	return { registry, calls };
 }
 
 test("an error from a settled turn is cleared", () => {
@@ -88,61 +60,4 @@ test("clearing twice is harmless", () => {
 	registry.clearDeadError("s5");
 	registry.clearDeadError("s5");
 	assert.equal(entry.error, null);
-});
-
-// ---------------------------------------------------------------------------
-// refreshIfForeignWrites
-//
-// The message list comes from events THIS child emits, so a second pi writing
-// the same session file is invisible: the server serves a transcript frozen
-// at its own child's last word while the conversation continues on disk. A
-// port takeover produces exactly that — it kills the old SERVER by pid and
-// its pi children outlive it, still attached and still writing.
-// ---------------------------------------------------------------------------
-
-const now = Date.now();
-
-test("a file written well after our last event reopens the session", async () => {
-	const { registry, calls } = refreshCase({ fileMtime: now, lastEventAt: now - 600_000 });
-	await registry.refreshIfForeignWrites("s");
-	assert.deepEqual(calls, ["s"]);
-});
-
-test("our own child writing just after it emits does not", async () => {
-	// The common case by far: persist lands a few ms past the event, and
-	// reopening on that would restart the session after every turn.
-	const { registry, calls } = refreshCase({ fileMtime: now, lastEventAt: now - 50 });
-	await registry.refreshIfForeignWrites("s");
-	assert.deepEqual(calls, []);
-});
-
-test("a file older than our last event does not", async () => {
-	const { registry, calls } = refreshCase({ fileMtime: now - 600_000, lastEventAt: now });
-	await registry.refreshIfForeignWrites("s");
-	assert.deepEqual(calls, []);
-});
-
-test("a streaming session is never reopened under itself", async () => {
-	// Mid-turn the writer is ours, and a reopen would lose the turn.
-	const { registry, calls } = refreshCase({
-		fileMtime: now,
-		lastEventAt: now - 600_000,
-		streaming: true,
-	});
-	await registry.refreshIfForeignWrites("s");
-	assert.deepEqual(calls, []);
-});
-
-test("a missing file is left alone rather than thrown on", async () => {
-	const { registry, calls } = refreshCase({ fileMtime: now, lastEventAt: now - 600_000 });
-	const entry = (registry as unknown as { entries: Map<string, { session: { file: string } }> }).entries.get("s");
-	if (entry) entry.session.file = "/nonexistent/session.jsonl";
-	await registry.refreshIfForeignWrites("s");
-	assert.deepEqual(calls, []);
-});
-
-test("an unknown id is a no-op", async () => {
-	const { registry, calls } = refreshCase({ fileMtime: now, lastEventAt: now - 600_000 });
-	await registry.refreshIfForeignWrites("nope");
-	assert.deepEqual(calls, []);
 });

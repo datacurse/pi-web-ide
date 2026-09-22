@@ -513,16 +513,12 @@ app.post("/api/sessions/open", async (req, res) => {
  * Full snapshot. The client calls this on attach and whenever it is in any
  * doubt — refetching the whole thing is always correct and always cheap enough.
  */
-app.get("/api/sessions/:id", async (req, res) => {
-	if (!registry.get(req.params.id)) return res.status(404).json({ error: "not found" });
+app.get("/api/sessions/:id", (req, res) => {
+	const entry = registry.get(req.params.id);
+	if (!entry) return res.status(404).json({ error: "not found" });
 	// Asking for the session fresh is how a reload starts, and an error from a
 	// turn that is no longer running has nothing to say about it.
 	registry.clearDeadError(req.params.id);
-	// May dispose and reopen the entry, so read it back afterwards rather than
-	// answering from the one we were holding.
-	await registry.refreshIfForeignWrites(req.params.id);
-	const entry = registry.get(req.params.id);
-	if (!entry) return res.status(404).json({ error: "not found" });
 	res.json(registry.snapshot(entry, req.params.id));
 });
 

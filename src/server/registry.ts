@@ -18,7 +18,6 @@
  * minutes of idleness that triggers eviction.
  */
 
-import { statSync } from "node:fs";
 import { emptyPartial, openSession, type AskAnswer, type PiSession } from "./agent.js";
 import { currentEpoch } from "./packages.js";
 import type { PiEvent, PiImage, PiNotice, PiPartial, Snapshot } from "../shared/types.js";
@@ -34,17 +33,6 @@ const SWEEP_INTERVAL_MS = 60_000;
  * dozens; the last screenful is what anyone reads.
  */
 const MAX_NOTICES = 40;
-
-/**
- * How far past our last event the session file may be written before we treat
- * the writer as somebody else's.
- *
- * Our own child persists just after it emits, so mtime routinely lands a few
- * milliseconds ahead; a couple of seconds clears that without hiding a real
- * second writer, which shows up as minutes of divergence rather than
- * milliseconds.
- */
-const FOREIGN_WRITE_MARGIN_MS = 2_000;
 
 /**
  * Prewarming is the whole reason `+ New` feels instant; set PWI_PREWARM=0 to
@@ -72,15 +60,6 @@ interface Entry {
 	 */
 	notices: PiNotice[];
 	lastActivity: number;
-	/**
-	 * When this entry last saw an event from its OWN child.
-	 *
-	 * Distinct from `lastActivity`, which any read bumps: this one only moves
-	 * when the child actually said something, so it can be compared against
-	 * the session file's mtime to tell "we are up to date" from "somebody else
-	 * has been writing this conversation".
-	 */
-	lastEventAt: number;
 	/**
 	 * The exact cwd string this session was prewarmed for, or null once it
 	 * belongs to a client. A spare is a complete, ready session that nobody has
@@ -209,7 +188,6 @@ export class Registry {
 			error: null,
 			notices: [],
 			lastActivity: Date.now(),
-			lastEventAt: Date.now(),
 			spareFor,
 			epoch: currentEpoch(),
 			subscribers: new Set(),
@@ -221,7 +199,6 @@ export class Registry {
 		// was built from.
 		entry.unsubscribe = session.subscribe((e) => {
 			entry.lastActivity = Date.now();
-			entry.lastEventAt = entry.lastActivity;
 			switch (e.type) {
 				case "text":
 					entry.streaming = true;
@@ -378,56 +355,6 @@ export class Registry {
 			entry.unsubscribe();
 			entry.session.dispose();
 			this.entries.delete(id);
-		}
-	}
-
-	/**
-	 * Reopen from the session file if somebody else has been writing it.
-	 *
-	 * The message list is built from events THIS child emits, and resynced by
-	 * asking that same child. Correct while one pi owns the session — and
-	 * silently wrong when two exist: a second pi appending to the same file is
-	 * invisible here, so the server serves a transcript frozen at whatever its
-	 * own child last said while the conversation continues on disk.
-	 *
-	 * Not hypothetical. A port takeover kills the old SERVER by pid; its pi
-	 * children outlive it, still attached to their sessions and still writing.
-	 * A crash mid-turn does the same with the survivor on the other side.
-	 *
-	 * So: compare the file's mtime against the last event we saw. Disk newer by
-	 * more than the margin means the transcript on screen is not the
-	 * conversation, and the file is the one that is right — it is the durable
-	 * identity the id is derived from. `restart` already disposes and reopens
-	 * through it, carrying the subscribers across.
-	 *
-	 * The margin exists because our own child writes just AFTER it emits: mtime
-	 * normally lands a few milliseconds past `lastEventAt`, and comparing bare
-	 * would reopen the session after every single turn.
-	 */
-	async refreshIfForeignWrites(id: string): Promise<void> {
-		const entry = this.entries.get(id);
-		if (!entry) return;
-		// Mid-turn the writer is ours, and a reopen would lose the turn.
-		if (entry.streaming || entry.session.isStreaming) return;
-		const file = entry.session.file;
-		if (!file) return;
-
-		let mtime: number;
-		try {
-			mtime = statSync(file).mtimeMs;
-		} catch {
-			// Unreadable or gone: nothing to reconcile against, and the entry we
-			// have is better than no entry.
-			return;
-		}
-		if (mtime <= entry.lastEventAt + FOREIGN_WRITE_MARGIN_MS) return;
-
-		try {
-			await this.restart(id);
-		} catch {
-			// Refused (a turn started under us) or the reopen failed. The stale
-			// list stands and the next read tries again — never worse than not
-			// having looked.
 		}
 	}
 
