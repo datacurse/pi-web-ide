@@ -71,12 +71,9 @@ function suggestBranch(): string {
  */
 export function GitActions({
 	cwd,
-	origin,
 	onDone,
 }: {
 	cwd: string;
-	/** Where this project's piw answers: "" for this page's own server, else a machine's origin with no trailing slash. */
-	origin: string;
 	onDone?: () => void;
 }) {
 	const [state, setState] = useState<GitState | null>(null);
@@ -93,7 +90,7 @@ export function GitActions({
 	const root = useRef<HTMLDivElement | null>(null);
 
 	const refresh = async () => {
-		const r = await fetch(`${origin}/api/git?cwd=${encodeURIComponent(cwd)}`);
+		const r = await fetch(`/api/git?cwd=${encodeURIComponent(cwd)}`);
 		if (!r.ok) return;
 		setState((await r.json()) as GitState);
 	};
@@ -105,7 +102,7 @@ export function GitActions({
 		// Only on a project switch: everything else re-reads on open, and
 		// polling a repo whose tree an agent is rewriting would be a fetch per
 		// interval forever for a number nobody is looking at.
-	}, [cwd, origin]);
+	}, [cwd]);
 
 	// A menu that outlives a click elsewhere is a menu you have to dismiss
 	// twice. Pointerdown, not click: it has to close before whatever was
@@ -135,7 +132,7 @@ export function GitActions({
 		setNaming(true);
 		setNameError(null);
 		try {
-			const r = await fetch(`${origin}/api/git/name`, {
+			const r = await fetch(`/api/git/name`, {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({ cwd }),
@@ -189,7 +186,7 @@ export function GitActions({
 
 	const execute = async (action: Action, fields: { message?: string; branch?: string }) => {
 		setRunning(true);
-		const r = await fetch(`${origin}/api/git`, {
+		const r = await fetch(`/api/git`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({

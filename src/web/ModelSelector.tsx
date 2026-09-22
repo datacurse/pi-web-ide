@@ -19,7 +19,6 @@ import { Star } from "@phosphor-icons/react";
  */
 export function ModelSelector({
 	model,
-	origin,
 	disabled,
 	error,
 	onChange,
@@ -28,8 +27,6 @@ export function ModelSelector({
 	onThinkingChange,
 }: {
 	model: string | undefined;
-	/** Where this project's piw answers: "" for this page's own server, else a machine's origin with no trailing slash. */
-	origin: string;
 	disabled: boolean;
 	/** Surfaced from the last failed switch attempt, if any. */
 	error?: string | null;
@@ -45,7 +42,7 @@ export function ModelSelector({
 
 	useEffect(() => {
 		let cancelled = false;
-		fetch(`${origin}/api/models`)
+		fetch(`/api/models`)
 			.then((r) => r.json())
 			.then((d) => {
 				if (!cancelled) setModels(d.models ?? []);
@@ -54,7 +51,7 @@ export function ModelSelector({
 		return () => {
 			cancelled = true;
 		};
-	}, [origin]);
+	}, []);
 
 	// Follow the session: a model set elsewhere (resume, another tab) must move
 	// the provider select with it, or the two boxes disagree about reality.
@@ -71,7 +68,7 @@ export function ModelSelector({
 
 	const saveAsDefault = async () => {
 		if (!model) return;
-		const r = await fetch(`${origin}/api/default-model`, {
+		const r = await fetch(`/api/default-model`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ model }),

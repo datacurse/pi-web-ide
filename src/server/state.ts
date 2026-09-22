@@ -2,10 +2,10 @@
  * state.ts — where this server keeps the things only it knows.
  *
  * Everything persistent that is pi-web-ide's rather than pi's lives in one
- * directory: the machine list, the project list, favourites, the personality
- * text, and later the packages manifest. Not under `~/.pi/agent/`, which is
- * pi's own store and not ours to litter — the old install did exactly that
- * and left `piw-hosts.json` sitting next to an agent's credentials.
+ * directory: the project list, favourites and the personality text. Not under
+ * `~/.pi/agent/`, which is pi's own store and not ours to litter — the old
+ * install did exactly that and left its own files sitting next to an agent's
+ * credentials.
  *
  * `PIW_STATE_DIR` overrides it, which is also the seam the tests point at a
  * temp directory. Resolved per call rather than captured at import, so an env

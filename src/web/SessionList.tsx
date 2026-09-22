@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { X } from "@phosphor-icons/react";
-import type { PiSessionInfo, PiwHostStatus } from "../shared/types.js";
+import type { PiSessionInfo } from "../shared/types.js";
 import { SESSION_SORTS, type SessionSort } from "./prefs.js";
-import { Machines } from "./Machines.js";
 import { DirectoryPicker } from "./DirectoryPicker.js";
 import { sessionLabel, shortName } from "./sessionName.js";
 
@@ -35,51 +34,14 @@ const dateFmt = new Intl.DateTimeFormat(undefined, {
 });
 
 /**
- * Which machine a project is on and which directory it is. `host` is "" for
- * this page's own piw, else a machine's name from the Machines panel.
+ * The project list this piw reports: every directory, plus the cwd it was
+ * launched against.
  */
-export interface Selection {
-	host: string;
-	cwd: string;
-}
-
-/**
- * One machine's project list, as its own piw reports it.
- *
- * The page merges machines by asking each piw for its projects and listing
- * them under the machine's name; nothing about a project crosses hosts. A
- * machine that did not answer keeps its entry with `error` set, so it shows
- * as unreachable rather than quietly missing from the dropdown.
- */
-export interface HostProjects {
-	/** "" for this page's own piw. */
-	host: string;
-	/** Where that piw answers; "" for this page's own server. */
-	origin: string;
+export interface Projects {
 	projects: string[];
-	/** That piw's startup cwd: always listed, never removable. */
+	/** This piw's startup cwd: always listed, never removable. */
 	seed: string;
 	error?: string;
-}
-
-/**
- * Why a request to a machine failed at the network level, as far as this
- * page can know. A cross-origin refusal and a machine being down look the
- * same from a browser, but the server-side probe sees the machine directly:
- * if it answered /api/health, the failure is CORS, and its health says
- * whether it was ever told about hubs at all. Both fixes are on that
- * machine, and the message names the one that applies.
- */
-export function unreachable(status: PiwHostStatus | undefined): string {
-	if (!status?.reachable) return "not answering";
-	if (status.hubOrigins === false) return "up, but PIW_HUB_ORIGINS is not set on it";
-	if (status.hubOrigins === true) return `up, but its PIW_HUB_ORIGINS does not include ${location.origin}`;
-	return "up, but not allowing this page (older piw, or PIW_HUB_ORIGINS)";
-}
-
-/** The dropdown's value for a selection; a cwd alone no longer names one. */
-function optionValue(host: string, cwd: string): string {
-	return JSON.stringify([host, cwd]);
 }
 
 /**
@@ -89,10 +51,8 @@ function optionValue(host: string, cwd: string): string {
  * pi's, and a UI that deletes an agent's memory should have to be very sure
  * of itself. The list shows what is on disk; managing it is the TUI's job.
  *
- * "Every" also means every machine's: the project picker lists each
- * machine's projects under its name, and selecting one selects the machine
- * with it. One project at a time, still — the session poll stays one
- * request, now to whichever piw owns the project.
+ * One project at a time: the dropdown swaps which cwd's sessions are listed,
+ * which keeps the 5s poll at exactly one request.
  */
 export function SessionList({
 	sessions,
@@ -100,10 +60,7 @@ export function SessionList({
 	activeFile,
 	openFiles,
 	projects,
-	selection,
-	origin,
-	hosts,
-	localVersions,
+	project,
 	sort,
 	onSort,
 	open,
@@ -111,9 +68,6 @@ export function SessionList({
 	onProject,
 	onAddProject,
 	onRemoveProject,
-	onAddHost,
-	onRemoveHost,
-	onSelectHost,
 	onSelect,
 	onRename,
 	onAutoName,
@@ -128,27 +82,18 @@ export function SessionList({
 	activeFile: string | undefined;
 	/** Sessions that already have a tab; clicking one just focuses it. */
 	openFiles: string[];
-	/** Every machine's directories, this piw's under host "". A project IS a cwd. */
-	projects: HostProjects[];
-	selection: Selection;
-	/** The selected machine's origin; undefined while it is not known. */
-	origin: string | undefined;
-	/** Other machines running their own piw. Empty on a single-machine setup. */
-	hosts: PiwHostStatus[];
-	/** This server's versions, for flagging a machine that lags. */
-	localVersions: { piw?: string; pi?: string };
+	/** This machine's directories. A project IS a cwd. */
+	projects: Projects;
+	/** The selected project: a cwd on this machine. */
+	project: string;
 	sort: SessionSort;
 	onSort: (sort: SessionSort) => void;
 	/** Drawer state. Only observable at <=768px, where this is an overlay. */
 	open: boolean;
 	onToggle: () => void;
-	onProject: (s: Selection) => void;
+	onProject: (cwd: string) => void;
 	onAddProject: (path: string) => void;
 	onRemoveProject: (path: string) => void;
-	/** An ssh destination or an http(s) origin; the server tells them apart. */
-	onAddHost: (value: string) => void;
-	onRemoveHost: (name: string) => void;
-	onSelectHost: (name: string) => void;
 	onSelect: (s: PiSessionInfo) => void;
 	/** Rename one session. pi owns the name, so this is a server round trip. */
 	onRename: (s: PiSessionInfo, name: string) => void;
@@ -164,27 +109,16 @@ export function SessionList({
 	onSettings: () => void;
 	onPackages: () => void;
 }) {
-	const { host, cwd: project } = selection;
-	const current = projects.find((e) => e.host === host);
-
 	/*
-	 * The picker's groups: this machine first, then the others in Machines
-	 * order. A machine whose list has not arrived, or did not, still gets a
-	 * group — with the selection as its only option if it is the selected
-	 * one, so the dropdown never shows a blank for a project that merely
-	 * lives on a machine that is down.
+	 * The selection stays in the list even while the list has not arrived (or
+	 * failed to), so the dropdown never shows a blank for the project whose
+	 * sessions are on screen.
 	 */
-	const groups = useMemo(() => {
-		const order = ["", ...hosts.map((h) => h.name)];
-		return order.map((name) => {
-			const entry = projects.find((e) => e.host === name);
-			const label = name || "this machine";
-			if (entry && !entry.error) return { host: name, label, options: entry.projects, error: undefined };
-			const error = entry?.error ?? "loading…";
-			const options = name === host && project ? [project] : [];
-			return { host: name, label: `${label} — ${error}`, options, error };
-		});
-	}, [projects, hosts, host, project]);
+	const options = useMemo(
+		() =>
+			projects.projects.length > 0 || !project ? projects.projects : [project],
+		[projects.projects, project],
+	);
 
 	/*
 	 * Sorted here rather than on the server: both timestamps are already on
@@ -295,39 +229,24 @@ export function SessionList({
 
 				  Adding opens a folder explorer over the SERVER's filesystem
 				  (DirectoryPicker): the browser cannot enumerate it, and its own
-				  directory input would offer the wrong machine's folders entirely.
+				  directory input would offer the wrong folders entirely.
 				*/}
 				<div className="flex items-center gap-1 border-b border-neutral-800 px-2 py-1.5">
 					<select
-						value={optionValue(host, project)}
-						onChange={(e) => {
-							const parsed: unknown = JSON.parse(e.target.value);
-							if (Array.isArray(parsed) && typeof parsed[0] === "string" && typeof parsed[1] === "string")
-								onProject({ host: parsed[0], cwd: parsed[1] });
-						}}
-						title={host ? `${host}: ${project}` : project}
+						value={project}
+						onChange={(e) => onProject(e.target.value)}
+						title={project}
 						className="min-w-0 flex-1 truncate rounded bg-neutral-900 px-1.5 py-1 text-xs text-neutral-300 outline-none"
 					>
-						{/* One machine: a flat list, as it always was. */}
-						{hosts.length === 0
-							? groups[0]?.options.map((p) => (
-									<option key={p} value={optionValue("", p)}>
-										{p.split("/").filter(Boolean).pop() || p}
-									</option>
-								))
-							: groups.map((g) => (
-									<optgroup key={g.host} label={g.label}>
-										{g.options.map((p) => (
-											<option key={p} value={optionValue(g.host, p)}>
-												{p.split("/").filter(Boolean).pop() || p}
-											</option>
-										))}
-									</optgroup>
-								))}
+						{options.map((p) => (
+							<option key={p} value={p}>
+								{p.split("/").filter(Boolean).pop() || p}
+							</option>
+						))}
 					</select>
 					<button
 						onClick={() => setPickerOpen(true)}
-						disabled={origin === undefined || !!current?.error}
+						disabled={!!projects.error}
 						title="Add project directory"
 						className="shrink-0 rounded bg-neutral-800 px-2 py-1 text-xs transition-colors duration-150 ease-out hover:bg-neutral-700 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 disabled:opacity-40 motion-reduce:transition-none"
 					>
@@ -342,7 +261,7 @@ export function SessionList({
 					  to say what is NOT happening, since "remove project" in most tools
 					  means the files.
 					*/}
-					{project && current && !current.error && project !== current.seed && (
+					{project && !projects.error && project !== projects.seed && (
 						<button
 							onClick={() => {
 								if (
@@ -510,15 +429,6 @@ export function SessionList({
 					})}
 				</div>
 
-				<Machines
-					hosts={hosts}
-					selected={host}
-					localVersions={localVersions}
-					onAdd={onAddHost}
-					onRemove={onRemoveHost}
-					onSelect={onSelectHost}
-				/>
-
 				{/*
 				  Bottom-left corner: the conventional resting place for an app's
 				  settings, out of the way of the list it sits under and reachable
@@ -621,8 +531,7 @@ export function SessionList({
 			<DirectoryPicker
 				open={pickerOpen}
 				start={project}
-				origin={origin ?? ""}
-				projects={current?.projects ?? []}
+				projects={projects.projects}
 				onPick={(p) => {
 					onAddProject(p);
 					setPickerOpen(false);

@@ -408,14 +408,14 @@ export async function remove(source: string): Promise<MutationResult> {
  * Update one package, or every unpinned one.
  *
  * `pi update --extensions` deliberately skips a pinned npm version or git
- * ref, so on a fleet where everything is pinned (which is the point of the
- * manifest) this does nothing — moving a pin is an install, not an update.
+ * ref, so a pinned package is untouched here — moving a pin is an install,
+ * not an update.
  */
 export async function update(source?: string): Promise<MutationResult> {
 	return mutate(source ? ["update", validate(source).source] : ["update", "--extensions"]);
 }
 
-/** Update the pi CLI itself on this machine. Never automatic, never fleet-wide. */
+/** Update the pi CLI itself on this machine. Never automatic. */
 export async function updateSelf(): Promise<MutationResult> {
 	return mutate(["update", "--self"]);
 }

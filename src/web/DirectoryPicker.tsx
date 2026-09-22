@@ -29,7 +29,6 @@ import type { PiwDirListing } from "../shared/types.js";
 export function DirectoryPicker({
 	open,
 	start,
-	origin,
 	projects,
 	onPick,
 	onClose,
@@ -37,8 +36,6 @@ export function DirectoryPicker({
 	open: boolean;
 	/** Where to open: normally the active project, so navigation starts nearby. */
 	start: string;
-	/** Where this project's piw answers: "" for this page's own server, else a machine's origin with no trailing slash. */
-	origin: string;
 	/** Already-added projects, marked in the list so they are not added twice. */
 	projects: string[];
 	onPick: (path: string) => void;
@@ -63,7 +60,7 @@ export function DirectoryPicker({
 	const go = useCallback(async (path: string) => {
 		const ticket = ++seq.current;
 		setBusy(true);
-		const r = await fetch(`${origin}/api/browse?path=${encodeURIComponent(path)}`).catch(
+		const r = await fetch(`/api/browse?path=${encodeURIComponent(path)}`).catch(
 			() => null,
 		);
 		const body = (await r?.json().catch(() => null)) as
@@ -79,7 +76,7 @@ export function DirectoryPicker({
 		setError(null);
 		setListing(body);
 		setDraft(body.path);
-	}, [origin]);
+	}, []);
 
 	// showModal() is imperative — the `open` ATTRIBUTE renders a non-modal
 	// dialog, which is a different (and here, wrong) thing.
@@ -103,12 +100,12 @@ export function DirectoryPicker({
 	useEffect(() => {
 		if (!open) return;
 		void (async () => {
-			const r = await fetch(`${origin}/api/favorites`).catch(() => null);
+			const r = await fetch(`/api/favorites`).catch(() => null);
 			if (!r?.ok) return;
 			const body = (await r.json().catch(() => null)) as { favorites?: string[] } | null;
 			setFavorites(body?.favorites ?? []);
 		})();
-	}, [open, origin]);
+	}, [open]);
 
 	/**
 	 * Pin or unpin the directory being listed. One button, because "this
@@ -116,7 +113,7 @@ export function DirectoryPicker({
 	 * control would sit disabled most of the time.
 	 */
 	const togglePin = useCallback(async (path: string, pinned: boolean) => {
-		const r = await fetch(`${origin}/api/favorites`, {
+		const r = await fetch(`/api/favorites`, {
 			method: pinned ? "DELETE" : "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ path }),
@@ -131,7 +128,7 @@ export function DirectoryPicker({
 		}
 		setError(null);
 		setFavorites(body?.favorites ?? []);
-	}, [origin]);
+	}, []);
 
 	/*
 	 * Breadcrumb segments, each with the absolute path it stands for. Built

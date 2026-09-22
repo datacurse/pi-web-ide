@@ -26,9 +26,7 @@ import {
 	removeFavorite,
 	removeProject,
 } from "./projects.js";
-import { addHost, listHosts, removeHost } from "./hosts.js";
 import { readPersonality, writePersonality } from "./personality.js";
-import { Tunnels } from "./tunnels.js";
 import { apply, status as gitStatus, suggestMessage, type GitPlan } from "./git.js";
 import { nameCommit, nameSession } from "./autoname.js";
 import { Terminals } from "./terminals.js";
@@ -37,7 +35,6 @@ import { PI_BIN, type AskAnswer } from "./agent.js";
 import { PRODUCT, type PiImage } from "../shared/types.js";
 import * as packages from "./packages.js";
 import { info, search } from "./gallery.js";
-import * as fleet from "./fleet.js";
 import { claimPort } from "./takeover.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -68,35 +65,37 @@ const CWD = resolve(process.env.PIW_CWD ?? process.argv[2] ?? process.cwd());
 const MODEL = process.env.PIW_MODEL;
 
 /**
- * Browser origins other than this server's own that may call it: the server
- * whose page merges this machine into its list. Not derivable from
- * hosts.json — that file names the machines THIS server reaches, and the
- * hub is the machine reaching us — so it is configuration, comma-separated,
- * e.g. `http://127.0.0.1:8890,https://laptop.tail.ts.net`. Origins never
- * carry a trailing slash; one typed here is forgiven.
+ * Under `pnpm dev` the page is served by Vite on its own port and reaches
+ * this server through Vite's proxy, so its Origin is the DEV SERVER's while
+ * the proxy rewrites Host to ours (`changeOrigin`). The two no longer match,
+ * and the terminal's upgrade — the one request whose origin check is ours to
+ * make rather than the browser's — is refused: `ws proxy error: socket hang
+ * up`, once per reconnect attempt, forever.
  *
- * This is the CSRF boundary, and it matters more than usual: an approved
- * origin can start an agent run that executes tools on this machine. Never
- * `*`, and never reflected unconditionally.
+ * So dev adds exactly one origin, the one Vite was told to listen on. Not a
+ * blanket "allow localhost": any page on the machine could then open a
+ * shell here. Empty unless PIW_DEV=1, which only `pnpm dev` sets, so a
+ * production server's boundary is unchanged.
  */
-const HUB_ORIGINS = new Set(
-	(process.env.PIW_HUB_ORIGINS ?? "")
-		.split(",")
-		.map((s) => s.trim().replace(/\/+$/, ""))
-		.filter(Boolean),
+const VITE_PORT = Number(process.env.PIW_VITE_PORT ?? 5480);
+const DEV_ORIGINS = new Set(
+	process.env.PIW_DEV === "1"
+		? [`http://127.0.0.1:${VITE_PORT}`, `http://localhost:${VITE_PORT}`]
+		: [],
 );
 
 /**
  * Whether a request's Origin may use this server: no Origin (not a browser),
- * our own origin, or an approved hub. "Our own" is judged by the Host header,
- * and by X-Forwarded-Host for the tailscale-serve case where the proxy sets
- * one. Express handles this for fetch through CORS; the terminal WebSocket
- * has no CORS, so the upgrade handler asks the same question itself.
+ * or our own origin. "Our own" is judged by the Host header, and by
+ * X-Forwarded-Host for the tailscale-serve case where the proxy sets one.
+ * Same-origin is the whole policy — the page is served by this server — so
+ * there is no CORS anywhere, and the terminal WebSocket upgrade (which CORS
+ * would not have covered anyway) asks this same question itself.
  */
 function originAllowed(req: IncomingMessage): boolean {
 	const origin = req.headers.origin;
 	if (!origin) return true;
-	if (HUB_ORIGINS.has(origin)) return true;
+	if (DEV_ORIGINS.has(origin)) return true;
 	let host: string;
 	try {
 		host = new URL(origin).host;
@@ -164,7 +163,6 @@ process.on("uncaughtException", (err) => {
 });
 
 const registry = new Registry(CWD, MODEL);
-const tunnels = new Tunnels();
 const terminals = new Terminals();
 const app = express();
 // Generous because a prompt body now carries base64 screenshots, and base64
@@ -174,41 +172,17 @@ const app = express();
 // good error.
 app.use(express.json({ limit: "64mb" }));
 
-// Cross-origin only for an approved hub, and only ever the exact origin.
-// Nothing here uses cookies, so no Allow-Credentials: the tailnet or the ssh
-// tunnel is the authentication, and the browser carries nothing to leak.
-//
-// `no-store` on every /api answer, because Express ETags make them
-// revalidatable and a 304 carries no CORS headers — so the browser keeps
-// using the CORS headers of the cached copy. Observed: a machine that had
-// once allowed this page kept "working" after its allowlist was removed,
-// until the cache was bypassed. `Vary: Origin` (set below) does not cover
-// this: the Origin did not change, this server's policy about it did, and
-// nothing in a cache key tracks that. Nothing under /api is worth caching
-// anyway; the page polls it.
-app.use("/api", (req, res, next) => {
+// `no-store` on every /api answer. Nothing under /api is worth caching — the
+// page polls it — and an Express ETag makes these revalidatable, which is how
+// a stale 304 ends up standing in for a live answer.
+app.use("/api", (_req, res, next) => {
 	res.setHeader("Cache-Control", "no-store");
-	const origin = req.headers.origin;
-	if (origin && HUB_ORIGINS.has(origin)) {
-		res.setHeader("Access-Control-Allow-Origin", origin);
-		res.setHeader("Vary", "Origin");
-		if (req.method === "OPTIONS") {
-			res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE");
-			res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-			res.setHeader("Access-Control-Max-Age", "600");
-			res.status(204).end();
-			return;
-		}
-	}
 	next();
 });
 
 app.get("/api/health", (_req, res) => {
 	// `pid` is what lets the NEXT piw take this port without a /proc scan;
-	// see takeover.ts. The versions are for the Machines panel on another
-	// host, which flags a machine that lags the fleet; `hubOrigins` is
-	// whether ANY are configured (never which), so that panel can tell "this
-	// machine was never told about hubs" from "it allows a different page".
+	// see takeover.ts, which also checks `product` before killing anything.
 	res.json({
 		ok: true,
 		product: PRODUCT,
@@ -218,7 +192,6 @@ app.get("/api/health", (_req, res) => {
 		pid: process.pid,
 		piwVersion: PIW_VERSION,
 		piVersion: PI_VERSION ?? null,
-		hubOrigins: HUB_ORIGINS.size > 0,
 	});
 });
 
@@ -334,43 +307,6 @@ app.put("/api/personality", (req, res) => {
 	}
 	try {
 		res.json(writePersonality(req.body.content));
-	} catch (err) {
-		res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
-	}
-});
-
-/**
- * Machines: the other piw instances this one can point a browser window at.
- *
- * There is no proxying here and no cross-machine session list. A host is an
- * ssh destination plus the loopback port its piw is forwarded to; piw keeps
- * that forward up (tunnels.ts) and the browser opens a window on it, so from
- * the moment you switch machines the page is talking to the remote piw
- * directly, with the remote's own credentials and its own sessions.
- */
-app.get("/api/hosts", async (_req, res) => {
-	res.json({ hosts: await tunnels.status(listHosts()) });
-});
-
-app.post("/api/hosts", async (req, res) => {
-	try {
-		// addHost validates the destination and the port: both arrive from the
-		// browser, and PORT is passed so this server's own port cannot be
-		// forwarded to a remote.
-		const hosts = addHost(req.body, PORT);
-		tunnels.sync(hosts);
-		res.json({ hosts: await tunnels.status(hosts) });
-	} catch (err) {
-		res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
-	}
-});
-
-app.delete("/api/hosts", async (req, res) => {
-	const name = typeof req.body?.name === "string" ? req.body.name : "";
-	try {
-		const hosts = removeHost(name);
-		tunnels.sync(hosts);
-		res.json({ hosts: await tunnels.status(hosts) });
 	} catch (err) {
 		res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
 	}
@@ -828,7 +764,7 @@ app.post("/api/packages/update", async (req, res) => {
 	await mutation(res, () => packages.update(source));
 });
 
-/** Update the pi CLI on THIS machine. Per machine, never fleet-wide in one click. */
+/** Update the pi CLI on this machine. Never automatic. */
 app.post("/api/packages/update-pi", async (_req, res) => {
 	await mutation(res, () => packages.updateSelf());
 });
@@ -860,55 +796,6 @@ app.get("/api/packages/info", async (req, res) => {
 app.get("/api/packages/project", (req, res) => {
 	const cwd = typeof req.query.cwd === "string" && req.query.cwd ? req.query.cwd : CWD;
 	res.json({ cwd, packages: packages.listProject(cwd) });
-});
-
-/**
- * The fleet manifest: one desired state every machine converges on.
- *
- * Reconciliation runs in this server, not in the browser, so a machine that
- * was asleep when the manifest changed catches up on its own. These routes
- * only read, write and trigger.
- */
-app.get("/api/fleet", async (_req, res) => {
-	res.json({
-		manifest: fleet.readManifest(),
-		status: fleet.readStatus(),
-		hosts: await tunnels.status(listHosts()),
-	});
-});
-
-app.put("/api/fleet", async (req, res) => {
-	try {
-		const manifest = fleet.writeManifest(req.body);
-		// Reconcile immediately: the edit IS the instruction, and waiting for
-		// the next poll would make a manifest change look like it did nothing.
-		const status = await fleet.reconcile(tunnels);
-		registry.discardSpares();
-		res.json({ manifest, status });
-	} catch (err) {
-		res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
-	}
-});
-
-app.post("/api/fleet/sync", async (_req, res) => {
-	try {
-		res.json({ status: await fleet.reconcile(tunnels) });
-	} catch (err) {
-		res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
-	}
-});
-
-/** Take an unmanaged package into the manifest, pinned at what it runs now. */
-app.post("/api/fleet/adopt", async (req, res) => {
-	const source = typeof req.body?.source === "string" ? req.body.source : "";
-	const installed = typeof req.body?.installed === "string" ? req.body.installed : null;
-	if (!source) return res.status(400).json({ error: "source required" });
-	try {
-		const manifest = fleet.adopt(source, installed);
-		res.json({ manifest, status: await fleet.reconcile(tunnels) });
-	} catch (err) {
-		res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
-	}
 });
 
 /**
@@ -954,9 +841,23 @@ app.use("/api", (_req, res) => {
 	res.status(404).json({ error: "no such endpoint" });
 });
 
-// In production serve the built client; in dev, Vite proxies /api here instead.
+/*
+ * In production serve the built client; in dev, Vite proxies /api here instead.
+ *
+ * `PIW_DEV` (set only by `pnpm dev`, which always starts Vite) turns the
+ * static half OFF and sends the browser to the dev server instead. Without
+ * it this port keeps answering with whatever `dist/` was last built, which
+ * during development is by definition stale: the page looks alive, the API
+ * behind it is the one you are editing, and the only symptom of the mismatch
+ * is that your changes are not there. A redirect to the port that does have
+ * them is the honest answer, and it costs one line of config to say so.
+ */
 const dist = resolve(ROOT, "dist");
-if (existsSync(dist)) {
+if (process.env.PIW_DEV === "1") {
+	app.get("*", (req, res) =>
+		res.redirect(302, `http://127.0.0.1:${VITE_PORT}${req.originalUrl}`),
+	);
+} else if (existsSync(dist)) {
 	app.use(express.static(dist));
 	app.get("*", (_req, res) => res.sendFile(resolve(dist, "index.html")));
 }
@@ -1057,19 +958,8 @@ if (process.env.PIW_TAKEOVER !== "0") {
 	}
 }
 
-let stopWatching: (() => void) | undefined;
-
 server.listen(PORT, "127.0.0.1", () => {
 	console.log(`[piw] http://127.0.0.1:${PORT}  cwd=${CWD}`);
-	// Tunnels come up with the server rather than on first request: a machine
-	// you added should be reachable when you go looking, and starting them
-	// here means a failed bind exits without leaving ssh children behind.
-	tunnels.sync(listHosts());
-	// And the fleet converges from here on: a machine that comes back gets
-	// the manifest without anybody opening a tab. The first pass also
-	// reconciles THIS machine, so a manifest edited by hand between two runs
-	// takes effect on start.
-	stopWatching = fleet.watch(tunnels);
 });
 
 // Failing to bind is not a session-scoped error, so "survive and degrade" is
@@ -1085,9 +975,7 @@ server.on("error", (err: NodeJS.ErrnoException) => {
 
 for (const sig of ["SIGINT", "SIGTERM"] as const) {
 	process.on(sig, () => {
-		stopWatching?.();
 		registry.disposeAll();
-		tunnels.stop();
 		// SIGHUP to each shell, so a restart does not leave orphaned children
 		// holding the project's files (and, under takeover, its ports).
 		terminals.disposeAll();

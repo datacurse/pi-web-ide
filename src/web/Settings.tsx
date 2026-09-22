@@ -48,7 +48,6 @@ function Swatch({ theme }: { theme: ThemeId }) {
  */
 export function Settings({
 	open,
-	origin,
 	theme,
 	onTheme,
 	showThinking,
@@ -62,8 +61,6 @@ export function Settings({
 	onClose,
 }: {
 	open: boolean;
-	/** Where this project's piw answers: "" for this page's own server, else a machine's origin with no trailing slash. */
-	origin: string;
 	theme: ThemeId;
 	onTheme: (theme: ThemeId) => void;
 	showThinking: boolean;
@@ -126,7 +123,7 @@ export function Settings({
 		if (!open || dirty) return;
 		void (async () => {
 			// The personality on screen is the selected host's, not this page's.
-			const r = await fetch(`${origin}/api/personality`).catch(() => null);
+			const r = await fetch(`/api/personality`).catch(() => null);
 			/*
 			 * Every failure mode ends up as a message, never as a control that
 			 * sits on "loading…" forever. The one that actually happened: a
@@ -154,13 +151,13 @@ export function Settings({
 		})();
 		// `dirty` is deliberately not a dependency: this runs on open, and
 		// re-running it the moment an edit is undone would refetch mid-typing.
-	}, [open, origin]);
+	}, [open]);
 
 	const savePersonality = async () => {
 		if (draft === null) return;
 		setSaveState("saving");
 		setSaveError(null);
-		const r = await fetch(`${origin}/api/personality`, {
+		const r = await fetch(`/api/personality`, {
 			method: "PUT",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ content: draft }),

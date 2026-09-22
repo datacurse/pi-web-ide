@@ -6,16 +6,15 @@ import type {
 	PiImage,
 	PiPartial,
 	PiSessionInfo,
-	PiwHostStatus,
 	Snapshot,
 } from "../shared/types.js";
-import { SessionList, unreachable, type HostProjects, type Selection } from "./SessionList.js";
+import { SessionList, type Projects } from "./SessionList.js";
 import { SessionTabs, tabDomId } from "./SessionTabs.js";
 import { Chat } from "./Chat.js";
 import { TerminalPane } from "./Terminal.js";
 import { EMPTY_LAYOUT, parseLayout, reconcile, type TermLayout } from "./termLayout.js";
 import { Settings } from "./Settings.js";
-import { Packages, type PackageMachine } from "./Packages.js";
+import { Packages } from "./Packages.js";
 import {
 	applyTheme,
 	readNotify,
@@ -150,8 +149,7 @@ const CHAT_PANEL_ID = "chat-panel";
  */
 
 /**
- * The selected project — a cwd on a machine — remembered in TWO places on
- * purpose.
+ * The selected project — a cwd — remembered in TWO places on purpose.
  *
  * `sessionStorage` is the selection of THIS window: it is scoped to the tab,
  * survives a reload, an HMR refresh and a session restore, and — crucially —
@@ -168,18 +166,18 @@ const PROJECT_KEY = "piw:project";
 const LAST_PROJECT_KEY = "piw:lastProject";
 
 /**
- * A stored selection. Older builds stored the bare cwd, which was always
- * this machine's; anything that does not parse degrades to "nothing
- * remembered" rather than throwing during the first render.
+ * A stored project. A build that managed remote machines wrote `{host,cwd}`
+ * here; only the cwd survives, and a remote one resolves to nothing
+ * remembered rather than throwing during the first render.
  */
-function parseSelection(raw: string | undefined): Selection | undefined {
+function parseSelection(raw: string | undefined): string | undefined {
 	if (!raw) return undefined;
-	if (!raw.startsWith("{")) return { host: "", cwd: raw };
+	if (!raw.startsWith("{")) return raw;
 	try {
 		const parsed: unknown = JSON.parse(raw);
 		if (parsed && typeof parsed === "object" && "cwd" in parsed && typeof parsed.cwd === "string") {
 			const host = "host" in parsed && typeof parsed.host === "string" ? parsed.host : "";
-			return { host, cwd: parsed.cwd };
+			return host ? undefined : parsed.cwd;
 		}
 	} catch {
 		/* fall through */
@@ -221,7 +219,7 @@ function writeStored(key: string, value: string | undefined): void {
  * project someone explicitly selected" — a window merely restoring itself is
  * not a selection.
  */
-function readWindowProject(): Selection | undefined {
+function readWindowProject(): string | undefined {
 	try {
 		return parseSelection(sessionStorage.getItem(PROJECT_KEY) ?? readStored(LAST_PROJECT_KEY));
 	} catch {
@@ -232,22 +230,12 @@ function readWindowProject(): Selection | undefined {
 	}
 }
 
-function pinWindowProject(selection: Selection): void {
+function pinWindowProject(cwd: string): void {
 	try {
-		sessionStorage.setItem(PROJECT_KEY, JSON.stringify(selection));
+		sessionStorage.setItem(PROJECT_KEY, cwd);
 	} catch {
 		/* ignore */
 	}
-}
-
-/**
- * The storage key a selection's per-project state lives under: tabs and the
- * terminal layout. This machine's projects keep the bare cwd, which is what
- * every existing entry was written under; another machine's are prefixed
- * with its name, since the same path over there is a different project.
- */
-function scopeOf({ host, cwd }: Selection): string {
-	return host ? `@${host}:${cwd}` : cwd;
 }
 
 /**
@@ -361,33 +349,12 @@ export default function App() {
 	const attachSeq = useRef(0);
 	// attach() reconnects by calling itself; a useCallback cannot reference itself.
 	const attachRef = useRef<(file?: string) => Promise<void>>(async () => {});
-	/**
-	 * Every machine's project list, this piw's first. Loaded per machine and
-	 * merged here, never fetched through another piw: each list comes from
-	 * the piw that owns those directories.
-	 */
-	const [hostProjects, setHostProjects] = useState<HostProjects[]>([]);
-	const [selection, setSelection] = useState<Selection>(
-		() => readWindowProject() ?? { host: "", cwd: "" },
-	);
-	const { host, cwd: project } = selection;
-	const scope = scopeOf(selection);
+	/** This piw's project list: its directories plus the cwd it was launched against. */
+	const [projects, setProjects] = useState<Projects>({ projects: [], seed: "" });
+	const [project, setProject] = useState<string>(() => readWindowProject() ?? "");
+	/** Tabs and the terminal layout are stored per project, keyed by its cwd. */
+	const scope = project;
 	const [sessionSort, setSessionSort] = useState<SessionSort>(readSessionSort);
-	/** Null until the first answer: a remote selection cannot be judged before then. */
-	const [hosts, setHosts] = useState<PiwHostStatus[] | null>(null);
-	// Read through a ref where a five-second poll must not rebuild a callback.
-	const hostsRef = useRef(hosts);
-	hostsRef.current = hosts;
-	/**
-	 * Where the selected project's piw answers: "" for this page's own server,
-	 * a machine's origin otherwise — and undefined while that machine is not
-	 * yet known (the list has not arrived) or no longer listed. Every request
-	 * for the selected project goes through this, and none is made while it
-	 * is undefined: a request to the wrong machine is worse than a late one.
-	 */
-	const origin = host === "" ? "" : hosts?.find((h) => h.name === host)?.url;
-	/** This server's own versions, so the Machines panel can flag one that lags. */
-	const [localVersions, setLocalVersions] = useState<{ piw?: string; pi?: string }>({});
 
 	/*
 	 * index.html applies the stored theme before the first paint, so this is
@@ -466,7 +433,7 @@ export default function App() {
 	 */
 	useEffect(() => {
 		setTermsReady(false);
-		if (!project || origin === undefined) {
+		if (!project) {
 			setTermLayout(EMPTY_LAYOUT);
 			return;
 		}
@@ -474,7 +441,7 @@ export default function App() {
 
 		let live = true;
 		void (async () => {
-			const r = await fetch(`${origin}/api/terminals?cwd=${encodeURIComponent(project)}`).catch(
+			const r = await fetch(`/api/terminals?cwd=${encodeURIComponent(project)}`).catch(
 				() => null,
 			);
 			if (!r?.ok || !live) return;
@@ -491,7 +458,7 @@ export default function App() {
 		return () => {
 			live = false;
 		};
-	}, [project, origin, scope]);
+	}, [project, scope]);
 
 	/**
 	 * Every layout change is written through, so a reload, a crash and a
@@ -632,81 +599,35 @@ export default function App() {
 	const opened = useRef<Set<string>>(new Set());
 
 	/**
-	 * One machine's project list, from that machine's own piw.
+	 * This piw's project list.
 	 *
-	 * A machine that does not answer keeps an entry with `error` set rather
-	 * than dropping out: a dropdown that is merely shorter looks exactly like
-	 * "no projects there", and the difference is the thing worth showing.
+	 * A failed read keeps `error` set rather than emptying the list: a
+	 * dropdown that is merely shorter looks exactly like "no projects here",
+	 * and the difference is the thing worth showing.
 	 */
-	const loadProjects = useCallback(
-		async (host: string, origin: string, status?: PiwHostStatus): Promise<HostProjects> => {
-			const r = await fetch(`${origin}/api/projects`).catch(() => null);
-			if (!r?.ok) {
-				const error = r ? `HTTP ${r.status}` : host ? unreachable(status) : "not answering";
-				return { host, origin, projects: [], seed: "", error };
-			}
-			const body: unknown = await r.json().catch(() => null);
-			const projects =
-				body && typeof body === "object" && "projects" in body && Array.isArray(body.projects)
-					? body.projects.filter((p): p is string => typeof p === "string")
-					: [];
-			const seed =
-				body && typeof body === "object" && "active" in body && typeof body.active === "string"
-					? body.active
-					: "";
-			return { host, origin, projects, seed };
-		},
-		[],
-	);
-
-	/** Replace one machine's entry. Order is the Machines panel's, applied at render. */
-	const putProjects = useCallback((entry: HostProjects) => {
-		setHostProjects((list) => [...list.filter((e) => e.host !== entry.host), entry]);
+	const loadProjects = useCallback(async (): Promise<void> => {
+		const r = await fetch("/api/projects").catch(() => null);
+		if (!r?.ok) {
+			setProjects({ projects: [], seed: "", error: r ? `HTTP ${r.status}` : "not answering" });
+			return;
+		}
+		const body: unknown = await r.json().catch(() => null);
+		const list =
+			body && typeof body === "object" && "projects" in body && Array.isArray(body.projects)
+				? body.projects.filter((p): p is string => typeof p === "string")
+				: [];
+		const seed =
+			body && typeof body === "object" && "active" in body && typeof body.active === "string"
+				? body.active
+				: "";
+		setProjects({ projects: list, seed });
 	}, []);
 
-	// This server's own list and versions, once. It seeds the list with
-	// its startup cwd, which is also the fallback selection on a first visit.
+	// Once: it seeds the list with this server's startup cwd, which is also
+	// the fallback selection on a first visit.
 	useEffect(() => {
-		void loadProjects("", "").then(putProjects);
-		void (async () => {
-			const r = await fetch("/api/health").catch(() => null);
-			const body: unknown = r?.ok ? await r.json().catch(() => null) : null;
-			if (!body || typeof body !== "object") return;
-			setLocalVersions({
-				piw: "piwVersion" in body && typeof body.piwVersion === "string" ? body.piwVersion : undefined,
-				pi: "piVersion" in body && typeof body.piVersion === "string" ? body.piVersion : undefined,
-			});
-		})();
-	}, [loadProjects, putProjects]);
-
-	/*
-	 * The other machines' lists, one request each, straight to that machine.
-	 *
-	 * Keyed on what would change an answer — a machine added, removed,
-	 * re-addressed, or flipping reachable — and not on the polled array
-	 * itself, which is a new object every five seconds with the same content.
-	 * A machine that comes up gets its list on the poll that noticed.
-	 */
-	const hostsKey = (hosts ?? [])
-		.map((h) => `${h.name}|${h.url}|${h.reachable}|${h.hubOrigins}`)
-		.join("\n");
-	useEffect(() => {
-		if (hosts === null) return;
-		let live = true;
-		for (const h of hosts) {
-			void loadProjects(h.name, h.url, h).then((entry) => {
-				if (live) putProjects(entry);
-			});
-		}
-		// A machine removed since the last poll takes its projects with it.
-		setHostProjects((list) =>
-			list.filter((e) => e.host === "" || hosts.some((h) => h.name === e.host)),
-		);
-		return () => {
-			live = false;
-		};
-		// `hosts` is read for its content, which hostsKey stands for.
-	}, [hostsKey, loadProjects, putProjects]);
+		void loadProjects();
+	}, [loadProjects]);
 
 	/*
 	 * Keep the selection pointing at a project that exists.
@@ -717,41 +638,21 @@ export default function App() {
 	 * inherited from the shared "last project anywhere" key: a window that
 	 * never touches the dropdown must still keep the project it opened on
 	 * when another window selects something else.
-	 *
-	 * A remote selection is judged only once the machine list has arrived, and
-	 * a machine that is listed but not answering keeps the selection: it shows
-	 * as unreachable, which is the truth, rather than yanking the user to
-	 * another machine's directory because this one had a bad minute.
 	 */
 	useEffect(() => {
-		const local = hostProjects.find((e) => e.host === "");
-		const move = (next: Selection) => {
-			setSelection(next);
-			pinWindowProject(next);
-		};
-		if (host === "") {
-			if (!local || local.error) return;
-			if (project && local.projects.includes(project)) return;
-			move({ host: "", cwd: local.seed });
-			return;
-		}
-		if (hosts === null) return;
-		if (!hosts.some((h) => h.name === host)) {
-			if (local && !local.error) move({ host: "", cwd: local.seed });
-			return;
-		}
-		const entry = hostProjects.find((e) => e.host === host);
-		if (!entry || entry.error) return;
-		if (project && entry.projects.includes(project)) return;
-		move({ host, cwd: entry.seed });
-	}, [host, project, hosts, hostProjects]);
+		if (projects.error) return;
+		if (project && projects.projects.includes(project)) return;
+		if (!projects.seed) return;
+		setProject(projects.seed);
+		pinWindowProject(projects.seed);
+	}, [project, projects]);
 
 	// Switching projects clears the session list immediately, so the previous
 	// project's sessions never linger under the new project's name.
-	const selectProject = useCallback((next: Selection) => {
-		setSelection(next);
+	const selectProject = useCallback((next: string) => {
+		setProject(next);
 		pinWindowProject(next);
-		writeStored(LAST_PROJECT_KEY, JSON.stringify(next));
+		writeStored(LAST_PROJECT_KEY, next);
 		setSessions([]);
 		setListedProject("");
 		setListError(null);
@@ -759,8 +660,7 @@ export default function App() {
 
 	const addProject = useCallback(
 		async (path: string) => {
-			if (origin === undefined) return;
-			const r = await fetch(`${origin}/api/projects`, {
+			const r = await fetch("/api/projects", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({ path }),
@@ -774,13 +674,13 @@ export default function App() {
 				return;
 			}
 			const list = body.projects ?? [];
-			setHostProjects((all) => all.map((e) => (e.host === host ? { ...e, projects: list } : e)));
+			setProjects((p) => ({ ...p, projects: list }));
 			// Select what was just added — adding it and then hunting for it in the
 			// dropdown is a pointless second step.
 			const added = list.at(-1);
-			if (added) selectProject({ host, cwd: added });
+			if (added) selectProject(added);
 		},
-		[selectProject, host, origin],
+		[selectProject],
 	);
 
 	/**
@@ -790,8 +690,7 @@ export default function App() {
 	 */
 	const removeProject = useCallback(
 		async (path: string) => {
-			if (origin === undefined) return;
-			const r = await fetch(`${origin}/api/projects`, {
+			const r = await fetch("/api/projects", {
 				method: "DELETE",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({ path }),
@@ -800,95 +699,27 @@ export default function App() {
 			// Same shape as the POST response; typed once, then read.
 			const body = (await r.json().catch(() => ({}))) as { projects?: string[] };
 			const list = body.projects ?? [];
-			setHostProjects((all) => all.map((e) => (e.host === host ? { ...e, projects: list } : e)));
+			setProjects((p) => ({ ...p, projects: list }));
 			// Removing what you are looking at has to move the selection, or the
 			// panel keeps polling a cwd that is no longer offered.
-			if (!list.includes(path)) {
-				const seed = hostProjects.find((e) => e.host === host)?.seed ?? "";
-				selectProject({ host, cwd: list[0] ?? seed });
-			}
+			if (!list.includes(path)) selectProject(list[0] ?? projects.seed);
 		},
-		[selectProject, host, origin, hostProjects],
-	);
-
-	/**
-	 * The machine list, polled like the session list.
-	 *
-	 * Polling rather than a one-shot load because every field except the name
-	 * is live: the server re-probes each machine per request, so a dot goes
-	 * green when the remote piw comes up and red when it stops answering,
-	 * without a reload. One request for every machine you have, so the cost is
-	 * the same as the session poll.
-	 */
-	const refreshHosts = useCallback(async () => {
-		const r = await fetch("/api/hosts").catch(() => null);
-		if (!r?.ok) return;
-		setHosts((await r.json()).hosts ?? []);
-	}, []);
-
-	useEffect(() => {
-		void refreshHosts();
-		const id = setInterval(() => void refreshHosts(), 5_000);
-		return () => clearInterval(id);
-	}, [refreshHosts]);
-
-	const mutateHosts = useCallback(
-		async (method: "POST" | "DELETE", body: Record<string, string>) => {
-			const r = await fetch("/api/hosts", {
-				method,
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify(body),
-			}).catch(() => null);
-			const parsed = (await r?.json().catch(() => ({}))) as {
-				error?: string;
-				hosts?: PiwHostStatus[];
-			};
-			// A rejected ssh destination or a taken port is a typo to show, not a
-			// state to render: the list only moves when the server accepted it.
-			if (!r?.ok) {
-				alert(parsed?.error ?? "could not update machines");
-				return;
-			}
-			setHosts(parsed.hosts ?? []);
-		},
-		[],
-	);
-
-	/**
-	 * Jump to a machine: its piw's own startup directory, which is the one
-	 * project every piw is guaranteed to list. A machine whose list has not
-	 * arrived (or did not) has nothing to jump to yet; its dot says why.
-	 */
-	const selectHost = useCallback(
-		(name: string) => {
-			const entry = hostProjects.find((e) => e.host === name);
-			if (!entry || entry.error) return;
-			selectProject({ host: name, cwd: entry.seed });
-		},
-		[hostProjects, selectProject],
+		[selectProject, projects.seed],
 	);
 
 	const refreshSessions = useCallback(async () => {
-		if (!project || origin === undefined) return;
-		const r = await fetch(`${origin}/api/sessions?cwd=${encodeURIComponent(project)}`).catch(
-			() => null,
-		);
+		if (!project) return;
+		const r = await fetch(`/api/sessions?cwd=${encodeURIComponent(project)}`).catch(() => null);
 		if (!r?.ok) {
 			// Said out loud, not left as an empty list: no sessions and no answer
 			// look the same in a list, and only one of them is the machine's fault.
-			setListError(
-				r
-					? `HTTP ${r.status}`
-					: host
-						? `${host}: ${unreachable(hostsRef.current?.find((h) => h.name === host))}`
-						: "piw is not answering",
-			);
+			setListError(r ? `HTTP ${r.status}` : "piw is not answering");
 			return;
 		}
 		setListError(null);
 		setSessions((await r.json()).sessions);
 		setListedProject(scope);
-	}, [project, origin, host, scope]);
+	}, [project, scope]);
 
 	/**
 	 * Rename a session. pi owns the name (PiSession.setName in
@@ -906,7 +737,7 @@ export default function App() {
 			setSessions((list) =>
 				list.map((s) => (s.path === session.path ? { ...s, name } : s)),
 			);
-			const r = await fetch(`${origin}/api/sessions/rename`, {
+			const r = await fetch(`/api/sessions/rename`, {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({ file: session.path, id: session.id, name }),
@@ -917,7 +748,7 @@ export default function App() {
 			}
 			await refreshSessions();
 		},
-		[refreshSessions, origin],
+		[refreshSessions],
 	);
 
 	/**
@@ -931,7 +762,7 @@ export default function App() {
 	 */
 	const autoNameSession = useCallback(
 		async (session: PiSessionInfo) => {
-			const r = await fetch(`${origin}/api/sessions/autoname`, {
+			const r = await fetch(`/api/sessions/autoname`, {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({ file: session.path, id: session.id }),
@@ -951,7 +782,7 @@ export default function App() {
 			}
 			await refreshSessions();
 		},
-		[refreshSessions, origin],
+		[refreshSessions],
 	);
 
 	useEffect(() => {
@@ -1021,10 +852,7 @@ export default function App() {
 			 * unaffected (the session header carries the cwd), so only the create
 			 * path waits.
 			 */
-			if ((!file && !project) || origin === undefined) return;
-			// The machine this attach is for; the callbacks below outlive the
-			// render they were created in, and must keep talking to it.
-			const at = origin;
+			if (!file && !project) return;
 
 			/*
 			 * Every attach takes a ticket, and a stale ticket may not touch the
@@ -1063,7 +891,7 @@ export default function App() {
 				setOpening(true);
 			}
 
-			const r = await fetch(`${at}/api/sessions/open`, {
+			const r = await fetch(`/api/sessions/open`, {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				// Never a blank string: the server rejects that, precisely because it
@@ -1143,7 +971,7 @@ export default function App() {
 			setPartial(snap.partial ?? emptyPartial());
 			setBusy(snap.isStreaming);
 
-			const es = new EventSource(`${at}/api/sessions/${snap.id}/events`);
+			const es = new EventSource(`/api/sessions/${snap.id}/events`);
 			esRef.current = es;
 
 			/*
@@ -1162,7 +990,7 @@ export default function App() {
 			};
 
 			const refetch = async (): Promise<Snapshot | undefined> => {
-				const rr = await fetch(`${at}/api/sessions/${snap.id}`).catch(() => null);
+				const rr = await fetch(`/api/sessions/${snap.id}`).catch(() => null);
 				if (!rr || rr.status === 404) {
 					reattach();
 					return undefined;
@@ -1280,7 +1108,7 @@ export default function App() {
 				else void refetch();
 			};
 		},
-		[refreshSessions, project, origin, scope, commitTabs, closeTab],
+		[refreshSessions, project, scope, commitTabs, closeTab],
 	);
 
 	attachRef.current = attach;
@@ -1302,13 +1130,13 @@ export default function App() {
 	 */
 	const adopted = useRef("");
 	useEffect(() => {
-		if (!project || origin === undefined || adopted.current === scope) return;
+		if (!project || adopted.current === scope) return;
 		adopted.current = scope;
 		const next = readTabs(scope);
 		commitTabs(next);
 		detach();
 		if (next.active) void attach(next.active);
-	}, [project, origin, scope, attach, commitTabs, detach]);
+	}, [project, scope, attach, commitTabs, detach]);
 
 	useEffect(() => {
 		// Never persist the placeholder state that precedes the first adoption;
@@ -1435,7 +1263,7 @@ export default function App() {
 			// answer arrives later as a notice, so it starts out running.
 			const trimmed = text.trim();
 			setCommand(trimmed.startsWith("/") ? { text: trimmed, running: true } : null);
-			const r = await fetch(`${origin}/api/sessions/${snapshot.id}/prompt`, {
+			const r = await fetch(`/api/sessions/${snapshot.id}/prompt`, {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({ text, images }),
@@ -1454,16 +1282,16 @@ export default function App() {
 				return;
 			}
 
-			const rr = await fetch(`${origin}/api/sessions/${snapshot.id}`);
+			const rr = await fetch(`/api/sessions/${snapshot.id}`);
 			if (rr.ok) setSnapshot(toSnapshot(await rr.json()));
 		},
-		[snapshot, origin],
+		[snapshot],
 	);
 
 	const abort = useCallback(async () => {
 		if (!snapshot) return;
-		await fetch(`${origin}/api/sessions/${snapshot.id}/abort`, { method: "POST" });
-	}, [snapshot, origin]);
+		await fetch(`/api/sessions/${snapshot.id}/abort`, { method: "POST" });
+	}, [snapshot]);
 
 	/**
 	 * Fold the conversation. The transcript and the meter move when
@@ -1473,11 +1301,11 @@ export default function App() {
 	 */
 	const compact = useCallback(async () => {
 		if (!snapshot) return;
-		const r = await fetch(`${origin}/api/sessions/${snapshot.id}/compact`, { method: "POST" });
+		const r = await fetch(`/api/sessions/${snapshot.id}/compact`, { method: "POST" });
 		if (r.ok) return;
 		const body = await r.json().catch(() => ({}) as { error?: string });
 		setSnapshot((s) => (s ? { ...s, error: body.error ?? "could not compact" } : s));
-	}, [snapshot, origin]);
+	}, [snapshot]);
 
 	/**
 	 * Replace this session's pi child so it picks up a newly installed
@@ -1486,7 +1314,7 @@ export default function App() {
 	 */
 	const restart = useCallback(async () => {
 		if (!snapshot) return;
-		const r = await fetch(`${origin}/api/sessions/${snapshot.id}/restart`, { method: "POST" });
+		const r = await fetch(`/api/sessions/${snapshot.id}/restart`, { method: "POST" });
 		const body: unknown = await r.json().catch(() => null);
 		if (r.ok && body && typeof body === "object") {
 			setSnapshot(toSnapshot(body as Partial<Snapshot>));
@@ -1497,7 +1325,7 @@ export default function App() {
 				? body.error
 				: "could not restart this session";
 		setSnapshot((s) => (s ? { ...s, error: reason } : s));
-	}, [snapshot, origin]);
+	}, [snapshot]);
 
 	/**
 	 * Re-read the open session's snapshot.
@@ -1508,9 +1336,9 @@ export default function App() {
 	 */
 	const reloadSnapshot = useCallback(async () => {
 		if (!snapshot) return;
-		const r = await fetch(`${origin}/api/sessions/${snapshot.id}`);
+		const r = await fetch(`/api/sessions/${snapshot.id}`);
 		if (r.ok) setSnapshot(toSnapshot(await r.json()));
-	}, [snapshot, origin]);
+	}, [snapshot]);
 
 	/**
 	 * Re-read the slash command catalog when the composer's picker opens.
@@ -1527,7 +1355,7 @@ export default function App() {
 		const last = commandsFetchedAt.current;
 		if (last && last.id === snapshot.id && Date.now() - last.at < 30_000) return;
 		commandsFetchedAt.current = { id: snapshot.id, at: Date.now() };
-		const r = await fetch(`${origin}/api/sessions/${snapshot.id}/commands`, {
+		const r = await fetch(`/api/sessions/${snapshot.id}/commands`, {
 			method: "POST",
 		}).catch(() => null);
 		if (!r?.ok) return;
@@ -1536,7 +1364,7 @@ export default function App() {
 		const commands = body.commands;
 		if (!Array.isArray(commands)) return;
 		setSnapshot((s) => (s && s.id === snapshot.id ? { ...s, commands } : s));
-	}, [snapshot, origin]);
+	}, [snapshot]);
 
 	/**
 	 * Answer the question pi is blocked on.
@@ -1551,23 +1379,23 @@ export default function App() {
 		async (askId: string, answer: AskAnswer) => {
 			if (!snapshot) return;
 			setSnapshot((s) => (s ? { ...s, ask: null } : s));
-			const r = await fetch(`${origin}/api/sessions/${snapshot.id}/ask`, {
+			const r = await fetch(`/api/sessions/${snapshot.id}/ask`, {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({ askId, ...answer }),
 			});
 			if (r.ok) return;
-			const rr = await fetch(`${origin}/api/sessions/${snapshot.id}`);
+			const rr = await fetch(`/api/sessions/${snapshot.id}`);
 			if (rr.ok) setSnapshot(toSnapshot(await rr.json()));
 		},
-		[snapshot, origin],
+		[snapshot],
 	);
 
 	const changeModel = useCallback(
 		async (model: string) => {
 			if (!snapshot) return;
 			setModelError(null);
-			const r = await fetch(`${origin}/api/sessions/${snapshot.id}/model`, {
+			const r = await fetch(`/api/sessions/${snapshot.id}/model`, {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({ model }),
@@ -1577,10 +1405,10 @@ export default function App() {
 				setModelError(body.error ?? "failed to switch model");
 				return;
 			}
-			const rr = await fetch(`${origin}/api/sessions/${snapshot.id}`);
+			const rr = await fetch(`/api/sessions/${snapshot.id}`);
 			if (rr.ok) setSnapshot(await rr.json());
 		},
-		[snapshot, origin],
+		[snapshot],
 	);
 
 	/**
@@ -1592,7 +1420,7 @@ export default function App() {
 		async (level: string) => {
 			if (!snapshot) return;
 			setModelError(null);
-			const r = await fetch(`${origin}/api/sessions/${snapshot.id}/thinking`, {
+			const r = await fetch(`/api/sessions/${snapshot.id}/thinking`, {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({ level }),
@@ -1602,10 +1430,10 @@ export default function App() {
 				setModelError(body.error ?? "failed to set thinking level");
 				return;
 			}
-			const rr = await fetch(`${origin}/api/sessions/${snapshot.id}`);
+			const rr = await fetch(`/api/sessions/${snapshot.id}`);
 			if (rr.ok) setSnapshot(await rr.json());
 		},
-		[snapshot, origin],
+		[snapshot],
 	);
 
 	// A session created by `+ New` has no JSONL until its first prompt, so
@@ -1639,11 +1467,8 @@ export default function App() {
 				onRemoveProject={(p) => void removeProject(p)}
 				activeFile={snapshot?.file}
 				openFiles={tabs.files}
-				projects={hostProjects}
-				selection={selection}
-				origin={origin}
-				hosts={hosts ?? []}
-				localVersions={localVersions}
+				projects={projects}
+				project={project}
 				sort={sessionSort}
 				onSort={(next) => {
 					setSessionSort(next);
@@ -1653,13 +1478,6 @@ export default function App() {
 				onToggle={() => setListOpen((o) => !o)}
 				onProject={selectProject}
 				onAddProject={(p) => void addProject(p)}
-				onAddHost={(value) =>
-					// The server tells the two kinds apart by the field; the page
-					// only has to notice that one of them is a URL.
-					void mutateHosts("POST", /^https?:\/\//i.test(value) ? { url: value } : { ssh: value })
-				}
-				onSelectHost={selectHost}
-				onRemoveHost={(name) => void mutateHosts("DELETE", { name })}
 				onSelect={(s) => {
 					selectTab(s.path);
 					// On a narrow viewport the list is a drawer over the chat; having
@@ -1704,7 +1522,6 @@ export default function App() {
 						}`}
 					>
 						<Chat
-							origin={origin ?? ""}
 							snapshot={snapshot}
 							partial={partial}
 							busy={busy}
@@ -1755,8 +1572,7 @@ export default function App() {
 							>
 								<TerminalPane
 									cwd={project}
-									origin={origin ?? ""}
-									ready={termsReady}
+										ready={termsReady}
 									layout={termLayout}
 									onLayout={changeTermLayout}
 									onClose={closeTerminal}
@@ -1767,7 +1583,6 @@ export default function App() {
 				</div>
 			</div>
 			<Settings
-				origin={origin ?? ""}
 				open={settingsOpen}
 				theme={theme}
 				onTheme={setTheme}
@@ -1789,13 +1604,7 @@ export default function App() {
 			<Packages
 				open={packagesOpen}
 				onChanged={() => void reloadSnapshot()}
-				cwd={selection.cwd}
-				machines={[
-					{ name: "", origin: "" },
-					...(hosts ?? [])
-						.filter((h) => h.reachable && !h.foreign)
-						.map((h): PackageMachine => ({ name: h.name, origin: h.url })),
-				]}
+				cwd={project}
 				onClose={() => setPackagesOpen(false)}
 			/>
 		</div>

@@ -68,14 +68,11 @@ function themeColors(host: HTMLElement) {
  */
 export function Terminal({
 	id,
-	origin,
 	focused,
 	onFocus,
 	onExit,
 }: {
 	id: string;
-	/** Where this project's piw answers: "" for this page's own server, else a machine's origin with no trailing slash. */
-	origin: string;
 	/** The layout's focused pane, so a split can be pointed at by keyboard. */
 	focused?: boolean;
 	onFocus?: () => void;
@@ -125,11 +122,10 @@ export function Terminal({
 			// click: the gesture that made it was already a decision to use it.
 			if (focused) term.focus();
 
-			// Another machine's shell is on its own origin; same-origin keeps
-			// working through `location` when there is none.
-			const base = origin ? new URL(origin) : location;
-			const proto = base.protocol === "https:" ? "wss:" : "ws:";
-			const url = `${proto}//${base.host}/api/terminal/socket?id=${encodeURIComponent(id)}&cols=${term.cols}&rows=${term.rows}`;
+			// The shell is this server's, so the socket is same-origin: `location`
+			// is the whole address, and wss: follows from the page being https.
+			const proto = location.protocol === "https:" ? "wss:" : "ws:";
+			const url = `${proto}//${location.host}/api/terminal/socket?id=${encodeURIComponent(id)}&cols=${term.cols}&rows=${term.rows}`;
 			socket = new WebSocket(url);
 
 			socket.onmessage = (ev) => {
@@ -231,15 +227,12 @@ export function Terminal({
  */
 export function TerminalPane({
 	cwd,
-	origin,
 	ready,
 	layout,
 	onLayout,
 	onClose,
 }: {
 	cwd: string;
-	/** Where this project's piw answers: "" for this page's own server, else a machine's origin with no trailing slash. */
-	origin: string;
 	/**
 	 * Whether the layout has been reconciled with the server's terminal list.
 	 * The first shell is only started after that: starting one earlier would
@@ -266,7 +259,7 @@ export function TerminalPane({
 	 */
 	const spawn = async (place: (l: TermLayout, id: string) => TermLayout) => {
 		setError(null);
-		const r = await fetch(`${origin}/api/terminals`, {
+		const r = await fetch(`/api/terminals`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ cwd }),
@@ -308,7 +301,7 @@ export function TerminalPane({
 	 */
 	const closeTerm = (id: string) => {
 		onLayout(removeTerminal(layout, id));
-		void fetch(`${origin}/api/terminals/${encodeURIComponent(id)}`, { method: "DELETE" });
+		void fetch(`/api/terminals/${encodeURIComponent(id)}`, { method: "DELETE" });
 	};
 
 	/**
@@ -464,7 +457,6 @@ export function TerminalPane({
 							>
 								<Terminal
 									id={id}
-									origin={origin}
 									focused={tab.focus === id}
 									onFocus={() => onLayout(focusTerminal(layout, id))}
 								/>

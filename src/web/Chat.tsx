@@ -273,7 +273,7 @@ function Tool({
 				) : isError ? (
 					<X size={11} weight="bold" />
 				) : (
-					<Check size={11} weight="bold" />
+					<Check size={11} weight="bold" className="text-green-400" />
 				)}
 				{preview && <span className="ml-1 font-normal text-neutral-600">{preview}</span>}
 			</button>
@@ -353,22 +353,37 @@ function summarize(calls: ToolBlock[]): string {
  * count for a fold that ran no tools at all.
  *
  * Failures are counted on the collapsed line: a group may hide detail, never
- * the fact that something went wrong.
+ * the fact that something went wrong. Only the *badge* is red, though — one
+ * failed call out of seventeen does not make the other sixteen failures, and
+ * a whole line in red says it did.
+ *
+ * `streaming` is the in-flight fold: the group is the partial message, so it
+ * is running even before its first call has started. Without it a fold of
+ * pure reasoning reports itself finished the whole time the model is still
+ * thinking.
  */
-function ToolGroup({ blocks }: { blocks: PiBlock[] }) {
+function ToolGroup({ blocks, streaming }: { blocks: PiBlock[]; streaming?: boolean }) {
 	const [open, setOpen] = useState(false);
 	const calls = blocks.filter((b): b is ToolBlock => b.kind === "tool");
-	const running = calls.some((c) => c.result === undefined);
+	const running = streaming === true || calls.some((c) => c.result === undefined);
 	const failed = calls.filter((c) => c.isError).length;
 	const spinner = useSpinner(running);
-	const tone =
-		failed > 0 ? "text-red-400" : running ? "text-amber-400" : "text-neutral-500";
+	const tone = running ? "text-amber-400" : "text-neutral-500";
+	// A fold with no calls is reasoning — say so, rather than counting "steps"
+	// at a reader who cannot tell what a step was.
+	const thoughts = blocks.filter((b) => b.kind === "thinking").length;
 	const label =
 		calls.length > 0
 			? summarize(calls)
-			: blocks.length === 1
-				? "1 step"
-				: `${blocks.length} steps`;
+			: thoughts > 0 && thoughts === blocks.length
+				? running
+					? "Thinking"
+					: thoughts === 1
+						? "Thought"
+						: `Thought ${thoughts} times`
+				: blocks.length === 1
+					? "1 step"
+					: `${blocks.length} steps`;
 	return (
 		<div className="chat-wide my-1">
 			<button
@@ -380,16 +395,16 @@ function ToolGroup({ blocks }: { blocks: PiBlock[] }) {
 				{running ? (
 					<span>{spinner}</span>
 				) : failed > 0 ? (
-					<span className="flex items-center gap-1">
+					<span className="flex items-center gap-1 text-red-400">
 						<X size={11} weight="bold" />
 						{failed} failed
 					</span>
 				) : (
-					<Check size={11} weight="bold" />
+					<Check size={11} weight="bold" className="text-green-400" />
 				)}
 			</button>
 			{open && (
-				<div className="mt-1 border-l border-neutral-800 pl-3">
+				<div className="chat-nested mt-1 border-l border-neutral-800 pl-3">
 					{blocks.map((b, i) => (
 						<Block key={i} block={b} isUser={false} autoOpenTools={false} />
 					))}
@@ -949,7 +964,6 @@ type Row =
 
 export function Chat({
 	snapshot,
-	origin,
 	partial,
 	busy,
 	opening,
@@ -967,8 +981,6 @@ export function Chat({
 	onRestart,
 }: {
 	snapshot: Snapshot | null;
-	/** Where this project's piw answers: "" for this page's own server, else a machine's origin with no trailing slash. */
-	origin: string;
 	partial: PiPartial;
 	busy: boolean;
 	/**
@@ -1243,10 +1255,13 @@ export function Chat({
 			}
 
 			/*
-			 * Tool blocks are peeled off into the run, and reasoning joins a run
-			 * already open — see ToolGroup for why it belongs there. Everything
-			 * else stays a message row, and order is preserved on both sides: a
-			 * paragraph after three calls ends the run and starts the next one.
+			 * Tool blocks AND reasoning are peeled off into the run — see ToolGroup
+			 * for why reasoning belongs there. It joins even when no run is open
+			 * yet, because a turn that opens with a long thought is exactly the
+			 * wall of text this mode exists to fold: a thought is never prose the
+			 * reader asked for. Everything else stays a message row, and order is
+			 * preserved on both sides: a paragraph after three calls ends the run
+			 * and starts the next one.
 			 */
 			let run: PiBlock[] = [];
 			const flushRun = () => {
@@ -1260,10 +1275,8 @@ export function Chat({
 				run = [];
 			};
 			for (const b of blocks) {
-				if (b.kind === "tool") {
+				if (b.kind === "tool" || b.kind === "thinking") {
 					flushRun();
-					pending.push(b);
-				} else if (b.kind === "thinking" && pending.length > 0) {
 					pending.push(b);
 				} else {
 					flushGroup();
@@ -1392,16 +1405,33 @@ export function Chat({
 	// transcript for the whole reasoning or tool phase.
 	const showTools = toolMode !== "hidden";
 	/**
-	 * Both folding modes collapse a streaming run into the one growing line.
-	 * Live reasoning is NOT folded even in "answer" mode: while the turn runs,
-	 * the thought is the only thing saying what it is doing, and it folds away
-	 * by itself when the turn settles into rows.
+	 * Both folding modes collapse a streaming run into the one growing line —
+	 * reasoning included. Leaving live reasoning outside the fold made the
+	 * running turn the one place a wall of thinking still landed in the
+	 * transcript, and then it vanished into a group the moment the turn
+	 * settled: the pane jumped, and a mode that promises one line showed
+	 * twenty. The fold's own line says it is thinking, and the status line
+	 * below still names the running tool.
 	 */
 	const folds = toolMode === "grouped" || toolMode === "answer";
 	const hasPartial =
 		partial.text ||
 		(showThinking && partial.thinking) ||
 		(showTools && partial.tools.length > 0);
+	/**
+	 * The streaming fold's blocks, in the order they happened: the thought that
+	 * opened the turn, then the calls. One `thinking` block, not one per delta
+	 * — `partial.thinking` is already the accumulated text.
+	 */
+	const partialFold: PiBlock[] =
+		showTools && folds
+			? [
+					...(showThinking && partial.thinking
+						? [{ kind: "thinking", text: partial.thinking } as PiBlock]
+						: []),
+					...partial.tools.map((t) => ({ kind: "tool", ...t }) as PiBlock),
+				]
+			: [];
 
 
 	// The streaming block is one more assistant row, so it follows the same
@@ -1463,18 +1493,17 @@ export function Chat({
 
 					{hasPartial && (
 						<TranscriptRow role="assistant" labelled={partialLabelled}>
-							{showThinking && partial.thinking && (
-								<div className="chat-measure text-sm whitespace-pre-wrap text-neutral-500 italic">
-									{partial.thinking}
-								</div>
-							)}
 							{/*
 							 * Grouped while it streams, not just once it settles: the group
 							 * line grows in place instead of the pane growing a line per
 							 * call, and the status line below still names the running tool.
 							 */}
-							{showTools && folds && partial.tools.length > 0 && (
-								<ToolGroup blocks={partial.tools.map((t) => ({ kind: "tool", ...t }))} />
+							{partialFold.length > 0 && <ToolGroup blocks={partialFold} streaming />}
+							{/* Unfolded modes show the live thought as itself. */}
+							{!folds && showThinking && partial.thinking && (
+								<div className="chat-measure text-sm whitespace-pre-wrap text-neutral-500 italic">
+									{partial.thinking}
+								</div>
 							)}
 							{showTools &&
 								!folds &&
@@ -1573,7 +1602,7 @@ export function Chat({
 						 * transcript's context, so the caller gets a hook.
 						 */}
 						<div className="flex shrink-0 items-center gap-2">
-							{snapshot.cwd && <GitActions cwd={snapshot.cwd} origin={origin} />}
+							{snapshot.cwd && <GitActions cwd={snapshot.cwd} />}
 							{/* Jump to the newest message. Only while scrolled away from it:
 						    a button that does nothing is worse than no button. */}
 							{!atBottom && (
@@ -1734,7 +1763,6 @@ export function Chat({
 									)}
 									<ModelSelector
 										model={snapshot.model}
-										origin={origin}
 										disabled={busy}
 										error={modelError}
 										onChange={onModelChange}

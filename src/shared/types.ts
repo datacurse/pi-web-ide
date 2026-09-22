@@ -7,11 +7,10 @@
  */
 
 /**
- * What this server is. `/api/health` reports it, and both the port takeover
- * and the Machines panel refuse to act on a health body that does not carry
- * it — a server from the previous install on a neighbouring port answers
- * `/api/health` too, and mistaking one for the other means killing it or
- * listing its sessions here.
+ * What this server is. `/api/health` reports it, and the port takeover
+ * refuses to act on a health body that does not carry it — a server from the
+ * previous install on a neighbouring port answers `/api/health` too, and
+ * mistaking one for the other means killing it.
  */
 export const PRODUCT = "pi-web-ide";
 
@@ -230,9 +229,8 @@ export interface Snapshot {
  * One entry of pi's `packages` array, plus what is actually on disk.
  *
  * `identity` is pi's own rule for "the same package": the npm name, the git
- * URL without its ref, or the resolved absolute path. Two machines agree on
- * a package when their identities match, which is what lets the screen put
- * one row across a fleet.
+ * URL without its ref, or the resolved absolute path. It is what makes two
+ * spellings of one package the same row.
  */
 export interface PiwPackage {
 	/** Exactly as written in settings.json. */
@@ -292,112 +290,6 @@ export interface PiwPackageInfo {
 	video?: string;
 	weeklyDownloads?: number;
 }
-
-/** One line of the fleet manifest: a pinned source, and who must not get it. */
-export interface PiwManifestEntry {
-	source: string;
-	/** Machine names that must NOT receive this package. */
-	exclude?: string[];
-}
-
-/** The hub's desired state for every machine. */
-export interface PiwManifest {
-	version: 1;
-	packages: PiwManifestEntry[];
-}
-
-/** What reconciliation last did to one package on one machine. */
-export type PiwPackageState =
-	| { state: "ok"; version: string | null }
-	| { state: "installing" }
-	| { state: "failed"; reason: string; log: string }
-	| { state: "excluded" }
-	/** Installed there, absent from the manifest. Never removed automatically. */
-	| { state: "unmanaged"; version: string | null };
-
-export interface PiwMachineState {
-	reachable: boolean;
-	/** ISO timestamp of the last attempt, reachable or not. */
-	at: string;
-	error?: string;
-	/** Keyed by package identity. */
-	packages: Record<string, PiwPackageState>;
-}
-
-/** `GET /api/fleet`: keyed by machine name, "" being the hub itself. */
-export type PiwFleetStatus = Record<string, PiwMachineState>;
-
-/**
- * One other machine running its own piw.
- *
- * Not a session, not a project: nothing about a session crosses a host
- * boundary — the agent stays where the code and the credentials are. The
- * page merges the machines client-side by talking to each piw at its own
- * origin, which is one of two things:
- *
- * - a loopback `port` on the machine serving this page, forwarded by ssh to
- *   the remote piw (`PiwTunnelHost`), or
- * - a `url` both the browser and this server can open directly — a tailnet
- *   name behind `tailscale serve`, which keeps the remote bound to loopback
- *   while giving it a real HTTPS origin (`PiwDirectHost`).
- *
- * The direct form is the one to move to: it needs no tunnel, and HTTPS from
- * `tailscale serve` is HTTP/2, so a page holding one event stream plus a few
- * terminal sockets per host is not counting against the browser's six
- * HTTP/1.1 connections per origin the way it does through an `ssh -L`.
- */
-export interface PiwTunnelHost {
-	name: string;
-	/** ssh destination: an alias from ~/.ssh/config, or user@host. */
-	ssh: string;
-	/** Local loopback port forwarded to the remote piw. */
-	port: number;
-	/** The port the remote piw listens on. */
-	remotePort: number;
-	/** False when the forward is managed outside piw (a systemd unit). */
-	autostart: boolean;
-}
-
-export interface PiwDirectHost {
-	name: string;
-	/** Origin of the remote piw, no trailing slash: `https://opi.tail.ts.net`. */
-	url: string;
-}
-
-export type PiwHost = PiwTunnelHost | PiwDirectHost;
-
-/** A host plus what the server currently observes about it. */
-export type PiwHostStatus = PiwHost & {
-	/** Our ssh child: running, waiting to retry, not ours at all, or no tunnel involved. */
-	tunnel: "running" | "backoff" | "unsupervised" | "direct";
-	/** Where the browser reaches this host's piw, for both kinds. */
-	url: string;
-	/**
-	 * A pi-web-ide answered `/api/health` at `url`. This is the only status
-	 * worth a green dot: a live ssh child proves nothing about the machine at
-	 * the other end.
-	 */
-	reachable: boolean;
-	/**
-	 * False when something answered `/api/health` but did not identify itself
-	 * as this product — an older piw on a port that was forwarded here by
-	 * habit. Its sessions are not ours to list and its packages are not ours
-	 * to manage, so the panel says so instead of showing them.
-	 */
-	foreign?: boolean;
-	remoteCwd?: string;
-	/** What the remote reports, so the page can flag a host that lags the fleet. */
-	piwVersion?: string;
-	piVersion?: string;
-	/**
-	 * Whether the remote has ANY hub origins configured. Absent from an older
-	 * piw. Separates "never told about hubs" from "allows a different page"
-	 * when a request from here fails cross-origin.
-	 */
-	hubOrigins?: boolean;
-	/** Why the last ssh exited, when it exited badly. */
-	error?: string;
-};
 
 /**
  * One browsable subdirectory, as the project picker lists them.
