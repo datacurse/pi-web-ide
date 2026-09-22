@@ -17,10 +17,9 @@ the first argument). `PIW_MODEL=provider/id` overrides the model,
 `PIW_PI_BIN=/path/to/pi` the binary. To run it as a background service on a
 machine, see [Deployment](#deployment).
 
-Another machine with its own piw is added from the **Machines** panel in the
-bottom-left corner: give it an ssh destination (piw keeps an `ssh -L` forward
-up) or the origin its piw answers at (`tailscale serve`), and its projects
-join the picker on this page. See [Multiple machines](#multiple-machines).
+Another machine runs its own piw the same way. Reach it by forwarding its
+port (`ssh -L 8890:localhost:8890 orangepi`) or with `tailscale serve`, and
+open that in a browser tab. See [Multiple machines](#multiple-machines).
 
 **Restarting takes the port.** Starting piw while an older piw holds `:8890`
 kills the old one and binds — restarting is never anything else, and "find
@@ -63,9 +62,9 @@ list:
   though a session left running with nobody attached will sit on one
 - no image *generation*, no file attachments beyond images, no clipboard
   history — pasting a screenshot is in scope; a file manager is not
-- no central gateway across machines, and no merged cross-machine session
-  list. The page reaches each machine's own piw at its own origin, one
-  project at a time; nothing is proxied. See
+- no central gateway across machines, no merged cross-machine session list,
+  and no fleet manager. One piw per machine, serving its own browser; you
+  reach another machine by opening that machine's piw. See
   [Multiple machines](#multiple-machines)
 
 ## Architecture
@@ -79,8 +78,6 @@ src/server/registry.ts    session cache + server-authoritative message state
 src/server/index.ts       SSE for events, POST for commands
 src/server/takeover.ts    claims :8890 from the previous piw on startup
 src/server/state.ts       ~/.config/pi-web-ide, where this server keeps its own state
-src/server/hosts.ts       the machine list (~/.config/pi-web-ide/hosts.json)
-src/server/tunnels.ts     supervises one `ssh -L` child per machine
 src/server/autoname.ts    one-shot `pi -p` children: commit messages, session names
 src/server/personality.ts the extra system-prompt text, read and replaced in place
 src/server/terminals.ts   one login shell per project, on a real PTY
@@ -88,7 +85,7 @@ src/server/git.ts         branch/commit/push/PR, argv-only, no shell
 src/web/commands.ts       slash-command completion rules for the composer
 src/web/math.ts           pulls TeX out of markdown before markdown eats it
 src/web/termLayout.ts     terminal tabs + splits: the arrangement, not the shells
-src/web/                  React: SessionTabs + SessionList + Chat + Machines + Settings
+src/web/                  React: SessionTabs + SessionList + Chat + Settings
 ```
 
 `types.ts` keeps its `Pi*` names (`PiEvent`, `PiMessage`, `PiBlock`,
@@ -1056,22 +1053,18 @@ re-render per scroll event would cost more than the button is worth.
 A pi package bundles extensions, skills, prompt templates and themes, and pi
 already owns installing them: `packages` in `~/.pi/agent/settings.json` is
 the desired state, and pi installs anything missing at startup. So this
-screen is a view over that array on every machine at once, plus the two
-things a fleet needs that one machine does not.
+screen is a view over that array on this machine.
 
-**One row per package, one column per machine.** "The orangepi is missing
-pi-lens" is a thing to see, not to discover when a session there behaves
-differently. Each cell is that machine's installed version, with `pinned`,
-`filtered` and `off` where they apply, and update/remove on hover. Every
-request goes straight to the machine it concerns; nothing is proxied.
+**One row per package.** Each row is the installed version, with `pinned`,
+`filtered` and `off` where they apply, and update/remove on hover.
 
 **Search is the npm gallery** — packages carrying the `pi-package` keyword —
 asked through this server, so there is no third origin to allow and npm
 learns nothing about who is browsing. Git-only packages cannot appear there,
 which is what **Add by source** is for. The install dialog shows the
 resolved, *pinned* source, what the package contains, its repository and
-preview, the machines to install on, and one sentence that does not go away:
-packages run with full system access on every machine ticked.
+preview, and one sentence that does not go away: packages run with full
+system access.
 
 **A session open at install time cannot see the package.** pi reads
 extensions, skills and prompt templates when a child starts, so the server
@@ -1082,43 +1075,11 @@ mid-turn, because a restart there loses the turn — and for the same reason a
 successful install discards prewarmed spares, so the next `+ New` is not
 stale before anybody types.
 
-### The manifest
-
-Installing on three machines from a browser leaves the fourth — the one that
-was asleep — behind forever. So the **Fleet** tab is a desired state, not a
-fan-out: the hub keeps `<state dir>/packages.json`, and reconciliation runs
-in the hub's *server*, on a timer and whenever a machine comes back. A
-machine that was off catches up with no tab open anywhere.
-
-```json
-{
-  "version": 1,
-  "packages": [
-    { "source": "npm:pi-web-access@0.30.0" },
-    { "source": "git:github.com/you/pi-config@v3", "exclude": ["tg"] }
-  ]
-}
-```
-
-Every source must be **pinned**, and that is enforced at write time. A pin is
-what makes "the fleet runs the same code" true rather than aspirational, and
-it turns an upgrade into one reviewable edit instead of a race between
-machines' clocks. `exclude` names machines that must not get a package.
-
-Reconciliation installs what is missing and re-installs what is pinned
-differently — `pi install <source>@<newpin>` moves a pin in place rather than
-adding a second entry. It never removes: a package on a machine but not in
-the manifest is reported **unmanaged** and left alone, with an `adopt` button
-that takes it into the manifest at the version it is running. A failure is
-contained to one machine and one package, with npm's own last line as the
-reason; the next pass retries.
-
-Two kinds of package are deliberately outside this. A project's own
+Two kinds of package are deliberately outside this screen. A project's own
 `.pi/settings.json` is committed and git is its sync, so it is listed
-read-only under "This project". And pi itself is per machine: extensions
-declare pi's packages as peer dependencies, so version skew is how a package
-works on one box and throws on another — the screen shows each machine's pi
-version with its own update button, never one button for the fleet.
+read-only under "This project". And pi itself is updated with its own button,
+never automatically: extensions declare pi's packages as peer dependencies,
+so version skew is how a package works on one box and throws on another.
 
 ## Terminal
 
@@ -1216,7 +1177,7 @@ keeps the proportion instead of restoring a pane that does not fit.
 
 **This is shell access on the port.** It is not a new exposure — the agent
 already runs tools unattended on this machine, which is strictly more than a
-shell — but it is a much more obvious one, so: loopback only, tunnel it, see
+shell — but it is a much more obvious one, so: loopback only, forward it, see
 [Security](#security).
 
 ## Math
@@ -1508,134 +1469,49 @@ nothing moves until you come back.
 
 ## Multiple machines
 
-There is one piw per machine — `local`, `orangepi`, `tg` — each running its own
-systemd user service, each bound to `127.0.0.1`, each serving its own host's
-projects and using that host's own credentials. The **Machines** panel in the
-bottom-left corner is how you get to them: add a machine, and its projects
-appear in the project picker under its name. Pick one and the session list,
-the chat, the shells and the git button are all talking to *that* machine's
-piw — from this page, at that piw's own origin. No proxy, no second window.
+There is one piw per machine — `local`, `orangepi`, `tg` — each running its
+own systemd user service, each bound to `127.0.0.1`, each serving its own
+host's projects with that host's own credentials. To work on another machine,
+open that machine's piw:
 
-```
-┌ piw ─────────── ┐
-│ [orangepi ▾]    │   this machine      ~/code/pi-web-ide
-│                 │                     ~/code/ftp-db
-│ 12 SESSIONS     │   orangepi          ~/code/sensors
-│ …               │   tg — up, but PIW_HUB_ORIGINS is not set on it
-│ MACHINES      + │
-│ ● orangepi :8891│
-│ ● tg    direct  │
-└─────────────────┘
+```bash
+ssh -L 8890:localhost:8890 orangepi     # then open http://127.0.0.1:8890
 ```
 
-A machine is one of two things, and `hosts.json` holds both kinds:
+or put it on a tailnet with `tailscale serve --bg 8890` on that host and open
+`https://opi.tail.ts.net`. The remote stays bound to loopback either way; the
+tailnet form also gets you HTTP/2, which matters for a page holding an event
+stream plus a few terminal sockets.
 
-- **An ssh destination.** piw forwards a local port to that host's piw and the
-  page reaches it at `http://127.0.0.1:<port>`. Adding `orangepi` writes one
-  entry to `~/.config/pi-web-ide/hosts.json` and starts the equivalent of
+**piw used to manage this itself** — a machine list, a supervised `ssh -L`
+child per host with a capped backoff ladder, a reachability poll, a pinned
+package manifest reconciled from a hub, and `PIW_HUB_ORIGINS` so a remote
+would answer another page's cross-origin requests. It was ~2000 lines and it
+was the wrong shape: nothing about a session crosses a host boundary anyway,
+since the agent stays where the code and the credentials are. All of that
+machinery existed to render one merged sidebar over an arrangement that
+already worked. A shell command you type when you want it does the same job.
 
-  ```bash
-  ssh -N -T -o BatchMode=yes -o ExitOnForwardFailure=yes \
-      -o ServerAliveInterval=15 -o ServerAliveCountMax=3 \
-      -L 8891:127.0.0.1:8890 orangepi
-  ```
+What that buys, beyond the deleted code:
 
-  The local port is assigned for you (first free above `PIW_PORT`), so two
-  machines never collide.
-
-- **An origin.** `https://opi.tail.ts.net`, say, from `tailscale serve
-  --bg 8890` on that host: the remote stays bound to loopback and Tailscale
-  terminates TLS on its tailnet name. No tunnel, nothing for piw to
-  supervise, and HTTP/2 — which matters, because a page holding an event
-  stream plus a few terminal sockets to one host is counting against the
-  browser's six HTTP/1.1 connections per origin through an `ssh -L`. This is
-  the kind to move to; the tunnel kind is what you use until a machine is on
-  the tailnet. Only an origin is accepted (no path, no credentials), since
-  the page appends `/api/…` to it.
-
-The remote piw has to agree to be driven from this page. Each request from
-here arrives cross-origin, so the remote answers with CORS only for origins
-named in its `PIW_HUB_ORIGINS` (`deploy/pi-web-ide.env.example`): through a
-forward that is this page's own loopback origin, `http://127.0.0.1:8890`; through
-`tailscale serve` it is this machine's tailnet name. The terminal's WebSocket
-has no CORS, so the upgrade handler checks the same list. A refusal and a
-machine being down look identical from a browser, so the page asks its own
-server, which probed the machine directly: `/api/health` reports whether any
-hub origins are configured there (never which), and the message says the one
-thing that applies — *not answering*, *up, but `PIW_HUB_ORIGINS` is not set
-on it*, or *up, but its `PIW_HUB_ORIGINS` does not include
-`http://127.0.0.1:8890`*. Every `/api` answer is `Cache-Control: no-store`
-for a related reason: a 304 carries no CORS headers, so a browser revalidating
-a cached answer would keep the allow it saw last time.
-
-Per-project state — the tab strip, the terminal layout — is keyed by machine
-*and* directory (`piw:tabs:@orangepi:/home/…`), because `~/code/pi-web-ide` exists
-on all of them and its sessions on one have nothing to do with the same path
-on another. This machine's projects keep the bare-cwd keys they always had.
-
-**piw owns the tunnel, on purpose.** The forward is disposable plumbing: the
-agent's process memory, the credentials and the session on disk all live on
-the remote, behind the remote's own piw, so a tunnel that dies and comes back
-costs a reconnect and never a turn. That is what makes supervision cheap
-enough to be worth having — one child process per machine, restarted with
-capped backoff (1s → 2 → 5 → 10 → 30s, reset after 30s of uptime), instead of
-a per-machine systemd unit that is a second config surface to keep in sync
-with `hosts.json` and exists only on Linux. Set `"autostart": false` on an
-entry for a forward that should outlive piw; piw then only reports on it.
-
-The dot is deliberately not "is ssh alive":
-
-| dot | meaning |
-|---|---|
-| green | a piw answered `/api/health` at the machine's origin |
-| amber | the forward is up and nothing answered — piw is not running over there |
-| red | our ssh exited (tooltip carries its last stderr line), or a direct origin did not answer |
-| grey | `autostart: false` and unreachable — your tunnel, not ours |
-| `≠` | that piw or its pi is not the version this machine has; tooltip says which |
-
-The version mark exists because `pi update --self` on one box does not restart
-the piw there, and a piw keeps spawning the pi it started with: `/api/health`
-reports both versions, and the panel compares them to this machine's. Restart
-that piw and the mark goes.
-
-Two things follow from `BatchMode=yes`: key auth is required (piw has no
-terminal to type a passphrase on, and without `BatchMode` ssh would hang on
-stdin looking like a tunnel that is starting), and an unknown host key fails
-immediately with the reason in the tooltip. `StrictHostKeyChecking` is left
-alone on purpose — accepting new keys automatically is a decision for your ssh
-config, not for a web UI.
-
-**There is still no central gateway, and that is the feature.** A gateway
-would need authentication, an authorization model for "which machine may this
-browser drive", a way to carry credentials or proxy to hosts that hold them,
-and it would be a single point of failure in front of machines that are
-individually fine. Nothing here proxies: the *browser* talks to each piw, and
-this piw's only part in it is knowing where they answer.
-
-- **No cross-machine auth surface.** Every piw is loopback-only, so the only
-  ways in are a tunnel ssh already authenticated and a tailnet that already
-  knows the device. piw itself has no login to get wrong; `PIW_HUB_ORIGINS`
-  is a CSRF boundary, not a login.
-- **No single point of failure.** `tg` being down greys out `tg`'s group and
-  says so in the session list; `orangepi` is unaffected. A laptop that sleeps
-  mid-run loses a connection, not the run: the agent is a child of the
-  remote piw, not of this one, and the page re-attaches when it wakes.
+- **No cross-origin surface at all.** Same-origin is the whole policy. There
+  is no CORS in the server, and no configuration that can let another page
+  start an agent run here — which is what `PIW_HUB_ORIGINS` was.
+- **No single point of failure.** There is no hub to be down, and no machine
+  whose being asleep is a state something else has to track.
 - **Each host owns its credentials.** `~/.pi/agent/auth.json` never leaves the
-  machine it was created on, and a compromised host exposes one host's keys.
+  machine it was created on.
 - **The agent runs where the code is.** Sessions are partitioned by cwd, and a
-  cwd only means something on the machine that has it. A gateway would have to
-  pretend otherwise.
+  cwd only means something on the machine that has it.
 
-Still one project at a time: the picker chooses a machine and a directory
-together, and the session poll stays one request. A view of every machine's
-sessions at once would be every machine's session files parsed on every tick.
+Per-project state — the tab strip, the terminal layout — is keyed by
+directory alone (`piw:tabs:/home/…`), since a piw only ever serves its own
+machine's paths.
 
-Note the one consequence of `hosts.json` being per-machine rather than
-per-process: two piws on one host (a dev server on `PIW_PORT=8890` alongside
-the service, with `PIW_TAKEOVER=0`) both try to supervise the same forwards,
-and the loser sits in backoff with `EADDRINUSE` in its tooltip. That is the
-takeover exception, not the normal case — normally the newer piw takes the
-port and the older one is gone.
+The cost is a browser tab per machine instead of a dropdown, and keeping pi
+and piw current on each box yourself. `pi install <source>@<pin>` on each
+machine is the sync; pinning is still worth doing, so a rebuilt box gets the
+code that was working rather than whatever published since.
 
 ## Deployment
 
@@ -1698,19 +1574,20 @@ it did not achieve. `--dry-run` prints every file it would write and every
 
 pi reads `~/.pi/agent/auth.json` and `~/.pi/agent/provider-keys.json`, so
 provider credentials are in the child processes piw spawns, on the machine
-piw runs on. The server binds `127.0.0.1`
-only. For remote access use a tunnel — the Machines panel manages one per host
-(`ssh -L`, key auth, `BatchMode=yes`) — or `tailscale serve`, which gives the
+piw runs on. The server binds `127.0.0.1` only. For remote access forward the
+port yourself (`ssh -L`, key auth) or use `tailscale serve`, which gives the
 loopback port a tailnet HTTPS name without changing the bind; never a
-bind-address change. Nothing is proxied between hosts: a machine's piw is
+bind-address change. Nothing is proxied between hosts: each machine's piw is
 reached at its own origin, so the only credentials in play are the ssh key or
 the tailnet identity you already use, and each host's `auth.json` stays on
 that host.
 
-A piw driven from another machine's page answers cross-origin requests only
-for the origins in its `PIW_HUB_ORIGINS`, exact and never a wildcard, and the
-terminal's WebSocket upgrade checks the same list. That list is the CSRF
-boundary: a page allowed there can start an agent run on this machine.
+**Same-origin is the whole policy.** piw answers no cross-origin request —
+there is no CORS in the server and nothing to configure that would add one —
+and the terminal's WebSocket upgrade checks the same rule, since CORS would
+not have covered it anyway. An earlier version had `PIW_HUB_ORIGINS`, which
+let a named origin drive this piw from another machine's page; it was the
+CSRF boundary and it is gone with the feature that needed it.
 
 The children run their tools unattended (see the non-goals): pi has no
 approval gate, and a browser has no terminal to answer one on. piw is a tool
