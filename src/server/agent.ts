@@ -61,10 +61,10 @@ export type {
 /**
  * A systemd user unit gets a minimal PATH that usually omits the directory an
  * `npm i -g` puts `pi` in, so "pi" on PATH is not a safe assumption in the
- * deployment this project is built for. PIW_PI_BIN is the escape hatch, and
+ * deployment this project is built for. PWI_PI_BIN is the escape hatch, and
  * the ENOENT message below names it.
  */
-export const PI_BIN = process.env.PIW_PI_BIN ?? "pi";
+export const PI_BIN = process.env.PWI_PI_BIN ?? "pi";
 
 /**
  * pi emits nothing unprompted at startup — no ready frame, no protocol
@@ -439,7 +439,7 @@ class RpcChild {
 	) {
 		this.reader = new FrameReader(
 			(frame) => this.dispatch(frame),
-			(message) => console.error("[piw] rpc transport:", message),
+			(message) => console.error("[pwi] rpc transport:", message),
 		);
 	}
 
@@ -472,7 +472,7 @@ class RpcChild {
 				reject(
 					err.code === "ENOENT"
 						? new Error(
-								`cannot run "${PI_BIN}": not found on PATH. Set PIW_PI_BIN to its absolute path (a systemd user unit does not read your shell profile).`,
+								`cannot run "${PI_BIN}": not found on PATH. Set PWI_PI_BIN to its absolute path (a systemd user unit does not read your shell profile).`,
 							)
 						: err,
 				);
@@ -519,7 +519,7 @@ class RpcChild {
 			// Parse failures arrive with no id, and so do responses to commands
 			// whose caller has already gone. Neither can be routed.
 			if (frame.success !== true) {
-				console.error(`[piw] pi ${String(frame.command)} failed:`, String(frame.error ?? ""));
+				console.error(`[pwi] pi ${String(frame.command)} failed:`, String(frame.error ?? ""));
 			}
 			return;
 		}
@@ -528,7 +528,7 @@ class RpcChild {
 			try {
 				listener(frame);
 			} catch (err) {
-				console.error("[piw] frame listener threw:", err);
+				console.error("[pwi] frame listener threw:", err);
 			}
 		}
 	}
@@ -919,7 +919,7 @@ export async function openSession(opts: OpenOptions): Promise<PiSession> {
 
 			case "extension_error":
 				console.error(
-					`[piw] pi extension error in ${String(frame.extensionPath)} (${String(frame.event)}):`,
+					`[pwi] pi extension error in ${String(frame.extensionPath)} (${String(frame.event)}):`,
 					frame.error,
 				);
 				break;

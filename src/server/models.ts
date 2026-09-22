@@ -100,9 +100,9 @@ async function fetchCatalog(): Promise<Map<string, ModelMeta>> {
 // Default model — `defaultProvider` / `defaultModel` in pi's settings.json
 // ---------------------------------------------------------------------------
 
-/** pi's own settings file. `PIW_PI_SETTINGS` is the test seam. */
+/** pi's own settings file. `PWI_PI_SETTINGS` is the test seam. */
 export function settingsPath(): string {
-	return process.env.PIW_PI_SETTINGS ?? join(homedir(), ".pi", "agent", "settings.json");
+	return process.env.PWI_PI_SETTINGS ?? join(homedir(), ".pi", "agent", "settings.json");
 }
 
 /** pi's settings as a record, or an empty one when the file is absent. */
@@ -127,7 +127,7 @@ export function readSettings(): Record<string, unknown> {
 export function writeSettings(settings: Record<string, unknown>): void {
 	const path = settingsPath();
 	mkdirSync(dirname(path), { recursive: true });
-	const tmp = `${path}.piw-tmp`;
+	const tmp = `${path}.pwi-tmp`;
 	writeFileSync(tmp, `${JSON.stringify(settings, null, 2)}\n`, { mode: 0o600 });
 	renameSync(tmp, path);
 }

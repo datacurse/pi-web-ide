@@ -119,7 +119,7 @@ export class Terminals {
 					// addressing silently degrade.
 					TERM: "xterm-256color",
 					// So a shell profile, and anything run from it, can tell.
-					PIW_TERMINAL: "1",
+					PWI_TERMINAL: "1",
 				},
 			}),
 			scrollback: "",

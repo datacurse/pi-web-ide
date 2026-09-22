@@ -29,7 +29,7 @@ import { readSettings } from "./models.js";
 import type { PiwPackage, PiwPackagesView } from "../shared/types.js";
 
 /** One `pi install` can clone a repo and run `npm install`; a minute is not enough. */
-const TIMEOUT_MS = Number(process.env.PIW_PACKAGES_TIMEOUT_MS ?? 300_000);
+const TIMEOUT_MS = Number(process.env.PWI_PACKAGES_TIMEOUT_MS ?? 300_000);
 
 /** The tail of combined output kept for the UI. npm is verbose and the end is the verdict. */
 const LOG_KEEP = 4_096;
@@ -386,7 +386,7 @@ async function mutate(args: string[]): Promise<MutationResult> {
 			const log = tail(e.stdout, e.stderr);
 			const reason =
 				e.code === "ENOENT"
-					? `cannot run "${PI_BIN}": not found on PATH. Set PIW_PI_BIN to its absolute path.`
+					? `cannot run "${PI_BIN}": not found on PATH. Set PWI_PI_BIN to its absolute path.`
 					: e.killed
 						? `timed out after ${Math.round(TIMEOUT_MS / 1000)}s`
 						: // The last non-empty line is the complaint; the rest is npm.

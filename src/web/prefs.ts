@@ -8,6 +8,38 @@
  * every read validates and falls back rather than trusting what it finds.
  */
 
+import { EMPTY_LAYOUT, parseLayout, type TermLayout } from "./termLayout.js";
+
+/*
+ * Every key this app owns was once prefixed `piw:` and is now `pwi:`.
+ *
+ * Renaming the prefix without this would silently reset every preference and
+ * drop every unsent draft — the one thing drafts.ts exists to prevent. So the
+ * old keys are moved across once, on load, before anything reads them.
+ *
+ * Delete this after a release or two: it is dead weight the moment no browser
+ * still holds a `piw:` key, and nothing outside this app ever wrote one.
+ */
+function migrateLegacyKeys(): void {
+	try {
+		const stale = Object.keys(localStorage).filter((k) => k.startsWith("piw:"));
+		for (const old of stale) {
+			const value = localStorage.getItem(old);
+			const renamed = `pwi:${old.slice(4)}`;
+			// Never clobber: a key written under the new name is what the user
+			// has actually been using since the rename.
+			if (value !== null && localStorage.getItem(renamed) === null) {
+				localStorage.setItem(renamed, value);
+			}
+			localStorage.removeItem(old);
+		}
+	} catch {
+		// Private mode / disabled storage: nothing to migrate, nothing to fix.
+	}
+}
+
+migrateLegacyKeys();
+
 function readStored(key: string): string | null {
 	try {
 		return localStorage.getItem(key);
@@ -54,13 +86,13 @@ export const DEFAULT_THEME: ThemeId = "mocha";
  * Also hardcoded in the bootstrap script in index.html, which runs before this
  * module is even fetched so the first paint is already in the right flavor.
  */
-const THEME_KEY = "piw:theme";
+const THEME_KEY = "pwi:theme";
 
-const THINKING_KEY = "piw:showThinking";
-const TOOL_KEY = "piw:tools";
-const NOTIFY_KEY = "piw:notify";
-const SHORT_NAMES_KEY = "piw:shortNames";
-const GIT_AUTONAME_KEY = "piw:gitAutoName";
+const THINKING_KEY = "pwi:showThinking";
+const TOOL_KEY = "pwi:tools";
+const NOTIFY_KEY = "pwi:notify";
+const SHORT_NAMES_KEY = "pwi:shortNames";
+const GIT_AUTONAME_KEY = "pwi:gitAutoName";
 
 export function readTheme(): ThemeId {
 	const stored = readStored(THEME_KEY);
@@ -223,7 +255,7 @@ export const SESSION_SORTS = [
 
 export type SessionSort = (typeof SESSION_SORTS)[number]["id"];
 
-const SORT_KEY = "piw:sessionSort";
+const SORT_KEY = "pwi:sessionSort";
 
 export function readSessionSort(): SessionSort {
 	const stored = readStored(SORT_KEY);
@@ -243,8 +275,8 @@ export function writeSessionSort(sort: SessionSort): void {
  * because a stored value can be anything, and a 2% pane is a pane you cannot
  * grab back.
  */
-const TERM_OPEN_KEY = "piw:terminal";
-const TERM_WIDTH_KEY = "piw:terminalWidth";
+const TERM_OPEN_KEY = "pwi:terminal";
+const TERM_WIDTH_KEY = "pwi:terminalWidth";
 
 export const TERMINAL_MIN_PERCENT = 15;
 export const TERMINAL_MAX_PERCENT = 85;
@@ -283,16 +315,19 @@ export function writeTerminalWidth(percent: number): void {
  * see termLayout.ts, whose `reconcile` is what makes a restored arrangement
  * agree with the shells that still exist.
  */
-export function readTerminalLayout(cwd: string): unknown {
-	const raw = readStored(`piw:termLayout:${cwd}`);
-	if (!raw) return null;
+export function readTerminalLayout(cwd: string): TermLayout {
+	const raw = readStored(`pwi:termLayout:${cwd}`);
+	if (!raw) return EMPTY_LAYOUT;
+	// Parsed AND validated here, so a caller cannot forget the second half:
+	// stored JSON is user-writable, and `parseLayout` is what turns whatever
+	// is on disk into a layout that is safe to render.
 	try {
-		return JSON.parse(raw);
+		return parseLayout(JSON.parse(raw));
 	} catch {
-		return null;
+		return EMPTY_LAYOUT;
 	}
 }
 
-export function writeTerminalLayout(cwd: string, layout: unknown): void {
-	writeStored(`piw:termLayout:${cwd}`, JSON.stringify(layout));
+export function writeTerminalLayout(cwd: string, layout: TermLayout): void {
+	writeStored(`pwi:termLayout:${cwd}`, JSON.stringify(layout));
 }

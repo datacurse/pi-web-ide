@@ -29,8 +29,8 @@ Type=simple
 # your checkout is elsewhere — install.sh writes one for you.
 WorkingDirectory=%h/code/pi-web-ide
 
-# Required, not optional (no leading `-`). Every PIW_* variable has a default,
-# but the default for PIW_CWD is the process cwd — i.e. the checkout — so a
+# Required, not optional (no leading `-`). Every PWI_* variable has a default,
+# but the default for PWI_CWD is the process cwd — i.e. the checkout — so a
 # missing env file would not fail, it would start a perfectly healthy server
 # pointed at the wrong workspace. Refusing to start is the louder, cheaper
 # outcome.
@@ -42,7 +42,7 @@ EnvironmentFile=%h/.config/pi-web-ide/env
 # the `pi` binary itself, which agent.ts spawns once per open session.
 # `bash -lc` picks both up from the profile the user already maintains instead
 # of pinning a node version into this file, which would break on the next
-# upgrade. Set PIW_PI_BIN in the env file if you would rather the service not
+# upgrade. Set PWI_PI_BIN in the env file if you would rather the service not
 # depend on the shell profile for pi.
 #
 # `exec` is load-bearing: without it systemd supervises bash, MAINPID is the

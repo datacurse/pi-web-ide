@@ -1,5 +1,5 @@
 /**
- * projects.ts — the directories piw knows about: the ones whose sessions it
+ * projects.ts — the directories pwi knows about: the ones whose sessions it
  * shows, the ones pinned in the picker, and the listing that feeds the picker.
  *
  * A "project" is just a cwd. pi already stores sessions per working directory
@@ -22,17 +22,17 @@ import type { PiwDirEntry, PiwDirListing } from "../shared/types.js";
 const PROJECTS = "projects.json";
 /**
  * Pinned directories for the picker. Server-side and not `localStorage`
- * because these are paths on THIS machine: the browser may be reaching piw
+ * because these are paths on THIS machine: the browser may be reaching pwi
  * through an ssh forward, where a per-origin copy would be the wrong
- * machine's folders — and a second piw port on the same host would silently
+ * machine's folders — and a second pwi port on the same host would silently
  * have its own set.
  */
 const FAVORITES = "favorites.json";
 
 /** What the omp-era install called the same two lists. */
 const LEGACY: Record<string, string> = {
-	[PROJECTS]: "piw-projects.json",
-	[FAVORITES]: "piw-favorites.json",
+	[PROJECTS]: "pwi-projects.json",
+	[FAVORITES]: "pwi-favorites.json",
 };
 
 /** A stored flat array of paths, or nothing when the file is absent or corrupt. */
@@ -65,7 +65,7 @@ function requireDir(path: string): string {
 
 export function listProjects(seed: string): string[] {
 	const stored = read(PROJECTS) ?? [];
-	// The startup cwd is always present — piw launched against a directory must
+	// The startup cwd is always present — pwi launched against a directory must
 	// be able to show that directory's sessions without an explicit add.
 	return stored.includes(seed) ? stored : [seed, ...stored];
 }
@@ -119,7 +119,7 @@ export function removeFavorite(path: string): string[] {
  *
  * This exists because the browser cannot enumerate the server's filesystem,
  * and typing an absolute path from memory is the worst part of adding a
- * project. It is deliberately not sandboxed to any root: piw binds loopback
+ * project. It is deliberately not sandboxed to any root: pwi binds loopback
  * only and its agents already run tools against this machine, so a directory
  * listing grants nothing that is not already on offer. Directories only —
  * files cannot be projects.

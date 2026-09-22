@@ -5,7 +5,7 @@
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 		<link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-		<title>piw</title>
+		<title>pwi</title>
 		<!--
 		  Pick the theme before the first paint. The app would set the same
 		  attribute on mount, but the module graph loads first — long enough to
@@ -21,7 +21,7 @@
 				// Throws outright in some privacy modes; the default palette on
 				// :root covers that.
 				document.documentElement.dataset.theme =
-					localStorage.getItem("piw:theme") || "mocha";
+					localStorage.getItem("pwi:theme") || "mocha";
 			} catch {}
 		</script>
 	</head>

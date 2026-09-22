@@ -35,10 +35,10 @@ const SWEEP_INTERVAL_MS = 60_000;
 const MAX_NOTICES = 40;
 
 /**
- * Prewarming is the whole reason `+ New` feels instant; set PIW_PREWARM=0 to
+ * Prewarming is the whole reason `+ New` feels instant; set PWI_PREWARM=0 to
  * trade that back for one fewer idle `pi` child.
  */
-const PREWARM = process.env.PIW_PREWARM !== "0";
+const PREWARM = process.env.PWI_PREWARM !== "0";
 
 interface Entry {
 	session: PiSession;
@@ -287,7 +287,7 @@ export class Registry {
 		warming.work = this.warm(cwd, this.spareGeneration)
 			.catch((err) => {
 				console.error(
-					`[piw] prewarm failed for ${cwd}:`,
+					`[pwi] prewarm failed for ${cwd}:`,
 					err instanceof Error ? err.message : err,
 				);
 			})

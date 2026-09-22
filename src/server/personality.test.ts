@@ -1,6 +1,6 @@
 // Run: node --import tsx src/server/personality.test.ts
 //
-// PIW_STATE_DIR is pointed at a temp dir before the first call, because the
+// PWI_STATE_DIR is pointed at a temp dir before the first call, because the
 // real file is the user's live personality text and a test must never be the
 // thing that rewrites it.
 import assert from "node:assert/strict";
@@ -9,8 +9,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { personalityPath, readPersonality, writePersonality } from "./personality.js";
 
-const dir = mkdtempSync(join(tmpdir(), "piw-personality-"));
-process.env.PIW_STATE_DIR = dir;
+const dir = mkdtempSync(join(tmpdir(), "pwi-personality-"));
+process.env.PWI_STATE_DIR = dir;
 const path = join(dir, "personality.md");
 
 // The path agent.ts passes to `--append-system-prompt` and the path the

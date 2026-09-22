@@ -49,20 +49,37 @@ const ROOT = resolve(__dirname, "../..");
  * later. So it is a refusal to start, naming the replacement.
  */
 const RETIRED: Record<string, string> = {
-	PIW_OMP_BIN: "PIW_PI_BIN",
+	PIW_OMP_BIN: "PWI_PI_BIN",
 	PIW_APPROVAL_MODE: "nothing — pi has no approval modes",
-	PIW_AGENT_DIR: "PIW_STATE_DIR (this server's own files) or PI_CODING_AGENT_DIR (pi's)",
+	PIW_AGENT_DIR: "PWI_STATE_DIR (this server's own files) or PI_CODING_AGENT_DIR (pi's)",
 };
 for (const [name, replacement] of Object.entries(RETIRED)) {
 	if (process.env[name] === undefined) continue;
-	console.error(`[piw] ${name} is no longer read. Use ${replacement}.`);
+	console.error(`[pwi] ${name} is no longer read. Use ${replacement}.`);
 	process.exit(2);
 }
 
-const PORT = Number(process.env.PIW_PORT ?? 8890);
-const CWD = resolve(process.env.PIW_CWD ?? process.argv[2] ?? process.cwd());
+/*
+ * Every remaining `PIW_*` is the same variable under the old spelling, so the
+ * rule is mechanical rather than a table of seventeen.
+ *
+ * This matters more than the named cases above: `PIW_PORT=8891` left in an
+ * env file does not fail loudly, it starts a server on the DEFAULT port,
+ * which then takes the port from something else or is simply not where the
+ * browser is pointed. Same for `PIW_CWD`, where the fallback is the checkout
+ * itself. An unread variable that changes behaviour is the whole reason this
+ * check exists.
+ */
+for (const name of Object.keys(process.env)) {
+	if (!name.startsWith("PIW_")) continue;
+	console.error(`[pwi] ${name} is no longer read. Use PWI_${name.slice(4)}.`);
+	process.exit(2);
+}
+
+const PORT = Number(process.env.PWI_PORT ?? 8890);
+const CWD = resolve(process.env.PWI_CWD ?? process.argv[2] ?? process.cwd());
 /** "provider/id". Pi's own default may select a provider your plan blocks. */
-const MODEL = process.env.PIW_MODEL;
+const MODEL = process.env.PWI_MODEL;
 
 /**
  * Under `pnpm dev` the page is served by Vite on its own port and reaches
@@ -74,12 +91,12 @@ const MODEL = process.env.PIW_MODEL;
  *
  * So dev adds exactly one origin, the one Vite was told to listen on. Not a
  * blanket "allow localhost": any page on the machine could then open a
- * shell here. Empty unless PIW_DEV=1, which only `pnpm dev` sets, so a
+ * shell here. Empty unless PWI_DEV=1, which only `pnpm dev` sets, so a
  * production server's boundary is unchanged.
  */
-const VITE_PORT = Number(process.env.PIW_VITE_PORT ?? 5480);
+const VITE_PORT = Number(process.env.PWI_VITE_PORT ?? 5480);
 const DEV_ORIGINS = new Set(
-	process.env.PIW_DEV === "1"
+	process.env.PWI_DEV === "1"
 		? [`http://127.0.0.1:${VITE_PORT}`, `http://localhost:${VITE_PORT}`]
 		: [],
 );
@@ -105,9 +122,21 @@ function originAllowed(req: IncomingMessage): boolean {
 	return host === req.headers.host || host === req.headers["x-forwarded-host"];
 }
 
-// Our own package.json, which is the one file that knows piw's version.
-const pkg: unknown = JSON.parse(readFileSync(resolve(ROOT, "package.json"), "utf8"));
-const PIW_VERSION =
+/*
+ * Our own package.json, which is the one file that knows pwi's version.
+ *
+ * Unreadable or malformed degrades to "unknown" rather than throwing: the
+ * version is a label on /api/health, and refusing to start over a label
+ * would take the whole server down for the least important string in it.
+ * That is the same fallback the shape check below already applies.
+ */
+let pkg: unknown;
+try {
+	pkg = JSON.parse(readFileSync(resolve(ROOT, "package.json"), "utf8"));
+} catch {
+	pkg = undefined;
+}
+const PWI_VERSION =
 	pkg && typeof pkg === "object" && "version" in pkg && typeof pkg.version === "string"
 		? pkg.version
 		: "unknown";
@@ -147,17 +176,17 @@ const SUPERVISED = Boolean(process.env.INVOCATION_ID);
 let degraded = false;
 
 process.on("unhandledRejection", (reason) => {
-	console.error("[piw] unhandledRejection (surviving):", reason);
+	console.error("[pwi] unhandledRejection (surviving):", reason);
 });
 
 process.on("uncaughtException", (err) => {
 	if (SUPERVISED) {
-		console.error("[piw] uncaughtException — exiting for the supervisor to restart:", err);
+		console.error("[pwi] uncaughtException — exiting for the supervisor to restart:", err);
 		process.exit(1);
 	}
 	degraded = true;
 	console.error(
-		"[piw] uncaughtException — PROCESS IS DEGRADED, restart when convenient:",
+		"[pwi] uncaughtException — PROCESS IS DEGRADED, restart when convenient:",
 		err,
 	);
 });
@@ -181,7 +210,7 @@ app.use("/api", (_req, res, next) => {
 });
 
 app.get("/api/health", (_req, res) => {
-	// `pid` is what lets the NEXT piw take this port without a /proc scan;
+	// `pid` is what lets the NEXT pwi take this port without a /proc scan;
 	// see takeover.ts, which also checks `product` before killing anything.
 	res.json({
 		ok: true,
@@ -190,7 +219,7 @@ app.get("/api/health", (_req, res) => {
 		model: MODEL ?? null,
 		degraded,
 		pid: process.pid,
-		piwVersion: PIW_VERSION,
+		pwiVersion: PWI_VERSION,
 		piVersion: PI_VERSION ?? null,
 	});
 });
@@ -266,7 +295,7 @@ app.get("/api/browse", (req, res) => {
  * Favourites: directories pinned in the picker, as one-click starting points.
  *
  * Server-side state rather than a browser preference, because these are paths
- * on the machine piw runs on — a per-origin copy would follow the browser to
+ * on the machine pwi runs on — a per-origin copy would follow the browser to
  * a machine where the paths mean nothing.
  */
 app.get("/api/favorites", (_req, res) => {
@@ -405,7 +434,7 @@ app.post("/api/sessions/open", async (req, res) => {
 		 * silent and expensive: "" falls through `cwd ?? this.cwd` and Node's
 		 * spawn treats it as "inherit", so the child landed in the SERVER's own
 		 * directory. The session was then created against a project the user had
-		 * not selected — piw's own parent directory, in the case that found this
+		 * not selected — pwi's own parent directory, in the case that found this
 		 * — and its tools read and wrote the wrong tree. The browser sends a
 		 * blank cwd whenever a session is created before /api/projects has
 		 * answered, so this is reachable by clicking `+ New` early.
@@ -415,7 +444,7 @@ app.post("/api/sessions/open", async (req, res) => {
 			return res.status(400).json({ error: "cwd must not be blank" });
 		}
 		// Omitting cwd entirely still means "this server's project", which is what
-		// a single-project launch (PIW_CWD) relies on.
+		// a single-project launch (PWI_CWD) relies on.
 		const cwd = rawCwd || undefined;
 		if (cwd && !file && !(existsSync(cwd) && statSync(cwd).isDirectory())) {
 			return res.status(400).json({ error: `not a directory: ${cwd}` });
@@ -643,7 +672,7 @@ app.post("/api/sessions/:id/model", async (req, res) => {
  * Git: what the commit button can offer, and doing it.
  *
  * `cwd` is the project, not the server's own: the button belongs to the
- * session on screen, and a piw serving several projects would otherwise
+ * session on screen, and a pwi serving several projects would otherwise
  * commit in whichever one it was started in.
  */
 app.get("/api/git", async (req, res) => {
@@ -844,7 +873,7 @@ app.use("/api", (_req, res) => {
 /*
  * In production serve the built client; in dev, Vite proxies /api here instead.
  *
- * `PIW_DEV` (set only by `pnpm dev`, which always starts Vite) turns the
+ * `PWI_DEV` (set only by `pnpm dev`, which always starts Vite) turns the
  * static half OFF and sends the browser to the dev server instead. Without
  * it this port keeps answering with whatever `dist/` was last built, which
  * during development is by definition stale: the page looks alive, the API
@@ -853,7 +882,7 @@ app.use("/api", (_req, res) => {
  * them is the honest answer, and it costs one line of config to say so.
  */
 const dist = resolve(ROOT, "dist");
-if (process.env.PIW_DEV === "1") {
+if (process.env.PWI_DEV === "1") {
 	app.get("*", (req, res) =>
 		res.redirect(302, `http://127.0.0.1:${VITE_PORT}${req.originalUrl}`),
 	);
@@ -941,25 +970,25 @@ server.on("upgrade", (req, socket, head) => {
 // spawned with `--approve` so that project-local extensions load. Tunnel it
 // (ssh -L) or put it on a private overlay network; never bind it publicly.
 /*
- * Restarting piw is always a takeover: the port is fixed, and the thing
- * holding it is the piw you are replacing. Doing it by hand (find the pid,
+ * Restarting pwi is always a takeover: the port is fixed, and the thing
+ * holding it is the pwi you are replacing. Doing it by hand (find the pid,
  * kill it, start again) was three steps of pure ceremony, so the server does
- * it — but ONLY after the occupant identifies itself as a piw on
- * /api/health. PIW_TAKEOVER=0 restores the old "fail and tell you" behaviour,
+ * it — but ONLY after the occupant identifies itself as a pwi on
+ * /api/health. PWI_TAKEOVER=0 restores the old "fail and tell you" behaviour,
  * which is what you want under a supervisor that could otherwise have two
  * units killing each other in a loop.
  */
-if (process.env.PIW_TAKEOVER !== "0") {
+if (process.env.PWI_TAKEOVER !== "0") {
 	try {
 		await claimPort(PORT);
 	} catch (err) {
-		console.error(`[piw] ${err instanceof Error ? err.message : String(err)}`);
+		console.error(`[pwi] ${err instanceof Error ? err.message : String(err)}`);
 		process.exit(1);
 	}
 }
 
 server.listen(PORT, "127.0.0.1", () => {
-	console.log(`[piw] http://127.0.0.1:${PORT}  cwd=${CWD}`);
+	console.log(`[pwi] http://127.0.0.1:${PORT}  cwd=${CWD}`);
 });
 
 // Failing to bind is not a session-scoped error, so "survive and degrade" is
@@ -967,8 +996,8 @@ server.listen(PORT, "127.0.0.1", () => {
 server.on("error", (err: NodeJS.ErrnoException) => {
 	console.error(
 		err.code === "EADDRINUSE"
-			? `[piw] port ${PORT} already in use — kill the other server or set PIW_PORT`
-			: `[piw] listen failed: ${err.message}`,
+			? `[pwi] port ${PORT} already in use — kill the other server or set PWI_PORT`
+			: `[pwi] listen failed: ${err.message}`,
 	);
 	process.exit(1);
 });

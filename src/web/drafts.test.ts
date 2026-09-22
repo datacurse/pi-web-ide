@@ -74,22 +74,22 @@ assert.deepEqual(readDraft("new"), { text: "", images: [] });
 
 // An empty composer is not a draft, so it leaves no key to be pruned later.
 writeDraftText("ghost", "");
-assert.equal(localStorage.getItem("piw:draft:ghost"), null);
+assert.equal(localStorage.getItem("pwi:draft:ghost"), null);
 
 // Storage is user-writable: anything unrecognisable reads as "no draft"
 // instead of throwing on render.
-localStorage.setItem("piw:draft:junk", "not json");
-localStorage.setItem("piw:draft-images:junk", JSON.stringify([{ data: 5 }, "nope", null]));
+localStorage.setItem("pwi:draft:junk", "not json");
+localStorage.setItem("pwi:draft-images:junk", JSON.stringify([{ data: 5 }, "nope", null]));
 assert.deepEqual(readDraft("junk"), { text: "", images: [] });
 
 // Nothing deletes a session from this browser's point of view, so the drafts
 // cap is the only thing that reclaims a screenshot nobody will come back for.
 store.clear();
 for (let i = 0; i < 20; i++) {
-	store.set(`piw:draft:s${i}`, JSON.stringify({ text: `t${i}`, at: 1000 + i }));
+	store.set(`pwi:draft:s${i}`, JSON.stringify({ text: `t${i}`, at: 1000 + i }));
 }
 writeDraftText("fresh", "newest");
-assert.ok([...store.keys()].filter((k) => k.startsWith("piw:draft:s")).length <= 15);
+assert.ok([...store.keys()].filter((k) => k.startsWith("pwi:draft:s")).length <= 15);
 assert.equal(readDraft("s0").text, "");
 assert.equal(readDraft("s19").text, "t19");
 assert.equal(readDraft("fresh").text, "newest");

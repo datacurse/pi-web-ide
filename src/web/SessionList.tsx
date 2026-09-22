@@ -34,12 +34,12 @@ const dateFmt = new Intl.DateTimeFormat(undefined, {
 });
 
 /**
- * The project list this piw reports: every directory, plus the cwd it was
+ * The project list this pwi reports: every directory, plus the cwd it was
  * launched against.
  */
 export interface Projects {
 	projects: string[];
-	/** This piw's startup cwd: always listed, never removable. */
+	/** This pwi's startup cwd: always listed, never removable. */
 	seed: string;
 	error?: string;
 }
@@ -202,7 +202,7 @@ export function SessionList({
 				}`}
 			>
 				<div className="flex items-center justify-between border-b border-neutral-800 px-3 py-2">
-					<span className="text-sm font-semibold tracking-tight">piw</span>
+					<span className="text-sm font-semibold tracking-tight">pwi</span>
 					<div className="flex items-center gap-1">
 						<button
 							onClick={onNew}
@@ -253,7 +253,7 @@ export function SessionList({
 						+
 					</button>
 					{/*
-					  Removing is offered for every project except the one piw was
+					  Removing is offered for every project except the one pwi was
 					  launched against: that one is seeded back by the server on every
 					  read, so a button for it would appear to do nothing.
 

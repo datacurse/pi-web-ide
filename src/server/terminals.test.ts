@@ -52,7 +52,7 @@ function client(id: string) {
 
 // A directory that is not one is rejected at create, rather than producing a
 // shell that dies immediately for a reason the browser cannot see.
-assert.throws(() => terminals.create("/tmp/piw-does-not-exist-ever"), /not a directory/);
+assert.throws(() => terminals.create("/tmp/pwi-does-not-exist-ever"), /not a directory/);
 
 /*
  * Every create is a NEW shell. Splitting and opening a tab are the same call,
@@ -67,7 +67,7 @@ assert.equal(terminals.get(one.id), one);
 // The list is how a reloaded client learns which of its stored ids are real.
 const listed = terminals.list(CWD).map((t) => t.id);
 assert.deepEqual(new Set(listed), new Set([one.id, two.id]));
-assert.deepEqual(terminals.list("/tmp/piw-not-a-project"), []);
+assert.deepEqual(terminals.list("/tmp/pwi-not-a-project"), []);
 
 /*
  * Attach replays the scrollback BEFORE subscribing. A client that only got

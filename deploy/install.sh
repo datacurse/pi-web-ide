@@ -11,7 +11,7 @@
 #                        systemctl command that would run; change nothing
 #
 # Env knobs:
-#   PIW_INSTALL_COPY=1   copy the unit instead of symlinking it
+#   PWI_INSTALL_COPY=1   copy the unit instead of symlinking it
 #
 set -eu
 
@@ -90,12 +90,12 @@ ensure_env_file() {
 	say "created $env_file from $env_example — review it"
 }
 
-# PIW_PORT from the installed env file, defaulting exactly as index.ts does.
+# PWI_PORT from the installed env file, defaulting exactly as index.ts does.
 # Last match wins, which is what systemd does with a repeated key.
 read_port() {
 	p=""
 	if [ -f "$env_file" ]; then
-		p="$(sed -n 's/^PIW_PORT=\([0-9][0-9]*\).*/\1/p' "$env_file" | tail -1)"
+		p="$(sed -n 's/^PWI_PORT=\([0-9][0-9]*\).*/\1/p' "$env_file" | tail -1)"
 	fi
 	printf '%s' "${p:-8890}"
 }
@@ -162,7 +162,7 @@ else
 	mkdir -p "$unit_dir"
 fi
 
-if [ "${PIW_INSTALL_COPY:-}" = "1" ]; then
+if [ "${PWI_INSTALL_COPY:-}" = "1" ]; then
 	if [ "$dry" = 1 ]; then
 		say "would copy $here/$unit_name -> $unit_dir/$unit_name (mode 0644)"
 	else

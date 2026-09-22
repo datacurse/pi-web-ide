@@ -1,6 +1,6 @@
 // Run: node --import tsx src/server/sessions.test.ts
 //
-// Fixtures are real JSONL files in a temp dir with PIW_SESSION_ROOT pointed at
+// Fixtures are real JSONL files in a temp dir with PWI_SESSION_ROOT pointed at
 // it, because every interesting behaviour here is a filesystem behaviour: the
 // cwd-vs-directory-name mismatch, a torn trailing line, mtime ordering.
 import assert from "node:assert/strict";
@@ -16,10 +16,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { listSessions, sameProject, sessionHeaderCwd } from "./sessions.js";
 
-// Set after the import on purpose: listSessions reads PIW_SESSION_ROOT on every
+// Set after the import on purpose: listSessions reads PWI_SESSION_ROOT on every
 // call, so there is no load-order coupling to get wrong here.
-const tmp = mkdtempSync(join(tmpdir(), "piw-sessions-"));
-process.env.PIW_SESSION_ROOT = join(tmp, "sessions");
+const tmp = mkdtempSync(join(tmpdir(), "pwi-sessions-"));
+process.env.PWI_SESSION_ROOT = join(tmp, "sessions");
 
 const projectA = join(tmp, "alpha");
 const projectB = join(tmp, "beta");
@@ -43,7 +43,7 @@ interface Fixture {
 }
 
 function write(f: Fixture): string {
-	const dir = join(process.env.PIW_SESSION_ROOT as string, f.dir);
+	const dir = join(process.env.PWI_SESSION_ROOT as string, f.dir);
 	mkdirSync(dir, { recursive: true });
 	const file = join(dir, `${f.created.replace(/[:.]/g, "-")}_${f.uuid}.jsonl`);
 	const head = [
@@ -156,8 +156,8 @@ const otherProject = write({
 });
 
 // A file with no session header at all cannot be attributed to any project.
-const headerless = join(process.env.PIW_SESSION_ROOT as string, "-alpha-4", "orphan.jsonl");
-mkdirSync(join(process.env.PIW_SESSION_ROOT as string, "-alpha-4"), { recursive: true });
+const headerless = join(process.env.PWI_SESSION_ROOT as string, "-alpha-4", "orphan.jsonl");
+mkdirSync(join(process.env.PWI_SESSION_ROOT as string, "-alpha-4"), { recursive: true });
 writeFileSync(headerless, `${userMsg("orphan")}\n`);
 
 const a = await listSessions(projectA);

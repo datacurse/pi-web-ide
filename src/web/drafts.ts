@@ -21,8 +21,8 @@
 
 import type { PiImage } from "../shared/types.js";
 
-const TEXT_PREFIX = "piw:draft:";
-const IMAGES_PREFIX = "piw:draft-images:";
+const TEXT_PREFIX = "pwi:draft:";
+const IMAGES_PREFIX = "pwi:draft-images:";
 
 /**
  * Drafts kept at once, newest first. Sessions are never deleted from this

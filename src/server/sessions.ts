@@ -78,10 +78,10 @@ const cache = new Map<string, Parsed>();
 
 /** List persisted sessions for a workspace, newest created first. */
 export async function listSessions(cwd: string): Promise<PiSessionInfo[]> {
-	// Read per call, not captured at import: the tests point PIW_SESSION_ROOT at
+	// Read per call, not captured at import: the tests point PWI_SESSION_ROOT at
 	// a temp dir, and a module-level constant would bake in whatever the env
 	// held when this module first loaded.
-	const root = process.env.PIW_SESSION_ROOT ?? join(homedir(), ".pi", "agent", "sessions");
+	const root = process.env.PWI_SESSION_ROOT ?? join(homedir(), ".pi", "agent", "sessions");
 	// Symlink resolution is memoized per call, never across calls: a cwd that
 	// gets moved or a symlink that is retargeted must not be answered from a
 	// cache that nothing invalidates.
@@ -98,20 +98,23 @@ export async function listSessions(cwd: string): Promise<PiSessionInfo[]> {
 		return [];
 	}
 
-	const files: string[] = [];
-	await Promise.all(
+	// Each directory returns its own list rather than pushing into a shared
+	// array from concurrent callbacks; the flat() at the end is the only place
+	// they meet.
+	const perDir = await Promise.all(
 		dirs.map(async (dir) => {
 			try {
-				for (const name of await readdir(join(root, dir))) {
-					if (name.endsWith(".jsonl")) files.push(join(root, dir, name));
-				}
+				const names = await readdir(join(root, dir));
+				return names.filter((n) => n.endsWith(".jsonl")).map((n) => join(root, dir, n));
 			} catch {
 				// Deleted between the two readdirs: a session file or a whole
 				// project directory can vanish under us, so losing this race is
 				// routine, not a failure.
+				return [];
 			}
 		}),
 	);
+	const files = perDir.flat();
 
 	const out: PiSessionInfo[] = [];
 	await pooled(files, async (file) => {

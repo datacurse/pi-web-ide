@@ -44,11 +44,11 @@ const ACTIONS = [
 
 type Action = (typeof ACTIONS)[number];
 
-/** `piw/2026-09-17-1432`: sortable, obviously machine-made, never colliding. */
+/** `pwi/2026-09-17-1432`: sortable, obviously machine-made, never colliding. */
 function suggestBranch(): string {
 	const now = new Date();
 	const pad = (n: number) => String(n).padStart(2, "0");
-	return `piw/${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}`;
+	return `pwi/${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}`;
 }
 
 /**
@@ -66,7 +66,7 @@ function suggestBranch(): string {
  *
  * Auto-naming is the other half of the button. The dialog exists to ask two
  * questions — the commit message and the branch name — and both have machine
- * answers: a model that reads the diff, and a dated `piw/` branch. With the
+ * answers: a model that reads the diff, and a dated `pwi/` branch. With the
  * toggle on, the dialog stops appearing and `Commit & Push` is one click.
  */
 export function GitActions({

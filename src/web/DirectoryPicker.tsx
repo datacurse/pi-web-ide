@@ -7,7 +7,7 @@ import type { PiwDirListing } from "../shared/types.js";
  * filesystem.
  *
  * It exists because the browser's own file picker cannot help here. A project
- * is a cwd on the machine running piw, and `<input type="file" webkitdirectory>`
+ * is a cwd on the machine running pwi, and `<input type="file" webkitdirectory>`
  * would offer the directories of whatever machine the browser is on — which is
  * the wrong filesystem the moment the page is opened through an ssh forward,
  * and even on one machine it hands back file lists rather than a path. So the
@@ -88,7 +88,7 @@ export function DirectoryPicker({
 	}, [open]);
 
 	// Re-read on every open rather than caching: directories are created
-	// outside piw constantly, and a stale listing is a list of folders that
+	// outside pwi constantly, and a stale listing is a list of folders that
 	// may no longer be there.
 	useEffect(() => {
 		if (!open) return;

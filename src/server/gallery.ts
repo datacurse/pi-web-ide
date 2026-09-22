@@ -21,7 +21,7 @@ import { isRecord, records } from "./guards.js";
 const TIMEOUT_MS = 5_000;
 
 /** Search results and package metadata change on the order of a publish. */
-const CACHE_MS = Number(process.env.PIW_SEARCH_CACHE_MS ?? 600_000);
+const CACHE_MS = Number(process.env.PWI_SEARCH_CACHE_MS ?? 600_000);
 
 /** npm's own page size ceiling for this endpoint is 250; 30 is a screenful. */
 const SIZE = 30;
@@ -75,7 +75,9 @@ async function getJson(url: string): Promise<unknown> {
 		signal: AbortSignal.timeout(TIMEOUT_MS),
 		headers: { accept: "application/json" },
 	});
-	if (!res.ok) throw new Error(`${new URL(url).host} answered ${res.status}`);
+	// Every URL here is npm's, so parsing one back out to name the host in the
+	// message would be a throw-on-malformed call to say what we already know.
+	if (!res.ok) throw new Error(`the npm registry answered ${res.status}`);
 	return res.json();
 }
 

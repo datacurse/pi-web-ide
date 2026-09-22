@@ -12,7 +12,7 @@ import { SessionList, type Projects } from "./SessionList.js";
 import { SessionTabs, tabDomId } from "./SessionTabs.js";
 import { Chat } from "./Chat.js";
 import { TerminalPane } from "./Terminal.js";
-import { EMPTY_LAYOUT, parseLayout, reconcile, type TermLayout } from "./termLayout.js";
+import { EMPTY_LAYOUT, reconcile, type TermLayout } from "./termLayout.js";
 import { Settings } from "./Settings.js";
 import { Packages } from "./Packages.js";
 import {
@@ -133,7 +133,7 @@ function askLine(ask: PiAsk): string {
 const CHAT_PANEL_ID = "chat-panel";
 
 /*
- * Open tabs are remembered across reloads under `piw:tabs:<project cwd>`.
+ * Open tabs are remembered across reloads under `pwi:tabs:<project cwd>`.
  *
  * One key per project rather than one map of every project: the strip only
  * ever shows one project's sessions, so a per-project key is read and written
@@ -145,7 +145,7 @@ const CHAT_PANEL_ID = "chat-panel";
  * restored tab reopens through the same path a click would take.
  *
  * localStorage rather than the URL: this is per-browser UI state, not a
- * shareable address, and piw has no router.
+ * shareable address, and pwi has no router.
  */
 
 /**
@@ -162,8 +162,8 @@ const CHAT_PANEL_ID = "chat-panel";
  * of EITHER window silently adopted the other's project — taking its tab
  * strip with it, and pointing `+ New` at a directory nobody had selected.
  */
-const PROJECT_KEY = "piw:project";
-const LAST_PROJECT_KEY = "piw:lastProject";
+const PROJECT_KEY = "pwi:project";
+const LAST_PROJECT_KEY = "pwi:lastProject";
 
 /**
  * A stored project. A build that managed remote machines wrote `{host,cwd}`
@@ -260,7 +260,7 @@ interface Tabs {
 }
 
 function readTabs(project: string): Tabs {
-	const raw = readStored(`piw:tabs:${project}`);
+	const raw = readStored(`pwi:tabs:${project}`);
 	if (!raw) return { project, files: [] };
 	try {
 		const parsed = JSON.parse(raw) as { files?: unknown; active?: unknown };
@@ -349,7 +349,7 @@ export default function App() {
 	const attachSeq = useRef(0);
 	// attach() reconnects by calling itself; a useCallback cannot reference itself.
 	const attachRef = useRef<(file?: string) => Promise<void>>(async () => {});
-	/** This piw's project list: its directories plus the cwd it was launched against. */
+	/** This pwi's project list: its directories plus the cwd it was launched against. */
 	const [projects, setProjects] = useState<Projects>({ projects: [], seed: "" });
 	const [project, setProject] = useState<string>(() => readWindowProject() ?? "");
 	/** Tabs and the terminal layout are stored per project, keyed by its cwd. */
@@ -437,7 +437,7 @@ export default function App() {
 			setTermLayout(EMPTY_LAYOUT);
 			return;
 		}
-		setTermLayout(parseLayout(readTerminalLayout(scope)));
+		setTermLayout(readTerminalLayout(scope));
 
 		let live = true;
 		void (async () => {
@@ -569,8 +569,8 @@ export default function App() {
 			return;
 		if (document.visibilityState === "visible" && document.hasFocus()) return;
 		const info = sessionsRef.current.find((s) => s.path === file);
-		const title = info?.name || info?.firstMessage || "piw";
-		const n = new Notification(title, { body, tag: file ?? "piw" });
+		const title = info?.name || info?.firstMessage || "pwi";
+		const n = new Notification(title, { body, tag: file ?? "pwi" });
 		n.onclick = () => {
 			window.focus();
 			n.close();
@@ -599,7 +599,7 @@ export default function App() {
 	const opened = useRef<Set<string>>(new Set());
 
 	/**
-	 * This piw's project list.
+	 * This pwi's project list.
 	 *
 	 * A failed read keeps `error` set rather than emptying the list: a
 	 * dropdown that is merely shorter looks exactly like "no projects here",
@@ -713,7 +713,7 @@ export default function App() {
 		if (!r?.ok) {
 			// Said out loud, not left as an empty list: no sessions and no answer
 			// look the same in a list, and only one of them is the machine's fault.
-			setListError(r ? `HTTP ${r.status}` : "piw is not answering");
+			setListError(r ? `HTTP ${r.status}` : "pwi is not answering");
 			return;
 		}
 		setListError(null);
@@ -725,7 +725,7 @@ export default function App() {
 	 * Rename a session. pi owns the name (PiSession.setName in
 	 * src/server/agent.ts sends `set_session_name`), which is why this is a
 	 * request and not a local edit: the name has to end up in the session
-	 * file, so the TUI and every other piw window read the same one.
+	 * file, so the TUI and every other pwi window read the same one.
 	 *
 	 * Applied optimistically because the server may have to spawn a pi child
 	 * for a session nobody had open — a rename that takes two seconds to appear
@@ -1143,7 +1143,7 @@ export default function App() {
 		// it belongs to no project.
 		if (tabs.project) {
 			writeStored(
-				`piw:tabs:${tabs.project}`,
+				`pwi:tabs:${tabs.project}`,
 				JSON.stringify({ files: tabs.files, active: tabs.active }),
 			);
 		}
@@ -1232,7 +1232,7 @@ export default function App() {
 	// Tab title reflects activity so switching away doesn't lose the signal —
 	// the one thing a background terminal gives you for free.
 	useEffect(() => {
-		document.title = busy ? "\u25cf piw \u2014 working\u2026" : "piw";
+		document.title = busy ? "\u25cf pwi \u2014 working\u2026" : "pwi";
 	}, [busy]);
 
 	// The same signal in the icon, for a tab narrow enough that the title is

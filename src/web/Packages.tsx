@@ -2,8 +2,8 @@
  * Packages.tsx — what this machine has installed, and changing it.
  *
  * Two tabs and one table: what is installed here, and the gallery to add
- * from. Every machine runs its own piw, so "the orangepi is missing pi-lens"
- * is answered by opening the orangepi's piw, not by this page reaching
+ * from. Every machine runs its own pwi, so "the orangepi is missing pi-lens"
+ * is answered by opening the orangepi's pwi, not by this page reaching
  * across — which means no cross-origin requests and no manifest to converge
  * on.
  */

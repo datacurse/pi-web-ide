@@ -11,8 +11,8 @@ import { list, parseSource, validate } from "./packages.js";
 
 // Set after the import on purpose: both paths are resolved per call, so
 // there is no load-order coupling to get wrong — same as sessions.test.ts.
-const dir = mkdtempSync(join(tmpdir(), "piw-packages-"));
-process.env.PIW_PI_SETTINGS = join(dir, "settings.json");
+const dir = mkdtempSync(join(tmpdir(), "pwi-packages-"));
+process.env.PWI_PI_SETTINGS = join(dir, "settings.json");
 process.env.PI_CODING_AGENT_DIR = dir;
 
 // ---------------------------------------------------------------------------
@@ -97,11 +97,11 @@ assert.throws(() => validate("git:github.com/u/r@$(id)"), /not a git ref/);
 // ---------------------------------------------------------------------------
 assert.deepEqual(await list(), [], "no settings file at all is an empty list");
 
-writeFileSync(process.env.PIW_PI_SETTINGS, JSON.stringify({ theme: "dark" }));
+writeFileSync(process.env.PWI_PI_SETTINGS, JSON.stringify({ theme: "dark" }));
 assert.deepEqual(await list(), [], "settings without a packages key is an empty list");
 
 writeFileSync(
-	process.env.PIW_PI_SETTINGS,
+	process.env.PWI_PI_SETTINGS,
 	JSON.stringify({
 		packages: [
 			"npm:pi-sub-anthropic",

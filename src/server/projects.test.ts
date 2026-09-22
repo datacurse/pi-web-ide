@@ -12,9 +12,9 @@ import assert from "node:assert/strict";
 import { homedir, tmpdir } from "node:os";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-// Every list is written under PIW_STATE_DIR, so the test gets its own and
+// Every list is written under PWI_STATE_DIR, so the test gets its own and
 // never rewrites the developer's real project list.
-process.env.PIW_STATE_DIR = mkdtempSync(join(tmpdir(), "piw-projects-"));
+process.env.PWI_STATE_DIR = mkdtempSync(join(tmpdir(), "pwi-projects-"));
 const seed = process.cwd();
 assert(listProjects(seed).includes(seed), "seed always present");
 const before = listProjects(seed);
@@ -28,7 +28,7 @@ assert.deepEqual(listProjects(seed).sort(), before.sort(), "restored");
 
 // browse: the picker's listing. Built in a temp tree so the assertions do not
 // depend on whatever the machine happens to have in /tmp.
-const root = mkdtempSync(join(tmpdir(), "piw-browse-"));
+const root = mkdtempSync(join(tmpdir(), "pwi-browse-"));
 mkdirSync(join(root, "beta"));
 mkdirSync(join(root, "alpha", ".git"), { recursive: true });
 mkdirSync(join(root, ".hidden"));
@@ -69,12 +69,12 @@ assert.deepEqual(listFavorites(), favoritesBefore, "restored");
  * the old file is never consulted again, which is what this asserts: it is a
  * FALLBACK, not a sync.
  */
-const fresh = mkdtempSync(join(tmpdir(), "piw-state-"));
-process.env.PIW_STATE_DIR = fresh;
-const legacyHome = mkdtempSync(join(tmpdir(), "piw-home-"));
+const fresh = mkdtempSync(join(tmpdir(), "pwi-state-"));
+process.env.PWI_STATE_DIR = fresh;
+const legacyHome = mkdtempSync(join(tmpdir(), "pwi-home-"));
 mkdirSync(join(legacyHome, ".omp", "agent"), { recursive: true });
 writeFileSync(
-	join(legacyHome, ".omp", "agent", "piw-projects.json"),
+	join(legacyHome, ".omp", "agent", "pwi-projects.json"),
 	JSON.stringify(["/tmp"]),
 );
 const realHome = process.env.HOME;
@@ -83,7 +83,7 @@ try {
 	assert(listProjects(seed).includes("/tmp"), "inherits the old install's projects");
 	// Any write makes the new file authoritative; the old one stops counting.
 	addProject(seed, tmpdir());
-	writeFileSync(join(legacyHome, ".omp", "agent", "piw-projects.json"), JSON.stringify(["/etc"]));
+	writeFileSync(join(legacyHome, ".omp", "agent", "pwi-projects.json"), JSON.stringify(["/etc"]));
 	assert(!listProjects(seed).includes("/etc"), "the legacy file is not read again");
 } finally {
 	process.env.HOME = realHome;

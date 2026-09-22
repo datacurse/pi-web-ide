@@ -3,7 +3,7 @@
 A deliberately thin web UI for the **pi** coding agent (`pi/0.85.1` here).
 Two panels: session list on the left, chat on the right.
 
-piw does not link an agent SDK. It spawns `pi --mode rpc` and talks JSONL
+pwi does not link an agent SDK. It spawns `pi --mode rpc` and talks JSONL
 over stdio, so the agent is a *binary* dependency rather than an npm one.
 
 ```bash
@@ -12,21 +12,21 @@ pnpm dev                     # server :8890 + vite :5480
 pnpm build && pnpm start     # single process, serves dist/ itself
 ```
 
-Point it at a workspace with `PIW_CWD=/path/to/project` (or pass the path as
-the first argument). `PIW_MODEL=provider/id` overrides the model,
-`PIW_PI_BIN=/path/to/pi` the binary. To run it as a background service on a
+Point it at a workspace with `PWI_CWD=/path/to/project` (or pass the path as
+the first argument). `PWI_MODEL=provider/id` overrides the model,
+`PWI_PI_BIN=/path/to/pi` the binary. To run it as a background service on a
 machine, see [Deployment](#deployment).
 
-Another machine runs its own piw the same way. Reach it by forwarding its
+Another machine runs its own pwi the same way. Reach it by forwarding its
 port (`ssh -L 8890:localhost:8890 orangepi`) or with `tailscale serve`, and
 open that in a browser tab. See [Multiple machines](#multiple-machines).
 
-**Restarting takes the port.** Starting piw while an older piw holds `:8890`
+**Restarting takes the port.** Starting pwi while an older pwi holds `:8890`
 kills the old one and binds — restarting is never anything else, and "find
 the pid, kill it, start again" was three steps of ceremony. It only ever
-kills a process that identifies itself as piw on `/api/health`; an
+kills a process that identifies itself as pwi on `/api/health`; an
 unrecognised occupant is left alone and startup fails as before. Set
-`PIW_TAKEOVER=0` to always fail instead, which is what you want under a
+`PWI_TAKEOVER=0` to always fail instead, which is what you want under a
 supervisor where two units could otherwise kill each other in a loop. See
 [Port takeover](#port-takeover).
 
@@ -63,8 +63,8 @@ list:
 - no image *generation*, no file attachments beyond images, no clipboard
   history — pasting a screenshot is in scope; a file manager is not
 - no central gateway across machines, no merged cross-machine session list,
-  and no fleet manager. One piw per machine, serving its own browser; you
-  reach another machine by opening that machine's piw. See
+  and no fleet manager. One pwi per machine, serving its own browser; you
+  reach another machine by opening that machine's pwi. See
   [Multiple machines](#multiple-machines)
 
 ## Architecture
@@ -76,7 +76,7 @@ src/server/sessions.ts    session list, parsed from ~/.pi/agent/sessions
 src/server/models.ts      model catalog + startup default, asked of pi over RPC
 src/server/registry.ts    session cache + server-authoritative message state
 src/server/index.ts       SSE for events, POST for commands
-src/server/takeover.ts    claims :8890 from the previous piw on startup
+src/server/takeover.ts    claims :8890 from the previous pwi on startup
 src/server/state.ts       ~/.config/pi-web-ide, where this server keeps its own state
 src/server/autoname.ts    one-shot `pi -p` children: commit messages, session names
 src/server/personality.ts the extra system-prompt text, read and replaced in place
@@ -99,7 +99,7 @@ framing/reconnect/ack protocol to write and debug.
 
 ## Port takeover
 
-piw binds one fixed port, and the only thing that ever holds it is the piw
+pwi binds one fixed port, and the only thing that ever holds it is the pwi
 you are restarting. So startup claims it: probe the port, ask who is there,
 stop them, bind.
 
@@ -114,7 +114,7 @@ identification.
 The pid comes from `/api/health` when the occupant is new enough to report
 one, and otherwise from `/proc/net/tcp` + `/proc/*/fd` — the listening
 socket's inode, matched to the process holding it. That fallback exists for
-exactly one case, and it is the important one: the piw you are replacing is
+exactly one case, and it is the important one: the pwi you are replacing is
 by definition the *older* build, so on the upgrade that introduced this
 feature it is the only path that works. No `lsof`, no `ss`, no shelling out
 to find a pid we are about to signal.
@@ -124,7 +124,7 @@ then `SIGKILL` after 5s, because a server wedged in shutdown still has to let
 go of the port and everything it owns is on disk anyway. If the port is still
 held after that, startup fails rather than looping.
 
-`PIW_TAKEOVER=0` restores fail-and-tell-you. Under a supervisor that restarts
+`PWI_TAKEOVER=0` restores fail-and-tell-you. Under a supervisor that restarts
 units automatically, two units configured for one port would otherwise take
 turns killing each other forever.
 
@@ -135,7 +135,7 @@ restart mid-turn.
 
 ## Why a subprocess instead of the SDK
 
-piw used to import the agent in-process, and `pi.ts` was the one file allowed
+pwi used to import the agent in-process, and `pi.ts` was the one file allowed
 to do it. That rule existed because the SDK's churn is concentrated in
 *construction* — the credentials/models/session boilerplate was rewritten at
 least twice upstream (`AuthStorage` + `ModelRegistry` → `discoverAuthStorage` →
@@ -153,7 +153,7 @@ more properties fall out of it:
 - **Restartability.** Conversation state lives in pi's own JSONL under
   `~/.pi/agent/sessions/<cwd>/`, so a child is disposable: `--session <file>`
   rehydrates one for the cost of a spawn. Restarting the server loses at most
-  an in-flight turn, never the work — which is what makes running piw under a
+  an in-flight turn, never the work — which is what makes running pwi under a
   supervisor with `Restart=always` a reasonable thing to do.
 
 The cost is real and worth naming: everything is async, and nothing can be read
@@ -188,7 +188,7 @@ Three things are deliberate:
   is a single representation everywhere else.
 - **No resizing here.** The in-process version shrank screenshots through the
   SDK's Photon/WASM `resizeImage`. Across RPC the image is pi's to normalize
-  for the provider, and the only way to keep resizing in piw would be a native
+  for the provider, and the only way to keep resizing in pwi would be a native
   image dependency — a large cost for a step the agent already owns. `agent.ts`
   validates instead (type allowlist, non-empty, 20MB ceiling) and passes the
   bytes through. A rejection here is reportable to the user; a provider 400 is
@@ -248,7 +248,7 @@ project's extensions, prompt templates and skills define work. Some of them
 are **local**: pi handles them itself, which means no turn, no message
 appended, and no `agent_start`. Their entire output is whatever `notify` the
 extension chooses to send, and pi's own maintenance — a compaction, an
-auto-retry — talks through the same one-way channel. piw used to drop all of
+auto-retry — talks through the same one-way channel. pwi used to drop all of
 it, which is why such a command looked like it had done nothing at all.
 
 Now those frames land under the transcript as notice lines (info neutral,
@@ -310,7 +310,7 @@ trailing space you are missing. `/compact` + Enter runs `/compact` instead of
 costing a second Enter, while `/co` + Enter still completes. Found by typing a
 whole command into the box and watching it not run.
 
-The catalog comes from the session, never from a table in piw: `get_commands`
+The catalog comes from the session, never from a table in pwi: `get_commands`
 when the session opens, re-read whenever the menu is raised. Which commands
 exist depends on the project's `.pi/extensions`, `.pi/prompts` and
 `.pi/skills` — and on whichever packages are installed globally — so a
@@ -394,7 +394,7 @@ sessions" surface: clicking an entry opens it in a tab, and at ≤768px it
 collapses into a drawer so the chat gets the width.
 
 The ordered open set and the selection are kept in `localStorage` under
-`piw:tabs:<project cwd>` (value `{"files":[…],"active":"…"}`). One key per
+`pwi:tabs:<project cwd>` (value `{"files":[…],"active":"…"}`). One key per
 project, because the strip only ever shows one project's sessions: the key is
 read and written whole, and switching projects cannot corrupt the other
 project's entry.
@@ -404,7 +404,7 @@ identity, it is exactly what `/api/sessions/open` takes, and `pi --session <file
 resumes to the same session — so a restored tab travels the same path a click
 would, and survives both a server restart and an idle eviction that
 invalidates the in-memory id. Storage rather than the URL because this is
-per-window UI state, not a shareable address, and piw has no router.
+per-window UI state, not a shareable address, and pwi has no router.
 
 A remembered session that no longer exists is dropped, but only on positive
 evidence: a session list actually received for that project. A failed fetch, or
@@ -458,19 +458,19 @@ A blank `cwd` on that route is now a **400** rather than a fallback. It used
 to be accepted, and `""` survives `cwd ?? CWD` all the way into `spawn`, where
 Node reads it as "inherit" — so the session was created wherever the *server
 process* happens to run, which is not even the project the server was launched
-for (`PIW_CWD`). The browser sent exactly that whenever `+ New` was pressed
+for (`PWI_CWD`). The browser sent exactly that whenever `+ New` was pressed
 before `/api/projects` answered, so the client now waits for a project before
 creating anything: a create needs a project, and an omitted `cwd` still means
-`PIW_CWD` for a single-project launch.
+`PWI_CWD` for a single-project launch.
 
 ### The selected project is per window, not per browser
 
 Two keys, and the split is the whole point:
 
-- `sessionStorage["piw:project"]` — **this window's** selection. Scoped to the
+- `sessionStorage["pwi:project"]` — **this window's** selection. Scoped to the
   browser tab, survives a reload, an HMR refresh and a session restore, and is
   invisible to every other window.
-- `localStorage["piw:lastProject"]` — the project someone last *explicitly*
+- `localStorage["pwi:lastProject"]` — the project someone last *explicitly*
   selected, anywhere. It is only ever the seed for a brand-new window.
 
 One `localStorage` key did both jobs, and two windows on two projects then
@@ -483,7 +483,7 @@ touches the dropdown still keeps what it opened on. Only an explicit
 selection writes the shared key, since restoring a window is not a choice.
 
 Two windows deliberately on the *same* project still share that project's
-`piw:tabs:` entry, so the last one to change its strip wins what a future
+`pwi:tabs:` entry, so the last one to change its strip wins what a future
 reload restores. Live strips are independent; only the remembered one is
 shared.
 
@@ -519,7 +519,7 @@ Every write goes through pi, not through the file: `POST
 a `session_info` entry to the JSONL and wins over every earlier one. pi owns
 the name: that file is one pi has open and is still appending to, so writing
 the entry ourselves is the kind of clever that corrupts transcripts. The name
-therefore shows up in the TUI and in every other piw window too.
+therefore shows up in the TUI and in every other pwi window too.
 
 A rename addresses the session by **file or id**, because both callers are
 real: a list row may be a session nobody has opened, while an open tab knows
@@ -540,7 +540,7 @@ The child is the same shape as the commit namer in `autoname.ts` — no tools,
 no extensions, no skills, no prompt templates, no context files, no thinking
 — because the job is one short label about text that is already in the
 prompt, and every discovery pass is pure latency on a click.
-`PIW_NAMING_MODEL` picks the model; unset means pi's default. A session with
+`PWI_NAMING_MODEL` picks the model; unset means pi's default. A session with
 no messages yet has nothing to summarise and is refused as such, and while
 the request is in flight the row reads `Naming…`.
 
@@ -611,7 +611,7 @@ paths with a fake `localStorage` that has a settable ceiling.
 
 A project IS a cwd. pi already partitions its store by working directory
 (`~/.pi/agent/sessions/<encoded-cwd>/`) and every session header carries its
-own `cwd`, so piw models nothing extra: the picker at the top of the session
+own `cwd`, so pwi models nothing extra: the picker at the top of the session
 list swaps which directory's sessions are listed, and `+ New` launches pi in
 that directory. The list of directories you care about is a flat array in
 `~/.config/pi-web-ide/projects.json`.
@@ -628,7 +628,7 @@ directories marked `added`.
 Clicking a row **enters** it; adding is always the explicit footer button on
 the directory named in the breadcrumb, so there is no double-click rule and no
 ambiguity about what is about to be added. The listing is not sandboxed to any
-root, which grants nothing new: piw binds loopback only and its agents already
+root, which grants nothing new: pwi binds loopback only and its agents already
 run tools against this machine. `addProject` still validates what it is
 handed, since the path can also arrive typed.
 
@@ -649,9 +649,9 @@ rows narrow on the keystroke and not on a round trip.
 **Pinned folders** are the shortcut row under the breadcrumb: the star pins
 the directory being listed, a chip jumps back to it, and its `×` unpins.
 They live on the SERVER (`~/.config/pi-web-ide/favorites.json`, `/api/favorites`)
-and not in `localStorage`, because they are paths on the machine piw runs on:
+and not in `localStorage`, because they are paths on the machine pwi runs on:
 a per-origin copy would follow the browser to a machine where those paths mean
-nothing, and a second piw port on the same host would silently get its own
+nothing, and a second pwi port on the same host would silently get its own
 set. Unpinning skips the existence check — a favourite whose directory was
 deleted is the one you most need to be able to remove.
 
@@ -661,7 +661,7 @@ browsing alone, showing the OS message (`EACCES`, `ENOENT`) instead.
 
 `×` removes the selected project **from the list only**: the directory and its
 sessions stay on disk, and re-adding the path brings all of them back, because
-pi's store was keyed by cwd the whole time. The startup project (`PIW_CWD`)
+pi's store was keyed by cwd the whole time. The startup project (`PWI_CWD`)
 has no `×` — the server seeds it back on every read, so a button for it would
 appear to do nothing.
 
@@ -723,7 +723,7 @@ Three details that are the feature rather than incidental:
   ride along in every request.
 
 There is no project-level personality: one file, named in the dialog, for
-every session this server starts. `PIW_STATE_DIR` relocates it along with the
+every session this server starts. `PWI_STATE_DIR` relocates it along with the
 rest of this server's state, which is how the test works on a temp directory
 instead of your real file.
 
@@ -757,7 +757,7 @@ Error panels are a `color-mix` tint of the palette's own red over its own
 base rather than a fixed `red-950`, which on a light page would be a black
 hole.
 
-The choice is stored in `localStorage` under `piw:theme` and applied by a
+The choice is stored in `localStorage` under `pwi:theme` and applied by a
 small inline script in `index.html` **before the first paint**: the app sets
 the same attribute on mount, but the module graph loads first, which is long
 enough to flash a dark window at someone who chose Latte. An unrecognised
@@ -778,11 +778,11 @@ everything that is a property of *this browser* rather than of the agent:
 
 | setting | key | default |
 | --- | --- | --- |
-| theme | `piw:theme` | `mocha` |
-| show thinking | `piw:showThinking` | on |
-| tool calls | `piw:tools` | `live` |
-| short session names | `piw:shortNames` | off |
-| notify when finished | `piw:notify` | off |
+| theme | `pwi:theme` | `mocha` |
+| show thinking | `pwi:showThinking` | on |
+| tool calls | `pwi:tools` | `live` |
+| short session names | `pwi:shortNames` | off |
+| notify when finished | `pwi:notify` | off |
 
 All of them live in `localStorage` via `src/web/prefs.ts`, which validates on
 every read — storage is user-writable and outlives any rename, so an unknown
@@ -1020,11 +1020,11 @@ every action anybody asks for is a subset of those four:
   skills, no prompt templates, no context files, no thinking — because the
   job is one sentence about a diff that is already in the prompt: 4.9s
   instead of 22.5s on this repo's own 20 kB diff, which is also the cap on
-  how much patch is sent. `PIW_NAMING_MODEL` picks the model; unset means
+  how much patch is sent. `PWI_NAMING_MODEL` picks the model; unset means
   pi's default.
 - **`Auto-name commits` in the menu skips the dialog entirely.** Toggled on,
   `Commit & Push` is one click: the message is written by the model and the
-  branch (for the `Create Branch` actions) is the dated `piw/` suggestion.
+  branch (for the `Create Branch` actions) is the dated `pwi/` suggestion.
   Off by default, remembered per browser, and flipped where the actions it
   changes are rather than in the settings dialog. When the model cannot be
   reached the dialog opens after all, with the reason in it — a name that
@@ -1339,7 +1339,7 @@ ask for:
   pays the old price, which is the price either way, rather than holding two
   children.
 
-`PIW_PREWARM=0` turns it off and gives back the one idle child.
+`PWI_PREWARM=0` turns it off and gives back the one idle child.
 
 ## Two invariants
 
@@ -1421,7 +1421,7 @@ indistinguishable from a hung agent. They are put to the user; see
 
 The `ask` tool and an extension's `confirm` and `select`: all of them arrive
 as one blocking `extension_ui_request`, and pi waits inside the tool call
-until it is answered. piw used to **cancel** every one of them, on the
+until it is answered. pwi used to **cancel** every one of them, on the
 reasoning that answering on the user's behalf is the one thing here that could
 do real damage. It was the wrong conclusion from a correct premise: the third
 option is to ask the user, which is what the frame was for. The old behavior
@@ -1469,10 +1469,10 @@ nothing moves until you come back.
 
 ## Multiple machines
 
-There is one piw per machine — `local`, `orangepi`, `tg` — each running its
+There is one pwi per machine — `local`, `orangepi`, `tg` — each running its
 own systemd user service, each bound to `127.0.0.1`, each serving its own
 host's projects with that host's own credentials. To work on another machine,
-open that machine's piw:
+open that machine's pwi:
 
 ```bash
 ssh -L 8890:localhost:8890 orangepi     # then open http://127.0.0.1:8890
@@ -1483,9 +1483,9 @@ or put it on a tailnet with `tailscale serve --bg 8890` on that host and open
 tailnet form also gets you HTTP/2, which matters for a page holding an event
 stream plus a few terminal sockets.
 
-**piw used to manage this itself** — a machine list, a supervised `ssh -L`
+**pwi used to manage this itself** — a machine list, a supervised `ssh -L`
 child per host with a capped backoff ladder, a reachability poll, a pinned
-package manifest reconciled from a hub, and `PIW_HUB_ORIGINS` so a remote
+package manifest reconciled from a hub, and `PWI_HUB_ORIGINS` so a remote
 would answer another page's cross-origin requests. It was ~2000 lines and it
 was the wrong shape: nothing about a session crosses a host boundary anyway,
 since the agent stays where the code and the credentials are. All of that
@@ -1496,7 +1496,7 @@ What that buys, beyond the deleted code:
 
 - **No cross-origin surface at all.** Same-origin is the whole policy. There
   is no CORS in the server, and no configuration that can let another page
-  start an agent run here — which is what `PIW_HUB_ORIGINS` was.
+  start an agent run here — which is what `PWI_HUB_ORIGINS` was.
 - **No single point of failure.** There is no hub to be down, and no machine
   whose being asleep is a state something else has to track.
 - **Each host owns its credentials.** `~/.pi/agent/auth.json` never leaves the
@@ -1505,11 +1505,11 @@ What that buys, beyond the deleted code:
   cwd only means something on the machine that has it.
 
 Per-project state — the tab strip, the terminal layout — is keyed by
-directory alone (`piw:tabs:/home/…`), since a piw only ever serves its own
+directory alone (`pwi:tabs:/home/…`), since a pwi only ever serves its own
 machine's paths.
 
 The cost is a browser tab per machine instead of a dropdown, and keeping pi
-and piw current on each box yourself. `pi install <source>@<pin>` on each
+and pwi current on each box yourself. `pi install <source>@<pin>` on each
 machine is the sync; pinning is still worth doing, so a rebuilt box gets the
 code that was working rather than whatever published since.
 
@@ -1546,7 +1546,7 @@ Four details that are easy to get wrong:
   `/usr/bin/env /bin/bash -lc "exec pnpm start"` — which picks both up from the
   profile you already maintain instead of pinning a node version into a unit
   file. `exec` is load-bearing: without it systemd supervises the shell and
-  `SIGTERM` never reaches the server. Set `PIW_PI_BIN` if you would rather not
+  `SIGTERM` never reaches the server. Set `PWI_PI_BIN` if you would rather not
   depend on the profile.
 - **The unit adds no network exposure of its own.** No bind-address knob exists
   to set by accident — `index.ts` passes the literal `127.0.0.1` to `listen()`.
@@ -1560,7 +1560,7 @@ Four details that are easy to get wrong:
   it. The switch is `INVOCATION_ID`, which systemd sets for every unit it
   starts, so there is no flag to keep in step with the unit. Note what the
   exit code does and does not do: the unit is `Restart=always`, so any exit
-  is restarted and the code is not what brings piw back. It is what makes
+  is restarted and the code is not what brings pwi back. It is what makes
   the crash a *failure* in journald and `systemctl status` rather than a
   quiet restart, which is the difference between noticing and not.
 
@@ -1573,24 +1573,24 @@ it did not achieve. `--dry-run` prints every file it would write and every
 ## Security
 
 pi reads `~/.pi/agent/auth.json` and `~/.pi/agent/provider-keys.json`, so
-provider credentials are in the child processes piw spawns, on the machine
-piw runs on. The server binds `127.0.0.1` only. For remote access forward the
+provider credentials are in the child processes pwi spawns, on the machine
+pwi runs on. The server binds `127.0.0.1` only. For remote access forward the
 port yourself (`ssh -L`, key auth) or use `tailscale serve`, which gives the
 loopback port a tailnet HTTPS name without changing the bind; never a
-bind-address change. Nothing is proxied between hosts: each machine's piw is
+bind-address change. Nothing is proxied between hosts: each machine's pwi is
 reached at its own origin, so the only credentials in play are the ssh key or
 the tailnet identity you already use, and each host's `auth.json` stays on
 that host.
 
-**Same-origin is the whole policy.** piw answers no cross-origin request —
+**Same-origin is the whole policy.** pwi answers no cross-origin request —
 there is no CORS in the server and nothing to configure that would add one —
 and the terminal's WebSocket upgrade checks the same rule, since CORS would
-not have covered it anyway. An earlier version had `PIW_HUB_ORIGINS`, which
-let a named origin drive this piw from another machine's page; it was the
+not have covered it anyway. An earlier version had `PWI_HUB_ORIGINS`, which
+let a named origin drive this pwi from another machine's page; it was the
 CSRF boundary and it is gone with the feature that needed it.
 
 The children run their tools unattended (see the non-goals): pi has no
-approval gate, and a browser has no terminal to answer one on. piw is a tool
+approval gate, and a browser has no terminal to answer one on. pwi is a tool
 for driving an agent over code you own, on a host you control, and it should
 be deployed on that basis. A blocking question an extension does raise still
 renders as a [question](#questions) — at the cost that a detached run stops at

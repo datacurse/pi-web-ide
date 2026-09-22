@@ -1,9 +1,9 @@
 /**
- * takeover.ts — claim the port from a previous piw.
+ * takeover.ts — claim the port from a previous pwi.
  *
- * Restarting piw used to mean finding and killing the old process by hand:
+ * Restarting pwi used to mean finding and killing the old process by hand:
  * the port is fixed, the old server holds it, and `pnpm dev` died with
- * "already in use". Every restart is a takeover — nobody starts a second piw
+ * "already in use". Every restart is a takeover — nobody starts a second pwi
  * on the same port on purpose — so the server now does the killing itself.
  *
  * The safety property that makes that acceptable: it kills ONLY a process it
@@ -33,7 +33,7 @@ interface Occupant {
  * Ask the port who it is.
  *
  * Only a pi-web-ide is ours to kill, and the proof is `product` in its
- * `/api/health`. An older piw answers `/api/health` with `{ ok, cwd }` and
+ * `/api/health`. An older pwi answers `/api/health` with `{ ok, cwd }` and
  * no `product`, so it reads as a stranger and startup fails instead — which
  * is the whole point while both installs run side by side.
  *
@@ -68,7 +68,7 @@ async function identify(port: number): Promise<Occupant | undefined> {
  *
  * `lsof`/`ss` are not installed everywhere and shelling out to find a pid we
  * are about to signal is a worse dependency than reading two files. Linux
- * only, which is the platform piw is deployed on; anywhere else this returns
+ * only, which is the platform pwi is deployed on; anywhere else this returns
  * undefined and the caller reports the port as held by a stranger.
  */
 function listenerPid(port: number): number | undefined {
@@ -147,7 +147,7 @@ async function waitForRelease(port: number, ms: number): Promise<boolean> {
  * Make the port available, or explain why it is not.
  *
  * Returns once nothing is listening. Throws with a message meant for a
- * terminal when the occupant is not a piw, cannot be signalled, or refuses to
+ * terminal when the occupant is not a pwi, cannot be signalled, or refuses to
  * die — all cases where killing more aggressively would be guessing.
  */
 export async function claimPort(port: number): Promise<void> {
@@ -156,12 +156,12 @@ export async function claimPort(port: number): Promise<void> {
 	const occupant = await identify(port);
 	if (!occupant) {
 		throw new Error(
-			`port ${port} is held by something that is not ${PRODUCT} — stop it or set PIW_PORT`,
+			`port ${port} is held by something that is not ${PRODUCT} — stop it or set PWI_PORT`,
 		);
 	}
 
 	console.log(
-		`[piw] port ${port} held by another ${PRODUCT} (pid ${occupant.pid}, cwd=${occupant.cwd}) — stopping it`,
+		`[pwi] port ${port} held by another ${PRODUCT} (pid ${occupant.pid}, cwd=${occupant.cwd}) — stopping it`,
 	);
 	try {
 		process.kill(occupant.pid, "SIGTERM");
@@ -175,7 +175,7 @@ export async function claimPort(port: number): Promise<void> {
 	// SIGTERM is the polite path and it disposes sessions; a server wedged in
 	// shutdown still has to let go of the port, and everything it owns is on
 	// disk.
-	console.log(`[piw] pid ${occupant.pid} did not exit in ${TERM_GRACE_MS / 1000}s — SIGKILL`);
+	console.log(`[pwi] pid ${occupant.pid} did not exit in ${TERM_GRACE_MS / 1000}s — SIGKILL`);
 	try {
 		process.kill(occupant.pid, "SIGKILL");
 	} catch {

@@ -11,7 +11,7 @@ export default defineConfig({
 		// Same env var the server reads to build its dev redirect (see index.ts):
 		// two places deciding this independently is how you get a 302 to a port
 		// nothing is listening on.
-		port: Number(process.env.PIW_VITE_PORT ?? 5480),
+		port: Number(process.env.PWI_VITE_PORT ?? 5480),
 		// A dev server that silently moves to the next free port makes that
 		// redirect wrong, which is worse than failing to start.
 		strictPort: true,
@@ -22,7 +22,7 @@ export default defineConfig({
 		host: "127.0.0.1",
 		proxy: {
 			"/api": {
-				target: `http://127.0.0.1:${process.env.PIW_PORT ?? 8890}`,
+				target: `http://127.0.0.1:${process.env.PWI_PORT ?? 8890}`,
 				changeOrigin: true,
 				// The terminal is a WebSocket on /api/terminal/socket, and a proxy
 				// entry without this answers its upgrade with a 200 and no socket

@@ -5,7 +5,7 @@
  * file is the one exception, and it earns it: the damage it repairs is
  * permanent, self-replicating, and invisible until the next prompt fails.
  *
- * ## The damage
+ * ## The damage, part one: empty text blocks
  *
  * pi builds every user turn as `[{type:"text", text}, ...images]` — the text
  * block is unconditional (`core/agent-session.js`, "Add user message"). An
@@ -25,11 +25,24 @@
  * bricked, not the turn — the same failure mode as a dangling tool call, with
  * the same remedy.
  *
+ * ## The damage, part two: unanswered tool calls
+ *
+ * The assistant message is persisted at message_end and each tool result is
+ * persisted after it, so anything that kills the run in between — a crash, or
+ * a bash tool that restarts its own host process — leaves a `tool_use` with no
+ * `tool_result`. The API answers:
+ *
+ *     400 invalid_request_error: messages.N: `tool_use` ids were found without
+ *     `tool_result` blocks immediately after: toolu_...
+ *
+ * Same shape as the empty block: written before the request, replayed by every
+ * later prompt, session bricked rather than turn. Same remedy.
+ *
  * ## Why a file rewrite and not a filter
  *
- * `healDanglingToolCalls` fixes what the BROWSER renders. It cannot fix what
- * the PROVIDER receives: pi loads history from its own file and never asks
- * this server what it thinks the transcript is. The only seam that reaches
+ * `healDanglingToolCalls` in agent.ts fixes what the BROWSER renders. It cannot
+ * fix what the PROVIDER receives: pi loads history from its own file and never
+ * asks this server what it thinks the transcript is. The only seam that reaches
  * the request is the file itself, and the only safe moment to write it is
  * before the child that will hold it is spawned.
  *
@@ -37,6 +50,7 @@
  * intact rather than half a session.
  */
 
+import { randomBytes } from "node:crypto";
 import { readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
@@ -49,15 +63,66 @@ import { dirname, join } from "node:path";
  */
 const IMAGE_CAPTION = "(see attached image)";
 
+/**
+ * What an abandoned tool call is answered with. Same words agent.ts uses for
+ * the render-time heal, so a transcript reads the same whichever pass got there
+ * first.
+ */
+const INTERRUPTED = "Interrupted: the session ended before this tool returned.";
+
 export interface RepairResult {
 	/** User turns whose empty text block was captioned. */
 	captioned: number;
 	/** Messages dropped entirely: no text, no images, nothing to say. */
 	dropped: number;
+	/** Tool calls given a synthetic "interrupted" result. */
+	answered: number;
 }
 
 /** Nothing to do. Returned by the fast path so callers can skip logging. */
-const CLEAN: RepairResult = { captioned: 0, dropped: 0 };
+const CLEAN: RepairResult = { captioned: 0, dropped: 0, answered: 0 };
+
+/** Entry ids in this format are 8 hex chars. */
+const newId = () => randomBytes(4).toString("hex");
+
+/**
+ * Tool call ids in this file that never got a result, mapped to their tool name
+ * so the synthetic result can name it.
+ *
+ * Collected across the WHOLE file before anything is rewritten, because a
+ * result does not have to sit on the line after its call.
+ *
+ * ponytail: parses every line, so a repaired file is parsed twice. ~60ms on a
+ * 2.5MB session, once at open. Fuse the passes if that ever shows up.
+ */
+function unansweredCalls(lines: string[]): Map<string, string> {
+	const calls = new Map<string, string>();
+	const answered = new Set<string>();
+
+	for (const line of lines) {
+		if (!line) continue;
+		let entry: { type?: unknown; message?: unknown };
+		try {
+			entry = JSON.parse(line) as { type?: unknown; message?: unknown };
+		} catch {
+			continue;
+		}
+		if (entry.type !== "message") continue;
+		const m = entry.message as { role?: unknown; content?: unknown; toolCallId?: unknown } | undefined;
+		if (!m || typeof m !== "object") continue;
+
+		if (m.role === "toolResult" && typeof m.toolCallId === "string") answered.add(m.toolCallId);
+		if (m.role !== "assistant" || !Array.isArray(m.content)) continue;
+		for (const b of m.content as Array<Record<string, unknown>>) {
+			if (b?.type === "toolCall" && typeof b.id === "string") {
+				calls.set(b.id, typeof b.name === "string" ? b.name : "unknown");
+			}
+		}
+	}
+
+	for (const id of answered) calls.delete(id);
+	return calls;
+}
 
 /**
  * Remove empty text blocks from a session file's user turns.
@@ -86,12 +151,24 @@ export function repairSessionFile(file: string): RepairResult {
 	 * the repair would return clean here and stay bricked. Hence the escapes —
 	 * whitespace inside a JSON string arrives as `\n`, two characters.
 	 */
-	if (!/"text":"(?:\s|\\[nrtf])*"/.test(text)) return CLEAN;
-
 	const lines = text.split("\n");
+	const needsCaption = /"text":"(?:\s|\\[nrtf])*"/.test(text);
+	const pending = text.includes('"toolCall"') ? unansweredCalls(lines) : new Map<string, string>();
+	if (!needsCaption && pending.size === 0) return CLEAN;
+
 	const out: string[] = [];
 	let captioned = 0;
 	let dropped = 0;
+	let answered = 0;
+
+	/*
+	 * Entries are a tree linked by id/parentId, so an entry that is removed or
+	 * displaced has to hand its id on: `remap` says "anything that claimed this
+	 * parent now belongs to that one". Without it a drop orphans the rest of the
+	 * session (pi renders orphans as new roots) and an insert leaves the
+	 * synthetic result off the chain the provider is rebuilt from.
+	 */
+	const remap = new Map<string, string>();
 
 	for (const line of lines) {
 		if (!line) {
@@ -111,27 +188,31 @@ export function repairSessionFile(file: string): RepairResult {
 			continue;
 		}
 
+		const parent = entry.parentId;
+		const rechained = typeof parent === "string" && remap.has(parent);
+		if (rechained) entry.parentId = remap.get(parent as string);
+
 		const fixed = repairEntry(entry);
-		if (fixed === "unchanged") {
-			out.push(line);
-			continue;
-		}
 		if (fixed === "drop") {
 			dropped++;
+			// Adopt this entry's children onto its own parent, or they vanish.
+			if (typeof entry.id === "string") remap.set(entry.id, (entry.parentId ?? null) as string);
 			continue;
 		}
-		captioned++;
-		out.push(JSON.stringify(entry));
+		if (fixed === "fixed") captioned++;
+		out.push(fixed === "unchanged" && !rechained ? line : JSON.stringify(entry));
+
+		answered += appendMissingResults(entry, pending, out, remap);
 	}
 
-	if (captioned === 0 && dropped === 0) return CLEAN;
+	if (captioned === 0 && dropped === 0 && answered === 0) return CLEAN;
 
 	/*
 	 * Temp file in the SAME directory, because rename(2) is only atomic within
 	 * a filesystem and /tmp is routinely a different one. Removed on a failed
 	 * write so a full disk does not leave litter in pi's store.
 	 */
-	const tmp = join(dirname(file), `.${Date.now()}.piw-repair.tmp`);
+	const tmp = join(dirname(file), `.${Date.now()}.pwi-repair.tmp`);
 	try {
 		writeFileSync(tmp, out.join("\n"));
 		renameSync(tmp, file);
@@ -144,7 +225,62 @@ export function repairSessionFile(file: string): RepairResult {
 		return CLEAN;
 	}
 
-	return { captioned, dropped };
+	return { captioned, dropped, answered };
+}
+
+/**
+ * Emit a synthetic `toolResult` entry for every call in `entry` that this file
+ * never answered, chained after it, and point `entry`'s children at the last
+ * one. Returns how many were written.
+ *
+ * Immediately after the call, because the provider's rule is not "somewhere
+ * later" — the result must be in the NEXT message.
+ */
+function appendMissingResults(
+	entry: Record<string, unknown>,
+	pending: Map<string, string>,
+	out: string[],
+	remap: Map<string, string>,
+): number {
+	if (pending.size === 0 || entry.type !== "message") return 0;
+	const m = entry.message as { role?: unknown; content?: unknown } | undefined;
+	if (!m || m.role !== "assistant" || !Array.isArray(m.content)) return 0;
+
+	let parentId = typeof entry.id === "string" ? entry.id : null;
+	const timestamp = typeof entry.timestamp === "string" ? entry.timestamp : new Date().toISOString();
+	let written = 0;
+
+	for (const b of m.content as Array<Record<string, unknown>>) {
+		if (b?.type !== "toolCall" || typeof b.id !== "string") continue;
+		const toolName = pending.get(b.id);
+		if (toolName === undefined) continue;
+		// Drop it from `pending` so a session that somehow repeats a call id
+		// cannot get two results for it, which is the same 400 in reverse.
+		pending.delete(b.id);
+
+		const id = newId();
+		out.push(
+			JSON.stringify({
+				type: "message",
+				id,
+				parentId,
+				timestamp,
+				message: {
+					role: "toolResult",
+					toolCallId: b.id,
+					toolName,
+					content: [{ type: "text", text: INTERRUPTED }],
+					isError: true,
+					timestamp: Date.parse(timestamp) || Date.now(),
+				},
+			}),
+		);
+		parentId = id;
+		written++;
+	}
+
+	if (written > 0 && typeof entry.id === "string" && parentId) remap.set(entry.id, parentId);
+	return written;
 }
 
 /**

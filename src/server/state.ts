@@ -7,7 +7,7 @@
  * install did exactly that and left its own files sitting next to an agent's
  * credentials.
  *
- * `PIW_STATE_DIR` overrides it, which is also the seam the tests point at a
+ * `PWI_STATE_DIR` overrides it, which is also the seam the tests point at a
  * temp directory. Resolved per call rather than captured at import, so an env
  * var set after this module first loads still takes effect.
  */
@@ -17,7 +17,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 
 export function stateDir(): string {
-	return process.env.PIW_STATE_DIR ?? join(homedir(), ".config", "pi-web-ide");
+	return process.env.PWI_STATE_DIR ?? join(homedir(), ".config", "pi-web-ide");
 }
 
 export function statePath(name: string): string {
@@ -48,7 +48,7 @@ export function writeStateFile(path: string, text: string, mode = 0o600): void {
  * being consulted, because this only looks there when the new file is absent.
  *
  * Hosts are deliberately NOT migrated: the old list names forward ports that
- * the old server owns and remote ports where an omp-era piw is listening.
+ * the old server owns and remote ports where an omp-era pwi is listening.
  */
 export function readStateFile(path: string, legacy?: string): string | undefined {
 	try {

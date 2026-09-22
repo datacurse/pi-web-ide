@@ -106,9 +106,9 @@ export function Settings({
 	 * of state whose only consumer is one panel does not belong three levels up.
 	 *
 	 * Reloaded on every open so an edit made in $EDITOR (or on another machine's
-	 * piw) is what you see — EXCEPT when there are unsaved edits, which a
+	 * pwi) is what you see — EXCEPT when there are unsaved edits, which a
 	 * refetch would silently throw away. Closing the dialog by accident is one
-	 * Escape press; losing the paragraph you just typed to it would be piw's
+	 * Escape press; losing the paragraph you just typed to it would be pwi's
 	 * fault, not yours.
 	 */
 	const [personality, setPersonality] = useState<Personality | null>(null);
@@ -127,7 +127,7 @@ export function Settings({
 			/*
 			 * Every failure mode ends up as a message, never as a control that
 			 * sits on "loading…" forever. The one that actually happened: a
-			 * browser running this code against a piw process started before the
+			 * browser running this code against a pwi process started before the
 			 * endpoint existed, where the SPA fallback answered with index.html
 			 * and a 200 — so a successful-looking response whose body is not JSON
 			 * has to be treated as the version mismatch it is.
@@ -139,7 +139,7 @@ export function Settings({
 				setLoadError(
 					r && !r.ok
 						? `could not read it (HTTP ${r.status})`
-						: "could not read it — is this piw older than the field? restart it",
+						: "could not read it — is this pwi older than the field? restart it",
 				);
 				return;
 			}

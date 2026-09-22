@@ -30,7 +30,7 @@ import { PI_BIN } from "./agent.js";
  * a cheap one, because this runs on a button press and the answer is one
  * sentence.
  */
-const NAMING_MODEL = process.env.PIW_NAMING_MODEL;
+const NAMING_MODEL = process.env.PWI_NAMING_MODEL;
 
 /** A cold model plus a slow link. Past this, the click has failed. */
 const TIMEOUT_MS = 90_000;
@@ -60,7 +60,7 @@ const SESSION_INPUT_MAX = 2_000;
  * extra usage"), because pi had fallen back to a credential the package
  * normally supersedes; without it, the same prompt answers in 3.2 s.
  *
- * Unset PIW_NAMING_MODEL means pi's own default model, which is never wrong
+ * Unset PWI_NAMING_MODEL means pi's own default model, which is never wrong
  * — just slower and dearer than a small one for a one-sentence chore.
  */
 const ONESHOT = [

@@ -44,10 +44,10 @@ async function alive(port: number): Promise<boolean> {
 	await claimPort(port);
 }
 
-// THE GUARD. An older piw answers `{ ok, cwd }` with no `product`: it is a
+// THE GUARD. An older pwi answers `{ ok, cwd }` with no `product`: it is a
 // stranger, startup fails, and it keeps running.
 {
-	const old = await occupant({ ok: true, cwd: "/home/loki/code/piw", pid: process.pid });
+	const old = await occupant({ ok: true, cwd: "/home/loki/code/pwi", pid: process.pid });
 	try {
 		await assert.rejects(() => claimPort(old.port), /is not pi-web-ide/);
 		assert.equal(await alive(old.port), true, "the other product's server was left alone");

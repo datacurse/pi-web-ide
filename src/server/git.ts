@@ -7,7 +7,7 @@
  * typing `git add -A && git commit -m …` by hand on a phone is not the point.
  *
  * Deliberately NOT a git client. No staging UI, no hunks, no log, no diff
- * viewer: those are a real application, and piw already has a terminal for
+ * viewer: those are a real application, and pwi already has a terminal for
  * the cases this does not cover. What is here is the end of an agent turn —
  * branch, commit, push, PR — composed from four independent steps, because
  * every combination anybody actually asks for (`Commit`, `Commit & Push`,
