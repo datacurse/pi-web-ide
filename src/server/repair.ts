@@ -76,10 +76,17 @@ export function repairSessionFile(file: string): RepairResult {
 		return CLEAN;
 	}
 
-	// A file with no empty text block cannot need this pass, and this check is
-	// a substring scan rather than a JSON parse of several megabytes. The
-	// common case is every session ever opened, so it is worth the line.
-	if (!text.includes('"text":""')) return CLEAN;
+	/*
+	 * A file with no blank text block cannot need this pass, and this check is
+	 * a scan rather than a JSON parse of several megabytes. The common case is
+	 * every session ever opened, so it is worth the line.
+	 *
+	 * It must agree with `repairEntry`, which tests `.trim()`: a plain
+	 * `includes('"text":""')` misses `" "` and `"\n"`, and a file that needs
+	 * the repair would return clean here and stay bricked. Hence the escapes —
+	 * whitespace inside a JSON string arrives as `\n`, two characters.
+	 */
+	if (!/"text":"(?:\s|\\[nrtf])*"/.test(text)) return CLEAN;
 
 	const lines = text.split("\n");
 	const out: string[] = [];
