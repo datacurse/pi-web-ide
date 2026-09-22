@@ -599,6 +599,15 @@ export default function App() {
 	const opened = useRef<Set<string>>(new Set());
 
 	/**
+	 * Sessions opened this page that the listing cannot see yet, keyed the same
+	 * way tabs are. `+ New` writes its JSONL lazily, so its row would otherwise
+	 * exist only while it is the attached session and disappear the moment
+	 * another one is selected. Entries are dropped by `shown` once the real
+	 * on-disk entry arrives or the tab is closed.
+	 */
+	const [pending, setPending] = useState<PiSessionInfo[]>([]);
+
+	/**
 	 * This pwi's project list.
 	 *
 	 * A failed read keeps `error` set rather than emptying the list: a
@@ -944,6 +953,21 @@ export default function App() {
 			 */
 			const key = snap.file ?? snap.id;
 			opened.current.add(key);
+			setPending((list) => {
+				if (list.some((s) => s.path === key)) return list;
+				const now = new Date().toISOString();
+				return [
+					...list,
+					{
+						id: snap.id,
+						path: key,
+						created: now,
+						lastActive: now,
+						messageCount: 0,
+						firstMessage: "",
+					},
+				];
+			});
 			const current = tabsRef.current;
 			if (current.project === scope) {
 				// Replace a placeholder id-keyed tab once the file exists, rather
@@ -1480,24 +1504,15 @@ export default function App() {
 
 	// A session created by `+ New` has no JSONL until its first prompt, so
 	// /api/sessions (which lists disk) cannot see it. Show it anyway — in the
-	// list and as a tab title — until the next refresh replaces it with the
-	// real on-disk entry.
+	// list and as a tab title — for as long as it has a tab and no on-disk
+	// entry. Tab membership is the lifetime: closing the tab drops the row, and
+	// tabs are per-project, so another project's unsaved session never leaks in.
 	const shown = useMemo(() => {
-		const file = snapshot?.file;
-		if (!file || sessions.some((s) => s.path === file)) return sessions;
-		const now = new Date().toISOString();
-		return [
-			{
-				id: snapshot.id,
-				path: file,
-				created: now,
-				lastActive: now,
-				messageCount: 0,
-				firstMessage: "",
-			},
-			...sessions,
-		];
-	}, [sessions, snapshot?.id, snapshot?.file]);
+		const extra = pending.filter(
+			(p) => tabs.files.includes(p.path) && !sessions.some((s) => s.path === p.path),
+		);
+		return extra.length ? [...extra, ...sessions] : sessions;
+	}, [sessions, pending, tabs.files]);
 
 	const activeIndex = tabs.active ? tabs.files.indexOf(tabs.active) : -1;
 
