@@ -1,0 +1,40 @@
+{
+	"rules": {
+		"no-runtime-typeof": {
+			"disable": ["no-runtime-typeof", "ast-grep:no-runtime-typeof"]
+		},
+		"no-unknown-parameters": {
+			"disable": ["no-unknown-parameters", "ast-grep:no-unknown-parameters"]
+		},
+		"no-unsafe-dictionary-unknown": {
+			"disable": ["no-unsafe-dictionary-unknown", "ast-grep:no-unsafe-dictionary-unknown"]
+		},
+		"nested-ternary": {
+			"disable": ["nested-ternary", "ast-grep:nested-ternary"]
+		},
+		"console-statement": {
+			"disable": [
+				"console-statement",
+				"no-console-except-error",
+				"ast-grep:no-console-except-error"
+			]
+		},
+		"mixed-async-styles": {
+			"disable": ["mixed-async-styles", "ast-grep:mixed-async-styles"]
+		},
+		"dangerously-set-inner-html": {
+			"disable": [
+				"dangerously-set-inner-html",
+				"opengrep:typescript.react.security.audit.react-dangerouslysetinnerhtml.react-dangerouslysetinnerhtml"
+			]
+		},
+		"no-array-reverse-mutation": {
+			"disable": ["no-array-reverse-mutation", "ast-grep:no-array-reverse-mutation"]
+		},
+		"no-sort-without-comparator": {
+			"disable": ["no-sort-without-comparator", "ast-grep:no-sort-without-comparator"]
+		},
+		"high-complexity": { "threshold": 60 },
+		"high-fan-out": { "threshold": 60 }
+	}
+}
