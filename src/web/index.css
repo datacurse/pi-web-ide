@@ -206,6 +206,9 @@
 	--color-yellow-500: var(--ct-yellow);
 	--color-blue-400: var(--ct-blue);
 	--color-blue-300: var(--ct-lavender);
+	/* Success. Only ever a tick on a settled call — the eye should be able to
+	   run down a column of them and see that none is red. */
+	--color-green-400: var(--ct-green);
 	--color-red-400: var(--ct-red);
 	--color-red-300: var(--ct-red);
 	/*
@@ -358,6 +361,24 @@ body {
  */
 .chat-wide {
 	margin-inline-start: max(0px, (100% - var(--measure)) / 2);
+}
+
+/*
+ * Already inside the track.
+ *
+ * `.chat-wide` and `.chat-measure` position themselves against the measure,
+ * which is right exactly once — for a row that is a direct child of the
+ * gutter. Nest one inside another (an expanded tool group renders Blocks,
+ * and a Block is a `.chat-wide` tool card) and the offset is applied a
+ * second time, now against an already-narrowed box: the group's contents
+ * marched a third of the pane to the right of their own summary line.
+ *
+ * Collapsing the measure to the full width of the container makes both
+ * rules compute an offset of zero, so nesting is neutral without either
+ * rule knowing it is nested.
+ */
+.chat-nested {
+	--measure: 100%;
 }
 
 .chat-code {

@@ -119,6 +119,14 @@ function makeRenderRule(math: MathSpan[]) {
  * squeezed into 66 characters is unreadable in a different way.
  */
 const options: MarkdownToJSX.Options = {
+	/*
+	 * Without this, a reply short enough to hold no block element — "done",
+	 * a single sentence — is rendered inline, gets no `<p>`, and therefore
+	 * none of the `chat-measure` below: it lands flush against the gutter
+	 * while every other row in the transcript starts at the reading
+	 * column's left edge. The shortest answers were the misaligned ones.
+	 */
+	forceBlock: true,
 	overrides: {
 		a: {
 			component: ({ children, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement>) => (

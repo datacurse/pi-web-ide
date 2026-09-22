@@ -32,6 +32,7 @@ import type { Readable, Writable } from "node:stream";
 
 import { isRecord, records } from "./guards.js";
 import { personalityPath } from "./personality.js";
+import { repairSessionFile } from "./repair.js";
 import { sessionHeaderCwd } from "./sessions.js";
 import type {
 	AskAnswer,
@@ -108,6 +109,25 @@ const STDERR_KEEP = 4_000;
 
 /** One message as pi models it. Field access goes through the shared guards. */
 type AgentMessage = Record<string, unknown>;
+
+/**
+ * What an image-only prompt says instead of nothing.
+ *
+ * pi ALWAYS prepends a text block to a user turn — `agent-session.ts` builds
+ * `[{type:"text", text}, ...images]` whether or not `text` is empty — and a
+ * block with `text: ""` is a request the Anthropic API rejects outright:
+ * `400 invalid_request_error: messages: text content blocks must be
+ * non-empty`. pi's own anthropic provider filters blank blocks out on the way
+ * to the wire; a provider PACKAGE need not, and `pi-sub-anthropic` does not.
+ *
+ * Worse than one failed turn: the empty block is persisted before the request
+ * is made, so every later prompt replays it and the session file is bricked
+ * exactly the way a dangling tool call bricks one. Both are healed here.
+ *
+ * So a caption, not an empty string. It is what the user meant — "look at
+ * this" — and it costs a handful of tokens.
+ */
+const IMAGE_ONLY_PROMPT = "(see attached image)";
 
 export function emptyPartial(): PiPartial {
 	return { text: "", thinking: "", tools: [] };
@@ -723,6 +743,13 @@ export async function openSession(opts: OpenOptions): Promise<PiSession> {
 		// pi resolves a missing `--session` path as a partial session id and
 		// would start an unrelated session, or none. Fail with the path instead.
 		if (!existsSync(opts.file)) throw new Error(`session file not found: ${opts.file}`);
+		/*
+		 * Before the child opens it, never after: pi reads history from this file
+		 * once at startup and replays it to the provider on every turn, so a turn
+		 * with an empty text block in it fails forever otherwise. See repair.ts
+		 * for why that block exists and why only a file rewrite reaches it.
+		 */
+		repairSessionFile(opts.file);
 		cwd = (await sessionHeaderCwd(opts.file)) ?? opts.cwd;
 	}
 
@@ -970,10 +997,15 @@ export async function openSession(opts: OpenOptions): Promise<PiSession> {
 			// prompt, not as a half-started turn that fails mid-flight.
 			const attachments = images?.length ? images.map(toImageContent) : undefined;
 
+			// An image with no words is a legitimate prompt in the composer and an
+			// invalid request on the wire, because pi persists and replays the empty
+			// text block it builds around it (see IMAGE_ONLY_PROMPT). Caption it.
+			const message = text.trim() ? text : attachments ? IMAGE_ONLY_PROMPT : text;
+
 			// streamingBehavior is REQUIRED while streaming or the command fails.
 			const wasStreaming = streaming;
 			await child.send<unknown>("prompt", {
-				message: text,
+				message,
 				...(attachments ? { images: attachments } : {}),
 				...(wasStreaming ? { streamingBehavior: "followUp" } : {}),
 			});

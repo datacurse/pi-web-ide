@@ -8,7 +8,13 @@ import tailwindcss from "@tailwindcss/vite";
 export default defineConfig({
 	plugins: [react(), tailwindcss()],
 	server: {
-		port: 5480,
+		// Same env var the server reads to build its dev redirect (see index.ts):
+		// two places deciding this independently is how you get a 302 to a port
+		// nothing is listening on.
+		port: Number(process.env.PIW_VITE_PORT ?? 5480),
+		// A dev server that silently moves to the next free port makes that
+		// redirect wrong, which is worse than failing to start.
+		strictPort: true,
 		// Loopback only. Windows reaches 127.0.0.1 inside WSL via localhost
 		// forwarding (NAT) or mirrored networking (see ~/.wslconfig). Do NOT set
 		// `host: true` to work around a networking problem — that exposes the dev

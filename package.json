@@ -6,8 +6,7 @@
 	"description": "A deliberately thin web UI for the pi coding agent SDK",
 	"scripts": {
 		"dev": "concurrently -k -n server,web -c blue,green \"pnpm:dev:server\" \"pnpm:dev:web\"",
-		"dev:server": "node --import tsx src/server/index.ts",
-		"dev:server:watch": "node --watch --import tsx src/server/index.ts",
+		"dev:server": "PIW_DEV=1 node --watch --import tsx src/server/index.ts",
 		"dev:web": "until nc -z 127.0.0.1 ${PIW_PORT:-8890}; do sleep 0.1; done && vite",
 		"build": "vite build",
 		"start": "node --import tsx src/server/index.ts",
