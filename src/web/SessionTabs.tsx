@@ -14,6 +14,34 @@ import { isFileTab, tabLabel, tabPath } from "./tabs.js";
 export const tabDomId = (index: number) => `session-tab-${index}`;
 
 /**
+ * The drag payload for a tab, as a dataTransfer TYPE rather than its data.
+ *
+ * Data cannot be read during `dragover` (browsers protect it until drop), but
+ * the type list can — so the editor's drop zones need the entry encoded in a
+ * type to know whether an arbitrary drag over them is one of ours. Lowercase
+ * because the DOM lowercases every type it stores.
+ */
+export const TAB_DRAG_TYPE = "application/x-pwi-tab";
+
+/** Whether a drag in progress is one of our tabs, decidable during dragover. */
+export const isTabDrag = (types: readonly string[]): boolean => types.includes(TAB_DRAG_TYPE);
+
+/**
+ * Which SLOT a pointer aims at, over the tab at `index`.
+ *
+ * A slot is a GAP, numbered 0..tabs.length — slot 2 means "between tab 1 and
+ * tab 2". Past the tab's midpoint means the gap after it, which is what makes
+ * a drag feel like it is pointing somewhere: aiming at a tab's left half puts
+ * the tab before it, the right half after it, instead of every hover over one
+ * tab meaning the same single position.
+ *
+ * Pure and exported so the boundary is testable without a drag.
+ */
+export function slotFor(x: number, left: number, width: number, index: number): number {
+	return x < left + width / 2 ? index : index + 1;
+}
+
+/**
  * The tab strip: this project's open chat sessions AND open files, in one
  * list, the way an editor's is.
  *
@@ -44,6 +72,8 @@ export function SessionTabs({
 	shortNames,
 	dirtyFiles,
 	onReorder,
+	onAdopt,
+	label = "Open sessions",
 }: {
 	/** Open session files, in strip order. */
 	tabs: string[];
@@ -52,11 +82,24 @@ export function SessionTabs({
 	active: string | undefined;
 	/** Element the tabs control — the chat panel. */
 	panelId: string;
-	listOpen: boolean;
+	listOpen?: boolean;
 	onSelect: (file: string) => void;
 	onClose: (file: string) => void;
-	onNew: () => void;
-	onToggleList: () => void;
+	/*
+	 * Both absent in the split's second column: it holds files only, so there
+	 * is no session to create and no session list to toggle. Optional rather
+	 * than a `variant` flag — the buttons are gone exactly when the callbacks
+	 * that make them do anything are, and that cannot be set inconsistently.
+	 */
+	onNew?: () => void;
+	onToggleList?: () => void;
+	/**
+	 * Take a tab dropped from the OTHER column. Absent means this strip does
+	 * not accept them, which is the single-column case.
+	 */
+	onAdopt?: (entry: string, index: number) => void;
+	/** Distinguishes the two strips for a screen reader. */
+	label?: string;
 	/** Label unnamed sessions by a short name from the first prompt. */
 	shortNames: boolean;
 	/** Open files with unsaved edits, keyed by absolute path. */
@@ -75,7 +118,31 @@ export function SessionTabs({
 	 * and the insertion marker has to be drawn before then.
 	 */
 	const dragFrom = useRef<number | null>(null);
-	const [drag, setDrag] = useState<{ from: number; to: number } | null>(null);
+	/**
+	 * The in-flight drag: where it started, and the gap it is aiming at.
+	 *
+	 * `from` is null for a tab dragged in from the OTHER column — that is an
+	 * insertion rather than a move, and it is the case that previously drew
+	 * nothing at all, so a cross-column drag gave no clue where it would land.
+	 */
+	const [drag, setDrag] = useState<{ from: number | null; slot: number } | null>(null);
+
+	/** Aim at `slot`, skipping the re-render when it has not changed. */
+	const aim = (from: number | null, slot: number) => {
+		setDrag((d) => (d && d.from === from && d.slot === slot ? d : { from, slot }));
+	};
+
+	/*
+	 * The gap to draw the marker in, or -1 for none.
+	 *
+	 * A same-strip drag hides the marker at the two slots that mean "where it
+	 * already is": a line promising a move that would not move anything reads
+	 * as a bug.
+	 */
+	const markSlot =
+		drag && !(drag.from !== null && (drag.slot === drag.from || drag.slot === drag.from + 1))
+			? drag.slot
+			: -1;
 	const byFile = useMemo(() => new Map(sessions.map((s) => [s.path, s])), [sessions]);
 	const activeIndex = active ? tabs.indexOf(active) : -1;
 
@@ -130,6 +197,7 @@ export function SessionTabs({
 			  to live somewhere permanent. The strip's left edge is where a tab bar
 			  already carries chrome, and it stays out of the scrolling region.
 			*/}
+			{onToggleList && (
 			<button
 				onClick={onToggleList}
 				aria-expanded={listOpen}
@@ -140,10 +208,12 @@ export function SessionTabs({
 			>
 				<span aria-hidden>{"\u2261"}</span>
 			</button>
+			)}
 
 			{/* Left of the strip, outside the scrolling region: a "+" that scrolls
 			    away with twenty open tabs is a "+" you cannot click, and the left
 			    edge is where the strip's chrome already lives. */}
+			{onNew && (
 			<button
 				onClick={onNew}
 				aria-label="New session"
@@ -152,15 +222,54 @@ export function SessionTabs({
 			>
 				<Plus size={16} />
 			</button>
+			)}
 
 			<div
 				role="tablist"
-				aria-label="Open sessions"
+				aria-label={label}
 				aria-orientation="horizontal"
+				/*
+				 * A tab dragged from the OTHER column lands here. The strip itself
+				 * takes the drop as well as each tab, so dropping on the empty space
+				 * past the last tab appends rather than doing nothing — which is the
+				 * whole target when the column is empty.
+				 */
+				onDragOver={(e) => {
+					const from = dragFrom.current;
+					if (from === null && !onAdopt) return;
+					if (!isTabDrag(e.dataTransfer.types)) return;
+					e.preventDefault();
+					e.dataTransfer.dropEffect = "move";
+					// Only fires for the space PAST the last tab: a tab's own handler
+					// stops the event before it bubbles here.
+					aim(from, tabs.length);
+				}}
+				// dragleave fires on every internal boundary, so clear only when the
+				// pointer actually left the strip — otherwise the marker flickers off
+				// each time it crosses between two tabs.
+				onDragLeave={(e) => {
+					if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDrag(null);
+				}}
+				onDrop={(e) => {
+					const from = dragFrom.current;
+					dragFrom.current = null;
+					setDrag(null);
+					if (from !== null) {
+						e.preventDefault();
+						// Dropped past the last tab: send it to the end.
+						if (from !== tabs.length - 1) onReorder(from, tabs.length - 1);
+						return;
+					}
+					const entry = onAdopt ? e.dataTransfer.getData(TAB_DRAG_TYPE) : "";
+					if (!entry) return;
+					e.preventDefault();
+					onAdopt?.(entry, tabs.length);
+				}}
 				// An empty tablist must not claim the free space, or the hint next to
-				// it is pushed into the middle of the strip.
+				// it is pushed into the middle of the strip. It does claim it when it
+				// is a drop target, because an empty column needs somewhere to aim.
 				className={`tab-strip flex min-w-0 items-stretch gap-1 overflow-x-auto ${
-					tabs.length > 0 ? "flex-1" : "flex-none"
+					tabs.length > 0 || onAdopt ? "flex-1" : "flex-none"
 				}`}
 			>
 				{tabs.map((file, i) => {
@@ -179,27 +288,58 @@ export function SessionTabs({
 							draggable
 							onDragStart={(e) => {
 								dragFrom.current = i;
-								setDrag({ from: i, to: i });
+								// Aimed at its own slot, which draws no marker — the tab has
+								// not been dragged anywhere yet.
+								setDrag({ from: i, slot: i });
 								e.dataTransfer.effectAllowed = "move";
 								// Firefox starts no drag at all unless some data is set.
 								e.dataTransfer.setData("text/plain", file);
+								// The entry rides in the TYPE as well as the data: the
+								// editor's split zones have to recognise our drag during
+								// dragover, where the data is unreadable.
+								e.dataTransfer.setData(TAB_DRAG_TYPE, file);
 							}}
 							onDragOver={(e) => {
 								const from = dragFrom.current;
-								if (from === null) return;
+								// Null `from` with our type on the drag means it started in the
+								// other column: an insertion rather than a move, but it aims at
+								// a slot and gets a marker exactly like a local drag.
+								if (from === null && !onAdopt) return;
+								if (!isTabDrag(e.dataTransfer.types)) return;
 								// Without preventDefault the browser refuses the drop and the
 								// tab animates back to where it started.
 								e.preventDefault();
+								// The strip's own handler means "past the last tab"; over a tab
+								// it must not overwrite the slot we just worked out.
+								e.stopPropagation();
 								e.dataTransfer.dropEffect = "move";
-								if (drag?.to !== i) setDrag({ from, to: i });
+								const r = e.currentTarget.getBoundingClientRect();
+								aim(from, slotFor(e.clientX, r.left, r.width, i));
 							}}
 							onDrop={(e) => {
 								const from = dragFrom.current;
 								dragFrom.current = null;
 								setDrag(null);
-								if (from === null || from === i) return;
+								// Recomputed from the drop's OWN coordinates rather than read
+								// back from state: dragleave fires before drop, so the state
+								// the marker used may already be cleared.
+								const r = e.currentTarget.getBoundingClientRect();
+								const slot = slotFor(e.clientX, r.left, r.width, i);
+								if (from === null) {
+									const entry = onAdopt ? e.dataTransfer.getData(TAB_DRAG_TYPE) : "";
+									if (!entry) return;
+									e.preventDefault();
+									// Stop the strip's own handler from appending it as well.
+									e.stopPropagation();
+									onAdopt?.(entry, slot);
+									return;
+								}
 								e.preventDefault();
-								onReorder(from, i);
+								e.stopPropagation();
+								// Slot to index: removing the tab first shifts every later slot
+								// down one.
+								const to = slot > from ? slot - 1 : slot;
+								if (to !== from) onReorder(from, to);
 							}}
 							// Dropping outside the strip, or pressing Escape, ends the drag
 							// without a drop — the marker has to be cleared either way.
@@ -208,17 +348,34 @@ export function SessionTabs({
 								setDrag(null);
 							}}
 							className={`group relative flex shrink-0 py-1 ${
+								// The tab being dragged fades, so the marker is clearly a
+								// destination and not the tab itself.
 								drag?.from === i ? "opacity-40" : ""
-							} ${
-								/* Where it would land: a line on the side it is coming from,
-								   so the marker sits between the two tabs it separates. */
-								drag && drag.to === i && drag.from !== i
-									? drag.from < i
-										? "shadow-[inset_-2px_0_0_0_var(--color-amber-400)]"
-										: "shadow-[inset_2px_0_0_0_var(--color-amber-400)]"
-									: ""
 							}`}
 						>
+							{/*
+							 * The insertion marker, drawn IN THE GAP between two tabs
+							 * rather than as an inset edge on one of them — an inset line
+							 * reads as a border the tab grew, which is why this looked
+							 * wrong. Sitting in the gap, it reads as the seam the tab is
+							 * about to be dropped into.
+							 *
+							 * pointer-events-none so the marker cannot become the drag
+							 * target and start flickering against its own hover.
+							 */}
+							{markSlot === i && (
+								<span
+									aria-hidden
+									className="pointer-events-none absolute inset-y-1 -left-[3px] w-0.5 rounded-full bg-amber-400"
+								/>
+							)}
+							{/* The last gap has no tab after it to hang off. */}
+							{markSlot === tabs.length && i === tabs.length - 1 && (
+								<span
+									aria-hidden
+									className="pointer-events-none absolute inset-y-1 -right-[3px] w-0.5 rounded-full bg-amber-400"
+								/>
+							)}
 							<button
 								ref={(el) => {
 									buttons.current[i] = el;
@@ -281,6 +438,15 @@ export function SessionTabs({
 						</div>
 					);
 				})}
+
+				{/* An empty column still has to show where the drop lands, and has no
+				    tab to hang the marker off. */}
+				{tabs.length === 0 && markSlot === 0 && (
+					<span
+						aria-hidden
+						className="pointer-events-none my-1 w-0.5 shrink-0 rounded-full bg-amber-400"
+					/>
+				)}
 			</div>
 
 			{tabs.length === 0 && (

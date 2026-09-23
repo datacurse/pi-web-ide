@@ -1,6 +1,18 @@
 // Run: node --import tsx src/web/tabs.test.ts
 import assert from "node:assert/strict";
-import { fileTab, isFileTab, moveTab, tabLabel, tabPath } from "./tabs.js";
+import {
+	fileTab,
+	groupOf,
+	isFileTab,
+	moveTab,
+	tabLabel,
+	tabPath,
+	withGroup,
+	withoutTab,
+	withTab,
+} from "./tabs.js";
+import { halfOf } from "./SplitZone.js";
+import { slotFor } from "./SessionTabs.js";
 
 // A file entry round-trips.
 const t = fileTab("/home/me/proj/src/App.tsx");
@@ -57,5 +69,111 @@ assert.deepEqual(moveTab([], 0, 1), []);
 // tab can sit between two chats, which is the point of having one strip.
 const mixed = ["/s/1.jsonl", fileTab("/p/a.ts"), "/s/2.jsonl"];
 assert.deepEqual(moveTab(mixed, 1, 0), [fileTab("/p/a.ts"), "/s/1.jsonl", "/s/2.jsonl"]);
+
+// --- withoutTab / withTab: the split's two mutations -----------------------
+const group = { files: ["a", "b", "c"], active: "b" };
+
+// Closing the SHOWING tab selects the one that slid into its slot.
+assert.deepEqual(withoutTab(group, "b"), { files: ["a", "c"], active: "c" });
+// Closing the rightmost falls back to its LEFT neighbour — there is no slot to
+// slide into, and landing on the empty pane is the bug this rule prevents.
+assert.deepEqual(withoutTab({ files: ["a", "b"], active: "b" }, "b"), {
+	files: ["a"],
+	active: "a",
+});
+// Closing a background tab leaves the selection alone: the pane must not
+// change under you because something else closed.
+assert.deepEqual(withoutTab(group, "a"), { files: ["b", "c"], active: "b" });
+// Emptying the group yields no active tab, which is what tells App to collapse
+// the split rather than render a divider and a blank pane.
+assert.deepEqual(withoutTab({ files: ["a"], active: "a" }, "a"), { files: [], active: undefined });
+// Not here: null, so a caller can tell "nothing to do" from "removed the last
+// one" — they need different handling, and both have empty-ish results.
+assert.equal(withoutTab(group, "zzz"), null);
+
+// Adding focuses; adding twice does NOT duplicate. Dropping a tab onto the
+// column it already lives in is the common way to hit this.
+assert.deepEqual(withTab(group, "d"), { files: ["a", "b", "c", "d"], active: "d" });
+assert.deepEqual(withTab(group, "a"), { files: ["a", "b", "c"], active: "a" });
+assert.deepEqual(withTab({ files: [] }, "a"), { files: ["a"], active: "a" });
+
+// Neither mutates: App holds the previous group in a ref and compares.
+assert.deepEqual(group, { files: ["a", "b", "c"], active: "b" });
+
+
+
+// --- halfOf: which side a drop lands on ------------------------------------
+// The midpoint belongs to the RIGHT half, so a drop exactly on the seam
+// splits rather than silently doing nothing.
+assert.equal(halfOf(10, 0, 100), "left");
+assert.equal(halfOf(50, 0, 100), "right");
+assert.equal(halfOf(90, 0, 100), "right");
+// Offset boxes: the second column does not start at x=0, and using clientX
+// against a zero origin would make its whole body read as "right".
+assert.equal(halfOf(510, 500, 100), "left");
+assert.equal(halfOf(590, 500, 100), "right");
+// --- groupOf / withGroup: the split's two columns --------------------------
+const split = { files: ["s1", "f1"], active: "s1", right: { files: ["f2"], active: "f2" } };
+
+// Each side reads back as a plain group, whichever half it is.
+assert.deepEqual(groupOf(split, "left"), { files: ["s1", "f1"], active: "s1" });
+assert.deepEqual(groupOf(split, "right"), { files: ["f2"], active: "f2" });
+// Unsplit: the right column reads as empty rather than undefined, so callers
+// can treat both sides the same without a null check.
+assert.deepEqual(groupOf({ files: ["a"], active: "a" }, "right"), { files: [] });
+
+// Writing the left column keeps it FLAT, which is the shape already persisted
+// under pwi:tabs:<project> — nesting it would drop everyone's open tabs.
+assert.deepEqual(withGroup(split, "left", { files: ["x"], active: "x" }), {
+	files: ["x"],
+	active: "x",
+	right: { files: ["f2"], active: "f2" },
+});
+
+// Emptying the SECOND column collapses the split: a column with no tabs is a
+// divider and a blank pane.
+assert.deepEqual(withGroup(split, "right", { files: [] }), {
+	files: ["s1", "f1"],
+	active: "s1",
+	right: undefined,
+});
+// Emptying the FIRST column does not: it owns the empty-state hint, and there
+// would be nowhere left to put a tab back.
+assert.deepEqual(withGroup(split, "left", { files: [] }), {
+	files: [],
+	active: undefined,
+	right: { files: ["f2"], active: "f2" },
+});
+
+// A SESSION moves between columns like any other entry — the chat follows the
+// selection rather than being pinned to the left column.
+const moved = withGroup(withGroup(split, "left", withoutTab(groupOf(split, "left"), "s1")!), "right", withTab(groupOf(split, "right"), "s1"));
+assert.deepEqual(moved.files, ["f1"]);
+assert.deepEqual(moved.right, { files: ["f2", "s1"], active: "s1" });
+
+// --- slotFor: which GAP a drag aims at ------------------------------------
+// A slot is a gap, 0..n. Over tab 2's left half means the gap before it (2),
+// over its right half the gap after (3) — that is what makes a drag point
+// somewhere instead of every hover over one tab meaning one position.
+assert.equal(slotFor(100, 100, 40, 2), 2); // hard left edge
+assert.equal(slotFor(119, 100, 40, 2), 2); // just before the midpoint
+assert.equal(slotFor(120, 100, 40, 2), 3); // the midpoint belongs to the right
+assert.equal(slotFor(139, 100, 40, 2), 3); // hard right edge
+
+// The strip scrolls and the second column does not start at x=0, so the box
+// offset has to be honoured rather than assumed away.
+assert.equal(slotFor(505, 500, 40, 0), 0);
+assert.equal(slotFor(535, 500, 40, 0), 1);
+
+// Dropping a tab back on its own two slots is a no-op: with `from` = 2, both
+// slot 2 and slot 3 mean "where it already is". App converts slot to index by
+// subtracting one when the slot is past the source.
+for (const [slot, from] of [[2, 2], [3, 2]]) {
+	assert.equal(slot > from ? slot - 1 : slot, from);
+}
+// Moving right: slot 5 with the tab removed from index 2 lands at index 4.
+assert.equal(5 > 2 ? 5 - 1 : 5, 4);
+// Moving left needs no shift: slot 1 is index 1.
+assert.equal(1 > 2 ? 0 : 1, 1);
 
 console.log("tabs: ok");

@@ -17,7 +17,18 @@ import { TerminalPane } from "./Terminal.js";
 import { Review } from "./Review.js";
 import { Explorer } from "./Explorer.js";
 import { FileEditor } from "./FileEditor.js";
-import { fileTab, isFileTab, moveTab, tabPath } from "./tabs.js";
+import {
+	fileTab,
+	groupOf,
+	isFileTab,
+	moveTab,
+	tabPath,
+	withGroup,
+	withoutTab,
+	withTab,
+} from "./tabs.js";
+import type { Side, TabGroup } from "./tabs.js";
+import { SplitZone } from "./SplitZone.js";
 import { EMPTY_LAYOUT, reconcile, type TermLayout } from "./termLayout.js";
 import { Settings } from "./Settings.js";
 import { Packages } from "./Packages.js";
@@ -180,6 +191,146 @@ function askLine(ask: PiAsk): string {
 /** The chat panel the tab strip controls; `aria-controls` needs a real id. */
 const CHAT_PANEL_ID = "chat-panel";
 
+/** Same, for the split's second column. */
+const SPLIT_PANEL_ID = "split-panel";
+
+/**
+ * One editor column: a tab strip, and whatever its selected tab shows.
+ *
+ * Both halves of the split are this SAME component, which is what makes them
+ * symmetric — the same strip, the same drop targets, the same rules — rather
+ * than a real editor and a lesser copy of one.
+ *
+ * `chat` is passed in as an element rather than rendered here, because there
+ * is exactly one chat in the app: one EventSource, one transcript, one
+ * composer. Handing that single instance to whichever column holds the
+ * attached session means dragging the session across MOVES the chat instead
+ * of building a second one.
+ */
+function EditorColumn({
+	side,
+	group,
+	panelId,
+	sessions,
+	shortNames,
+	dirtyFiles,
+	onSelect,
+	onClose,
+	onReorder,
+	onMove,
+	listOpen,
+	onNew,
+	onToggleList,
+	cwd,
+	onDirty,
+	chat,
+}: {
+	side: Side;
+	group: TabGroup;
+	panelId: string;
+	sessions: PiSessionInfo[];
+	shortNames: boolean;
+	dirtyFiles: Record<string, boolean>;
+	onSelect: (entry: string) => void;
+	onClose: (entry: string) => void;
+	onReorder: (from: number, to: number) => void;
+	onMove: (entry: string, to: Side, index?: number) => void;
+	listOpen?: boolean;
+	onNew?: () => void;
+	onToggleList?: () => void;
+	cwd: string;
+	onDirty: (path: string, dirty: boolean) => void;
+	/** The one chat, when this column is the one holding the attached session. */
+	chat: React.ReactNode;
+}) {
+	const active = group.active;
+	const activeIndex = active ? group.files.indexOf(active) : -1;
+	const showsFile = active !== undefined && isFileTab(active);
+
+	return (
+		<div
+			className={`flex min-h-0 min-w-0 flex-1 flex-col ${
+				/* Only the second column draws the seam, so an unsplit editor has no
+				   stray border down its left edge. Hidden on a phone, where two
+				   columns is a handful of words per line each — the state is
+				   untouched, so the tabs return when the window widens. */
+				side === "right" ? "border-l border-neutral-800 narrow:hidden" : ""
+			}`}
+		>
+			<SessionTabs
+				tabs={group.files}
+				sessions={sessions}
+				active={active}
+				panelId={panelId}
+				label={side === "left" ? "Open sessions" : "Open sessions, second column"}
+				listOpen={listOpen}
+				onSelect={onSelect}
+				onClose={onClose}
+				onNew={onNew}
+				onToggleList={onToggleList}
+				shortNames={shortNames}
+				dirtyFiles={dirtyFiles}
+				onReorder={onReorder}
+				// A tab dropped on THIS strip belongs in THIS column, at the slot it
+				// was aimed at.
+				onAdopt={(entry, index) => onMove(entry, side, index)}
+			/>
+			<SplitZone
+				/*
+				 * The left column's halves mean "keep it here" and "put it in the
+				 * second column". The right column is already the rightmost, so both
+				 * of its halves mean the same thing: there is nothing further right
+				 * to create, and honouring a left-half drop here would yank the tab
+				 * back out of the column you just aimed at.
+				 */
+				onDrop={(entry, dropSide) => onMove(entry, side === "right" ? side : dropSide)}
+				// ...and the highlight says so: one target covering the whole body,
+				// rather than a half promising a third column.
+				splits={side === "left"}
+				className="flex min-h-0 min-w-0 flex-1 flex-col"
+			>
+				<div
+					id={panelId}
+					role="tabpanel"
+					aria-labelledby={activeIndex >= 0 ? tabDomId(activeIndex) : undefined}
+					className="flex min-h-0 min-w-0 flex-1 flex-col"
+				>
+					{showsFile && (
+						<FileEditor
+							// Keyed by path: switching files must build a new editor rather
+							// than reuse one holding another file's undo history.
+							key={active}
+							path={tabPath(active)}
+							cwd={cwd}
+							onDirty={onDirty}
+						/>
+					)}
+					{/*
+					 * The chat stays MOUNTED under a file tab rather than being swapped
+					 * out: it holds the live EventSource and the transcript's scroll
+					 * position, so unmounting to look at a file would drop a streaming
+					 * turn and lose your place in it. `hidden` costs a hidden subtree;
+					 * remounting costs the session.
+					 */}
+					{chat && (
+						<div
+							className={`flex min-h-0 min-w-0 flex-1 flex-col ${showsFile ? "hidden" : ""}`}
+						>
+							{chat}
+						</div>
+					)}
+					{/* Nothing to show: an empty column says so rather than going blank. */}
+					{!showsFile && !chat && (
+						<p className="m-auto px-4 text-center text-sm text-neutral-500">
+							Drag a tab here, or pick one above.
+						</p>
+					)}
+				</div>
+			</SplitZone>
+		</div>
+	);
+}
+
 /*
  * Open tabs are remembered across reloads under `pwi:tabs:<project cwd>`.
  *
@@ -305,13 +456,26 @@ interface Tabs {
 	project: string;
 	files: string[];
 	active?: string;
+	/**
+	 * The SECOND editor column, when the strip has been split.
+	 *
+	 * Files only, and that is a constraint rather than a simplification: the
+	 * chat is one EventSource, one snapshot and one composer (see `attach`),
+	 * so a session tab in a second column would need a whole parallel attach
+	 * pipeline to render anything. A session dropped into the split therefore
+	 * stays where it is — see `moveToGroup`.
+	 *
+	 * Undefined means unsplit, which is distinct from split-and-empty: the
+	 * latter cannot occur, because emptying the column closes it.
+	 */
+	right?: TabGroup;
 }
 
 function readTabs(project: string): Tabs {
 	const raw = readStored(`pwi:tabs:${project}`);
 	if (!raw) return { project, files: [] };
 	try {
-		const parsed = JSON.parse(raw) as { files?: unknown; active?: unknown };
+		const parsed = JSON.parse(raw) as { files?: unknown; active?: unknown; right?: unknown };
 		// Storage is user-writable and outlives any format change, so anything
 		// unexpected degrades to "no tabs" instead of throwing during render.
 		const files = Array.isArray(parsed.files)
@@ -321,10 +485,36 @@ function readTabs(project: string): Tabs {
 			typeof parsed.active === "string" && files.includes(parsed.active)
 				? parsed.active
 				: files[0];
-		return { project, files, active };
+		return { project, files, active, right: parseGroup(parsed.right, files) };
 	} catch {
 		return { project, files: [] };
 	}
+}
+
+/**
+ * The stored second column, or undefined.
+ *
+ * `taken` is the left column's files: an entry in BOTH columns would render
+ * twice and be closable from either, so the left one wins and the right keeps
+ * whatever is left. Storage is user-writable, so this is a validation and not
+ * a cast — the same rule every other read in prefs.ts follows.
+ */
+function parseGroup(raw: unknown, taken: string[]): TabGroup | undefined {
+	if (!raw || typeof raw !== "object") return undefined;
+	const { files, active } = raw as { files?: unknown; active?: unknown };
+	if (!Array.isArray(files)) return undefined;
+	const kept = [
+		...new Set(
+			files.filter((f): f is string => typeof f === "string" && !taken.includes(f)),
+		),
+	];
+	// An empty second column is no second column: restoring one would show a
+	// divider and a blank pane with no way to tell what it was for.
+	if (kept.length === 0) return undefined;
+	return {
+		files: kept,
+		active: typeof active === "string" && kept.includes(active) ? active : kept[0],
+	};
 }
 
 export default function App() {
@@ -934,6 +1124,23 @@ export default function App() {
 	);
 
 	/**
+	 * Close a tab in the second column, collapsing the split when it empties.
+	 *
+	 * Beside `closeTab` because it is the same operation on the other column,
+	 * and because the stale-session sweep needs both of them.
+	 */
+	const closeRight = useCallback(
+		(file: string) => {
+			const current = tabsRef.current;
+			if (!current.right) return;
+			const pruned = withoutTab(current.right, file);
+			if (!pruned) return;
+			commitTabs(withGroup(current, "right", pruned));
+		},
+		[commitTabs],
+	);
+
+	/**
 	 * Attach to a session. The server is authoritative: we GET the full state
 	 * and only then start applying deltas. On any doubt we refetch rather than
 	 * trying to repair local state.
@@ -1246,9 +1453,19 @@ export default function App() {
 		const next = readTabs(scope);
 		commitTabs(next);
 		detach();
-		// A restored FILE tab has no session behind it. Attach to nothing and let
-		// the file render; attaching would treat `file:/path` as a session path.
-		if (next.active && !isFileTab(next.active)) void attach(next.active);
+		/*
+		 * Attach to whichever column's selected tab is a session — the split
+		 * can hold the conversation in either one, and a restore that only
+		 * looked left would come back to a chat pane that never attached.
+		 *
+		 * A restored FILE tab has no session behind it: attach to nothing and
+		 * let the file render, because attaching would treat `file:/path` as a
+		 * session path.
+		 */
+		const restored = [next.active, next.right?.active].find(
+			(entry): entry is string => entry !== undefined && !isFileTab(entry),
+		);
+		if (restored) void attach(restored);
 	}, [project, scope, attach, commitTabs, detach]);
 
 	useEffect(() => {
@@ -1257,7 +1474,7 @@ export default function App() {
 		if (tabs.project) {
 			writeStored(
 				`pwi:tabs:${tabs.project}`,
-				JSON.stringify({ files: tabs.files, active: tabs.active }),
+				JSON.stringify({ files: tabs.files, active: tabs.active, right: tabs.right }),
 			);
 		}
 	}, [tabs]);
@@ -1273,15 +1490,15 @@ export default function App() {
 	 */
 	useEffect(() => {
 		if (!listedProject || listedProject !== tabs.project) return;
-		for (const file of tabs.files) {
+		const gone = (file: string) =>
 			// A file tab is not a session and is not in the session listing; only
 			// the sessions are checked for having gone away.
-			if (isFileTab(file)) continue;
-			if (opened.current.has(file)) continue;
-			if (sessions.some((s) => s.path === file)) continue;
-			closeTab(file);
-		}
-	}, [sessions, listedProject, tabs, closeTab]);
+			!isFileTab(file) && !opened.current.has(file) && !sessions.some((s) => s.path === file);
+		for (const file of tabs.files) if (gone(file)) closeTab(file);
+		// The second column too: a session deleted elsewhere leaves a broken tab
+		// whichever column it happens to be sitting in.
+		for (const file of tabs.right?.files ?? []) if (gone(file)) closeRight(file);
+	}, [sessions, listedProject, tabs, closeTab, closeRight]);
 
 	/**
 	 * Switch tabs: a chat session, or a file.
@@ -1325,12 +1542,116 @@ export default function App() {
 		[commitTabs],
 	);
 
-	/** Open a file from the explorer into a tab, or focus the tab it already has. */
+	/** Reorder within the second column. Same rules, other list. */
+	const reorderRight = useCallback(
+		(from: number, to: number) => {
+			const current = tabsRef.current;
+			if (!current.right) return;
+			const files = moveTab(current.right.files, from, to);
+			if (files === current.right.files) return;
+			commitTabs({ ...current, right: { ...current.right, files } });
+		},
+		[commitTabs],
+	);
+
+	/**
+	 * Move a tab between the two editor columns, creating or closing the split.
+	 *
+	 * The ONE mutation for every version of this gesture — dragging onto a
+	 * body's half, onto the other column's strip, or back again — because they
+	 * are all the same thing: remove from one column, insert into the other,
+	 * and let an emptied second column collapse.
+	 *
+	 * Sessions move too, not just files. The chat is singular (one
+	 * EventSource, one composer), but it is rendered as ONE element handed to
+	 * whichever column selects a session — see `chatSide` — so moving a
+	 * session across is a move of that element and not a second chat.
+	 */
+	const moveToGroup = useCallback(
+		(entry: string, to: Side, index?: number) => {
+			const current = tabsRef.current;
+			const from: Side = to === "left" ? "right" : "left";
+			const target = groupOf(current, to);
+
+			// Already there: focus it, and do not disturb the other column.
+			const pruned = withoutTab(groupOf(current, from), entry);
+			if (!pruned) {
+				if (!target.files.includes(entry)) return;
+				commitTabs(withGroup(current, to, withTab(target, entry)));
+				if (!isFileTab(entry)) void attachRef.current(entry);
+				return;
+			}
+
+			const grown = withTab(target, entry);
+			// Landing at a specific slot rather than the end: the drop was onto a
+			// tab, and the tab belongs where it was aimed.
+			const files =
+				index === undefined
+					? grown.files
+					: moveTab(
+							grown.files,
+							grown.files.indexOf(entry),
+							Math.min(index, grown.files.length - 1),
+						);
+
+			commitTabs(
+				withGroup(withGroup(current, from, pruned), to, { files, active: entry }),
+			);
+
+			/*
+			 * Attach to whatever is now selected, in either column.
+			 *
+			 * Two ways this fires: the moved tab is itself a session (it is now
+			 * showing in the target column), or moving it uncovered a session in
+			 * the column it left. Both are "the selected session changed", which is
+			 * the only thing `attach` cares about — and it no-ops when the session
+			 * is the one already streaming.
+			 */
+			const selected = !isFileTab(entry) ? entry : pruned.active;
+			if (selected && !isFileTab(selected) && selected !== snapshotRef.current?.file) {
+				void attachRef.current(selected);
+			}
+		},
+		[commitTabs],
+	);
+
+	/**
+	 * Select within the second column.
+	 *
+	 * Attaches for the same reason `selectTab` does: a session tab can live in
+	 * either column now, and the one you pick is the one the chat shows.
+	 * Already-attached is skipped so switching away to a file and back does not
+	 * tear down a live EventSource mid-turn.
+	 */
+	const selectRight = useCallback(
+		(file: string) => {
+			const current = tabsRef.current;
+			if (!current.right || current.right.active === file) return;
+			commitTabs({ ...current, right: withTab(current.right, file) });
+			if (isFileTab(file) || (snapshotRef.current?.file === file && esRef.current)) return;
+			void attachRef.current(file);
+		},
+		[commitTabs],
+	);
+
+	/**
+	 * Open a file from the explorer into a tab, or focus the tab it already has.
+	 *
+	 * A file already open in the SECOND column is focused there rather than
+	 * opened a second time on the left: two tabs for one file would be two
+	 * editors over one document, each with its own undo history and its own
+	 * idea of what is saved.
+	 */
 	const openFile = useCallback(
 		(path: string) => {
-			selectTab(fileTab(path));
+			const entry = fileTab(path);
+			if (tabsRef.current.right?.files.includes(entry)) {
+				selectRight(entry);
+				return;
+			}
+			selectTab(entry);
 		},
-		[selectTab],
+		[selectTab, selectRight],
 	);
 
 	/**
@@ -1655,7 +1976,50 @@ export default function App() {
 		return extra.length ? [...extra, ...sessions] : sessions;
 	}, [sessions, pending, tabs.files]);
 
-	const activeIndex = tabs.active ? tabs.files.indexOf(tabs.active) : -1;
+	/**
+	 * THE chat, built once and handed to whichever column holds the attached
+	 * session.
+	 *
+	 * One element and not one per column: the app has a single EventSource, a
+	 * single transcript and a single composer, so a second <Chat> would be a
+	 * second view onto state that only has one owner. Rendering the same
+	 * element in the other column moves it, and because React sees the same
+	 * component in the same slot, a turn streaming mid-drag keeps streaming.
+	 */
+	const chat = (
+		<Chat
+			snapshot={snapshot}
+			partial={partial}
+			busy={busy}
+			opening={opening}
+			showThinking={showThinking}
+			toolMode={toolMode}
+			command={command}
+			modelError={modelError}
+			onSend={send}
+			onAnswerAsk={answerAsk}
+			onAbort={abort}
+			onModelChange={changeModel}
+			onThinkingChange={changeThinking}
+			onCommandMenu={refreshCommands}
+			onCompact={compact}
+			onRestart={restart}
+		/>
+	);
+
+	/**
+	 * Which column the chat belongs in: the one whose SELECTED tab is a
+	 * session.
+	 *
+	 * Selection and not mere membership, because a column showing a file must
+	 * show that file — the chat is hidden underneath it either way, and two
+	 * columns both claiming it would render it twice.
+	 *
+	 * Neither column selecting a session leaves it in the left one, which is
+	 * where the "no session" empty state belongs.
+	 */
+	const chatSide: Side =
+		tabs.right?.active !== undefined && !isFileTab(tabs.right.active) ? "right" : "left";
 
 	return (
 		<div ref={splitRow} className="flex h-full bg-neutral-950 text-neutral-100">
@@ -1791,74 +2155,52 @@ export default function App() {
 			{/* On a phone the panel IS the view: two columns there is three words
 			    per line each. Same rule the session list follows. */}
 			<div
-				className={`flex min-h-0 min-w-0 flex-1 flex-col ${panel !== null ? "narrow:hidden" : ""}`}
+				className={`flex min-h-0 min-w-0 flex-1 ${panel !== null ? "narrow:hidden" : ""}`}
 			>
-				<SessionTabs
-					tabs={tabs.files}
-					sessions={shown}
-					active={tabs.active}
+				{/*
+				 * The two editor columns, as SIBLINGS.
+				 *
+				 * Each owns its own tab strip, so a split looks like two editors side
+				 * by side rather than one nested in the other's body — which is both
+				 * what VS Code does and the only arrangement where the second
+				 * column's tabs sit at the same height as the first's.
+				 */}
+				<EditorColumn
+					side="left"
+					group={groupOf(tabs, "left")}
 					panelId={CHAT_PANEL_ID}
-					listOpen={listOpen}
-					onSelect={selectTab}
+					sessions={shown}
 					shortNames={shortNames}
+					dirtyFiles={dirtyFiles}
+					onSelect={selectTab}
 					onClose={closeTab}
+					onReorder={reorderTabs}
+					onMove={moveToGroup}
+					listOpen={listOpen}
 					onNew={() => void attach(undefined)}
 					onToggleList={() => setListOpen((o) => !o)}
-					dirtyFiles={dirtyFiles}
-					onReorder={reorderTabs}
+					cwd={snapshot?.cwd || project || ""}
+					onDirty={onFileDirty}
+					chat={chatSide === "left" ? chat : null}
 				/>
-				<div className="flex min-h-0 min-w-0 flex-1">
-					<div
-						id={CHAT_PANEL_ID}
-						role="tabpanel"
-						aria-labelledby={activeIndex >= 0 ? tabDomId(activeIndex) : undefined}
-						className="flex min-h-0 min-w-0 flex-1 flex-col"
-					>
-						{/*
-						 * A file tab shows its editor; anything else shows the chat.
-						 *
-						 * Chat stays MOUNTED underneath rather than being swapped out,
-						 * because it holds the live EventSource and the transcript's
-						 * scroll position: unmounting to look at a file would drop a
-						 * streaming turn and lose your place in it. `hidden` costs a
-						 * hidden subtree; remounting costs the session.
-						 */}
-						{tabs.active && isFileTab(tabs.active) && (
-							<FileEditor
-								// Keyed by path: switching files must build a new editor
-								// rather than reuse one holding another file's undo history.
-								key={tabs.active}
-								path={tabPath(tabs.active)}
-								cwd={snapshot?.cwd || project || ""}
-								onDirty={onFileDirty}
-							/>
-						)}
-						<div
-							className={`flex min-h-0 min-w-0 flex-1 flex-col ${
-								tabs.active && isFileTab(tabs.active) ? "hidden" : ""
-							}`}
-						>
-							<Chat
-								snapshot={snapshot}
-								partial={partial}
-								busy={busy}
-								opening={opening}
-								showThinking={showThinking}
-								toolMode={toolMode}
-								command={command}
-								modelError={modelError}
-								onSend={send}
-								onAnswerAsk={answerAsk}
-								onAbort={abort}
-								onModelChange={changeModel}
-								onThinkingChange={changeThinking}
-								onCommandMenu={refreshCommands}
-								onCompact={compact}
-								onRestart={restart}
-							/>
-						</div>
-					</div>
-				</div>
+
+				{tabs.right && (
+					<EditorColumn
+						side="right"
+						group={tabs.right}
+						panelId={SPLIT_PANEL_ID}
+						sessions={shown}
+						shortNames={shortNames}
+						dirtyFiles={dirtyFiles}
+						onSelect={selectRight}
+						onClose={closeRight}
+						onReorder={reorderRight}
+						onMove={moveToGroup}
+						cwd={snapshot?.cwd || project || ""}
+						onDirty={onFileDirty}
+						chat={chatSide === "right" ? chat : null}
+					/>
+				)}
 			</div>
 
 			{/* The session list moved to the RIGHT edge, opposite the rail: the two
