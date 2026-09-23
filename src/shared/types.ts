@@ -1,10 +1,16 @@
 /**
  * The wire contract between server and browser.
  *
- * Deliberately in its own module with ZERO imports: if these types lived in
- * agent.ts, a stray value-import from the client would drag the RPC boundary
- * and node:child_process into the browser bundle. Here that is impossible.
+ * Deliberately in its own module with ZERO VALUE imports: if these types lived
+ * in agent.ts, a stray value-import from the client would drag the RPC
+ * boundary and node:child_process into the browser bundle. Here that is
+ * impossible.
+ *
+ * The one import is `type`-only and points at hunks.ts, which is held to the
+ * same rule — so it erases at compile time and drags nothing with it.
  */
+
+import type { Hunk } from "./hunks.js";
 
 /**
  * What this server is. `/api/health` reports it, and the port takeover
@@ -183,6 +189,19 @@ export interface Snapshot {
 	 */
 	ask: PiAsk | null;
 	/**
+	 * Changes this session's agent made to files, oldest first.
+	 *
+	 * ALREADY ON DISK. pi's edit tool writes during execution and this server
+	 * installs no `tool_call` gate, so the review pane shows what happened
+	 * rather than what is proposed: accepting is a no-op that records a
+	 * decision, and rejecting is what writes the old text back.
+	 *
+	 * In the snapshot rather than only on an event because a decision outlives
+	 * the turn that produced it — a reload mid-review would otherwise lose
+	 * every pending change with nothing on screen to say they happened.
+	 */
+	hunks: Hunk[];
+	/**
 	 * Slash commands this session accepts, for the composer's picker. Per
 	 * session and not global: the set depends on the project's extensions,
 	 * skills and prompt templates under `.pi/`, so a catalog shared across
@@ -305,6 +324,23 @@ export interface PiwDirEntry {
 	/** Contains a `.git`. A project is usually a checkout, so it is worth marking. */
 	repo: boolean;
 	/** A dotted name. Sorted last rather than dropped — ~/.config stays reachable. */
+	hidden: boolean;
+}
+
+/**
+ * One row in the editor's file tree — a file or a directory.
+ *
+ * Deliberately NOT `PiwDirEntry`: that list feeds the project picker, where
+ * only a directory can be the answer and "is it a checkout" is the useful
+ * flag. Here a file is the entire point, and the flag that matters is whether
+ * clicking a row opens a buffer or expands a level.
+ */
+export interface PiwFileEntry {
+	name: string;
+	/** Absolute, so the client never joins paths itself. */
+	path: string;
+	dir: boolean;
+	/** A dotted name. Sorted last rather than dropped — .gitignore stays reachable. */
 	hidden: boolean;
 }
 

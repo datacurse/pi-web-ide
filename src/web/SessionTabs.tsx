@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useRef } from "react";
-import { Plus, TerminalWindow, X } from "@phosphor-icons/react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Plus, X } from "@phosphor-icons/react";
 import type { KeyboardEvent } from "react";
 import type { PiSessionInfo } from "../shared/types.js";
 import { sessionLabel } from "./sessionName.js";
+import { FileGlyph } from "./fileIcon.js";
+import { isFileTab, tabLabel, tabPath } from "./tabs.js";
 
 /**
  * DOM id of the Nth tab. Shared with App, which points the chat panel's
@@ -12,8 +14,12 @@ import { sessionLabel } from "./sessionName.js";
 export const tabDomId = (index: number) => `session-tab-${index}`;
 
 /**
- * The session tab strip: open sessions of the current project, switched like
- * editor tabs.
+ * The tab strip: this project's open chat sessions AND open files, in one
+ * list, the way an editor's is.
+ *
+ * One strip rather than two because they are the same gesture — you switch
+ * between a conversation and the file it is about constantly, and a second
+ * strip would mean a second place to look and a second thing to close.
  *
  * Only the selected session is attached (one EventSource, per App); the strip
  * is otherwise driven entirely by the session list the app already polls, so
@@ -35,9 +41,9 @@ export function SessionTabs({
 	onClose,
 	onNew,
 	onToggleList,
-	terminalOpen,
-	onToggleTerminal,
 	shortNames,
+	dirtyFiles,
+	onReorder,
 }: {
 	/** Open session files, in strip order. */
 	tabs: string[];
@@ -51,12 +57,25 @@ export function SessionTabs({
 	onClose: (file: string) => void;
 	onNew: () => void;
 	onToggleList: () => void;
-	terminalOpen: boolean;
-	onToggleTerminal: () => void;
 	/** Label unnamed sessions by a short name from the first prompt. */
 	shortNames: boolean;
+	/** Open files with unsaved edits, keyed by absolute path. */
+	dirtyFiles: Record<string, boolean>;
+	/** Move the tab at `from` to index `to`. */
+	onReorder: (from: number, to: number) => void;
 }) {
 	const buttons = useRef<Array<HTMLButtonElement | null>>([]);
+	/*
+	 * Drag state for REORDERING, which is view state and not App's: only the
+	 * committed order matters upstream, and lifting the in-flight index would
+	 * re-render the whole app on every dragover event.
+	 *
+	 * `from` is held in a ref as well as state because dataTransfer cannot be
+	 * read during dragover in several browsers (it is protected until drop),
+	 * and the insertion marker has to be drawn before then.
+	 */
+	const dragFrom = useRef<number | null>(null);
+	const [drag, setDrag] = useState<{ from: number; to: number } | null>(null);
 	const byFile = useMemo(() => new Map(sessions.map((s) => [s.path, s])), [sessions]);
 	const activeIndex = active ? tabs.indexOf(active) : -1;
 
@@ -73,6 +92,24 @@ export function SessionTabs({
 
 	const moveFocus = (e: KeyboardEvent<HTMLButtonElement>, from: number) => {
 		const step = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : undefined;
+		/*
+		 * Ctrl+Shift+Arrow MOVES the tab instead of moving focus, so reordering
+		 * is reachable without a pointer — a drag handle is not operable by
+		 * keyboard at all, and this is the same binding VS Code uses.
+		 *
+		 * Clamped rather than wrapped: dragging past the end stops at the end,
+		 * and a key that teleports the first tab to last is a key you undo.
+		 */
+		if (step !== undefined && e.ctrlKey && e.shiftKey) {
+			const target = Math.min(Math.max(from + step, 0), tabs.length - 1);
+			if (target === from) return;
+			e.preventDefault();
+			onReorder(from, target);
+			// Focus follows the tab, not the slot: the hand is still on the key
+			// and the next press must move the SAME tab again.
+			requestAnimationFrame(() => buttons.current[target]?.focus());
+			return;
+		}
 		const to =
 			step !== undefined
 				? (from + step + tabs.length) % tabs.length
@@ -104,6 +141,18 @@ export function SessionTabs({
 				<span aria-hidden>{"\u2261"}</span>
 			</button>
 
+			{/* Left of the strip, outside the scrolling region: a "+" that scrolls
+			    away with twenty open tabs is a "+" you cannot click, and the left
+			    edge is where the strip's chrome already lives. */}
+			<button
+				onClick={onNew}
+				aria-label="New session"
+				title="New session"
+				className="flex size-9 shrink-0 items-center justify-center self-center rounded text-neutral-300 transition-colors duration-150 ease-out hover:bg-neutral-800 hover:text-neutral-50 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 motion-reduce:transition-none"
+			>
+				<Plus size={16} />
+			</button>
+
 			<div
 				role="tablist"
 				aria-label="Open sessions"
@@ -115,9 +164,11 @@ export function SessionTabs({
 				}`}
 			>
 				{tabs.map((file, i) => {
-					const info = byFile.get(file);
-					const label = sessionLabel(file, info, shortNames);
+					const isFile = isFileTab(file);
+					const info = isFile ? undefined : byFile.get(file);
+					const label = isFile ? tabLabel(file) : sessionLabel(file, info, shortNames);
 					const isActive = file === active;
+					const dirty = isFile && dirtyFiles[tabPath(file)] === true;
 					return (
 						// Wrapper because the close control cannot be a <button> inside
 						// the tab's <button>; role="presentation" keeps the tablist's
@@ -125,7 +176,48 @@ export function SessionTabs({
 						<div
 							key={file}
 							role="presentation"
-							className="group relative flex shrink-0 py-1"
+							draggable
+							onDragStart={(e) => {
+								dragFrom.current = i;
+								setDrag({ from: i, to: i });
+								e.dataTransfer.effectAllowed = "move";
+								// Firefox starts no drag at all unless some data is set.
+								e.dataTransfer.setData("text/plain", file);
+							}}
+							onDragOver={(e) => {
+								const from = dragFrom.current;
+								if (from === null) return;
+								// Without preventDefault the browser refuses the drop and the
+								// tab animates back to where it started.
+								e.preventDefault();
+								e.dataTransfer.dropEffect = "move";
+								if (drag?.to !== i) setDrag({ from, to: i });
+							}}
+							onDrop={(e) => {
+								const from = dragFrom.current;
+								dragFrom.current = null;
+								setDrag(null);
+								if (from === null || from === i) return;
+								e.preventDefault();
+								onReorder(from, i);
+							}}
+							// Dropping outside the strip, or pressing Escape, ends the drag
+							// without a drop — the marker has to be cleared either way.
+							onDragEnd={() => {
+								dragFrom.current = null;
+								setDrag(null);
+							}}
+							className={`group relative flex shrink-0 py-1 ${
+								drag?.from === i ? "opacity-40" : ""
+							} ${
+								/* Where it would land: a line on the side it is coming from,
+								   so the marker sits between the two tabs it separates. */
+								drag && drag.to === i && drag.from !== i
+									? drag.from < i
+										? "shadow-[inset_-2px_0_0_0_var(--color-amber-400)]"
+										: "shadow-[inset_2px_0_0_0_var(--color-amber-400)]"
+									: ""
+							}`}
 						>
 							<button
 								ref={(el) => {
@@ -138,7 +230,7 @@ export function SessionTabs({
 								// Roving tabindex: Tab reaches the strip once, arrows walk it.
 								// When nothing is selected the first tab is the entry point.
 								tabIndex={isActive || (activeIndex < 0 && i === 0) ? 0 : -1}
-								title={label}
+								title={isFile ? tabPath(file) : label}
 								onClick={() => onSelect(file)}
 								onKeyDown={(e) => moveFocus(e, i)}
 								className={`flex h-8 max-w-52 items-center gap-1.5 rounded-t border-t-2 pr-7 pl-2.5 text-xs transition-colors duration-150 ease-out focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 motion-reduce:transition-none ${
@@ -155,13 +247,29 @@ export function SessionTabs({
 										className="size-1.5 shrink-0 animate-pulse rounded-full bg-amber-400"
 									/>
 								)}
-								<span className="truncate text-ellipsis">{label}</span>
+								{/* Same glyph the tree uses, so a tab and its row match. */}
+								{isFile && <FileGlyph name={label} size={13} />}
+								<span className={`truncate text-ellipsis ${isFile ? "font-mono" : ""}`}>
+									{label}
+								</span>
+								{/* Unsaved. A dot rather than an asterisk in the label, so
+								    the name stays readable at a narrow width. */}
+								{dirty && (
+									<span aria-hidden className="size-1.5 shrink-0 rounded-full bg-amber-400" />
+								)}
+								{dirty && <span className="sr-only">, unsaved changes</span>}
 								{info?.isStreaming && <span className="sr-only">, working</span>}
 							</button>
 							<button
 								onClick={() => onClose(file)}
 								aria-label={`Close tab ${label}`}
-								title="Close tab (the session keeps running)"
+								title={
+									isFile
+										? dirty
+											? "Close tab — unsaved edits will be lost"
+											: "Close tab"
+										: "Close tab (the session keeps running)"
+								}
 								className={`tab-close absolute top-1/2 right-1.5 flex size-6 -translate-y-1/2 items-center justify-center rounded text-sm leading-none text-neutral-400 transition-opacity duration-150 ease-out after:absolute after:-inset-1 after:content-[''] hover:bg-neutral-700 hover:text-neutral-50 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-neutral-400 motion-reduce:transition-none ${
 									isActive
 										? "opacity-100"
@@ -181,35 +289,6 @@ export function SessionTabs({
 				</p>
 			)}
 
-			{/* Outside the scrolling region: a "+" that scrolls away with twenty
-			    open tabs is a "+" you cannot click. */}
-			<button
-				onClick={onNew}
-				aria-label="New session"
-				title="New session"
-				className="flex size-9 shrink-0 items-center justify-center self-center rounded text-neutral-300 transition-colors duration-150 ease-out hover:bg-neutral-800 hover:text-neutral-50 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 motion-reduce:transition-none"
-			>
-				<Plus size={16} />
-			</button>
-
-			{/* Next to "+", because both are "open something", and this is the
-			    only always-visible place for it: a control on the terminal pane
-			    itself could not open the pane. */}
-			<button
-				onClick={onToggleTerminal}
-				aria-label={terminalOpen ? "Hide terminal" : "Show terminal"}
-				aria-pressed={terminalOpen}
-				title={
-					terminalOpen
-						? "Hide terminal (Ctrl+`) — the shell keeps running"
-						: "Show terminal (Ctrl+`)"
-				}
-				className={`flex size-9 shrink-0 items-center justify-center self-center rounded transition-colors duration-150 ease-out hover:bg-neutral-800 hover:text-neutral-50 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 motion-reduce:transition-none ${
-					terminalOpen ? "bg-neutral-800 text-amber-400" : "text-neutral-300"
-				}`}
-			>
-				<TerminalWindow size={16} />
-			</button>
 		</div>
 	);
 }

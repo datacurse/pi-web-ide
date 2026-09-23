@@ -6,13 +6,19 @@
  * is no terminal to do it in — and now there is one (terminals.ts), but
  * typing `git add -A && git commit -m …` by hand on a phone is not the point.
  *
- * Deliberately NOT a git client. No staging UI, no hunks, no log, no diff
- * viewer: those are a real application, and pwi already has a terminal for
- * the cases this does not cover. What is here is the end of an agent turn —
+ * Deliberately NOT a git client. No staging UI, no hunks, no log, no merge
+ * tools: those are a real application, and pwi already has a terminal for the
+ * cases this does not cover. What is here is the end of an agent turn —
  * branch, commit, push, PR — composed from four independent steps, because
  * every combination anybody actually asks for (`Commit`, `Commit & Push`,
  * `Create Branch, Commit & Push`, `Commit & Create PR`) is a subset of those
  * four in that order.
+ *
+ * One line has since moved: `diff()` below serves a READ-ONLY diff panel.
+ * That is still not a git client — nothing there stages, reverts or edits, it
+ * is `git diff` rendered legibly — but it is worth being honest that the
+ * "no diff viewer" rule above now has exactly one exception, and that staging
+ * is where the line was redrawn.
  *
  * Every invocation is `execFile` with an argv array and no shell: a commit
  * message is arbitrary user text, and a shell would make `"; rm -rf ~"` a
@@ -20,7 +26,8 @@
  */
 
 import { execFile } from "node:child_process";
-import { existsSync, statSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
+import { join } from "node:path";
 
 /** Long enough for a push over a slow link, short enough to fail visibly. */
 const GIT_TIMEOUT_MS = 120_000;
@@ -224,6 +231,78 @@ export async function changeSummary(cwd: string): Promise<string> {
 		parts.push(`Diff:\n${body}`);
 	}
 	return parts.join("\n\n");
+}
+
+/** One file in the working tree that differs from HEAD. */
+export interface GitFileDiff {
+	path: string;
+	/** Porcelain status letters, e.g. ` M`, `??`, `A `. */
+	status: string;
+	/** The file as HEAD has it; "" for something untracked or newly added. */
+	before: string;
+	/** The file as it is on disk now; "" when it has been deleted. */
+	after: string;
+	/** Set when the content was too big to send, instead of the text. */
+	skipped?: string;
+}
+
+/** Bigger than this and the panel gets a note instead of two copies of it. */
+const MAX_FILE_BYTES = 1024 * 1024;
+
+/**
+ * Every uncommitted change, as before/after pairs for a diff view.
+ *
+ * Deliberately not a unified patch: the panel renders with the same CodeMirror
+ * merge view the agent-changes panel uses, and that takes two documents rather
+ * than a diff to parse. Letting git produce the patch and then parsing it back
+ * into two documents would be work to undo work.
+ *
+ * `git status --porcelain` drives it rather than `git diff --name-only`,
+ * because only status mentions UNTRACKED files — a file the agent just created
+ * is the single most likely thing to want to look at, and `git diff` does not
+ * know it exists.
+ */
+export async function diff(cwd: string): Promise<GitFileDiff[]> {
+	if (!(existsSync(cwd) && statSync(cwd).isDirectory())) return [];
+	const inside = await git(cwd, ["rev-parse", "--is-inside-work-tree"]);
+	if (inside.code !== 0 || inside.stdout !== "true") return [];
+
+	const porcelain = await git(cwd, ["status", "--porcelain", "-z"]);
+	if (!porcelain.stdout) return [];
+
+	// -z because a path with a space or a newline in it is legal, and the
+	// line-based format quotes those into something that has to be unescaped.
+	const entries = porcelain.stdout.split("\0").filter(Boolean);
+	const out: GitFileDiff[] = [];
+
+	for (const entry of entries) {
+		const status = entry.slice(0, 2);
+		const path = entry.slice(3);
+		if (!path) continue;
+
+		// `git show` rather than reading .git ourselves: it resolves the index
+		// and HEAD correctly for renames and staged content. A non-zero exit
+		// means the file is not in HEAD, which is the normal answer for
+		// something newly created.
+		const head = await git(cwd, ["show", `HEAD:${path}`]);
+		const before = head.code === 0 ? head.stdout : "";
+
+		let after = "";
+		let skipped: string | undefined;
+		try {
+			const full = join(cwd, path);
+			const st = statSync(full);
+			if (st.size > MAX_FILE_BYTES) skipped = `too large to diff (${st.size} bytes)`;
+			else after = readFileSync(full, "utf8");
+		} catch {
+			// Deleted, or not readable: "" is the honest after-image of a file
+			// that is no longer there.
+		}
+
+		out.push(skipped ? { path, status, before: "", after: "", skipped } : { path, status, before, after });
+	}
+
+	return out;
 }
 
 /**

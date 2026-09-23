@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { X } from "@phosphor-icons/react";
+import { CaretUpDown, FolderPlus, Plus, X } from "@phosphor-icons/react";
 import type { PiSessionInfo } from "../shared/types.js";
 import { SESSION_SORTS, type SessionSort } from "./prefs.js";
 import { DirectoryPicker } from "./DirectoryPicker.js";
@@ -73,8 +73,6 @@ export function SessionList({
 	onAutoName,
 	shortNames,
 	onNew,
-	onSettings,
-	onPackages,
 }: {
 	sessions: PiSessionInfo[];
 	/** Why the listing failed, when it did; shown instead of "No sessions yet". */
@@ -106,8 +104,6 @@ export function SessionList({
 	/** Label unnamed sessions by a short name from the first prompt. */
 	shortNames: boolean;
 	onNew: () => void;
-	onSettings: () => void;
-	onPackages: () => void;
 }) {
 	/*
 	 * The selection stays in the list even while the list has not arrived (or
@@ -119,6 +115,24 @@ export function SessionList({
 			projects.projects.length > 0 || !project ? projects.projects : [project],
 		[projects.projects, project],
 	);
+
+	/*
+	 * Dropdown labels. The basename alone is what you think of the project as,
+	 * but two checkouts of the same repo are then the same word twice — so a
+	 * basename that is not unique carries its parent directory.
+	 */
+	const labelFor = useMemo(() => {
+		const base = (p: string) => p.split("/").filter(Boolean).pop() || p;
+		const counts = new Map<string, number>();
+		for (const p of options) counts.set(base(p), (counts.get(base(p)) ?? 0) + 1);
+		return (p: string) => {
+			const parts = p.split("/").filter(Boolean);
+			const name = parts.at(-1) || p;
+			return (counts.get(name) ?? 0) > 1 && parts.length > 1
+				? `${parts.at(-2)}/${name}`
+				: name;
+		};
+	}, [options]);
 
 	/*
 	 * Sorted here rather than on the server: both timestamps are already on
@@ -197,28 +211,23 @@ export function SessionList({
 			<aside
 				id="session-list"
 				aria-label="All sessions"
-				className={`w-72 shrink-0 flex-col border-r border-neutral-800 bg-neutral-950 narrow:fixed narrow:inset-y-0 narrow:left-0 narrow:z-30 narrow:w-[min(20rem,85vw)] narrow:shadow-2xl ${
+				// Right edge now, opposite the activity rail: `border-l` and the
+				// drawer anchored to `right-0`, or it would slide in from the side it
+				// no longer lives on.
+				className={`w-72 shrink-0 flex-col border-l border-neutral-800 bg-neutral-950 narrow:fixed narrow:inset-y-0 narrow:right-0 narrow:z-30 narrow:w-[min(20rem,85vw)] narrow:shadow-2xl ${
 					open ? "flex" : "hidden wide:flex"
 				}`}
 			>
 				<div className="flex items-center justify-between border-b border-neutral-800 px-3 py-2">
 					<span className="text-sm font-semibold tracking-tight">pwi</span>
-					<div className="flex items-center gap-1">
-						<button
-							onClick={onNew}
-							className="rounded bg-neutral-800 px-2 py-1 text-xs transition-colors duration-150 ease-out hover:bg-neutral-700 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 motion-reduce:transition-none"
-						>
-							+ New
-						</button>
-						<button
-							onClick={onToggle}
-							aria-label="Hide session list"
-							title="Hide sessions"
-							className="size-8 rounded text-neutral-300 transition-colors duration-150 ease-out hover:bg-neutral-800 hover:text-neutral-50 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 motion-reduce:transition-none wide:hidden"
-						>
-							<X size={13} />
-						</button>
-					</div>
+					<button
+						onClick={onToggle}
+						aria-label="Hide session list"
+						title="Hide sessions"
+						className="size-8 rounded text-neutral-300 transition-colors duration-150 ease-out hover:bg-neutral-800 hover:text-neutral-50 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 motion-reduce:transition-none wide:hidden"
+					>
+						<X size={13} />
+					</button>
 				</div>
 
 				{/*
@@ -240,17 +249,21 @@ export function SessionList({
 					>
 						{options.map((p) => (
 							<option key={p} value={p}>
-								{p.split("/").filter(Boolean).pop() || p}
+								{labelFor(p)}
 							</option>
 						))}
 					</select>
+					{/* A folder icon, not a bare `+`: the other `+` on this panel
+					    makes a session, and two identical glyphs for two different
+					    nouns is the whole confusion. */}
 					<button
 						onClick={() => setPickerOpen(true)}
 						disabled={!!projects.error}
+						aria-label="Add project directory"
 						title="Add project directory"
 						className="shrink-0 rounded bg-neutral-800 px-2 py-1 text-xs transition-colors duration-150 ease-out hover:bg-neutral-700 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 disabled:opacity-40 motion-reduce:transition-none"
 					>
-						+
+						<FolderPlus size={13} />
 					</button>
 					{/*
 					  Removing is offered for every project except the one pwi was
@@ -291,16 +304,36 @@ export function SessionList({
 				  session jumped to the top just from being opened, so `active`
 				  reads the timestamp of the last message in the file instead.
 				*/}
+				{/*
+				  New session sits BELOW the project picker because that is the
+				  order the two are read in: the button makes a session in the
+				  selected project, so offering it first asked the question before
+				  showing the answer.
+				*/}
+				<div className="border-b border-neutral-800 px-2 py-1.5">
+					<button
+						onClick={onNew}
+						className="flex w-full items-center justify-center gap-1.5 rounded bg-neutral-800 px-2 py-1.5 text-xs transition-colors duration-150 ease-out hover:bg-neutral-700 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 motion-reduce:transition-none"
+					>
+						<Plus size={12} />
+						New session
+					</button>
+				</div>
+
 				<div className="flex items-center justify-between border-b border-neutral-800 px-2 py-1">
 					<span className="text-[10px] tracking-wide text-neutral-500 uppercase">
 						{sessions.length} {sessions.length === 1 ? "session" : "sessions"}
 					</span>
+					{/* Bordered, with an up/down caret: unstyled text on a row that
+					    reads as a table header looks like a column title, not a
+					    control. */}
 					<button
 						onClick={() => onSort(sort === "created" ? "active" : "created")}
 						title="Switch between newest-created and most-recently-active"
-						className="rounded px-1.5 py-0.5 text-[10px] text-neutral-400 transition-colors duration-150 ease-out hover:bg-neutral-800 hover:text-neutral-200 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 motion-reduce:transition-none"
+						className="flex items-center gap-1 rounded border border-neutral-800 px-1.5 py-0.5 text-[10px] text-neutral-400 transition-colors duration-150 ease-out hover:border-neutral-600 hover:bg-neutral-800 hover:text-neutral-200 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 motion-reduce:transition-none"
 					>
-						{SESSION_SORTS.find((s) => s.id === sort)?.label} {"\u2193"}
+						{SESSION_SORTS.find((s) => s.id === sort)?.label}
+						<CaretUpDown size={10} />
 					</button>
 				</div>
 
@@ -429,38 +462,6 @@ export function SessionList({
 					})}
 				</div>
 
-				{/*
-				  Bottom-left corner: the conventional resting place for an app's
-				  settings, out of the way of the list it sits under and reachable
-				  from either layout — on a narrow viewport this panel is the
-				  drawer, which is where the chrome already lives.
-				*/}
-				<div className="border-t border-neutral-800 p-1.5">
-					<button
-						onClick={onPackages}
-						title="Packages installed on every machine"
-						className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-xs text-neutral-400 transition-colors duration-150 ease-out hover:bg-neutral-900 hover:text-neutral-200 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 motion-reduce:transition-none"
-					>
-						{/* Text presentation selector on both: a bare symbol renders
-						    as a colour emoji on several platforms, which this chrome
-						    is not. */}
-						<span aria-hidden>{"\u25a6\ufe0e"}</span>
-						Packages
-					</button>
-					<button
-						onClick={onSettings}
-						title="Settings"
-						className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-xs text-neutral-400 transition-colors duration-150 ease-out hover:bg-neutral-900 hover:text-neutral-200 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 motion-reduce:transition-none"
-					>
-						<span aria-hidden>{"\u2699\ufe0e"}</span>
-						Settings
-					</button>
-					{/* Which build this machine is actually running — the thing you
-					    read out loud when two machines disagree. */}
-					<p className="px-2 pt-1 text-[10px] text-neutral-600" title="Version + git commit; * means uncommitted changes">
-						v{__APP_VERSION__}
-					</p>
-				</div>
 			</aside>
 
 			{/*

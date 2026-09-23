@@ -95,6 +95,46 @@ export function Terminal({
 		let term: XTerm | null = null;
 		let socket: WebSocket | null = null;
 		let observer: ResizeObserver | null = null;
+		let retry: ReturnType<typeof setTimeout> | null = null;
+		let attempt = 0;
+		/*
+		 * Set when the server has told us this terminal will never answer again
+		 * (it is gone, or its shell exited). Retrying then is a loop that can
+		 * only ever print the same error, so the socket stays closed.
+		 */
+		let finished = false;
+		/*
+		 * Whether this pane has EVER had a socket open. A shell that attached
+		 * once and dropped is a transient failure worth retrying quietly; one
+		 * that has never attached at all is usually a refused upgrade, which no
+		 * amount of retrying fixes — see the diagnosis in `explain` below.
+		 */
+		let everOpened = false;
+
+		/**
+		 * Say why the socket will not open, once retrying has clearly failed.
+		 *
+		 * `[reconnecting…]` forever is the worst of both worlds: the shell is
+		 * fine, the server is fine, and the pane looks merely slow. The one
+		 * question that separates the causes is whether the server answers HTTP
+		 * at all — if it does, and the upgrade still never opens, the upgrade is
+		 * being refused rather than lost.
+		 */
+		const explain = async () => {
+			const healthy = await fetch("/api/health")
+				.then((r) => r.ok)
+				.catch(() => false);
+			if (!live || everOpened) return;
+			setError(
+				healthy
+					? // originAllowed() in server/index.ts refuses an upgrade whose
+					  // Origin is not its own, and the Vite proxy rewrites Host but
+					  // not Origin — so a dev page served from Vite is refused unless
+					  // the server was started with PWI_DEV=1 to allow it.
+					  `The server is up but refused the terminal connection. If this page is Vite's (${location.host}), start the server with \`pnpm dev\` rather than \`pnpm start\`, or open it directly instead.`
+					: "Cannot reach the server. Still retrying.",
+			);
+		};
 
 		void load().then(({ Terminal: XTermCtor, FitAddon: Fit }) => {
 			if (!live || !host.current) return;
@@ -122,31 +162,70 @@ export function Terminal({
 			// click: the gesture that made it was already a decision to use it.
 			if (focused) term.focus();
 
-			// The shell is this server's, so the socket is same-origin: `location`
-			// is the whole address, and wss: follows from the page being https.
-			const proto = location.protocol === "https:" ? "wss:" : "ws:";
-			const url = `${proto}//${location.host}/api/terminal/socket?id=${encodeURIComponent(id)}&cols=${term.cols}&rows=${term.rows}`;
-			socket = new WebSocket(url);
+			/*
+			 * Attach, and keep attaching.
+			 *
+			 * A socket dies for reasons that have nothing to do with the shell —
+			 * the server restarted, the laptop slept, WSL dropped the loopback —
+			 * and the shell survives every one of them (see terminals.ts: close
+			 * is a detach). A pane that gave up on the first close was therefore
+			 * permanently dead next to a process that was still running, with no
+			 * way back short of a reload.
+			 */
+			const connect = () => {
+				if (!live || !term || finished) return;
+				// The shell is this server's, so the socket is same-origin:
+				// `location` is the whole address, and wss: follows from https.
+				const proto = location.protocol === "https:" ? "wss:" : "ws:";
+				const url = `${proto}//${location.host}/api/terminal/socket?id=${encodeURIComponent(id)}&cols=${term.cols}&rows=${term.rows}`;
+				const ws = new WebSocket(url);
+				socket = ws;
 
-			socket.onmessage = (ev) => {
-				let msg: { type?: string; data?: string; message?: string; code?: number };
-				try {
-					msg = JSON.parse(ev.data as string);
-				} catch {
-					return;
-				}
-				if (msg.type === "data" && typeof msg.data === "string") term?.write(msg.data);
-				else if (msg.type === "exit") {
-					term?.write(`\r\n\x1b[90m[shell exited${msg.code ? ` (${msg.code})` : ""}]\x1b[0m\r\n`);
-					onExit?.();
-				} else if (msg.type === "error") setError(msg.message ?? "terminal failed");
+				ws.onopen = () => {
+					// The server replays its whole scrollback on attach, so a
+					// reattach without this prints the session twice. It owns the
+					// buffer; the pane just shows what it is sent.
+					if (attempt > 0) term?.reset();
+					attempt = 0;
+					everOpened = true;
+					setError(null);
+				};
+
+				ws.onmessage = (ev) => {
+					let msg: { type?: string; data?: string; message?: string; code?: number };
+					try {
+						msg = JSON.parse(ev.data as string);
+					} catch {
+						return;
+					}
+					if (msg.type === "data" && typeof msg.data === "string") term?.write(msg.data);
+					else if (msg.type === "exit") {
+						// The shell itself ended. Nothing to reattach to.
+						finished = true;
+						term?.write(`\r\n\x1b[90m[shell exited${msg.code ? ` (${msg.code})` : ""}]\x1b[0m\r\n`);
+						onExit?.();
+					} else if (msg.type === "error") {
+						// "no such terminal": the id in the restored layout is not on
+						// this server. Retrying cannot conjure it.
+						finished = true;
+						setError(msg.message ?? "terminal failed");
+					}
+				};
+
+				ws.onclose = () => {
+					if (!live || finished) return;
+					// Backoff to 5s: the common case is a dev-server restart, back
+					// within a second, and the uncommon one must not spin.
+					const wait = Math.min(250 * 2 ** attempt, 5000);
+					attempt += 1;
+					if (attempt === 1) term?.write("\r\n\x1b[90m[reconnecting…]\x1b[0m\r\n");
+					// Three failures without ever opening is no longer a blip. Once,
+					// not per attempt: the banner would otherwise refetch forever.
+					if (attempt === 3 && !everOpened) void explain();
+					retry = setTimeout(connect, wait);
+				};
 			};
-			// Not an error state: the server was restarted, or the page is being
-			// unloaded. The scrollback stays on screen, and reopening the panel
-			// reattaches to whatever is there now.
-			socket.onclose = () => {
-				if (live) term?.write("\r\n\x1b[90m[disconnected]\x1b[0m\r\n");
-			};
+			connect();
 
 			term.onData((data) => {
 				if (socket?.readyState === WebSocket.OPEN)
@@ -170,6 +249,7 @@ export function Terminal({
 
 		return () => {
 			live = false;
+			if (retry) clearTimeout(retry);
 			observer?.disconnect();
 			socket?.close();
 			term?.dispose();

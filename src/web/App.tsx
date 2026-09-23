@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { X } from "@phosphor-icons/react";
 import type {
 	AskAnswer,
 	PiAsk,
@@ -9,9 +10,14 @@ import type {
 	Snapshot,
 } from "../shared/types.js";
 import { SessionList, type Projects } from "./SessionList.js";
+import { ActivityBar } from "./ActivityBar.js";
 import { SessionTabs, tabDomId } from "./SessionTabs.js";
 import { Chat } from "./Chat.js";
 import { TerminalPane } from "./Terminal.js";
+import { Review } from "./Review.js";
+import { Explorer } from "./Explorer.js";
+import { FileEditor } from "./FileEditor.js";
+import { fileTab, isFileTab, moveTab, tabPath } from "./tabs.js";
 import { EMPTY_LAYOUT, reconcile, type TermLayout } from "./termLayout.js";
 import { Settings } from "./Settings.js";
 import { Packages } from "./Packages.js";
@@ -45,12 +51,55 @@ import { pulseFavicon } from "./favicon.js";
 const emptyPartial = (): PiPartial => ({ text: "", thinking: "", tools: [] });
 
 /**
- * The terminal pane's share of the chat+terminal track, kept inside the
- * bounds prefs.ts advertises — a pane narrower than the minimum is one the
- * divider cannot be grabbed back from.
+ * What a panel shows when the thing it needs is missing.
+ *
+ * The rail's buttons stay enabled in that case on purpose: a button that does
+ * nothing when pressed reads as broken, while a panel saying "pick a project
+ * first" is an answer. It carries the same header and close button as a real
+ * panel so the column does not visibly change shape.
  */
-const clampTerminal = (percent: number): number =>
+function PanelEmpty({
+	title,
+	onClose,
+	children,
+}: {
+	title: string;
+	onClose: () => void;
+	children: React.ReactNode;
+}) {
+	return (
+		<section
+			aria-label={title}
+			className="flex min-h-0 min-w-0 flex-1 flex-col bg-neutral-950"
+		>
+			<div className="flex items-center gap-2 border-b border-neutral-800 px-3 py-2">
+				<span className="text-sm text-neutral-300">{title}</span>
+				<button
+					onClick={onClose}
+					aria-label={`Close ${title.toLowerCase()}`}
+					className="ml-auto rounded p-1 text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200"
+				>
+					<X size={16} />
+				</button>
+			</div>
+			<p className="p-4 text-sm text-neutral-500">{children}</p>
+		</section>
+	);
+}
+
+/**
+ * The panel column's share of the panel+chat row, kept inside the bounds
+ * prefs.ts advertises — a pane narrower than the minimum is one the divider
+ * cannot be grabbed back from.
+ */
+const clampPanel = (percent: number): number =>
 	Math.min(TERMINAL_MAX_PERCENT, Math.max(TERMINAL_MIN_PERCENT, percent));
+
+/**
+ * The side panels, which are mutually exclusive: one column, one divider,
+ * and the rail switches between them the way an activity bar does.
+ */
+export type Panel = "editor" | "review" | "terminal" | "packages" | null;
 
 /**
  * The server's JSON, made safe to render.
@@ -83,6 +132,8 @@ function toSnapshot(raw: Partial<Snapshot>): Snapshot {
 		error: typeof raw.error === "string" ? raw.error : null,
 		notices: Array.isArray(raw.notices) ? raw.notices : [],
 		ask: raw.ask ?? null,
+		// An older server sends none, and the review pane simply stays empty.
+		hunks: Array.isArray(raw.hunks) ? raw.hunks : [],
 		// An older server sends none, and the picker simply has nothing to offer.
 		commands: Array.isArray(raw.commands) ? raw.commands : [],
 		// Absent means an older server that has no opinion; assume support
@@ -320,10 +371,23 @@ export default function App() {
 	const [command, setCommand] = useState<{ text: string; running: boolean } | null>(null);
 	const [modelError, setModelError] = useState<string | null>(null);
 	const [listOpen, setListOpen] = useState(false);
-	const [terminalOpen, setTerminalOpen] = useState(readTerminalOpen);
+	/**
+	 * Which side panel is showing, if any — one value, because they are
+	 * mutually exclusive the way VS Code's activity bar is: one column, one
+	 * divider, and clicking the lit icon closes it.
+	 *
+	 * A single value rather than a boolean each is what makes "two panels open
+	 * at once" unreachable instead of merely avoided by remembering to reset
+	 * the other three.
+	 *
+	 * Only the terminal's openness is persisted, and only because its shells
+	 * outlive the page; the rest are views over things that reload in a fetch.
+	 */
+	const [panel, setPanel] = useState<Panel>(() => (readTerminalOpen() ? "terminal" : null));
 	/** True once the server's terminal list has been folded in; see below. */
 	const [termsReady, setTermsReady] = useState(false);
-	const [terminalWidth, setTerminalWidth] = useState(readTerminalWidth);
+	/** One width for the one panel column, whichever panel is in it. */
+	const [panelWidth, setPanelWidth] = useState(readTerminalWidth);
 	/**
 	 * The terminal pane's arrangement for the CURRENT project: its tabs,
 	 * splits and their shares. Per project, restored from storage and then
@@ -331,10 +395,9 @@ export default function App() {
 	 * below and termLayout.ts.
 	 */
 	const [termLayout, setTermLayout] = useState<TermLayout>(EMPTY_LAYOUT);
-	/** The chat+terminal track, measured while dragging the divider. */
+	/** The row holding the panel, the chat and the divider between them. */
 	const splitRow = useRef<HTMLDivElement | null>(null);
 	const [settingsOpen, setSettingsOpen] = useState(false);
-	const [packagesOpen, setPackagesOpen] = useState(false);
 	const [theme, setTheme] = useState<ThemeId>(readTheme);
 	const [showThinking, setShowThinking] = useState(readShowThinking);
 	const [toolMode, setToolMode] = useState<ToolMode>(readToolMode);
@@ -407,16 +470,27 @@ export default function App() {
 	 * pane closed and a window closed in the same second still agree.
 	 */
 	const showTerminal = useCallback((open: boolean) => {
-		setTerminalOpen(open);
+		setPanel((p) => (open ? "terminal" : p === "terminal" ? null : p));
 		writeTerminalOpen(open);
 	}, []);
 
-	const toggleTerminal = useCallback(
-		() => showTerminal(!terminalOpen),
-		[showTerminal, terminalOpen],
-	);
-
 	const closeTerminal = useCallback(() => showTerminal(false), [showTerminal]);
+
+	/**
+	 * The rail's one action: show a panel, or close it if it is already the
+	 * one showing — the behaviour of every activity bar, and the reason the
+	 * state is a single value.
+	 *
+	 * The terminal's openness is mirrored to storage on every switch, not just
+	 * its own button, because switching away from it is also closing it.
+	 */
+	const selectPanel = useCallback((next: Panel) => {
+		setPanel((current) => {
+			const resolved = current === next ? null : next;
+			writeTerminalOpen(resolved === "terminal");
+			return resolved;
+		});
+	}, []);
 
 	/**
 	 * Restore this project's terminal layout, then intersect it with the
@@ -476,8 +550,8 @@ export default function App() {
 	);
 
 	/** Clamped here, not at the call sites: every path in is a raw number. */
-	const resizeTerminal = useCallback((percent: number) => {
-		setTerminalWidth(clampTerminal(percent));
+	const resizePanel = useCallback((percent: number) => {
+		setPanelWidth(clampPanel(percent));
 	}, []);
 
 	/**
@@ -501,37 +575,41 @@ export default function App() {
 			divider.setPointerCapture(event.pointerId);
 			// Or the browser starts a text selection across both panes instead.
 			event.preventDefault();
-			let latest = terminalWidth;
+			let latest = panelWidth;
 			const move = (moved: PointerEvent) => {
-				latest = ((row.right - moved.clientX) / row.width) * 100;
-				resizeTerminal(latest);
+				// The panel is on the LEFT, so its width grows from the row's left
+				// edge. This read `row.right - clientX` when the terminal was the
+				// only thing in this track and sat on the right.
+				latest = ((moved.clientX - row.left) / row.width) * 100;
+				resizePanel(latest);
 			};
 			const end = () => {
 				divider.removeEventListener("pointermove", move);
 				divider.removeEventListener("pointerup", end);
 				divider.removeEventListener("pointercancel", end);
-				writeTerminalWidth(clampTerminal(latest));
+				writeTerminalWidth(clampPanel(latest));
 			};
 			divider.addEventListener("pointermove", move);
 			divider.addEventListener("pointerup", end);
 			divider.addEventListener("pointercancel", end);
 		},
-		[resizeTerminal, terminalWidth],
+		[resizePanel, panelWidth],
 	);
 
 	/**
 	 * Keyboard resize, because a separator that only responds to a pointer is
-	 * one that a keyboard user cannot move at all. Left grows the terminal
-	 * (the divider moves left); Home/End go to the advertised bounds.
+	 * one that a keyboard user cannot move at all. Right grows the panel — it
+	 * is on the left, so this is the opposite of what it was when the terminal
+	 * owned this divider. Home/End go to the advertised bounds.
 	 */
 	const dividerKeys = useCallback(
 		(event: React.KeyboardEvent<HTMLDivElement>) => {
 			const step = event.shiftKey ? 10 : 2;
 			const next =
-				event.key === "ArrowLeft"
-					? terminalWidth + step
-					: event.key === "ArrowRight"
-						? terminalWidth - step
+				event.key === "ArrowRight"
+					? panelWidth + step
+					: event.key === "ArrowLeft"
+						? panelWidth - step
 						: event.key === "Home"
 							? TERMINAL_MIN_PERCENT
 							: event.key === "End"
@@ -539,10 +617,10 @@ export default function App() {
 								: undefined;
 			if (next === undefined) return;
 			event.preventDefault();
-			resizeTerminal(next);
-			writeTerminalWidth(clampTerminal(next));
+			resizePanel(next);
+			writeTerminalWidth(clampPanel(next));
 		},
-		[resizeTerminal, terminalWidth],
+		[resizePanel, panelWidth],
 	);
 
 	/*
@@ -840,8 +918,10 @@ export default function App() {
 			}
 			const next: string | undefined = files[Math.min(index, files.length - 1)];
 			commitTabs({ ...current, files, active: next });
-			if (next) void attachRef.current(next);
-			else detach();
+			// A file tab has no session to attach to, and the attached one is left
+			// alone: closing a file must not detach the conversation behind it.
+			if (next && !isFileTab(next)) void attachRef.current(next);
+			else if (!next) detach();
 		},
 		[commitTabs, detach],
 	);
@@ -1159,7 +1239,9 @@ export default function App() {
 		const next = readTabs(scope);
 		commitTabs(next);
 		detach();
-		if (next.active) void attach(next.active);
+		// A restored FILE tab has no session behind it. Attach to nothing and let
+		// the file render; attaching would treat `file:/path` as a session path.
+		if (next.active && !isFileTab(next.active)) void attach(next.active);
 	}, [project, scope, attach, commitTabs, detach]);
 
 	useEffect(() => {
@@ -1185,28 +1267,80 @@ export default function App() {
 	useEffect(() => {
 		if (!listedProject || listedProject !== tabs.project) return;
 		for (const file of tabs.files) {
+			// A file tab is not a session and is not in the session listing; only
+			// the sessions are checked for having gone away.
+			if (isFileTab(file)) continue;
 			if (opened.current.has(file)) continue;
 			if (sessions.some((s) => s.path === file)) continue;
 			closeTab(file);
 		}
 	}, [sessions, listedProject, tabs, closeTab]);
 
-	/** Switch tabs, or open a session from the list into one. */
+	/**
+	 * Switch tabs: a chat session, or a file.
+	 *
+	 * Only a session attaches — a file tab is rendered from its own state and
+	 * has no server session behind it. Selecting one deliberately leaves the
+	 * attached session alone, so switching to a file and back does not tear
+	 * down a live EventSource or interrupt a streaming turn.
+	 */
 	const selectTab = useCallback(
 		(file: string) => {
 			const current = tabsRef.current;
-			// Clicking the tab you are already attached to should do nothing; a
-			// re-attach would tear down a live EventSource for no reason.
-			if (current.active === file && esRef.current) return;
+			if (current.active === file) return;
 			commitTabs({
 				...current,
 				files: current.files.includes(file) ? current.files : [...current.files, file],
 				active: file,
 			});
+			// Already attached to this session (switched away to a file and back):
+			// re-attaching would tear down a live EventSource for no reason.
+			if (isFileTab(file) || (snapshotRef.current?.file === file && esRef.current)) return;
 			void attachRef.current(file);
 		},
 		[commitTabs],
 	);
+
+	/**
+	 * Move a tab within the strip.
+	 *
+	 * Order is the only thing that changes: no attach, no detach, no selection
+	 * change. Dragging the tab you are reading must not reload it, and it must
+	 * not steal the selection from the one you are streaming.
+	 */
+	const reorderTabs = useCallback(
+		(from: number, to: number) => {
+			const current = tabsRef.current;
+			const files = moveTab(current.files, from, to);
+			if (files === current.files) return;
+			commitTabs({ ...current, files });
+		},
+		[commitTabs],
+	);
+
+	/** Open a file from the explorer into a tab, or focus the tab it already has. */
+	const openFile = useCallback(
+		(path: string) => {
+			selectTab(fileTab(path));
+		},
+		[selectTab],
+	);
+
+	/**
+	 * Which open files have unsaved edits, so the strip can dot them.
+	 *
+	 * Held here rather than in FileEditor because the strip is rendered from
+	 * here and cannot see into a tab's body — without it a modified file would
+	 * look exactly like a saved one from the outside.
+	 */
+	const [dirtyFiles, setDirtyFiles] = useState<Record<string, boolean>>({});
+	const onFileDirty = useCallback((path: string, dirty: boolean) => {
+		setDirtyFiles((current) =>
+			// Same value: return the SAME object. A fresh one on every keystroke
+			// would re-render the whole strip while typing.
+			(current[path] ?? false) === dirty ? current : { ...current, [path]: dirty },
+		);
+	}, []);
 
 	/**
 	 * Alt+1..9 selects the Nth tab.
@@ -1247,11 +1381,11 @@ export default function App() {
 		const onKeyDown = (e: KeyboardEvent) => {
 			if (e.code !== "Backquote" || !e.ctrlKey || e.metaKey || e.altKey) return;
 			e.preventDefault();
-			toggleTerminal();
+			selectPanel("terminal");
 		};
 		window.addEventListener("keydown", onKeyDown);
 		return () => window.removeEventListener("keydown", onKeyDown);
-	}, [toggleTerminal]);
+	}, [selectPanel]);
 
 	// Tab title reflects activity so switching away doesn't lose the signal —
 	// the one thing a background terminal gives you for free.
@@ -1517,7 +1651,7 @@ export default function App() {
 	const activeIndex = tabs.active ? tabs.files.indexOf(tabs.active) : -1;
 
 	return (
-		<div className="flex h-full bg-neutral-950 text-neutral-100">
+		<div ref={splitRow} className="flex h-full bg-neutral-950 text-neutral-100">
 			{/*
 			  Fixed, and above everything: the point is that it is visible whichever
 			  pane you are looking at. Dismissible because a tab you are only reading
@@ -1543,6 +1677,187 @@ export default function App() {
 					</button>
 				</div>
 			)}
+			{/* The rail owns every panel toggle, and never scrolls. */}
+			<ActivityBar
+				panel={panel}
+				onSelect={selectPanel}
+				pendingHunks={snapshot?.hunks.filter((h) => h.state === "pending").length ?? 0}
+				onSettings={() => setSettingsOpen(true)}
+				version={__APP_VERSION__}
+			/>
+
+			{/*
+			 * THE panel column — one column, whichever panel the rail selected,
+			 * sitting immediately right of the button that opened it.
+			 *
+			 * Each panel states its own requirement rather than the rail hiding
+			 * the button: the editor and the terminal need a project, changes
+			 * needs a SESSION (hunks belong to one, and decisions post against its
+			 * id), and packages needs neither. A button that silently does nothing
+			 * is worse than one that opens a panel explaining what is missing.
+			 */}
+			{panel !== null && (
+				<>
+					<div
+						className="flex min-h-0 min-w-0 flex-col narrow:flex-1 wide:[flex:0_0_var(--panel-w)]"
+						style={{ "--panel-w": `${panelWidth}%` } as React.CSSProperties}
+					>
+						{panel === "editor" &&
+							(project || snapshot ? (
+								<Explorer
+									cwd={snapshot?.cwd || project || ""}
+									openPath={
+										tabs.active && isFileTab(tabs.active) ? tabPath(tabs.active) : null
+									}
+									onOpen={openFile}
+									onClose={() => setPanel(null)}
+								/>
+							) : (
+								<PanelEmpty title="Explorer" onClose={() => setPanel(null)}>
+									Pick a project first — the file tree is rooted at it.
+								</PanelEmpty>
+							))}
+
+						{panel === "review" &&
+							(snapshot ? (
+								<Review
+									sessionId={snapshot.id}
+									cwd={snapshot.cwd}
+									hunks={snapshot.hunks}
+									onClose={() => setPanel(null)}
+									onChanged={() => void reloadSnapshot()}
+								/>
+							) : (
+								<PanelEmpty title="Changes" onClose={() => setPanel(null)}>
+									Open a session to review what the agent changed.
+								</PanelEmpty>
+							))}
+
+						{/*
+						 * Kept MOUNTED while another panel shows, because the shells
+						 * are live processes and xterm's fit is measured from a visible
+						 * box — unmounting would tear down a terminal you only switched
+						 * away from, and remounting would re-measure at zero width.
+						 */}
+						{panel === "terminal" &&
+							(project ? (
+								<TerminalPane
+									cwd={project}
+									ready={termsReady}
+									layout={termLayout}
+									onLayout={changeTermLayout}
+									onClose={closeTerminal}
+								/>
+							) : (
+								<PanelEmpty title="Terminal" onClose={() => setPanel(null)}>
+									Pick a project first — a shell has to start somewhere.
+								</PanelEmpty>
+							))}
+
+						{panel === "packages" && (
+							<Packages
+								onChanged={() => void reloadSnapshot()}
+								cwd={project}
+								onClose={() => setPanel(null)}
+							/>
+						)}
+					</div>
+					{/* Hidden on narrow, where the panel IS the view and there is
+					    nothing beside it to resize. */}
+					<div
+						role="separator"
+						aria-orientation="vertical"
+						aria-label="Resize panel"
+						aria-valuenow={Math.round(panelWidth)}
+						aria-valuemin={TERMINAL_MIN_PERCENT}
+						aria-valuemax={TERMINAL_MAX_PERCENT}
+						tabIndex={0}
+						onPointerDown={startDrag}
+						onKeyDown={dividerKeys}
+						// The `after` box is the real hit area: a 4px line is a target
+						// you miss, and there is nothing else to aim at.
+						className="relative w-1 shrink-0 cursor-col-resize bg-neutral-800 transition-colors duration-150 ease-out after:absolute after:inset-y-0 after:-left-1 after:-right-1 after:content-[''] hover:bg-amber-600 focus-visible:bg-amber-500 focus-visible:outline-none motion-reduce:transition-none narrow:hidden"
+					/>
+				</>
+			)}
+
+			{/* On a phone the panel IS the view: two columns there is three words
+			    per line each. Same rule the session list follows. */}
+			<div
+				className={`flex min-h-0 min-w-0 flex-1 flex-col ${panel !== null ? "narrow:hidden" : ""}`}
+			>
+				<SessionTabs
+					tabs={tabs.files}
+					sessions={shown}
+					active={tabs.active}
+					panelId={CHAT_PANEL_ID}
+					listOpen={listOpen}
+					onSelect={selectTab}
+					shortNames={shortNames}
+					onClose={closeTab}
+					onNew={() => void attach(undefined)}
+					onToggleList={() => setListOpen((o) => !o)}
+					dirtyFiles={dirtyFiles}
+					onReorder={reorderTabs}
+				/>
+				<div className="flex min-h-0 min-w-0 flex-1">
+					<div
+						id={CHAT_PANEL_ID}
+						role="tabpanel"
+						aria-labelledby={activeIndex >= 0 ? tabDomId(activeIndex) : undefined}
+						className="flex min-h-0 min-w-0 flex-1 flex-col"
+					>
+						{/*
+						 * A file tab shows its editor; anything else shows the chat.
+						 *
+						 * Chat stays MOUNTED underneath rather than being swapped out,
+						 * because it holds the live EventSource and the transcript's
+						 * scroll position: unmounting to look at a file would drop a
+						 * streaming turn and lose your place in it. `hidden` costs a
+						 * hidden subtree; remounting costs the session.
+						 */}
+						{tabs.active && isFileTab(tabs.active) && (
+							<FileEditor
+								// Keyed by path: switching files must build a new editor
+								// rather than reuse one holding another file's undo history.
+								key={tabs.active}
+								path={tabPath(tabs.active)}
+								cwd={snapshot?.cwd || project || ""}
+								onDirty={onFileDirty}
+							/>
+						)}
+						<div
+							className={`flex min-h-0 min-w-0 flex-1 flex-col ${
+								tabs.active && isFileTab(tabs.active) ? "hidden" : ""
+							}`}
+						>
+							<Chat
+								snapshot={snapshot}
+								partial={partial}
+								busy={busy}
+								opening={opening}
+								showThinking={showThinking}
+								toolMode={toolMode}
+								command={command}
+								modelError={modelError}
+								onSend={send}
+								onAnswerAsk={answerAsk}
+								onAbort={abort}
+								onModelChange={changeModel}
+								onThinkingChange={changeThinking}
+								onCommandMenu={refreshCommands}
+								onCompact={compact}
+								onRestart={restart}
+							/>
+						</div>
+					</div>
+				</div>
+			</div>
+
+			{/* The session list moved to the RIGHT edge, opposite the rail: the two
+			    pieces of persistent chrome now bracket the window instead of
+			    stacking on one side. It keeps its narrow-viewport drawer
+			    behaviour, which now slides in from the right. */}
 			<SessionList
 				sessions={shown}
 				listError={listError}
@@ -1570,100 +1885,7 @@ export default function App() {
 				onAutoName={autoNameSession}
 				shortNames={shortNames}
 				onNew={() => void attach(undefined)}
-				onSettings={() => setSettingsOpen(true)}
-				onPackages={() => setPackagesOpen(true)}
 			/>
-			<div className="flex min-h-0 min-w-0 flex-1 flex-col">
-				<SessionTabs
-					tabs={tabs.files}
-					sessions={shown}
-					active={tabs.active}
-					panelId={CHAT_PANEL_ID}
-					listOpen={listOpen}
-					onSelect={selectTab}
-					shortNames={shortNames}
-					onClose={closeTab}
-					onNew={() => void attach(undefined)}
-					onToggleList={() => setListOpen((o) => !o)}
-					terminalOpen={terminalOpen}
-					onToggleTerminal={toggleTerminal}
-				/>
-				{/* The split. `min-w-0` on the row AND on both panes, or the
-				    terminal's own content width becomes the row's floor and the
-				    divider cannot be dragged left. */}
-				<div ref={splitRow} className="flex min-h-0 min-w-0 flex-1">
-					<div
-						id={CHAT_PANEL_ID}
-						role="tabpanel"
-						aria-labelledby={activeIndex >= 0 ? tabDomId(activeIndex) : undefined}
-						className={`flex min-h-0 min-w-0 flex-1 flex-col ${
-							// A 40% chat column on a phone is two words per line.
-							// Below the breakpoint the terminal is not a split, it
-							// is the view — the same rule the session list follows.
-							terminalOpen ? "narrow:hidden" : ""
-						}`}
-					>
-						<Chat
-							snapshot={snapshot}
-							partial={partial}
-							busy={busy}
-							opening={opening}
-							showThinking={showThinking}
-							toolMode={toolMode}
-							command={command}
-							modelError={modelError}
-							onSend={send}
-							onAnswerAsk={answerAsk}
-							onAbort={abort}
-							onModelChange={changeModel}
-							onThinkingChange={changeThinking}
-							onCommandMenu={refreshCommands}
-							onCompact={compact}
-							onRestart={restart}
-						/>
-					</div>
-
-					{terminalOpen && project && (
-						<>
-							<div
-								role="separator"
-								aria-orientation="vertical"
-								aria-label="Resize terminal"
-								aria-valuenow={Math.round(terminalWidth)}
-								aria-valuemin={TERMINAL_MIN_PERCENT}
-								aria-valuemax={TERMINAL_MAX_PERCENT}
-								tabIndex={0}
-								onPointerDown={startDrag}
-								onKeyDown={dividerKeys}
-								// The `after` box is the real hit area: a 4px line is
-								// a target you miss, and there is nothing else to
-								// aim at. Hidden when the terminal owns the whole
-								// width, because then there is nothing to resize.
-								className="relative w-1 shrink-0 cursor-col-resize bg-neutral-800 transition-colors duration-150 ease-out after:absolute after:inset-y-0 after:-left-1 after:-right-1 after:content-[''] hover:bg-amber-600 focus-visible:bg-amber-500 focus-visible:outline-none motion-reduce:transition-none narrow:hidden"
-							/>
-							{/*
-							 * The width goes through a custom property so the media
-							 * query can override it in CSS: an inline `flex` would
-							 * beat any class, and deciding the layout from
-							 * `matchMedia` in React means re-rendering the whole tree
-							 * on a window resize to compute what CSS already knows.
-							 */}
-							<div
-								className="flex min-h-0 min-w-0 flex-col narrow:flex-1 wide:[flex:0_0_var(--term-w)]"
-								style={{ "--term-w": `${terminalWidth}%` } as React.CSSProperties}
-							>
-								<TerminalPane
-									cwd={project}
-										ready={termsReady}
-									layout={termLayout}
-									onLayout={changeTermLayout}
-									onClose={closeTerminal}
-								/>
-							</div>
-						</>
-					)}
-				</div>
-			</div>
 			<Settings
 				open={settingsOpen}
 				theme={theme}
@@ -1677,17 +1899,6 @@ export default function App() {
 				shortNames={shortNames}
 				onShortNames={changeShortNames}
 				onClose={() => setSettingsOpen(false)}
-			/>
-			{/*
-			 * Every machine this page can reach, this one first. A host that is
-			 * not answering, or that turned out to be another product, is left
-			 * out entirely: its packages are not ours to list or to change.
-			 */}
-			<Packages
-				open={packagesOpen}
-				onChanged={() => void reloadSnapshot()}
-				cwd={project}
-				onClose={() => setPackagesOpen(false)}
 			/>
 		</div>
 	);

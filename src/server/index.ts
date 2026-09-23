@@ -28,6 +28,8 @@ import {
 	removeProject,
 } from "./projects.js";
 import { readPersonality, writePersonality } from "./personality.js";
+import { listDir, readFile as readReviewFile, writeFile, writeReviewed } from "./files.js";
+import { resolve as resolveHunks } from "../shared/hunks.js";
 import { apply, status as gitStatus, suggestMessage, type GitPlan } from "./git.js";
 import { nameCommit, nameSession } from "./autoname.js";
 import { Terminals } from "./terminals.js";
@@ -689,6 +691,96 @@ app.post("/api/sessions/:id/ask", (req, res) => {
 	if (!registry.answerAsk(req.params.id, askId, answer))
 		return res.status(409).json({ error: "that question is no longer open" });
 	res.json({ ok: true });
+});
+
+/**
+ * The file behind a hunk, as it is RIGHT NOW.
+ *
+ * The pane diffs against live contents rather than anything remembered: the
+ * agent may have edited the same file again, or the user in their own editor,
+ * and a review rendered from a stale copy would offer to revert text that is
+ * no longer there.
+ */
+app.get("/api/file", (req, res) => {
+	const path = typeof req.query.path === "string" ? req.query.path : "";
+	try {
+		res.json({ path, content: readReviewFile(CWD, path) });
+	} catch (err) {
+		res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
+	}
+});
+
+/**
+ * Save a file the user edited.
+ *
+ * `expect` is what the editor had when it opened the buffer, and a mismatch is
+ * a 409 rather than a write. The agent edits these same files, so "someone
+ * else saved while this tab was open" is the NORMAL case here, not a rare
+ * race — and the only safe answer is to refuse and let the UI offer a reload.
+ */
+app.put("/api/file", (req, res) => {
+	const path = typeof req.body?.path === "string" ? req.body.path : "";
+	const content = typeof req.body?.content === "string" ? req.body.content : null;
+	const expect = typeof req.body?.expect === "string" ? req.body.expect : null;
+	if (content === null || expect === null) {
+		return res.status(400).json({ error: "path, content and expect are required" });
+	}
+	try {
+		writeFile(CWD, path, expect, content);
+		res.json({ ok: true });
+	} catch (err) {
+		const message = err instanceof Error ? err.message : String(err);
+		// A stale buffer is a conflict the client can resolve by reloading; a bad
+		// path is the client's bug. Different statuses so the UI can tell them
+		// apart without parsing the message.
+		res.status(message.includes("changed on disk") ? 409 : 400).json({ error: message });
+	}
+});
+
+/** One directory's files and subdirectories, for the editor's tree. */
+app.get("/api/files", (req, res) => {
+	const path = typeof req.query.path === "string" ? req.query.path : "";
+	try {
+		res.json({ path, entries: listDir(CWD, path || CWD) });
+	} catch (err) {
+		res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
+	}
+});
+
+/**
+ * Accept or reject one hunk.
+ *
+ * Accepting records a decision and writes NOTHING: pi's edit tool already put
+ * the agent's text on disk, so "accept" means "reviewed, keeping it".
+ * Rejecting is the branch that writes, putting the old text back.
+ *
+ * The write happens BEFORE the state is recorded, and a failed write leaves
+ * the hunk pending. The other order would let a refused write — a file that
+ * moved, a path outside the project — leave the pane showing a revert that
+ * never reached the disk.
+ */
+app.post("/api/sessions/:id/hunks/:hunkId", (req, res) => {
+	const state: unknown = req.body?.state;
+	if (state !== "accepted" && state !== "rejected" && state !== "pending") {
+		return res.status(400).json({ error: "state must be accepted, rejected or pending" });
+	}
+	const entry = registry.get(req.params.id);
+	if (!entry) return res.status(404).json({ error: "not found" });
+	const hunk = entry.session.hunks.find((h) => h.id === req.params.hunkId);
+	if (!hunk) return res.status(404).json({ error: "no such hunk" });
+
+	try {
+		if (state === "rejected") {
+			const current = readReviewFile(CWD, hunk.path) ?? "";
+			// One hunk, not all of them: reverting is per-decision, and folding in
+			// the others would undo changes the user has not ruled on.
+			writeReviewed(CWD, hunk.path, current, resolveHunks(current, [{ ...hunk, state }]));
+		}
+		registry.setHunkState(req.params.id, req.params.hunkId, state);
+		res.json({ ok: true });
+	} catch (err) {
+		res.status(409).json({ error: err instanceof Error ? err.message : String(err) });
+	}
 });
 
 app.post("/api/sessions/:id/model", async (req, res) => {

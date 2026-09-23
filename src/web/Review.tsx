@@ -1,0 +1,332 @@
+/**
+ * Review.tsx — the agent-edit review pane.
+ *
+ * ONE component owns the CodeMirror `EditorView`, deliberately. There is no
+ * `openFile`/`applyPatch` indirection layer: an interface with one
+ * implementation would have to re-expose every decoration and transaction this
+ * pane needs, and the inline accept/reject UI is exactly what leaks through a
+ * generic wrapper first. The seam that actually has to survive an editor swap
+ * is the HUNK FORMAT, which is plain data in shared/hunks.ts and knows nothing
+ * about CodeMirror.
+ *
+ * What this pane is NOT: an approval queue. pi's edit tool writes during
+ * execution and this server installs no `tool_call` gate, so every hunk here
+ * is already on disk. Accepting records a decision and changes no bytes;
+ * rejecting is the action that writes, putting the old text back. The merge
+ * view is therefore oriented "what it was" → "what it is", not "what it is" →
+ * "what it would be".
+ */
+
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ArrowCounterClockwise, Check, FileCode, X } from "@phosphor-icons/react";
+import type { EditorView } from "@codemirror/view";
+import type { Hunk, HunkState } from "../shared/hunks.js";
+import { fitHunk, revertHunks } from "../shared/hunks.js";
+import { darkPlus, languageFor, loadCodeMirror } from "./codemirror.js";
+
+/** `/home/me/proj/src/web/App.tsx` → `src/web/App.tsx` when it is under `cwd`. */
+function shortPath(path: string, cwd: string): string {
+	return cwd && path.startsWith(`${cwd}/`) ? path.slice(cwd.length + 1) : path;
+}
+
+async function getJson<T>(url: string): Promise<T> {
+	const r = await fetch(url);
+	if (!r.ok) throw new Error(((await r.json()) as { error?: string }).error ?? `${r.status}`);
+	return (await r.json()) as T;
+}
+
+/**
+ * One file's hunks, rendered as a unified merge view.
+ *
+ * `unifiedMergeView` rather than the side-by-side `MergeView`: one editable
+ * document with inline chunks is both closer to the review UI this needs and
+ * the only one of the two that survives a phone screen, which is where
+ * checking on a running agent actually happens.
+ *
+ * The "original" side is RECONSTRUCTED by undoing the file's hunks, because
+ * the agent's text is what is on disk and the pre-edit content exists nowhere
+ * else by the time this renders.
+ */
+function FileDiff({ path, content, hunks }: { path: string; content: string; hunks: Hunk[] }) {
+	const host = useRef<HTMLDivElement | null>(null);
+	const view = useRef<EditorView | null>(null);
+
+	useEffect(() => {
+		const node = host.current;
+		if (!node) return;
+		let live = true;
+
+		void Promise.all([loadCodeMirror(), languageFor(path)]).then(([cm, lang]) => {
+			if (!live || !host.current) return;
+			// Everything the agent touched, undone: the file as it was before
+			// this session ran. Hunks already reverted by hand are skipped by
+			// revertHunks rather than forced, so this degrades to "as close to
+			// the original as is still reachable".
+			const original = revertHunks(content, hunks);
+			view.current = new cm.EditorView({
+				parent: host.current,
+				state: cm.EditorState.create({
+					doc: content,
+					extensions: [
+						/*
+						 * Read-only, and that is not a simplification. Editing here
+						 * would put a third writer on the file — the agent, the
+						 * user's own editor, and this pane — with no way to
+						 * reconcile them, and the accept/reject decision is the
+						 * only write this pane is meant to make.
+						 */
+						cm.EditorView.editable.of(false),
+						cm.EditorState.readOnly.of(true),
+						cm.EditorView.lineWrapping,
+						cm.lineNumbers(),
+						cm.unifiedMergeView({ original, mergeControls: false }),
+						// Highlighting is best-effort: a language this does not
+						// cover still diffs, just without colour.
+						...lang,
+						/*
+						 * The stock highlighter, not a CodeMirror theme. This app
+						 * paints everything from its own CSS variables (see
+						 * index.css), so a bundled theme would be the one panel
+						 * ignoring the palette — the mistake Terminal.tsx documents
+						 * having already made once with xterm.
+						 */
+						cm.syntaxHighlighting(darkPlus(cm), { fallback: true }),
+					],
+				}),
+			});
+		});
+
+		return () => {
+			live = false;
+			view.current?.destroy();
+			view.current = null;
+		};
+		// Rebuilt when the file's text or its hunks change: a merge view's
+		// `original` is fixed at construction, so there is nothing to
+		// reconfigure in place.
+	}, [path, content, hunks]);
+
+	return <div ref={host} className="cm-review overflow-auto text-sm" />;
+}
+
+/**
+ * One hunk's row: what it did, and the two decisions.
+ *
+ * `stale` and `missing` are surfaced rather than hidden, because the honest
+ * answer to "this text is not where the agent left it" is to say so and refuse
+ * the revert — a forced write would silently clobber whatever replaced it.
+ */
+function HunkRow({
+	hunk,
+	current,
+	busy,
+	onDecide,
+}: {
+	hunk: Hunk;
+	current: string | null;
+	busy: boolean;
+	onDecide: (state: HunkState) => void;
+}) {
+	const fit = current === null ? null : fitHunk(hunk, current);
+	const gone = fit?.fit === "missing";
+	const ambiguous = fit?.fit === "ambiguous";
+	const added = hunk.newText.split("\n").length;
+	const removed = hunk.oldText.split("\n").length;
+
+	return (
+		<div className="flex items-center gap-2 border-b border-neutral-800 px-3 py-1.5 text-sm">
+			<span className="font-mono text-xs text-neutral-500">
+				L{hunk.anchor.line + 1}
+			</span>
+			<span className="font-mono text-xs">
+				{hunk.oldText !== "" && <span className="text-red-400">-{removed}</span>}
+				{hunk.oldText !== "" && hunk.newText !== "" && " "}
+				{hunk.newText !== "" && <span className="text-green-400">+{added}</span>}
+			</span>
+
+			{gone ? (
+				<span className="text-xs text-amber-500">
+					not in the file any more — nothing to revert
+				</span>
+			) : ambiguous ? (
+				<span className="text-xs text-amber-500">
+					appears {fit.count}× — reverting the nearest
+				</span>
+			) : null}
+
+			<div className="ml-auto flex items-center gap-1">
+				{hunk.state === "pending" ? (
+					<>
+						<button
+							disabled={busy}
+							onClick={() => onDecide("accepted")}
+							className="flex items-center gap-1 rounded px-2 py-0.5 text-xs text-green-400 hover:bg-neutral-800 disabled:opacity-50"
+						>
+							<Check size={12} weight="bold" />
+							Keep
+						</button>
+						<button
+							// A hunk whose text is gone cannot be reverted, and
+							// offering the button would promise a write that the
+							// server is right to refuse.
+							disabled={busy || gone}
+							onClick={() => onDecide("rejected")}
+							className="flex items-center gap-1 rounded px-2 py-0.5 text-xs text-red-400 hover:bg-neutral-800 disabled:opacity-50"
+						>
+							<ArrowCounterClockwise size={12} weight="bold" />
+							Revert
+						</button>
+					</>
+				) : (
+					<button
+						disabled={busy}
+						onClick={() => onDecide("pending")}
+						className={`rounded px-2 py-0.5 text-xs hover:bg-neutral-800 disabled:opacity-50 ${
+							hunk.state === "accepted" ? "text-green-400" : "text-neutral-500"
+						}`}
+					>
+						{hunk.state === "accepted" ? "Kept" : "Reverted"} · undo
+					</button>
+				)}
+			</div>
+		</div>
+	);
+}
+
+/**
+ * The pane: every file this session's agent touched, newest first.
+ *
+ * Hunks come from the snapshot rather than from an event stream of their own,
+ * so a reload mid-review shows exactly what was on screen before it — the
+ * decisions live on the server, keyed by pi's own tool call ids, and survive
+ * a remount, a tab switch and a refresh.
+ */
+export function Review({
+	sessionId,
+	cwd,
+	hunks,
+	onClose,
+	onChanged,
+}: {
+	sessionId: string;
+	cwd: string;
+	hunks: Hunk[];
+	onClose: () => void;
+	/** A revert wrote to disk; the snapshot's hunk states are now out of date. */
+	onChanged: () => void;
+}) {
+	/** Live file contents, keyed by path. The diff is against disk, never a memory of it. */
+	const [files, setFiles] = useState<Record<string, string | null>>({});
+	const [busy, setBusy] = useState(false);
+	const [error, setError] = useState<string | null>(null);
+
+	const paths = [...new Set(hunks.map((h) => h.path))];
+	// Stable across renders that did not change the set, so the effect below
+	// does not refetch every file on every keystroke elsewhere in the app.
+	const key = paths.join("\0");
+
+	const reload = useCallback(async () => {
+		const entries = await Promise.all(
+			key
+				.split("\0")
+				.filter(Boolean)
+				.map(async (path) => {
+					try {
+						const r = await getJson<{ content: string | null }>(
+							`/api/file?path=${encodeURIComponent(path)}`,
+						);
+						return [path, r.content] as const;
+					} catch {
+						// A file that cannot be read still has hunks worth listing;
+						// null renders the row without a diff rather than dropping it.
+						return [path, null] as const;
+					}
+				}),
+		);
+		setFiles(Object.fromEntries(entries));
+	}, [key]);
+
+	useEffect(() => {
+		void reload();
+	}, [reload]);
+
+	const decide = async (hunk: Hunk, state: HunkState) => {
+		setBusy(true);
+		setError(null);
+		try {
+			const r = await fetch(`/api/sessions/${sessionId}/hunks/${encodeURIComponent(hunk.id)}`, {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({ state }),
+			});
+			if (!r.ok) throw new Error(((await r.json()) as { error?: string }).error ?? `${r.status}`);
+			// Re-read from disk rather than patching local state: a revert
+			// changed the file, and every other hunk in it has just moved.
+			await reload();
+			onChanged();
+		} catch (err) {
+			setError(err instanceof Error ? err.message : String(err));
+		} finally {
+			setBusy(false);
+		}
+	};
+
+	const pending = hunks.filter((h) => h.state === "pending").length;
+
+	return (
+		<div className="flex min-h-0 min-w-0 flex-1 flex-col bg-neutral-950">
+			<div className="flex items-center gap-2 border-b border-neutral-800 px-3 py-2">
+				<FileCode size={16} className="text-neutral-400" />
+				<span className="text-sm text-neutral-300">
+					Changes{pending > 0 && <span className="text-amber-400"> · {pending} to review</span>}
+				</span>
+				<button
+					onClick={onClose}
+					aria-label="Close review"
+					className="ml-auto rounded p-1 text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200"
+				>
+					<X size={16} />
+				</button>
+			</div>
+
+			{error && (
+				<div className="border-b border-red-900 bg-red-950/40 px-3 py-2 text-sm text-red-300">
+					{error}
+				</div>
+			)}
+
+			{hunks.length === 0 ? (
+				<p className="p-4 text-sm text-neutral-500">
+					Nothing edited yet. Changes the agent makes to files show up here.
+				</p>
+			) : (
+				<div className="min-h-0 flex-1 overflow-auto">
+					{paths.map((path) => {
+						const mine = hunks.filter((h) => h.path === path);
+						const content = files[path] ?? null;
+						return (
+							<div key={path} className="border-b border-neutral-800">
+								<div className="sticky top-0 z-10 bg-neutral-900 px-3 py-1.5 font-mono text-xs text-neutral-400">
+									{shortPath(path, cwd)}
+									{content === null && (
+										<span className="ml-2 text-amber-500">deleted or unreadable</span>
+									)}
+								</div>
+								{mine.map((h) => (
+									<HunkRow
+										key={h.id}
+										hunk={h}
+										current={content}
+										busy={busy}
+										onDecide={(state) => void decide(h, state)}
+									/>
+								))}
+								{content !== null && <FileDiff path={path} content={content} hunks={mine} />}
+							</div>
+						);
+					})}
+				</div>
+			)}
+		</div>
+	);
+}

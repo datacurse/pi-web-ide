@@ -8,7 +8,7 @@
  * on.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { X } from "@phosphor-icons/react";
 import type {
 	PiwMutation,
@@ -51,12 +51,10 @@ const WARNING =
 	"Packages run with full system access: extensions are code, and skills can tell the model to run anything.";
 
 export function Packages({
-	open,
 	onChanged,
 	cwd,
 	onClose,
 }: {
-	open: boolean;
 	/** A package changed: the open session's snapshot is now out of date. */
 	onChanged: () => void;
 	/** The project on screen, whose own `.pi/settings.json` is shown read-only. */
@@ -72,18 +70,6 @@ export function Packages({
 	const [log, setLog] = useState<{ title: string; text: string } | null>(null);
 	const [adding, setAdding] = useState<PiwPackageInfo | { source: string } | null>(null);
 
-	const ref = useRef<HTMLDialogElement>(null);
-
-	// Same imperative showModal() as Settings: the `open` ATTRIBUTE renders a
-	// non-modal dialog, which is a different (and here, wrong) thing. This was
-	// a hand-rolled `fixed inset-0` div, which claimed aria-modal without the
-	// focus trap, Escape binding, inertness or top layer that back it up.
-	useEffect(() => {
-		const dialog = ref.current;
-		if (!dialog) return;
-		if (open && !dialog.open) dialog.showModal();
-		else if (!open && dialog.open) dialog.close();
-	}, [open]);
 
 	const refresh = useCallback(async () => {
 		try {
@@ -95,7 +81,6 @@ export function Packages({
 	}, []);
 
 	useEffect(() => {
-		if (!open) return;
 		void refresh();
 		// The project's own `.pi/settings.json`, read-only: it is committed and
 		// git is its sync, so this is here to answer "why does this project
@@ -105,7 +90,7 @@ export function Packages({
 		)
 			.then(setProject)
 			.catch(() => setProject(null));
-	}, [open, refresh, cwd]);
+	}, [refresh, cwd]);
 
 	/**
 	 * Run one mutation and fold the answer back in.
@@ -138,32 +123,28 @@ export function Packages({
 		[refresh, onChanged],
 	);
 
-	// No early return on `!open`: the <dialog> element has to stay mounted for
-	// showModal()/close() to have something to act on, and the UA hides it.
 	const packages = [...(view?.packages ?? [])].sort((a, b) =>
 		a.identity.localeCompare(b.identity),
 	);
 
+	/*
+	 * A panel in the rail's column now, not a modal.
+	 *
+	 * It stopped being a dialog when it stopped being something you open ON TOP
+	 * of your work: installing a package while reading the session that made you
+	 * want it is the actual use, and a modal makes that impossible by design.
+	 * The focus trap and Escape binding went with it — neither is wanted for a
+	 * panel you tab into and out of like any other column.
+	 *
+	 * `min-w-0` because the installed table holds absolute node_modules paths,
+	 * which would otherwise set the column's floor and defeat the divider.
+	 */
 	return (
-		<dialog
-			ref={ref}
+		<section
 			aria-label="Packages"
-			// Escape and the close button both end up here, so React state and
-			// the element's own open state cannot disagree.
-			onClose={onClose}
-			// Clicking the backdrop targets the dialog itself; a click anywhere
-			// on its contents targets a descendant.
-			onClick={(e) => {
-				if (e.target === ref.current) onClose();
-			}}
-			// Wider than Settings because this holds a table: a local package's
-			// identity is an absolute node_modules path, and the search tab adds
-			// description, downloads and date columns. `hidden open:flex` because
-			// a <dialog> is hidden by the UA until open, which a bare `flex` would
-			// override.
-			className="m-auto hidden max-h-[88vh] w-[min(48rem,94vw)] flex-col overflow-hidden rounded-lg border border-neutral-800 bg-neutral-950 p-0 text-neutral-100 shadow-2xl backdrop:bg-black/60 open:flex"
+			className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-neutral-950 text-neutral-100"
 		>
-			<div className="flex items-center gap-3 border-b border-neutral-800 px-3 py-2">
+			<div className="flex items-center gap-2 border-b border-neutral-800 px-3 py-2">
 				<h2 className="text-sm font-semibold tracking-tight">Packages</h2>
 				<div className="flex gap-1">
 					{(["installed", "search"] as const).map((t) => (
@@ -185,9 +166,11 @@ export function Packages({
 				>
 					Refresh
 				</button>
-				<span className="ml-auto flex items-center gap-3 font-mono text-[10px] text-neutral-500">
-					<span title="pi on this machine">pi {view?.piVersion ?? "?"}</span>
-					{working && <span className="text-amber-400">{working}…</span>}
+				<span className="ml-auto flex min-w-0 items-center gap-2 font-mono text-[10px] text-neutral-500">
+					<span className="truncate" title="pi on this machine">
+						pi {view?.piVersion ?? "?"}
+					</span>
+					{working && <span className="truncate text-amber-400">{working}…</span>}
 				</span>
 				<button
 					onClick={onClose}
@@ -259,7 +242,7 @@ export function Packages({
 					</pre>
 				</div>
 			)}
-		</dialog>
+		</section>
 	);
 }
 

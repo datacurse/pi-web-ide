@@ -35,10 +35,11 @@
  */
 
 import { spawn } from "node:child_process";
-import { existsSync, statSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import type { Readable, Writable } from "node:stream";
 
 import { isRecord, records } from "./guards.js";
+import { hunkFromWrite, hunksFromEdit, type Hunk } from "../shared/hunks.js";
 import { personalityPath } from "./personality.js";
 import { repairSessionFile } from "./repair.js";
 import { sessionHeaderCwd } from "./sessions.js";
@@ -622,6 +623,14 @@ export interface PiSession {
 	readonly commands: PiCommand[];
 	/** The question pi is blocked on, or null if it is not waiting on one. */
 	readonly ask: PiAsk | null;
+	/**
+	 * Every change this session's agent made to a file, oldest first, for the
+	 * review pane. Already applied to disk: pi's edit tool writes during
+	 * execution, so these are changes to review, not proposals to approve.
+	 */
+	readonly hunks: Hunk[];
+	/** Record a review decision. False if `id` is not a hunk of this session. */
+	setHunkState(id: string, state: Hunk["state"]): boolean;
 	messages(): PiMessage[];
 	prompt(text: string, images?: PiImage[]): Promise<void>;
 	abort(): Promise<void>;
@@ -860,6 +869,29 @@ export async function openSession(opts: OpenOptions): Promise<PiSession> {
 	};
 
 	/**
+	 * Hunks this session's agent produced, oldest first, for the review pane.
+	 *
+	 * Server-side because the edit has ALREADY HAPPENED by the time anyone sees
+	 * it: pi's edit tool writes during execution and this server installs no
+	 * `tool_call` gate, so the pane reviews changes on disk rather than approving
+	 * proposals. That makes the pre-edit content something only this process can
+	 * observe, and only in the window between `tool_execution_start` and the
+	 * tool actually writing — which is why it is captured here and not derived
+	 * later from a diff.
+	 */
+	const hunks: Hunk[] = [];
+	/**
+	 * What an in-flight edit needs, keyed by tool call id, until its end frame.
+	 *
+	 * The ARGS are held here and not read from the end frame because
+	 * `tool_execution_end` does not carry them — verified against a live child:
+	 * it has `toolCallId`, `toolName`, `result` and `isError`, and nothing else.
+	 * `tool_execution_start` is the only frame with the arguments, and also the
+	 * only moment the pre-edit content still exists, so both are captured there.
+	 */
+	const preEdit = new Map<string, { before: string | null; args: Record<string, unknown> }>();
+
+	/**
 	 * The question pi is currently blocked on, if any. One at a time by
 	 * construction: the dialog methods block the extension that called them,
 	 * and the surface they drive is single.
@@ -886,6 +918,69 @@ export async function openSession(opts: OpenOptions): Promise<PiSession> {
 				disarmLocal();
 				streaming = true;
 				break;
+
+			/*
+			 * This fires BEFORE the tool runs, which is the only moment the
+			 * pre-edit content of the file still exists. Read it now or lose it:
+			 * once `edit` has written, nothing on this machine remembers what was
+			 * there, and a diff computed afterwards could only guess at which of
+			 * the agent's edits produced which change.
+			 *
+			 * Synchronous on purpose. An async read would race the tool's own
+			 * write and could return the post-edit content, silently producing a
+			 * hunk whose "before" is its "after".
+			 */
+			case "tool_execution_start": {
+				const tool = String(frame.toolName ?? "");
+				if (tool !== "edit" && tool !== "write") break;
+				const args = isRecord(frame.args) ? frame.args : {};
+				if (typeof args.path !== "string") break;
+				let before: string | null;
+				try {
+					before = readFileSync(args.path, "utf8");
+				} catch {
+					// Absent is meaningful, not an error: `write` creating a new file
+					// records null, which is what makes "did not exist" distinguishable
+					// from "existed empty" when the change is reverted.
+					before = null;
+				}
+				preEdit.set(String(frame.toolCallId ?? ""), { before, args });
+				break;
+			}
+
+			/*
+			 * Hunks are built here, from the tool's OWN ARGUMENTS rather than from
+			 * a diff of before and after. The agent already said what it meant to
+			 * change; re-diffing would split one intended edit across two hunks or
+			 * merge two unrelated ones, and show a change nobody expressed.
+			 */
+			case "tool_execution_end": {
+				const id = String(frame.toolCallId ?? "");
+				const pending = preEdit.get(id);
+				if (!pending) break;
+				preEdit.delete(id);
+				// A failed edit changed nothing, so there is nothing to review.
+				if (frame.isError === true) break;
+				const { before, args } = pending;
+				if (typeof args.path !== "string") break;
+
+				if (String(frame.toolName ?? "") === "write") {
+					if (typeof args.content !== "string") break;
+					hunks.push(hunkFromWrite(id, args.path, before, args.content));
+				} else {
+					// An `edit` against a file that could not be read has no "before"
+					// to anchor against, so its hunks would be unrevertable.
+					if (before === null) break;
+					const edits = records(args.edits).flatMap((e) =>
+						typeof e.oldText === "string" && typeof e.newText === "string"
+							? [{ oldText: e.oldText, newText: e.newText }]
+							: [],
+					);
+					if (edits.length === 0) break;
+					hunks.push(...hunksFromEdit(id, args.path, before, edits));
+				}
+				break;
+			}
 
 			case "message_end":
 				if (isRecord(frame.message)) {
@@ -989,6 +1084,20 @@ export async function openSession(opts: OpenOptions): Promise<PiSession> {
 		},
 		get ask() {
 			return pendingAsk;
+		},
+		get hunks() {
+			return hunks;
+		},
+		/**
+		 * Record a review decision. The STATE is all that is stored here; the
+		 * bytes are written by the caller through files.ts, because this module
+		 * speaks to pi and nothing else.
+		 */
+		setHunkState(id: string, state: Hunk["state"]): boolean {
+			const hunk = hunks.find((h) => h.id === id);
+			if (!hunk) return false;
+			hunk.state = state;
+			return true;
 		},
 		messages() {
 			return stitch(messages.filter(isConversation).map(toPiMessage));

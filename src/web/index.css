@@ -462,3 +462,144 @@ body {
 		animation: fade-in-late 1.2s steps(1, jump-end) forwards;
 	}
 }
+
+/*
+ * The review pane's CodeMirror, painted from this app's palette.
+ *
+ * No CodeMirror theme is loaded on purpose: every colour here is one of the
+ * same variables the rest of the UI uses, so the pane follows a theme switch
+ * like everything else. A bundled theme would make it the one panel stuck in
+ * its own colours — the mistake Terminal.tsx records having made with xterm.
+ */
+.cm-review .cm-editor {
+	background: var(--color-neutral-950);
+	color: var(--color-neutral-200);
+}
+
+.cm-review .cm-gutters {
+	background: var(--color-neutral-950);
+	color: var(--color-neutral-600);
+	border-right: 1px solid var(--color-neutral-800);
+}
+
+/* A read-only pane still draws a cursor without this, which invites typing. */
+.cm-review .cm-cursor {
+	display: none;
+}
+
+/*
+ * The merge view's own chunk classes. Tinted rather than filled: the diff has
+ * to stay readable as CODE, and a saturated background turns syntax colours
+ * into noise.
+ */
+.cm-review .cm-changedLine {
+	background: color-mix(in oklab, var(--color-green-500) 12%, transparent);
+}
+
+.cm-review .cm-deletedChunk {
+	background: color-mix(in oklab, var(--color-red-500) 12%, transparent);
+	color: var(--color-neutral-400);
+}
+
+.cm-review .cm-changedText {
+	background: color-mix(in oklab, var(--color-green-500) 22%, transparent);
+}
+
+/*
+ * The editor's CodeMirror, in VS Code's Dark+ chrome.
+ *
+ * This is the ONE surface that does not follow the app palette, deliberately:
+ * the token colours are Dark+'s literal hexes (see darkPlus() in
+ * codemirror.ts), and neutral-950 chrome around them reads as a theme someone
+ * half-applied. Code looks like code here; the app around it still themes.
+ *
+ * Plus the two things an EDITABLE view needs that a read-only one does not:
+ * it has to fill the pane so clicking empty space below the last line still
+ * focuses the document, and it has to show a cursor.
+ */
+.cm-editor-host,
+.cm-editor-host .cm-editor {
+	height: 100%;
+}
+
+.cm-editor-host .cm-editor {
+	background: #1f1f1f;
+	color: #d4d4d4;
+}
+
+/* Without this the focused editor wears the browser's default focus ring. */
+.cm-editor-host .cm-editor.cm-focused {
+	outline: none;
+}
+
+.cm-editor-host .cm-scroller {
+	font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+	line-height: 1.5;
+}
+
+.cm-editor-host .cm-gutters {
+	background: #1f1f1f;
+	color: #6e7681;
+	border-right: none;
+}
+
+.cm-editor-host .cm-activeLine {
+	background: #ffffff0a;
+}
+
+.cm-editor-host .cm-activeLineGutter {
+	background: transparent;
+	color: #cccccc;
+}
+
+.cm-editor-host .cm-cursor {
+	border-left-color: #aeafad;
+}
+
+/*
+ * Unfocused selection stays visible but dimmer, the way VS Code's does:
+ * clicking the tree and back should not make you lose what you had selected.
+ */
+.cm-editor-host .cm-selectionBackground,
+.cm-editor-host .cm-content ::selection {
+	background: #264f78;
+}
+
+.cm-editor-host .cm-editor:not(.cm-focused) .cm-selectionBackground {
+	background: #3a3d41;
+}
+
+.cm-editor-host .cm-selectionMatch {
+	background: #add6ff26;
+}
+
+.cm-editor-host .cm-matchingBracket {
+	background: #0064001a;
+	outline: 1px solid #888888;
+}
+
+/* The search panel and autocomplete popup are chrome CodeMirror draws itself,
+   and default to a light theme that flashes white over a dark editor. */
+.cm-editor-host .cm-panels {
+	background: #252526;
+	color: #cccccc;
+	border-color: #454545;
+}
+
+.cm-editor-host .cm-panel input,
+.cm-editor-host .cm-panel button {
+	background: #3c3c3c;
+	color: #cccccc;
+	border: 1px solid #454545;
+}
+
+.cm-editor-host .cm-tooltip {
+	background: #252526;
+	color: #cccccc;
+	border: 1px solid #454545;
+}
+
+.cm-editor-host .cm-tooltip-autocomplete ul li[aria-selected] {
+	background: #04395e;
+	color: #ffffff;
+}

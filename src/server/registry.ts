@@ -21,6 +21,7 @@
 import { emptyPartial, openSession, type AskAnswer, type PiSession } from "./agent.js";
 import { currentEpoch } from "./packages.js";
 import { lastMessageAt } from "./sessions.js";
+import type { Hunk } from "../shared/hunks.js";
 import type { PiEvent, PiImage, PiNotice, PiPartial, Snapshot } from "../shared/types.js";
 
 export type { Snapshot };
@@ -382,6 +383,7 @@ export class Registry {
 			error: entry.error,
 			notices: entry.notices,
 			ask: entry.session.ask,
+			hunks: entry.session.hunks,
 			commands: entry.session.commands,
 			supportsImages: entry.session.supportsImages,
 			thinkingLevel: entry.session.thinkingLevel,
@@ -547,6 +549,22 @@ export class Registry {
 		if (!entry) throw new Error(`unknown session: ${id}`);
 		entry.lastActivity = Date.now();
 		return entry.session.answerAsk(askId, answer);
+	}
+
+	/**
+	 * Record a review decision on one of a session's hunks.
+	 *
+	 * The STATE only. The bytes are written by the route through files.ts,
+	 * because the decision and the write have different failure modes: a write
+	 * can be refused for a path outside the project or a file that moved under
+	 * us, and a decision recorded for a write that then failed would leave the
+	 * pane claiming a revert that never happened.
+	 */
+	setHunkState(id: string, hunkId: string, state: Hunk["state"]): boolean {
+		const entry = this.entries.get(id);
+		if (!entry) throw new Error(`unknown session: ${id}`);
+		entry.lastActivity = Date.now();
+		return entry.session.setHunkState(hunkId, state);
 	}
 
 	/** Attach an SSE client. Detaching NEVER aborts — the run continues. */

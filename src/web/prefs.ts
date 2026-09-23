@@ -267,9 +267,15 @@ export function writeSessionSort(sort: SessionSort): void {
 }
 
 /**
- * The terminal pane: whether it is open, and how wide.
+ * The side panel: whether the terminal is the one showing, and how wide the
+ * column is.
  *
- * Width is a PERCENTAGE of the chat+terminal track, not pixels: the same
+ * One width for every panel, because there is only ever one panel column —
+ * the editor, changes, terminal and packages all live in it and only one at a
+ * time. The key keeps its `terminal` name so an existing preference is not
+ * silently reset to the default by a rename.
+ *
+ * Width is a PERCENTAGE of the panel+chat track, not pixels: the same
  * browser gets used at 1280 and at 2560, and a pixel width restored into the
  * narrower one leaves the chat as a column too thin to read. Clamped on read
  * because a stored value can be anything, and a 2% pane is a pane you cannot
@@ -305,6 +311,7 @@ export function readTerminalWidth(): number {
 export function writeTerminalWidth(percent: number): void {
 	writeStored(TERM_WIDTH_KEY, String(Math.round(percent)));
 }
+
 
 /**
  * Where each project's terminals are drawn: its tabs, splits and their
