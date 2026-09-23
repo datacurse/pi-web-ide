@@ -22,6 +22,7 @@ import {
 	groupOf,
 	isFileTab,
 	moveTab,
+	sideOfTab,
 	tabPath,
 	withGroup,
 	withoutTab,
@@ -1264,14 +1265,26 @@ export default function App() {
 			});
 			const current = tabsRef.current;
 			if (current.project === scope) {
+				/*
+				 * Which column this session's tab already lives in.
+				 *
+				 * Attaching must not ASSUME the left one. A session dragged into the
+				 * second column is still the attached session, and reloading the page
+				 * re-attaches it — which used to append a second tab for it on the
+				 * left, so one session showed up in both columns and the left copy
+				 * rendered an empty pane, because the chat can only be in one place.
+				 */
+				const side: Side = sideOfTab(current, key, snap.id) ?? "left";
+				const group = groupOf(current, side);
 				// Replace a placeholder id-keyed tab once the file exists, rather
 				// than ending up with two tabs for one session.
-				const files = current.files.filter((f) => f !== snap.id || f === key);
-				commitTabs({
-					...current,
-					files: files.includes(key) ? files : [...files, key],
-					active: superseded() ? current.active : key,
-				});
+				const files = group.files.filter((f) => f !== snap.id || f === key);
+				commitTabs(
+					withGroup(current, side, {
+						files: files.includes(key) ? files : [...files, key],
+						active: superseded() ? group.active : key,
+					}),
+				);
 			}
 
 			/*
@@ -1645,7 +1658,10 @@ export default function App() {
 	const openFile = useCallback(
 		(path: string) => {
 			const entry = fileTab(path);
-			if (tabsRef.current.right?.files.includes(entry)) {
+			// Already open in the second column: focus it there rather than opening
+			// a second editor over the same document, each with its own undo
+			// history and its own idea of what is saved.
+			if (sideOfTab(tabsRef.current, entry) === "right") {
 				selectRight(entry);
 				return;
 			}
@@ -1970,11 +1986,14 @@ export default function App() {
 	// entry. Tab membership is the lifetime: closing the tab drops the row, and
 	// tabs are per-project, so another project's unsaved session never leaks in.
 	const shown = useMemo(() => {
+		// Either column: a session dragged into the split is still open, and
+		// checking only the left one would drop its title the moment it moved.
+		const open = new Set([...tabs.files, ...(tabs.right?.files ?? [])]);
 		const extra = pending.filter(
-			(p) => tabs.files.includes(p.path) && !sessions.some((s) => s.path === p.path),
+			(p) => open.has(p.path) && !sessions.some((s) => s.path === p.path),
 		);
 		return extra.length ? [...extra, ...sessions] : sessions;
-	}, [sessions, pending, tabs.files]);
+	}, [sessions, pending, tabs.files, tabs.right]);
 
 	/**
 	 * THE chat, built once and handed to whichever column holds the attached

@@ -8,10 +8,11 @@
  * closing this panel must not close what you opened.
  */
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { CaretDown, CaretRight, X } from "@phosphor-icons/react";
 import type { PiwFileEntry } from "../shared/types.js";
 import { FileGlyph, FolderGlyph } from "./fileIcon.js";
+import { readExplorerOpen, writeExplorerOpen } from "./prefs.js";
 
 async function getJson<T>(url: string): Promise<T> {
 	const r = await fetch(url);
@@ -31,35 +32,63 @@ function TreeDir({
 	depth,
 	openPath,
 	onOpen,
+	openDirs,
+	onToggle,
 }: {
 	entry: PiwFileEntry;
 	depth: number;
 	openPath: string | null;
 	onOpen: (path: string) => void;
+	/** Every expanded directory, by absolute path. Owned by Explorer. */
+	openDirs: Set<string>;
+	onToggle: (path: string) => void;
 }) {
-	const [open, setOpen] = useState(false);
 	const [children, setChildren] = useState<PiwFileEntry[] | null>(null);
+	/*
+	 * Expansion is the PANEL's state, not this node's.
+	 *
+	 * Held locally it could not be restored: a node only exists once its parent
+	 * has been expanded and its listing has arrived, so there is no moment at
+	 * which anything could hand it back a remembered flag. Reading it from a
+	 * set the panel owns means a node knows whether it is open the instant it
+	 * mounts, at any depth.
+	 */
+	const open = openDirs.has(entry.path);
 
-	const toggle = async () => {
-		setOpen((o) => !o);
-		if (children !== null) return;
-		try {
-			const r = await getJson<{ entries: PiwFileEntry[] }>(
-				`/api/files?path=${encodeURIComponent(entry.path)}`,
-			);
-			setChildren(r.entries);
-		} catch {
+	/*
+	 * Children are fetched when the node is open and has none, which covers
+	 * both the click and the restore — a restored directory mounts already
+	 * open and has to fetch without anyone having clicked it.
+	 *
+	 * Fetched once and then kept: collapsing is a display state, and
+	 * re-fetching a directory being toggled open and shut would be a request
+	 * per click for a listing that has almost certainly not changed.
+	 */
+	useEffect(() => {
+		if (!open || children !== null) return;
+		let live = true;
+		void getJson<{ entries: PiwFileEntry[] }>(
+			`/api/files?path=${encodeURIComponent(entry.path)}`,
+		)
+			.then((r) => {
+				if (live) setChildren(r.entries);
+			})
 			// An unreadable directory collapses to empty rather than breaking the
 			// tree: a permissions error on one folder should not cost the panel.
-			setChildren([]);
-		}
-	};
+			.catch(() => {
+				if (live) setChildren([]);
+			});
+		return () => {
+			live = false;
+		};
+	}, [open, children, entry.path]);
 
 	return (
 		<>
 			<button
 				type="button"
-				onClick={() => void toggle()}
+				onClick={() => onToggle(entry.path)}
+				aria-expanded={open}
 				style={{ paddingLeft: `${depth * 12 + 4}px` }}
 				className={`flex w-full items-center gap-1 py-0.5 pr-2 text-left text-xs hover:bg-neutral-800 ${
 					entry.hidden ? "text-neutral-500" : "text-neutral-300"
@@ -82,6 +111,8 @@ function TreeDir({
 							depth={depth + 1}
 							openPath={openPath}
 							onOpen={onOpen}
+							openDirs={openDirs}
+							onToggle={onToggle}
 						/>
 					) : (
 						<TreeFile
@@ -145,6 +176,34 @@ export function Explorer({
 }) {
 	const [roots, setRoots] = useState<PiwFileEntry[]>([]);
 	const [error, setError] = useState<string | null>(null);
+	/*
+	 * The expanded directories, restored per project.
+	 *
+	 * Keyed off `cwd` via the lazy initialiser AND the effect below, because
+	 * this panel is not remounted on a project switch — without the effect it
+	 * would keep showing the previous project's expansions against the new
+	 * project's tree, where none of those paths exist.
+	 */
+	const [openDirs, setOpenDirs] = useState<Set<string>>(() => new Set(readExplorerOpen(cwd)));
+
+	useEffect(() => {
+		setOpenDirs(new Set(readExplorerOpen(cwd)));
+	}, [cwd]);
+
+	const toggleDir = useCallback(
+		(path: string) => {
+			setOpenDirs((prev) => {
+				const next = new Set(prev);
+				if (!next.delete(path)) next.add(path);
+				// Written here rather than in an effect on `openDirs`: the effect
+				// would also fire for the restore above, writing a project's
+				// remembered set straight back over itself on every switch.
+				writeExplorerOpen(cwd, [...next]);
+				return next;
+			});
+		},
+		[cwd],
+	);
 
 	useEffect(() => {
 		if (!cwd) return;
@@ -188,6 +247,8 @@ export function Explorer({
 							depth={0}
 							openPath={openPath}
 							onOpen={onOpen}
+							openDirs={openDirs}
+							onToggle={toggleDir}
 						/>
 					) : (
 						<TreeFile

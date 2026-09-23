@@ -65,6 +65,28 @@ export function groupOf<T extends TabState>(tabs: T, side: Side): TabGroup {
 }
 
 /**
+ * Which column an entry is already open in, or null.
+ *
+ * The rule every caller that adds a tab has to follow first, because adding
+ * one that is already open in the OTHER column is how a session ends up in
+ * both — and the chat can only render in one of them, so the other copy is a
+ * tab you can select and then stare at an empty pane.
+ *
+ * `alt` is a second key for the same tab: a session with no JSONL yet is
+ * keyed by its id until the file exists, and the two must not be treated as
+ * different tabs.
+ */
+export function sideOfTab<T extends TabState>(
+	tabs: T,
+	entry: string,
+	alt?: string,
+): Side | null {
+	const has = (files: string[]) => files.some((f) => f === entry || (alt !== undefined && f === alt));
+	if (has(tabs.right?.files ?? [])) return "right";
+	return has(tabs.files) ? "left" : null;
+}
+
+/**
  * `tabs` with one column replaced.
  *
  * An emptied SECOND column collapses the split, because a column with no tabs

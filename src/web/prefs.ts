@@ -362,3 +362,34 @@ export function readTerminalLayout(cwd: string): TermLayout {
 export function writeTerminalLayout(cwd: string, layout: TermLayout): void {
 	writeStored(`pwi:termLayout:${cwd}`, JSON.stringify(layout));
 }
+
+/**
+ * Which explorer directories are expanded, as absolute paths.
+ *
+ * Per project for the same reason the terminal layout is: the paths are that
+ * project's, and restoring them onto another cwd would expand nothing.
+ *
+ * A SET of open paths rather than a nested shape mirroring the tree, because
+ * the tree is fetched a directory at a time and its shape is not known until
+ * it arrives — a flat set is answerable the moment a node renders, at any
+ * depth, without waiting for its parent's listing.
+ *
+ * Unbounded on purpose: it is one string per directory you expanded, and a
+ * cap would silently forget the deepest one, which is the one you were
+ * working in.
+ */
+export function readExplorerOpen(cwd: string): string[] {
+	const raw = readStored(`pwi:explorer:${cwd}`);
+	if (!raw) return [];
+	try {
+		const parsed: unknown = JSON.parse(raw);
+		// Storage is user-writable, so this validates rather than casts.
+		return Array.isArray(parsed) ? parsed.filter((p): p is string => typeof p === "string") : [];
+	} catch {
+		return [];
+	}
+}
+
+export function writeExplorerOpen(cwd: string, open: string[]): void {
+	writeStored(`pwi:explorer:${cwd}`, JSON.stringify(open));
+}

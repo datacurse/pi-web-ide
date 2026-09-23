@@ -15,7 +15,8 @@ const store = new Map<string, string>();
 	removeItem: (k: string) => void store.delete(k),
 };
 
-const { readPanel, writePanel } = await import("./prefs.js");
+const prefs = await import("./prefs.js");
+const { readPanel, writePanel } = prefs;
 
 // Nothing stored at all: no panel, not a crash and not a default-open rail.
 assert.equal(readPanel(), null);
@@ -34,5 +35,30 @@ assert.equal(readPanel(), null);
 // Storage is user-writable; an unknown panel closes rather than renders.
 store.set("pwi:panel", "nonsense");
 assert.equal(readPanel(), null);
+
+// --- explorer expansion, per project --------------------------------------
+const { readExplorerOpen, writeExplorerOpen } = prefs;
+
+// Nothing stored: nothing expanded, and the tree renders collapsed.
+assert.deepEqual(readExplorerOpen("/p"), []);
+
+writeExplorerOpen("/p", ["/p/src", "/p/src/web"]);
+assert.deepEqual(readExplorerOpen("/p"), ["/p/src", "/p/src/web"]);
+
+// Per PROJECT: another cwd's expansions are paths this tree does not have.
+assert.deepEqual(readExplorerOpen("/other"), []);
+
+// Collapsing everything is a real state, not "never set".
+writeExplorerOpen("/p", []);
+assert.deepEqual(readExplorerOpen("/p"), []);
+
+// Storage is user-writable, so a wrong shape degrades instead of throwing
+// during render.
+localStorage.setItem("pwi:explorer:/bad", "{not json");
+assert.deepEqual(readExplorerOpen("/bad"), []);
+localStorage.setItem("pwi:explorer:/obj", '{"a":1}');
+assert.deepEqual(readExplorerOpen("/obj"), []);
+localStorage.setItem("pwi:explorer:/mixed", '["/p/ok", 7, null]');
+assert.deepEqual(readExplorerOpen("/mixed"), ["/p/ok"]);
 
 console.log("prefs ok");

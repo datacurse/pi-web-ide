@@ -7,6 +7,7 @@ import {
 	moveTab,
 	tabLabel,
 	tabPath,
+	sideOfTab,
 	withGroup,
 	withoutTab,
 	withTab,
@@ -175,5 +176,27 @@ for (const [slot, from] of [[2, 2], [3, 2]]) {
 assert.equal(5 > 2 ? 5 - 1 : 5, 4);
 // Moving left needs no shift: slot 1 is index 1.
 assert.equal(1 > 2 ? 0 : 1, 1);
+
+// --- sideOfTab: the rule attach() used to get wrong ------------------------
+// The bug: a session dragged into the right column is still the ATTACHED
+// session, so reloading re-attached it — and attach appended a second tab for
+// it on the left. One session in both columns, and the left copy rendered an
+// empty pane because the chat can only be in one place.
+const s2 = { files: ["f1"], active: "f1", right: { files: ["sess"], active: "sess" } };
+assert.equal(sideOfTab(s2, "sess"), "right");
+assert.equal(sideOfTab(s2, "f1"), "left");
+assert.equal(sideOfTab(s2, "nope"), null);
+
+// The right column wins when an entry is somehow in both, so a duplicate
+// collapses toward the column actually showing it.
+assert.equal(sideOfTab({ files: ["x"], right: { files: ["x"] } }, "x"), "right");
+
+// A session with no JSONL yet is keyed by id until the file exists; both keys
+// mean the same tab, or attach would add a second one when the file appears.
+assert.equal(sideOfTab({ files: [], right: { files: ["id-7"] } }, "/s.jsonl", "id-7"), "right");
+assert.equal(sideOfTab({ files: ["id-7"] }, "/s.jsonl", "id-7"), "left");
+
+// Unsplit: nothing is ever on the right.
+assert.equal(sideOfTab({ files: ["a"], active: "a" }, "a"), "left");
 
 console.log("tabs: ok");

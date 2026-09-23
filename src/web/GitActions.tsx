@@ -23,31 +23,7 @@ interface GitResult {
 	url?: string;
 }
 
-/**
- * What to say after a plan succeeded.
- *
- * The step OUTPUTS are git's own stdout/stderr, which is written for a
- * terminal and not for a status line — `git push` opens with `To
- * github.com:you/repo.git`, so showing the last step's first line put a
- * remote URL next to the button on every push. The URL is in the tooltip with
- * the rest of the transcript; the line beside the button should say what
- * happened.
- *
- * Named after the steps that ran, which is the one thing the caller actually
- * chose.
- */
-export function summarise(result: GitResult): string {
-	// A PR's URL is the exception: it is the result, and the thing you want to
-	// click.
-	if (result.url) return result.url;
-	const did = result.steps.map((s) => s.step.split(" ")[0]);
-	const parts = [
-		did.includes("branch") && "Branched",
-		did.includes("commit") && "Committed",
-		did.includes("push") && "Pushed",
-	].filter((p): p is string => typeof p === "string");
-	return parts.length > 0 ? parts.join(" · ") : "Done";
-}
+
 
 /**
  * The actions, as compositions of the four steps the server runs in order.
@@ -330,20 +306,34 @@ export function GitActions({
 				</div>
 			)}
 
-			{result && (
+			{/*
+			 * Only FAILURE gets a line, plus a PR's URL because that is a thing you
+			 * click rather than a notification.
+			 *
+			 * A success message here was permanent clutter for information the
+			 * button already carries: the changed-file count drops to nothing and
+			 * the tree is clean. Announcing that a thing you clicked did what it
+			 * says is noise you learn to look past — and it sat next to the
+			 * composer, where it competed with the thing you were typing.
+			 */}
+			{result && !result.ok && (
 				<button
 					onClick={() => setResult(null)}
-					title={
-						result.ok
-							? result.steps.map((s) => `${s.step}: ${s.output}`).join("\n")
-							: result.error
-					}
-					className={`max-w-60 truncate rounded-full px-2 py-1 text-xs ${
-						result.ok ? "text-neutral-400 hover:text-neutral-200" : "text-red-400 hover:text-red-300"
-					}`}
+					title={result.error}
+					className="max-w-60 truncate rounded-full px-2 py-1 text-xs text-red-400 hover:text-red-300"
 				>
-					{result.ok ? summarise(result) : (result.error ?? "Failed")}
+					{result.error ?? "Failed"}
 				</button>
+			)}
+			{result?.ok && result.url && (
+				<a
+					href={result.url}
+					target="_blank"
+					rel="noreferrer"
+					className="max-w-60 truncate rounded-full px-2 py-1 text-xs text-neutral-400 hover:text-neutral-200"
+				>
+					Pull request ↗
+				</a>
 			)}
 
 			{pending && (
