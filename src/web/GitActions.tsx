@@ -24,6 +24,32 @@ interface GitResult {
 }
 
 /**
+ * What to say after a plan succeeded.
+ *
+ * The step OUTPUTS are git's own stdout/stderr, which is written for a
+ * terminal and not for a status line — `git push` opens with `To
+ * github.com:you/repo.git`, so showing the last step's first line put a
+ * remote URL next to the button on every push. The URL is in the tooltip with
+ * the rest of the transcript; the line beside the button should say what
+ * happened.
+ *
+ * Named after the steps that ran, which is the one thing the caller actually
+ * chose.
+ */
+export function summarise(result: GitResult): string {
+	// A PR's URL is the exception: it is the result, and the thing you want to
+	// click.
+	if (result.url) return result.url;
+	const did = result.steps.map((s) => s.step.split(" ")[0]);
+	const parts = [
+		did.includes("branch") && "Branched",
+		did.includes("commit") && "Committed",
+		did.includes("push") && "Pushed",
+	].filter((p): p is string => typeof p === "string");
+	return parts.length > 0 ? parts.join(" · ") : "Done";
+}
+
+/**
  * The actions, as compositions of the four steps the server runs in order.
  *
  * One table rather than seven endpoints: every combination anybody asks for
@@ -242,6 +268,19 @@ export function GitActions({
 				// Right-anchored: the button sits at the right edge of the status
 				// row, and a left-anchored menu ran off the window there.
 				<div className="absolute right-0 bottom-full z-20 mb-1 w-60 overflow-hidden rounded-xl border border-neutral-700 bg-neutral-900 py-1 shadow-xl">
+					{/*
+					 * Where a push would go, at the top of the menu that pushes.
+					 *
+					 * This used to sit permanently beside the button, which is a remote
+					 * URL you read once and then look past forever. It is context for a
+					 * decision, so it belongs where the decision is made — and it is
+					 * the branch that matters as much as the host.
+					 */}
+					<p className="truncate px-3 pt-0.5 pb-1.5 text-xs text-neutral-500">
+						<span className="text-neutral-400">{state.branch}</span>
+						{state.remote ? ` → ${state.upstream || `${state.remote} (new)`}` : " · no remote"}
+					</p>
+					<div className="mb-1 border-t border-neutral-800" />
 					{ACTIONS.map((action) => {
 						// A PR needs `gh`; a push needs somewhere to push to. Shown
 						// disabled rather than hidden, so the menu does not change
@@ -303,9 +342,7 @@ export function GitActions({
 						result.ok ? "text-neutral-400 hover:text-neutral-200" : "text-red-400 hover:text-red-300"
 					}`}
 				>
-					{result.ok
-						? (result.url ?? result.steps.at(-1)?.output.split("\n")[0] ?? "Done")
-						: (result.error ?? "Failed")}
+					{result.ok ? summarise(result) : (result.error ?? "Failed")}
 				</button>
 			)}
 
