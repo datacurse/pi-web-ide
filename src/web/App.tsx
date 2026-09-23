@@ -24,24 +24,25 @@ import { Packages } from "./Packages.js";
 import {
 	applyTheme,
 	readNotify,
+	readPanel,
 	readSessionSort,
 	readShortNames,
 	readShowThinking,
 	readTerminalLayout,
-	readTerminalOpen,
 	readTerminalWidth,
 	readTheme,
 	readToolMode,
 	TERMINAL_MAX_PERCENT,
 	TERMINAL_MIN_PERCENT,
 	writeNotify,
+	writePanel,
 	writeSessionSort,
 	writeShortNames,
 	writeShowThinking,
 	writeTerminalLayout,
-	writeTerminalOpen,
 	writeTerminalWidth,
 	writeToolMode,
+	type Panel,
 	type SessionSort,
 	type ThemeId,
 	type ToolMode,
@@ -95,11 +96,7 @@ function PanelEmpty({
 const clampPanel = (percent: number): number =>
 	Math.min(TERMINAL_MAX_PERCENT, Math.max(TERMINAL_MIN_PERCENT, percent));
 
-/**
- * The side panels, which are mutually exclusive: one column, one divider,
- * and the rail switches between them the way an activity bar does.
- */
-export type Panel = "editor" | "review" | "terminal" | "packages" | null;
+export type { Panel } from "./prefs.js";
 
 /**
  * The server's JSON, made safe to render.
@@ -380,10 +377,22 @@ export default function App() {
 	 * at once" unreachable instead of merely avoided by remembering to reset
 	 * the other three.
 	 *
-	 * Only the terminal's openness is persisted, and only because its shells
-	 * outlive the page; the rest are views over things that reload in a fetch.
+	 * Persisted, all four of them: a panel you had open before a reload (or
+	 * before switching browser tabs and coming back) should still be open, and
+	 * remembering only the terminal made every other one feel like it kept
+	 * closing itself. `showPanel` is the ONE writer, so no caller can move the
+	 * panel without the memory following.
 	 */
-	const [panel, setPanel] = useState<Panel>(() => (readTerminalOpen() ? "terminal" : null));
+	const [panel, setPanel] = useState<Panel>(readPanel);
+
+	/** Set the panel and remember it. Every path that changes `panel` goes here. */
+	const showPanel = useCallback((next: Panel | ((current: Panel) => Panel)) => {
+		setPanel((current) => {
+			const resolved = typeof next === "function" ? next(current) : next;
+			writePanel(resolved);
+			return resolved;
+		});
+	}, []);
 	/** True once the server's terminal list has been folded in; see below. */
 	const [termsReady, setTermsReady] = useState(false);
 	/** One width for the one panel column, whichever panel is in it. */
@@ -469,10 +478,12 @@ export default function App() {
 	 * Both preferences are written on change rather than in an effect, so a
 	 * pane closed and a window closed in the same second still agree.
 	 */
-	const showTerminal = useCallback((open: boolean) => {
-		setPanel((p) => (open ? "terminal" : p === "terminal" ? null : p));
-		writeTerminalOpen(open);
-	}, []);
+	const showTerminal = useCallback(
+		(open: boolean) => {
+			showPanel((p) => (open ? "terminal" : p === "terminal" ? null : p));
+		},
+		[showPanel],
+	);
 
 	const closeTerminal = useCallback(() => showTerminal(false), [showTerminal]);
 
@@ -480,17 +491,13 @@ export default function App() {
 	 * The rail's one action: show a panel, or close it if it is already the
 	 * one showing — the behaviour of every activity bar, and the reason the
 	 * state is a single value.
-	 *
-	 * The terminal's openness is mirrored to storage on every switch, not just
-	 * its own button, because switching away from it is also closing it.
 	 */
-	const selectPanel = useCallback((next: Panel) => {
-		setPanel((current) => {
-			const resolved = current === next ? null : next;
-			writeTerminalOpen(resolved === "terminal");
-			return resolved;
-		});
-	}, []);
+	const selectPanel = useCallback(
+		(next: Panel) => {
+			showPanel((current) => (current === next ? null : next));
+		},
+		[showPanel],
+	);
 
 	/**
 	 * Restore this project's terminal layout, then intersect it with the
@@ -1710,10 +1717,10 @@ export default function App() {
 										tabs.active && isFileTab(tabs.active) ? tabPath(tabs.active) : null
 									}
 									onOpen={openFile}
-									onClose={() => setPanel(null)}
+									onClose={() => showPanel(null)}
 								/>
 							) : (
-								<PanelEmpty title="Explorer" onClose={() => setPanel(null)}>
+								<PanelEmpty title="Explorer" onClose={() => showPanel(null)}>
 									Pick a project first — the file tree is rooted at it.
 								</PanelEmpty>
 							))}
@@ -1724,11 +1731,11 @@ export default function App() {
 									sessionId={snapshot.id}
 									cwd={snapshot.cwd}
 									hunks={snapshot.hunks}
-									onClose={() => setPanel(null)}
+									onClose={() => showPanel(null)}
 									onChanged={() => void reloadSnapshot()}
 								/>
 							) : (
-								<PanelEmpty title="Changes" onClose={() => setPanel(null)}>
+								<PanelEmpty title="Changes" onClose={() => showPanel(null)}>
 									Open a session to review what the agent changed.
 								</PanelEmpty>
 							))}
@@ -1749,7 +1756,7 @@ export default function App() {
 									onClose={closeTerminal}
 								/>
 							) : (
-								<PanelEmpty title="Terminal" onClose={() => setPanel(null)}>
+								<PanelEmpty title="Terminal" onClose={() => showPanel(null)}>
 									Pick a project first — a shell has to start somewhere.
 								</PanelEmpty>
 							))}
@@ -1758,7 +1765,7 @@ export default function App() {
 							<Packages
 								onChanged={() => void reloadSnapshot()}
 								cwd={project}
-								onClose={() => setPanel(null)}
+								onClose={() => showPanel(null)}
 							/>
 						)}
 					</div>

@@ -7,15 +7,27 @@ import pkg from "./package.json" with { type: "json" };
 // Stamped at build (and dev-server) start, not at runtime: the browser has no
 // git. `*` marks a working tree with uncommitted changes, which is the whole
 // point when comparing two machines that both claim the same commit.
+//
+// The PATCH number is the commit count, not package.json's: `0.1.<n commits>`.
+// package.json owns major.minor (the deliberate part of a version) and git
+// owns the patch (the mechanical part), so the number moves on its own and
+// nobody has to remember to bump it — and crucially there is no version-bump
+// COMMIT, which would increment the count it is trying to record.
 function gitVersion(): string {
 	try {
-		const sha = execSync("git rev-parse --short HEAD", { stdio: ["ignore", "pipe", "ignore"] })
-			.toString()
-			.trim();
-		const dirty = execSync("git status --porcelain", { stdio: ["ignore", "pipe", "ignore"] })
-			.toString()
-			.trim();
-		return `${pkg.version}+${sha}${dirty ? "*" : ""}`;
+		const git = (args: string[]) =>
+			execSync(`git ${args.join(" ")}`, { stdio: ["ignore", "pipe", "ignore"] })
+				.toString()
+				.trim();
+		// `major.minor` from package.json; anything past it is git's to decide.
+		const [major = "0", minor = "0"] = pkg.version.split(".");
+		// Counts THIS branch's history, so it only goes backwards if you do —
+		// and a shallow clone (CI with fetch-depth 1) counts what it has, which
+		// is why the sha below is the real identity and this is only a label.
+		const count = git(["rev-list", "--count", "HEAD"]);
+		const sha = git(["rev-parse", "--short", "HEAD"]);
+		const dirty = git(["status", "--porcelain"]);
+		return `${major}.${minor}.${count}+${sha}${dirty ? "*" : ""}`;
 	} catch {
 		// No git (tarball, Docker build context without .git). The version alone
 		// is still more than nothing.

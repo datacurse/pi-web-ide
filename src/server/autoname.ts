@@ -41,6 +41,9 @@ const MAX_OUTPUT_BYTES = 64 * 1024;
 /** Long enough for a real subject line, short enough to stay one. */
 const MAX_SUBJECT_CHARS = 120;
 
+/** A body is context, not a changelog. Past this the box stops being readable. */
+const MAX_BODY_CHARS = 2_000;
+
 /** A session name is a tab label, not a sentence. */
 const MAX_NAME_CHARS = 60;
 
@@ -83,9 +86,12 @@ const ONESHOT = [
 const COMMIT_PROMPT = `Write a git commit message for the changes below.
 
 Rules:
-- One line, imperative mood, at most 72 characters.
+- First line: imperative mood, at most 72 characters, no trailing period.
+- Then a blank line, then a body of 1-4 short paragraphs or "-" bullets.
+- The subject says WHAT changed; the body says WHY, and what it fixes or
+  replaces. Skip the body only when the diff is a trivial one-liner.
 - Say what the change does, not which files it touched.
-- No quotes, no backticks, no trailing period, no "commit:" prefix.
+- No quotes, no backticks, no "commit:" prefix, no markdown headings.
 - Reply with the message and nothing else.`;
 
 const SESSION_PROMPT = `Write a short title for a coding session that opens with the request below.
@@ -111,11 +117,34 @@ export async function nameCommit(cwd: string): Promise<string> {
 	const args = [...ONESHOT, ...(NAMING_MODEL ? ["--model", NAMING_MODEL] : [])];
 	args.push(`${COMMIT_PROMPT}\n\n${summary}`);
 
-	const stdout = await runPi(cwd, args);
+	const message = subjectAndBody(await runPi(cwd, args));
+	if (!message) throw new Error("the model returned nothing");
+	return message;
+}
 
-	const subject = firstLine(stdout, MAX_SUBJECT_CHARS);
-	if (!subject) throw new Error("the model returned nothing");
-	return subject;
+/**
+ * A git message out of the model's reply: subject, blank line, body.
+ *
+ * The subject goes through the same squeeze as a session name (one line,
+ * unquoted, capped) because that is the part git and every log viewer treat
+ * as special. The body is kept verbatim apart from a length cap — rewrapping
+ * it here would mangle the bullets the prompt asks for, and the dialog's
+ * textarea is where a human edits it anyway.
+ */
+export function subjectAndBody(stdout: string): string {
+	const lines = stdout.split("\n");
+	const start = lines.findIndex((line) => line.trim());
+	if (start < 0) return "";
+
+	const subject = firstLine(lines[start] ?? "", MAX_SUBJECT_CHARS);
+	const body = lines
+		.slice(start + 1)
+		.join("\n")
+		.trim()
+		.slice(0, MAX_BODY_CHARS)
+		.trim();
+	if (!subject) return "";
+	return body ? `${subject}\n\n${body}` : subject;
 }
 
 /**

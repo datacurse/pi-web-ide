@@ -267,8 +267,40 @@ export function writeSessionSort(sort: SessionSort): void {
 }
 
 /**
- * The side panel: whether the terminal is the one showing, and how wide the
- * column is.
+ * The side panels, which are mutually exclusive: one column, one divider, and
+ * the rail switches between them the way an activity bar does.
+ *
+ * Lives here rather than in App.tsx because prefs is what persists it, and a
+ * type imported the other way round would be a cycle.
+ */
+export type Panel = "editor" | "review" | "terminal" | "packages" | null;
+
+const PANELS: readonly string[] = ["editor", "review", "terminal", "packages"];
+
+const PANEL_KEY = "pwi:panel";
+
+/**
+ * Which panel the rail last had open, restored on reload.
+ *
+ * ALL of them, not only the terminal: a closed explorer on every reload is
+ * the same annoyance as a closed terminal, and the rail cannot tell you which
+ * one you were using if it only remembers one of them.
+ *
+ * `pwi:terminal` is the old boolean this replaces, read once as a fallback so
+ * an open terminal survives the upgrade. Delete that arm after a release.
+ */
+export function readPanel(): Panel {
+	const stored = readStored(PANEL_KEY);
+	if (stored !== null) return PANELS.includes(stored) ? (stored as Panel) : null;
+	return readStored(TERM_OPEN_KEY) === "1" ? "terminal" : null;
+}
+
+export function writePanel(panel: Panel): void {
+	writeStored(PANEL_KEY, panel ?? "");
+}
+
+/**
+ * How wide the panel column is.
  *
  * One width for every panel, because there is only ever one panel column —
  * the editor, changes, terminal and packages all live in it and only one at a
@@ -286,14 +318,6 @@ const TERM_WIDTH_KEY = "pwi:terminalWidth";
 
 export const TERMINAL_MIN_PERCENT = 15;
 export const TERMINAL_MAX_PERCENT = 85;
-
-export function readTerminalOpen(): boolean {
-	return readStored(TERM_OPEN_KEY) === "1";
-}
-
-export function writeTerminalOpen(open: boolean): void {
-	writeStored(TERM_OPEN_KEY, open ? "1" : "0");
-}
 
 /** Wide enough for 80 columns on a laptop, narrow enough to keep the chat readable. */
 const DEFAULT_TERMINAL_PERCENT = 40;

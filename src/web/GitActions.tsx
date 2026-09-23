@@ -427,7 +427,9 @@ function GitDialog({
 							ref={field}
 							value={message}
 							onChange={(e) => onMessage(e.target.value)}
-							rows={3}
+							// Room for a subject and a short body: an auto-named message
+							// has both, and three rows hides the half that explains why.
+							rows={10}
 							placeholder={state.suggestion || "What changed"}
 							// Enter submits, as it does in the composer; a message that
 							// needs a second paragraph gets Shift+Enter.
