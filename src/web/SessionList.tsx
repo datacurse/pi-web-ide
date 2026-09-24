@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { CaretUpDown, FolderPlus, Plus, X } from "@phosphor-icons/react";
+import { CaretUpDown, Plus, X } from "@phosphor-icons/react";
 import type { PiSessionInfo } from "../shared/types.js";
 import { SESSION_SORTS, type SessionSort } from "./prefs.js";
-import { DirectoryPicker } from "./DirectoryPicker.js";
 import { sessionLabel, shortName } from "./sessionName.js";
 
 /** The menu's own box, needed before it renders so it can be kept on screen. */
@@ -34,40 +33,24 @@ const dateFmt = new Intl.DateTimeFormat(undefined, {
 });
 
 /**
- * The project list this pwi reports: every directory, plus the cwd it was
- * launched against.
- */
-export interface Projects {
-	projects: string[];
-	/** This pwi's startup cwd: always listed, never removable. */
-	seed: string;
-	error?: string;
-}
-
-/**
  * Left panel: flat, read-only list of EVERY session in the project.
  *
  * Read-only means no delete, no archive, no rename: the session file is
  * pi's, and a UI that deletes an agent's memory should have to be very sure
  * of itself. The list shows what is on disk; managing it is the TUI's job.
  *
- * One project at a time: the dropdown swaps which cwd's sessions are listed,
- * which keeps the 5s poll at exactly one request.
+ * One project at a time, chosen in the Explorer's project picker, which
+ * keeps the 5s poll at exactly one request.
  */
 export function SessionList({
 	sessions,
 	listError,
 	activeFile,
 	openFiles,
-	projects,
-	project,
 	sort,
 	onSort,
 	open,
 	onToggle,
-	onProject,
-	onAddProject,
-	onRemoveProject,
 	onSelect,
 	onRename,
 	onAutoName,
@@ -80,18 +63,11 @@ export function SessionList({
 	activeFile: string | undefined;
 	/** Sessions that already have a tab; clicking one just focuses it. */
 	openFiles: string[];
-	/** This machine's directories. A project IS a cwd. */
-	projects: Projects;
-	/** The selected project: a cwd on this machine. */
-	project: string;
 	sort: SessionSort;
 	onSort: (sort: SessionSort) => void;
 	/** Drawer state. Only observable at <=768px, where this is an overlay. */
 	open: boolean;
 	onToggle: () => void;
-	onProject: (cwd: string) => void;
-	onAddProject: (path: string) => void;
-	onRemoveProject: (path: string) => void;
 	onSelect: (s: PiSessionInfo) => void;
 	/** Rename one session. pi owns the name, so this is a server round trip. */
 	onRename: (s: PiSessionInfo, name: string) => void;
@@ -106,35 +82,6 @@ export function SessionList({
 	onNew: () => void;
 }) {
 	/*
-	 * The selection stays in the list even while the list has not arrived (or
-	 * failed to), so the dropdown never shows a blank for the project whose
-	 * sessions are on screen.
-	 */
-	const options = useMemo(
-		() =>
-			projects.projects.length > 0 || !project ? projects.projects : [project],
-		[projects.projects, project],
-	);
-
-	/*
-	 * Dropdown labels. The basename alone is what you think of the project as,
-	 * but two checkouts of the same repo are then the same word twice — so a
-	 * basename that is not unique carries its parent directory.
-	 */
-	const labelFor = useMemo(() => {
-		const base = (p: string) => p.split("/").filter(Boolean).pop() || p;
-		const counts = new Map<string, number>();
-		for (const p of options) counts.set(base(p), (counts.get(base(p)) ?? 0) + 1);
-		return (p: string) => {
-			const parts = p.split("/").filter(Boolean);
-			const name = parts.at(-1) || p;
-			return (counts.get(name) ?? 0) > 1 && parts.length > 1
-				? `${parts.at(-2)}/${name}`
-				: name;
-		};
-	}, [options]);
-
-	/*
 	 * Sorted here rather than on the server: both timestamps are already on
 	 * the wire, the list is small, and switching order must not wait for a
 	 * request. Descending in both modes — a session list is read newest-first
@@ -144,13 +91,6 @@ export function SessionList({
 		() => [...sessions].sort((a, b) => stamp(b, sort).localeCompare(stamp(a, sort))),
 		[sessions, sort],
 	);
-
-	/*
-	 * The add-project explorer. Local state, not lifted: nothing outside this
-	 * panel opens it, and it is a <dialog> in the top layer, so living inside
-	 * the drawer's subtree costs it nothing in stacking or inertness.
-	 */
-	const [pickerOpen, setPickerOpen] = useState(false);
 
 	/*
 	 * Which row is being renamed, and the text in it. Local, like the picker:
@@ -231,70 +171,6 @@ export function SessionList({
 				</div>
 
 				{/*
-				  Project picker. One active project at a time: the dropdown swaps which
-				  cwd's sessions are listed, which keeps the 5s poll at exactly one
-				  request. Showing every project at once would mean parsing every session
-				  file on the machine on every tick.
-
-				  Adding opens a folder explorer over the SERVER's filesystem
-				  (DirectoryPicker): the browser cannot enumerate it, and its own
-				  directory input would offer the wrong folders entirely.
-				*/}
-				<div className="flex items-center gap-1 border-b border-neutral-800 px-2 py-1.5">
-					<select
-						value={project}
-						onChange={(e) => onProject(e.target.value)}
-						title={project}
-						className="min-w-0 flex-1 truncate rounded bg-neutral-900 px-1.5 py-1 text-xs text-neutral-300 outline-none"
-					>
-						{options.map((p) => (
-							<option key={p} value={p}>
-								{labelFor(p)}
-							</option>
-						))}
-					</select>
-					{/* A folder icon, not a bare `+`: the other `+` on this panel
-					    makes a session, and two identical glyphs for two different
-					    nouns is the whole confusion. */}
-					<button
-						onClick={() => setPickerOpen(true)}
-						disabled={!!projects.error}
-						aria-label="Add project directory"
-						title="Add project directory"
-						className="shrink-0 rounded bg-neutral-800 px-2 py-1 text-xs transition-colors duration-150 ease-out hover:bg-neutral-700 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 disabled:opacity-40 motion-reduce:transition-none"
-					>
-						<FolderPlus size={13} />
-					</button>
-					{/*
-					  Removing is offered for every project except the one pwi was
-					  launched against: that one is seeded back by the server on every
-					  read, so a button for it would appear to do nothing.
-
-					  Still confirmed, even now that adding is a picker — the wording has
-					  to say what is NOT happening, since "remove project" in most tools
-					  means the files.
-					*/}
-					{project && !projects.error && project !== projects.seed && (
-						<button
-							onClick={() => {
-								if (
-									confirm(
-										`Remove ${project} from the project list?\n\nThe directory and its sessions stay on disk — this only hides them here.`,
-									)
-								) {
-									onRemoveProject(project);
-								}
-							}}
-							aria-label={`Remove ${project} from the list`}
-							title="Remove this project from the list (keeps sessions on disk)"
-							className="shrink-0 rounded bg-neutral-800 px-2 py-1 text-xs text-neutral-400 transition-colors duration-150 ease-out hover:bg-neutral-700 hover:text-neutral-100 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 motion-reduce:transition-none"
-						>
-							<X size={13} />
-						</button>
-					)}
-				</div>
-
-				{/*
 				  Sort mode. Two orders, one button, because a dropdown for a
 				  binary choice is a click more for the same information.
 
@@ -303,12 +179,6 @@ export function SessionList({
 				  file mtime — which is what this list used to do — meant a
 				  session jumped to the top just from being opened, so `active`
 				  reads the timestamp of the last message in the file instead.
-				*/}
-				{/*
-				  New session sits BELOW the project picker because that is the
-				  order the two are read in: the button makes a session in the
-				  selected project, so offering it first asked the question before
-				  showing the answer.
 				*/}
 				<div className="border-b border-neutral-800 px-2 py-1.5">
 					<button
@@ -532,18 +402,6 @@ export function SessionList({
 				</div>
 			)}
 
-			{/* Mounted next to the panel that opens it. `open` drives showModal(),
-			    so an unopened picker never fetches a listing. */}
-			<DirectoryPicker
-				open={pickerOpen}
-				start={project}
-				projects={projects.projects}
-				onPick={(p) => {
-					onAddProject(p);
-					setPickerOpen(false);
-				}}
-				onClose={() => setPickerOpen(false)}
-			/>
 		</>
 	);
 }

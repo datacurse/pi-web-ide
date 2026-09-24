@@ -722,6 +722,14 @@ Three details that are the feature rather than incidental:
   a 256 KB cap for the same class of reason — a paste accident would otherwise
   ride along in every request.
 
+**Repeat before every reply** (`personality-remind.json` in the same
+directory) also loads `src/server/remind-extension.ts` into each new session
+child. On every model request it adds the personality text to the end of the
+latest user message, because a system prompt loses weight as a session grows.
+The change applies only to the request: pi restores the messages, so nothing
+is saved to the session or shown in the transcript. The extension reads the
+file on every request, so text edits reach running sessions too.
+
 There is no project-level personality: one file, named in the dialog, for
 every session this server starts. `PWI_STATE_DIR` relocates it along with the
 rest of this server's state, which is how the test works on a temp directory

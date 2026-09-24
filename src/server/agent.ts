@@ -40,7 +40,8 @@ import type { Readable, Writable } from "node:stream";
 
 import { isRecord, records } from "./guards.js";
 import { hunkFromWrite, hunksFromEdit, type Hunk } from "../shared/hunks.js";
-import { personalityPath } from "./personality.js";
+import { fileURLToPath } from "node:url";
+import { personalityPath, readRemind } from "./personality.js";
 import { repairSessionFile } from "./repair.js";
 import { sessionHeaderCwd } from "./sessions.js";
 import type {
@@ -700,7 +701,15 @@ interface SessionState {
  * approval mode (pi has none), and `--session <file>` rather than `-r`, which
  * in pi opens an interactive picker and takes no path.
  */
-export function spawnArgs(opts: { file?: string; model?: string; personality?: string }): string[] {
+/** Loaded by pi (with its own TS loader), never imported here. */
+const REMIND_EXTENSION = fileURLToPath(new URL("./remind-extension.ts", import.meta.url));
+
+export function spawnArgs(opts: {
+	file?: string;
+	model?: string;
+	personality?: string;
+	remind?: boolean;
+}): string[] {
 	const args = ["--mode", "rpc"];
 	// Project-local extensions, skills and prompt templates are silently
 	// skipped in RPC mode without this — no prompt, no warning, they are just
@@ -714,6 +723,10 @@ export function spawnArgs(opts: { file?: string; model?: string; personality?: s
 	// spawn, so an edit reaches children started after the save — which is what
 	// the settings dialog says.
 	if (opts.personality) args.push("--append-system-prompt", opts.personality);
+	// The same file again at the end of each request; see remind-extension.ts.
+	if (opts.personality && opts.remind) {
+		args.push("-e", REMIND_EXTENSION, "--pwi-remind", opts.personality);
+	}
 	return args;
 }
 
@@ -774,7 +787,7 @@ export async function openSession(opts: OpenOptions): Promise<PiSession> {
 	}
 
 	const child = await RpcChild.start(
-		spawnArgs({ file: opts.file, model: opts.model, personality }),
+		spawnArgs({ file: opts.file, model: opts.model, personality, remind: readRemind() }),
 		cwd,
 	);
 

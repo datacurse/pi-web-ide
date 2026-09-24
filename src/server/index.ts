@@ -27,7 +27,7 @@ import {
 	removeFavorite,
 	removeProject,
 } from "./projects.js";
-import { readPersonality, writePersonality } from "./personality.js";
+import { readPersonality, writePersonality, writeRemind } from "./personality.js";
 import { listDir, readFile as readReviewFile, writeFile, writeReviewed } from "./files.js";
 import { resolve as resolveHunks } from "../shared/hunks.js";
 import {
@@ -351,6 +351,14 @@ app.delete("/api/favorites", (req, res) => {
  */
 app.get("/api/personality", (_req, res) => {
 	res.json(readPersonality());
+});
+
+/** The "Repeat before every reply" toggle. Applies to sessions started after it. */
+app.put("/api/personality/remind", (req, res) => {
+	if (typeof req.body?.remind !== "boolean") {
+		return res.status(400).json({ error: "remind must be a boolean" });
+	}
+	res.json(writeRemind(req.body.remind));
 });
 
 app.put("/api/personality", (req, res) => {

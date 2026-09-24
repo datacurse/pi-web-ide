@@ -7,7 +7,13 @@ import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { personalityPath, readPersonality, writePersonality } from "./personality.js";
+import {
+	personalityPath,
+	readPersonality,
+	readRemind,
+	writePersonality,
+	writeRemind,
+} from "./personality.js";
 
 const dir = mkdtempSync(join(tmpdir(), "pwi-personality-"));
 process.env.PWI_STATE_DIR = dir;
@@ -31,7 +37,18 @@ const text = "Answer in haiku.\n\n- Keep  double  spaces\n- Keep *markdown*";
 const written = writePersonality(text);
 assert.equal(written.content, `${text}\n`, "trailing newline added, nothing else");
 assert.equal(readFileSync(path, "utf8"), `${text}\n`);
-assert.deepEqual(readPersonality(), { path, content: `${text}\n`, exists: true });
+assert.deepEqual(readPersonality(), {
+	path,
+	content: `${text}\n`,
+	exists: true,
+	remind: false,
+});
+
+// The toggle defaults off, persists, and does not touch the text.
+assert.equal(readRemind(), false);
+assert.equal(writeRemind(true).remind, true);
+assert.equal(readPersonality().content, `${text}\n`);
+assert.equal(writeRemind(false).remind, false);
 
 // An already-terminated file is not given a second newline on every save.
 assert.equal(writePersonality(`${text}\n`).content, `${text}\n`, "idempotent");

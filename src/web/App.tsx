@@ -10,7 +10,8 @@ import type {
 	Snapshot,
 } from "../shared/types.js";
 import type { Hunk } from "../shared/hunks.js";
-import { SessionList, type Projects } from "./SessionList.js";
+import { SessionList } from "./SessionList.js";
+import { ProjectPicker, type Projects } from "./ProjectPicker.js";
 import { ActivityBar } from "./ActivityBar.js";
 import { SessionTabs, tabDomId } from "./SessionTabs.js";
 import { Chat } from "./Chat.js";
@@ -2181,13 +2182,22 @@ export default function App() {
 						{panel === "editor" &&
 							(project || snapshot ? (
 								<Explorer
+									key={snapshot?.cwd || project || ""}
 									cwd={snapshot?.cwd || project || ""}
 									openPath={
 										tabs.active && isFileTab(tabs.active) ? tabPath(tabs.active) : null
 									}
 									onOpen={openFile}
 									onClose={() => showPanel(null)}
-								/>
+								>
+									<ProjectPicker
+										projects={projects}
+										project={project}
+										onProject={selectProject}
+										onAddProject={(p) => void addProject(p)}
+										onRemoveProject={(p) => void removeProject(p)}
+									/>
+								</Explorer>
 							) : (
 								<PanelEmpty title="Explorer" onClose={() => showPanel(null)}>
 									Pick a project first — the file tree is rooted at it.
@@ -2334,11 +2344,8 @@ export default function App() {
 			<SessionList
 				sessions={shown}
 				listError={listError}
-				onRemoveProject={(p) => void removeProject(p)}
 				activeFile={snapshot?.file}
 				openFiles={tabs.files}
-				projects={projects}
-				project={project}
 				sort={sessionSort}
 				onSort={(next) => {
 					setSessionSort(next);
@@ -2346,8 +2353,6 @@ export default function App() {
 				}}
 				open={listOpen}
 				onToggle={() => setListOpen((o) => !o)}
-				onProject={selectProject}
-				onAddProject={(p) => void addProject(p)}
 				onSelect={(s) => {
 					selectTab(s.path);
 					// On a narrow viewport the list is a drawer over the chat; having

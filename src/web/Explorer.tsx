@@ -20,6 +20,32 @@ async function getJson<T>(url: string): Promise<T> {
 	return (await r.json()) as T;
 }
 
+/*
+ * Directory listings, kept for the life of the page.
+ *
+ * Without this every mount (panel reopen, project switch) starts each node
+ * empty, and the restored tree unfolds one round trip per depth level. With
+ * it a node renders its last known listing immediately and revalidates in the
+ * background. `inflight` dedupes the prefetch in Explorer against a node's own
+ * fetch for the same directory.
+ */
+const listings = new Map<string, PiwFileEntry[]>();
+const inflight = new Map<string, Promise<PiwFileEntry[]>>();
+
+function listDir(path: string): Promise<PiwFileEntry[]> {
+	let p = inflight.get(path);
+	if (!p) {
+		p = getJson<{ entries: PiwFileEntry[] }>(`/api/files?path=${encodeURIComponent(path)}`)
+			.then((r) => {
+				listings.set(path, r.entries);
+				return r.entries;
+			})
+			.finally(() => inflight.delete(path));
+		inflight.set(path, p);
+	}
+	return p;
+}
+
 /**
  * One expandable directory.
  *
@@ -43,7 +69,11 @@ function TreeDir({
 	openDirs: Set<string>;
 	onToggle: (path: string) => void;
 }) {
-	const [children, setChildren] = useState<PiwFileEntry[] | null>(null);
+	const [children, setChildren] = useState<PiwFileEntry[] | null>(
+		() => listings.get(entry.path) ?? null,
+	);
+	/** Revalidated once per mount, even when the cache already had it. */
+	const [fetched, setFetched] = useState(false);
 	/*
 	 * Expansion is the PANEL's state, not this node's.
 	 *
@@ -56,32 +86,34 @@ function TreeDir({
 	const open = openDirs.has(entry.path);
 
 	/*
-	 * Children are fetched when the node is open and has none, which covers
-	 * both the click and the restore — a restored directory mounts already
-	 * open and has to fetch without anyone having clicked it.
+	 * Children are fetched the first time the node is open in this mount,
+	 * which covers both the click and the restore — a restored directory
+	 * mounts already open and has to fetch without anyone having clicked it.
+	 * A cached listing shows meanwhile, so the restore is instant.
 	 *
-	 * Fetched once and then kept: collapsing is a display state, and
+	 * Once per mount, then kept: collapsing is a display state, and
 	 * re-fetching a directory being toggled open and shut would be a request
 	 * per click for a listing that has almost certainly not changed.
 	 */
 	useEffect(() => {
-		if (!open || children !== null) return;
+		if (!open || fetched) return;
 		let live = true;
-		void getJson<{ entries: PiwFileEntry[] }>(
-			`/api/files?path=${encodeURIComponent(entry.path)}`,
-		)
-			.then((r) => {
-				if (live) setChildren(r.entries);
+		void listDir(entry.path)
+			.then((entries) => {
+				if (live) setChildren(entries);
 			})
 			// An unreadable directory collapses to empty rather than breaking the
 			// tree: a permissions error on one folder should not cost the panel.
 			.catch(() => {
-				if (live) setChildren([]);
+				if (live) setChildren((c) => c ?? []);
+			})
+			.finally(() => {
+				if (live) setFetched(true);
 			});
 		return () => {
 			live = false;
 		};
-	}, [open, children, entry.path]);
+	}, [open, fetched, entry.path]);
 
 	return (
 		<>
@@ -169,28 +201,32 @@ export function Explorer({
 	openPath,
 	onOpen,
 	onClose,
+	children,
 }: {
 	cwd: string;
+	/** Rendered under the header: the project picker. */
+	children?: React.ReactNode;
 	/** The file showing in the active tab, highlighted in the tree. */
 	openPath: string | null;
 	/** Open this file in a tab. */
 	onOpen: (path: string) => void;
 	onClose: () => void;
 }) {
-	const [roots, setRoots] = useState<PiwFileEntry[]>([]);
+	const [roots, setRoots] = useState<PiwFileEntry[]>(() => listings.get(cwd) ?? []);
 	const [error, setError] = useState<string | null>(null);
 	/*
-	 * The expanded directories, restored per project.
-	 *
-	 * Keyed off `cwd` via the lazy initialiser AND the effect below, because
-	 * this panel is not remounted on a project switch — without the effect it
-	 * would keep showing the previous project's expansions against the new
-	 * project's tree, where none of those paths exist.
+	 * The expanded directories, restored per project. App keys this panel on
+	 * `cwd`, so a project switch remounts it and the lazy initialisers (this,
+	 * `roots`, every node's children) read the new project's state on the
+	 * first render, with no frame of the previous project's tree.
 	 */
 	const [openDirs, setOpenDirs] = useState<Set<string>>(() => new Set(readExplorerOpen(cwd)));
 
+	// Fetch every remembered open directory at once, so a cold restore is one
+	// round trip instead of one per depth level. Nodes pick these up through
+	// listDir's in-flight dedupe. Errors are the node's to handle.
 	useEffect(() => {
-		setOpenDirs(new Set(readExplorerOpen(cwd)));
+		for (const p of readExplorerOpen(cwd)) listDir(p).catch(() => {});
 	}, [cwd]);
 
 	const toggleDir = useCallback(
@@ -210,12 +246,19 @@ export function Explorer({
 
 	useEffect(() => {
 		if (!cwd) return;
-		void getJson<{ entries: PiwFileEntry[] }>(`/api/files?path=${encodeURIComponent(cwd)}`)
-			.then((r) => {
-				setRoots(r.entries);
+		let live = true;
+		void listDir(cwd)
+			.then((entries) => {
+				if (!live) return;
+				setRoots(entries);
 				setError(null);
 			})
-			.catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)));
+			.catch((err: unknown) => {
+				if (live) setError(err instanceof Error ? err.message : String(err));
+			});
+		return () => {
+			live = false;
+		};
 	}, [cwd]);
 
 	return (
@@ -234,6 +277,7 @@ export function Explorer({
 					<X size={16} />
 				</button>
 			</div>
+			{children}
 
 			{error && (
 				<div className="border-b border-red-900 bg-red-950/40 px-3 py-2 text-xs text-red-300">

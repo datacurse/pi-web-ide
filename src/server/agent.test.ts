@@ -42,6 +42,13 @@ assert.deepEqual(
 		"/p.md",
 	],
 );
+// The reminder repeats the personality file, so without one it adds nothing.
+assert.deepEqual(spawnArgs({ remind: true }), ["--mode", "rpc", "--approve"]);
+{
+	const args = spawnArgs({ personality: "/p.md", remind: true });
+	assert.equal(args[args.indexOf("-e") + 1]!.endsWith("/remind-extension.ts"), true);
+	assert.deepEqual(args.slice(-2), ["--pwi-remind", "/p.md"]);
+}
 
 // ---------------------------------------------------------------------------
 // Framing

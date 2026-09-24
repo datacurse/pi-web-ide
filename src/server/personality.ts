@@ -17,7 +17,7 @@
  */
 
 import { readFileSync } from "node:fs";
-import { statePath, writeStateFile } from "./state.js";
+import { readStateFile, statePath, writeStateFile } from "./state.js";
 
 /**
  * A personality block is prose, and prose that needs 256 KB is not a
@@ -37,17 +37,36 @@ export interface Personality {
 	content: string;
 	/** False when no file has been written yet, so nothing is appended. */
 	exists: boolean;
+	/** Also repeat the text before every reply (remind-extension.ts). */
+	remind: boolean;
+}
+
+function remindPath(): string {
+	return statePath("personality-remind.json");
+}
+
+export function readRemind(): boolean {
+	try {
+		return JSON.parse(readStateFile(remindPath()) ?? "{}").remind === true;
+	} catch {
+		return false;
+	}
+}
+
+export function writeRemind(remind: boolean): Personality {
+	writeStateFile(remindPath(), `${JSON.stringify({ remind })}\n`);
+	return readPersonality();
 }
 
 export function readPersonality(): Personality {
 	const path = personalityPath();
 	try {
-		return { path, content: readFileSync(path, "utf8"), exists: true };
+		return { path, content: readFileSync(path, "utf8"), exists: true, remind: readRemind() };
 	} catch {
 		// Absent is the normal state of a machine that never set one, so it is
 		// reported rather than thrown: the field opens empty and saving creates
 		// the file.
-		return { path, content: "", exists: false };
+		return { path, content: "", exists: false, remind: readRemind() };
 	}
 }
 
@@ -62,5 +81,5 @@ export function writePersonality(content: string): Personality {
 
 	const path = personalityPath();
 	writeStateFile(path, text);
-	return { path, content: text, exists: true };
+	return { path, content: text, exists: true, remind: readRemind() };
 }

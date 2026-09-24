@@ -7,6 +7,7 @@ interface Personality {
 	path: string;
 	content: string;
 	exists: boolean;
+	remind: boolean;
 }
 
 type SaveState = "idle" | "saving" | "saved";
@@ -153,6 +154,21 @@ export function Settings({
 		// re-running it the moment an edit is undone would refetch mid-typing.
 	}, [open]);
 
+	// Saved on click like every other checkbox here, independent of the text's
+	// Save button, since it is its own file on the server.
+	const saveRemind = async (remind: boolean) => {
+		const r = await fetch(`/api/personality/remind`, {
+			method: "PUT",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ remind }),
+		}).catch(() => null);
+		if (!r?.ok) {
+			setSaveError("could not save the reminder setting");
+			return;
+		}
+		setPersonality((p) => (p ? { ...p, remind } : p));
+	};
+
 	const savePersonality = async () => {
 		if (draft === null) return;
 		setSaveState("saving");
@@ -177,6 +193,7 @@ export function Settings({
 			path: body.path ?? personality?.path ?? "",
 			content: body.content ?? draft,
 			exists: true,
+			remind: body.remind ?? personality?.remind ?? false,
 		};
 		setPersonality(saved);
 		setDraft(saved.content);
@@ -413,6 +430,23 @@ export function Settings({
 							)}
 						</span>
 					</div>
+					<label className="mt-2 flex cursor-pointer items-center gap-3 rounded px-2 py-2 text-sm transition-colors duration-150 ease-out hover:bg-neutral-900 has-[:focus-visible]:outline-2 has-[:focus-visible]:-outline-offset-2 has-[:focus-visible]:outline-neutral-400 motion-reduce:transition-none">
+						<input
+							type="checkbox"
+							checked={personality?.remind ?? false}
+							disabled={!personality}
+							onChange={(e) => void saveRemind(e.target.checked)}
+							className="size-4 shrink-0 accent-amber-400"
+						/>
+						<span className="flex-1">
+							Repeat before every reply
+							<span className="block text-xs text-neutral-500">
+								Also adds the text to the end of your latest message on each model
+								request, so long sessions do not drift from it. Costs its length in
+								tokens per request. Applies to sessions started from now on.
+							</span>
+						</span>
+					</label>
 				</fieldset>
 			</div>
 		</dialog>
