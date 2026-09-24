@@ -4,6 +4,7 @@
 // which is a Vite transform and does not exist under plain node — and the part
 // worth testing is the mapping, not whether an <img> renders.
 import assert from "node:assert/strict";
+import { existsSync, readFileSync } from "node:fs";
 import { dirIconNameFor, iconNameFor } from "./fileIcon.js";
 
 // Extensions map to their language icon.
@@ -44,5 +45,30 @@ assert.equal(dirIconNameFor("src", true), "folder-src-open");
 assert.equal(dirIconNameFor("node_modules", false), "folder-node");
 assert.equal(dirIconNameFor("whatever", false), "folder");
 assert.equal(dirIconNameFor("whatever", true), "folder-open");
+assert.equal(dirIconNameFor("web", false), "folder-client");
+
+/*
+ * Every name the tables can produce must have an SVG on disk. `folder-www`
+ * and `folder-hooks` were both mapped to icons the package does not ship, and
+ * a missing icon is an invisible 404 rather than an error.
+ *
+ * ponytail: the names are scraped out of the source rather than exported,
+ * which keeps the module's API at two functions. Export the tables if
+ * anything else ever needs them.
+ */
+if (existsSync("public/material-icons")) {
+	const src = readFileSync("src/web/fileIcon.tsx", "utf8");
+	for (const [, name] of src.matchAll(/:\s*"([\w.-]+)",/g)) {
+		assert.ok(
+			existsSync(`public/material-icons/${name}.svg`),
+			`no icon file for "${name}"`,
+		);
+		if (name.startsWith("folder-"))
+			assert.ok(
+				existsSync(`public/material-icons/${name}-open.svg`),
+				`no open icon file for "${name}"`,
+			);
+	}
+}
 
 console.log("fileIcon: ok");

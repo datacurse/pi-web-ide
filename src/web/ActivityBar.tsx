@@ -17,7 +17,7 @@
  */
 
 import type { ReactNode } from "react";
-import { Code, FileCode, Gear, SquaresFour, TerminalWindow } from "@phosphor-icons/react";
+import { Code, GitBranch, Gear, SquaresFour, TerminalWindow } from "@phosphor-icons/react";
 import type { Panel } from "./App.js";
 
 /**
@@ -110,13 +110,17 @@ export function ActivityBar({
 			</RailButton>
 
 			<RailButton
-				label={panel === "review" ? "Hide changes" : "Show changes"}
-				title={panel === "review" ? "Hide changes" : "Review the agent's file changes"}
+				label={panel === "review" ? "Hide source control" : "Show source control"}
+				title={
+					panel === "review"
+						? "Hide source control"
+						: "Changes, commits and the commit message"
+				}
 				active={panel === "review"}
 				badge={pendingHunks}
 				onClick={() => onSelect("review")}
 			>
-				<FileCode size={20} />
+				<GitBranch size={20} />
 			</RailButton>
 
 			<RailButton

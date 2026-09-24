@@ -3,13 +3,12 @@ import assert from "node:assert/strict";
 import { sessionLabel, shortName } from "./sessionName.js";
 
 // Precedence: a name always wins, and it wins in both modes.
-const file = "/s/2026-09-18T10-00-00-000Z_01a0a15b-dead-beef.jsonl";
 const info = {
 	name: "Fix the parser",
 	firstMessage: "please fix the parser, it crashes on ...",
 };
-assert.equal(sessionLabel(file, info, false), "Fix the parser");
-assert.equal(sessionLabel(file, info, true), "Fix the parser");
+assert.equal(sessionLabel(info, false), "Fix the parser");
+assert.equal(sessionLabel(info, true), "Fix the parser");
 
 // No name: the first prompt, whole or shortened.
 const unnamed = {
@@ -17,19 +16,20 @@ const unnamed = {
 		"not a fan of opening directory like this. i would rather open it with some kind of folder explorer",
 };
 assert.equal(
-	sessionLabel(file, unnamed, false),
+	sessionLabel(unnamed, false),
 	"not a fan of opening directory like this. i would rather ope",
 	"long mode is the first line, capped at 60",
 );
 assert.equal(
-	sessionLabel(file, unnamed, true),
+	sessionLabel(unnamed, true),
 	"Not a fan of opening directory like this",
 	"short mode is the opening clause, at most eight words",
 );
 
-// Neither: the uuid half of the filename, never the timestamp half.
-assert.equal(sessionLabel(file, { firstMessage: "  " }, true), "01a0a15b");
-assert.equal(sessionLabel(file, undefined, false), "01a0a15b");
+// Neither: a placeholder, not eight characters of uuid — a fresh tab says what
+// it is, and a hex id says nothing at all.
+assert.equal(sessionLabel({ firstMessage: "  " }, true), "New session");
+assert.equal(sessionLabel(undefined, false), "New session");
 
 // A whole short sentence keeps its words but loses the punctuation it was cut on.
 assert.equal(shortName("do you have caveman mode on?"), "Do you have caveman mode on");
@@ -52,7 +52,7 @@ assert.equal(
 assert.equal(shortName(`add --${"x".repeat(44)} to it`), "Add");
 // A single word past the ceiling is still that word, truncated rather than dropped.
 assert.equal(shortName("x".repeat(60)), "X".padEnd(48, "x"));
-// Nothing in, nothing out: the caller falls back to the file.
+// Nothing in, nothing out: the caller falls back to the placeholder.
 assert.equal(shortName("   "), "");
 
 console.log("ok");

@@ -6,12 +6,11 @@
  * unsee — and there are three sources to reconcile: the name pi holds (set by
  * hand through the rename control, or written for you by the server's
  * one-shot naming child), the first user message, and, for a session with
- * neither, the file.
+ * neither, a placeholder.
  */
 
 /** Precedence is fixed: an explicit name beats anything derived from content. */
 export function sessionLabel(
-	file: string,
 	info: { name?: string; firstMessage?: string } | undefined,
 	short: boolean,
 ): string {
@@ -21,8 +20,19 @@ export function sessionLabel(
 	// an empty row.
 	const first = info?.firstMessage?.replace(/\s+/g, " ").trim();
 	if (first) return short ? shortName(first) : first.slice(0, 60);
-	return shortId(file);
+	return NEW_SESSION;
 }
+
+/**
+ * A session with no name and nothing said in it yet.
+ *
+ * It used to be eight characters of the file's uuid, which is unique but says
+ * nothing — a fresh tab read `01a0ceba`, and the one thing the user knows
+ * about that tab is that they just made it. Two unnamed sessions therefore
+ * read alike; they are told apart by position until the first message names
+ * them, which is a second or two later.
+ */
+const NEW_SESSION = "New session";
 
 /** How many words a generated name may run to before it stops being a name. */
 const SHORT_WORDS = 8;
@@ -81,15 +91,3 @@ export function shortName(firstMessage: string): string {
 	return out ? out[0].toUpperCase() + out.slice(1) : line.slice(0, SHORT_CHARS);
 }
 
-/**
- * Last-resort label for a session with no name and no first message yet:
- * session files are `<ISO timestamp>_<uuid>.jsonl`, so the uuid half is the
- * only human-distinguishable part. Eight characters is enough to tell two
- * tabs apart and short enough not to dominate the strip.
- */
-export function shortId(file: string): string {
-	const base = (file.split("/").pop() ?? file).replace(/\.jsonl$/, "");
-	const underscore = base.indexOf("_");
-	const id = underscore >= 0 ? base.slice(underscore + 1) : base;
-	return id.slice(0, 8) || "session";
-}

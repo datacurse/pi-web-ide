@@ -203,6 +203,30 @@
 
 	/* Accents. Amber is "this session is working"; peach is its counterpart. */
 	--color-amber-400: var(--ct-peach);
+	/*
+	 * The rest of the amber ramp, derived rather than sampled.
+	 *
+	 * Only `amber-400` was mapped for a long time, so every OTHER shade the UI
+	 * reaches for — the primary button's `amber-500`, its `amber-400` hover,
+	 * the restart banner's `amber-950` ground and `amber-200` text — fell
+	 * through to stock Tailwind and painted the one hard-coded orange in an
+	 * otherwise themed window. Mapping the ramp fixes every caller at once.
+	 *
+	 * Two directions, same reason the surface ramp has roles rather than
+	 * brightnesses: DARKER steps mix toward `--ct-base`, so they follow the
+	 * flavor's ground (and on Latte they lighten, which is what a tinted panel
+	 * on a light page has to do), while LIGHTER steps mix toward `--ct-text`,
+	 * so a label on one of those grounds keeps its contrast in both
+	 * directions. Same `color-mix` trick as `red-900`/`red-950` below.
+	 */
+	--color-amber-200: color-mix(in oklab, var(--ct-peach) 55%, var(--ct-text));
+	--color-amber-300: color-mix(in oklab, var(--ct-peach) 75%, var(--ct-text));
+	--color-amber-500: color-mix(in oklab, var(--ct-peach) 88%, var(--ct-base));
+	--color-amber-600: color-mix(in oklab, var(--ct-peach) 74%, var(--ct-base));
+	--color-amber-700: color-mix(in oklab, var(--ct-peach) 58%, var(--ct-base));
+	--color-amber-800: color-mix(in oklab, var(--ct-peach) 44%, var(--ct-base));
+	--color-amber-900: color-mix(in oklab, var(--ct-peach) 30%, var(--ct-base));
+	--color-amber-950: color-mix(in oklab, var(--ct-peach) 16%, var(--ct-base));
 	--color-yellow-500: var(--ct-yellow);
 	--color-blue-400: var(--ct-blue);
 	--color-blue-300: var(--ct-lavender);
@@ -247,6 +271,18 @@
 /* Form controls, scrollbars and the canvas behind a bounce-scroll. */
 :root {
 	color-scheme: dark;
+}
+
+/*
+ * One global thin scrollbar in theme colors. The standard properties are
+ * enough on Chrome 121+/Firefox; `*` rather than a list of scroll containers
+ * so CodeMirror, xterm and every future pane inherit it without a new rule.
+ */
+* {
+	scrollbar-width: thin;
+	/* var(), not theme(): theme() inlines the default at build time and would
+	   ignore the active flavor. */
+	scrollbar-color: var(--color-neutral-700) transparent;
 }
 
 :root[data-theme="latte"] {
@@ -398,10 +434,6 @@ body {
 	/* Flicking to the end of the strip must not start a page/pull-to-refresh
 	   gesture behind it. */
 	overscroll-behavior-x: contain;
-	scrollbar-width: thin;
-	/* var(), not theme(): theme() inlines the default at build time and would
-	   ignore the active flavor. */
-	scrollbar-color: var(--color-neutral-700) transparent;
 }
 
 /*

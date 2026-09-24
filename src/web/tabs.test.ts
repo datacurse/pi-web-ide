@@ -1,12 +1,18 @@
 // Run: node --import tsx src/web/tabs.test.ts
 import assert from "node:assert/strict";
 import {
+	diffParts,
+	diffTab,
 	fileTab,
 	groupOf,
+	isDiffTab,
 	isFileTab,
+	isSessionTab,
 	moveTab,
 	tabLabel,
 	tabPath,
+	chatSideOf,
+	collapse,
 	sideOfTab,
 	withGroup,
 	withoutTab,
@@ -39,6 +45,41 @@ assert.equal(tabPath(odd), "/home/me/file:weird/a.ts");
 // A dotfile has no extension to strip, and a trailing slash has no basename.
 assert.equal(tabLabel(fileTab("/home/me/proj/.gitignore")), ".gitignore");
 assert.equal(tabLabel(fileTab("/")), "/");
+
+// --- diff entries ----------------------------------------------------------
+// A diff round-trips its commit AND its path.
+const d = diffTab("a4a8539", "scripts/make_kit.py");
+assert.equal(isDiffTab(d), true);
+assert.equal(isFileTab(d), false);
+assert.deepEqual(diffParts(d), { ref: "a4a8539", path: "scripts/make_kit.py" });
+assert.equal(tabPath(d), "scripts/make_kit.py");
+
+// The working tree is the empty ref, and must not be confused with a commit.
+const w = diffTab("", "src/App.tsx");
+assert.deepEqual(diffParts(w), { ref: "", path: "src/App.tsx" });
+assert.match(tabLabel(w), /working tree/);
+// A commit's label carries the sha, so the same file at two revisions is two
+// distinguishable tabs rather than two identical ones.
+assert.equal(tabLabel(d), "make_kit.py (a4a8539)");
+assert.notEqual(tabLabel(d), tabLabel(diffTab("", "scripts/make_kit.py")));
+
+// A path containing a colon splits at the FIRST one only: the sha never has
+// one, so everything after it is the path.
+assert.deepEqual(diffParts(diffTab("abc123", "weird:name.ts")), {
+	ref: "abc123",
+	path: "weird:name.ts",
+});
+
+// THE invariant App depends on: only a session is ever attached to. A diff
+// entry that merely failed the file test would be handed to the EventSource
+// as a session path and stream a 404 forever.
+assert.equal(isSessionTab(session), true);
+assert.equal(isSessionTab(d), false);
+assert.equal(isSessionTab(w), false);
+assert.equal(isSessionTab(t), false);
+
+// ...and the chat therefore stays left when the right column shows a diff.
+assert.equal(chatSideOf({ files: [], right: { files: [d], active: d } }), "left");
 
 // --- moveTab ---------------------------------------------------------------
 const strip = ["a", "b", "c", "d"];
@@ -198,5 +239,26 @@ assert.equal(sideOfTab({ files: ["id-7"] }, "/s.jsonl", "id-7"), "left");
 
 // Unsplit: nothing is ever on the right.
 assert.equal(sideOfTab({ files: ["a"], active: "a" }, "a"), "left");
+
+// A new session opens in the column the chat is already in, not always the
+// first one: "+" beside a session in the second column must not yank the chat
+// back to the left. A file selected on the right leaves the chat on the left.
+assert.equal(chatSideOf({ files: ["a"], active: "a", right: { files: ["s"], active: "s" } }), "right");
+assert.equal(chatSideOf({ files: ["a"], active: "a", right: { files: ["file:/x"], active: "file:/x" } }), "left");
+assert.equal(chatSideOf({ files: ["a"], active: "a" }), "left");
+
+// --- collapse: closing the last tab on the LEFT must not leave a blank pane --
+// The mirror of withGroup's rule for the right column: the second column's
+// tabs slide over and the split closes.
+assert.deepEqual(collapse({ files: [], right: { files: ["a", "b"], active: "b" } }), {
+	files: ["a", "b"],
+	active: "b",
+	right: undefined,
+});
+// Unsplit and empty stays empty — there is nothing to slide over.
+assert.deepEqual(collapse({ files: [] }), { files: [] });
+// A non-empty left column is untouched.
+const kept = { files: ["a"], active: "a", right: { files: ["b"], active: "b" } };
+assert.equal(collapse(kept), kept);
 
 console.log("tabs: ok");

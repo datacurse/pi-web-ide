@@ -11,7 +11,8 @@
 		"build": "node scripts/sync-icons.mjs && vite build",
 		"postinstall": "node scripts/sync-icons.mjs",
 		"start": "node --import tsx src/server/index.ts",
-		"typecheck": "tsc --noEmit"
+		"typecheck": "tsc --noEmit",
+		"test": "node --import tsx --test src/server/*.test.ts"
 	},
 	"dependencies": {
 		"@codemirror/autocomplete": "^6.20.3",

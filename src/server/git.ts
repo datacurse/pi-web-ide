@@ -14,11 +14,13 @@
  * `Create Branch, Commit & Push`, `Commit & Create PR`) is a subset of those
  * four in that order.
  *
- * One line has since moved: `diff()` below serves a READ-ONLY diff panel.
- * That is still not a git client — nothing there stages, reverts or edits, it
- * is `git diff` rendered legibly — but it is worth being honest that the
- * "no diff viewer" rule above now has exactly one exception, and that staging
- * is where the line was redrawn.
+ * Three lines have since moved: `changes()`, `show()` and `log()` serve a
+ * READ-ONLY source-control panel. That is still not a git client — nothing
+ * there stages, reverts, rebases or edits history, it is `git status`, `git
+ * show` and `git log` rendered legibly — but it is worth being honest that
+ * the "no log, no diff viewer" rule above now has exactly those exceptions,
+ * and that STAGING is where the line was redrawn: a commit here is always
+ * `add -A`, so there is no index to present.
  *
  * Every invocation is `execFile` with an argv array and no shell: a commit
  * message is arbitrary user text, and a shell would make `"; rm -rf ~"` a
@@ -71,10 +73,18 @@ export interface GitResult {
 	url?: string;
 }
 
+/**
+ * `raw` keeps stdout byte-for-byte. Everything here wants it trimmed — a
+ * branch name with a newline on it is noise in every caller — except FILE
+ * CONTENT from `git show`, where the trailing newline is part of the file and
+ * eating it makes the merge view report a change on the last line of every
+ * diff.
+ */
 function run(
 	cwd: string,
 	file: string,
 	args: string[],
+	raw = false,
 ): Promise<{ code: number; stdout: string; stderr: string }> {
 	const { promise, resolve } = Promise.withResolvers<{
 		code: number;
@@ -90,13 +100,17 @@ function run(
 			// nothing staged is the most common outcome of clicking Commit twice,
 			// and it has to read as a message rather than as a crash.
 			const code = err && typeof err === "object" && "code" in err ? Number(err.code) : err ? 1 : 0;
-			resolve({ code, stdout: String(stdout).trim(), stderr: String(stderr).trim() });
+			resolve({
+				code,
+				stdout: raw ? String(stdout) : String(stdout).trim(),
+				stderr: String(stderr).trim(),
+			});
 		},
 	);
 	return promise;
 }
 
-const git = (cwd: string, args: string[]) => run(cwd, "git", args);
+const git = (cwd: string, args: string[], raw = false) => run(cwd, "git", args, raw);
 
 async function has(cwd: string, file: string): Promise<boolean> {
 	// `command -v` through a shell would be shorter and would also inherit the
@@ -233,36 +247,51 @@ export async function changeSummary(cwd: string): Promise<string> {
 	return parts.join("\n\n");
 }
 
-/** One file in the working tree that differs from HEAD. */
-export interface GitFileDiff {
+/** One changed path, as the source-control panel lists it. */
+export interface GitChange {
 	path: string;
 	/** Porcelain status letters, e.g. ` M`, `??`, `A `. */
 	status: string;
-	/** The file as HEAD has it; "" for something untracked or newly added. */
+}
+
+/** One file's two sides, for the merge view a diff tab renders. */
+export interface GitFileDiff {
+	path: string;
+	/** The older side; "" for something untracked or added in that commit. */
 	before: string;
-	/** The file as it is on disk now; "" when it has been deleted. */
+	/** The newer side; "" when the file has been deleted. */
 	after: string;
 	/** Set when the content was too big to send, instead of the text. */
 	skipped?: string;
 }
 
-/** Bigger than this and the panel gets a note instead of two copies of it. */
+/** One commit, with the paths it touched. */
+export interface GitCommit {
+	hash: string;
+	subject: string;
+	author: string;
+	/** Relative, as git formats it: "2 hours ago". */
+	when: string;
+	files: GitChange[];
+}
+
+/** Bigger than this and the tab gets a note instead of two copies of it. */
 const MAX_FILE_BYTES = 1024 * 1024;
 
 /**
- * Every uncommitted change, as before/after pairs for a diff view.
+ * Which paths differ from HEAD, and how. NAMES ONLY.
  *
- * Deliberately not a unified patch: the panel renders with the same CodeMirror
- * merge view the agent-changes panel uses, and that takes two documents rather
- * than a diff to parse. Letting git produce the patch and then parsing it back
- * into two documents would be work to undo work.
+ * The content of each side is a separate request (`show` below) because the
+ * panel that asks this renders a LIST: shipping both copies of every changed
+ * file to draw twelve rows was megabytes to render a sidebar, and the diff
+ * itself is opened one file at a time.
  *
  * `git status --porcelain` drives it rather than `git diff --name-only`,
  * because only status mentions UNTRACKED files — a file the agent just created
  * is the single most likely thing to want to look at, and `git diff` does not
  * know it exists.
  */
-export async function diff(cwd: string): Promise<GitFileDiff[]> {
+export async function changes(cwd: string): Promise<GitChange[]> {
 	if (!(existsSync(cwd) && statSync(cwd).isDirectory())) return [];
 	const inside = await git(cwd, ["rev-parse", "--is-inside-work-tree"]);
 	if (inside.code !== 0 || inside.stdout !== "true") return [];
@@ -273,36 +302,125 @@ export async function diff(cwd: string): Promise<GitFileDiff[]> {
 	// -z because a path with a space or a newline in it is legal, and the
 	// line-based format quotes those into something that has to be unescaped.
 	const entries = porcelain.stdout.split("\0").filter(Boolean);
-	const out: GitFileDiff[] = [];
+	const out: GitChange[] = [];
 
-	for (const entry of entries) {
-		const status = entry.slice(0, 2);
-		const path = entry.slice(3);
-		if (!path) continue;
-
-		// `git show` rather than reading .git ourselves: it resolves the index
-		// and HEAD correctly for renames and staged content. A non-zero exit
-		// means the file is not in HEAD, which is the normal answer for
-		// something newly created.
-		const head = await git(cwd, ["show", `HEAD:${path}`]);
-		const before = head.code === 0 ? head.stdout : "";
-
-		let after = "";
-		let skipped: string | undefined;
-		try {
-			const full = join(cwd, path);
-			const st = statSync(full);
-			if (st.size > MAX_FILE_BYTES) skipped = `too large to diff (${st.size} bytes)`;
-			else after = readFileSync(full, "utf8");
-		} catch {
-			// Deleted, or not readable: "" is the honest after-image of a file
-			// that is no longer there.
-		}
-
-		out.push(skipped ? { path, status, before: "", after: "", skipped } : { path, status, before, after });
+	for (let i = 0; i < entries.length; i++) {
+		/*
+		 * NOT a fixed slice(3). stdout is trimmed on the way in, so the FIRST
+		 * entry of an unstaged change arrives as `M src/x.ts` and not
+		 * ` M src/x.ts` — a fixed offset ate a character of that one filename
+		 * (`rc/server/index.ts`) and then diffed a file that does not exist.
+		 * Same shape-tolerant split as suggestMessage above.
+		 */
+		const m = /^(.{1,2})\s+(.*)$/s.exec(entries[i]);
+		if (!m) continue;
+		const status = m[1].padEnd(2);
+		// A rename or copy is TWO -z tokens: `R  old` and then the destination
+		// on its own. The destination is the path that has content to show.
+		const path = /[RC]/.test(status) && entries[i + 1] ? entries[++i] : m[2];
+		if (path) out.push({ status, path });
 	}
 
 	return out;
+}
+
+/** A commit this server will pass to `git show`. Anything else is refused. */
+const SHA = /^[0-9a-f]{4,40}$/i;
+
+/**
+ * One file's before/after, either for a commit or for the working tree.
+ *
+ * Two documents and not a unified patch: the tab renders with CodeMirror's
+ * merge view, which takes two documents. Letting git produce a patch and then
+ * parsing it back into two documents would be work to undo work.
+ *
+ * `ref` empty means the working tree — HEAD against what is on disk, which is
+ * the only pair that includes edits nobody has committed. A commit sha means
+ * `sha^` against `sha`; a root commit has no parent, so the before side is
+ * simply empty and the whole file reads as added.
+ */
+export async function show(cwd: string, path: string, ref = ""): Promise<GitFileDiff> {
+	if (ref && !SHA.test(ref)) throw new Error(`not a commit: ${ref}`);
+
+	if (ref) {
+		// raw: this is file content, not a git answer. See `run`.
+		const [before, after] = await Promise.all([
+			git(cwd, ["show", `${ref}^:${path}`], true),
+			git(cwd, ["show", `${ref}:${path}`], true),
+		]);
+		return {
+			path,
+			// A non-zero exit is "not in that tree", which is the normal answer
+			// for a file the commit added (no before) or deleted (no after).
+			before: before.code === 0 ? before.stdout : "",
+			after: after.code === 0 ? after.stdout : "",
+		};
+	}
+
+	// `git show` rather than reading .git ourselves: it resolves HEAD and
+	// renames correctly. A non-zero exit means the file is not in HEAD, the
+	// normal answer for something newly created.
+	const head = await git(cwd, ["show", `HEAD:${path}`], true);
+	const before = head.code === 0 ? head.stdout : "";
+	try {
+		const full = join(cwd, path);
+		const st = statSync(full);
+		if (st.size > MAX_FILE_BYTES)
+			return { path, before: "", after: "", skipped: `too large to diff (${st.size} bytes)` };
+		return { path, before, after: readFileSync(full, "utf8") };
+	} catch {
+		// Deleted, or not readable: "" is the honest after-image of a file that
+		// is no longer there.
+		return { path, before, after: "" };
+	}
+}
+
+/** Field separator inside one commit's header line. */
+const FS = "\x1f";
+
+/**
+ * The last `limit` commits on HEAD, each with its changed paths.
+ *
+ * One `git log` and not one per commit: the panel draws a collapsible tree,
+ * and a request per row would be fifty round trips to render a list nobody
+ * has expanded yet.
+ *
+ * `-z` makes every file entry NUL-separated, so a path with a space or a
+ * newline in it survives; the commit headers are then the tokens carrying the
+ * field separator, which is what tells the two apart while scanning.
+ */
+export async function log(cwd: string, limit = 50): Promise<GitCommit[]> {
+	const out = await git(cwd, [
+		"log",
+		`-n${Math.max(1, Math.min(500, limit))}`,
+		"-z",
+		"--name-status",
+		`--format=%H${FS}%s${FS}%an${FS}%ar`,
+	]);
+	if (out.code !== 0 || !out.stdout) return [];
+
+	const commits: GitCommit[] = [];
+	const tokens = out.stdout.split("\0");
+	for (let i = 0; i < tokens.length; i++) {
+		// A header is the only token with field separators in it. It arrives with
+		// the previous commit's trailing newline stuck to its front.
+		const token = tokens[i].replace(/^\n/, "");
+		if (!token) continue;
+		if (token.includes(FS)) {
+			const [hash, subject, author, when] = token.split(FS);
+			commits.push({ hash, subject, author, when, files: [] });
+			continue;
+		}
+		const commit = commits.at(-1);
+		// A status token is followed by its path; a rename by two paths, of
+		// which the destination is the one that exists in this commit.
+		if (!commit || !/^[A-Z]/.test(token)) continue;
+		const renamed = /^[RC]/.test(token);
+		const path = tokens[renamed ? i + 2 : i + 1];
+		i += renamed ? 2 : 1;
+		if (path) commit.files.push({ status: token, path });
+	}
+	return commits;
 }
 
 /**

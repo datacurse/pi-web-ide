@@ -9,18 +9,26 @@ import type {
 	PiSessionInfo,
 	Snapshot,
 } from "../shared/types.js";
+import type { Hunk } from "../shared/hunks.js";
 import { SessionList, type Projects } from "./SessionList.js";
 import { ActivityBar } from "./ActivityBar.js";
 import { SessionTabs, tabDomId } from "./SessionTabs.js";
 import { Chat } from "./Chat.js";
 import { TerminalPane } from "./Terminal.js";
-import { Review } from "./Review.js";
+import { SourceControl } from "./SourceControl.js";
+import { DiffView } from "./DiffView.js";
 import { Explorer } from "./Explorer.js";
 import { FileEditor } from "./FileEditor.js";
 import {
+	chatSideOf,
+	collapse,
+	diffParts,
+	diffTab,
 	fileTab,
 	groupOf,
+	isDiffTab,
 	isFileTab,
+	isSessionTab,
 	moveTab,
 	sideOfTab,
 	tabPath,
@@ -62,6 +70,15 @@ import {
 import { pulseFavicon } from "./favicon.js";
 
 const emptyPartial = (): PiPartial => ({ text: "", thinking: "", tools: [] });
+
+/**
+ * The stand-in for "no session, so no hunks".
+ *
+ * A module constant and not `[]` inline: a fresh array on every render is a
+ * new prop identity, which would re-run the diff pane's effects on every
+ * keystroke in the composer.
+ */
+const EMPTY_HUNKS: Hunk[] = [];
 
 /**
  * What a panel shows when the thing it needs is missing.
@@ -219,11 +236,14 @@ function EditorColumn({
 	onClose,
 	onReorder,
 	onMove,
+	onFocus,
 	listOpen,
-	onNew,
 	onToggleList,
 	cwd,
 	onDirty,
+	sessionId,
+	hunks,
+	onHunksChanged,
 	chat,
 }: {
 	side: Side;
@@ -236,20 +256,32 @@ function EditorColumn({
 	onClose: (entry: string) => void;
 	onReorder: (from: number, to: number) => void;
 	onMove: (entry: string, to: Side, index?: number) => void;
+	/** This column was interacted with; it becomes the one new tabs open in. */
+	onFocus: () => void;
 	listOpen?: boolean;
-	onNew?: () => void;
 	onToggleList?: () => void;
 	cwd: string;
 	onDirty: (path: string, dirty: boolean) => void;
+	/** The attached session, for hunk decisions inside a working-tree diff. */
+	sessionId?: string;
+	hunks: Hunk[];
+	onHunksChanged: () => void;
 	/** The one chat, when this column is the one holding the attached session. */
 	chat: React.ReactNode;
 }) {
 	const active = group.active;
 	const activeIndex = active ? group.files.indexOf(active) : -1;
 	const showsFile = active !== undefined && isFileTab(active);
+	const showsDiff = active !== undefined && isDiffTab(active);
+	/** The chat hides under a file OR a diff: both are documents, not the chat. */
+	const showsDoc = showsFile || showsDiff;
 
 	return (
 		<div
+			// Capture, so a click anywhere in the column counts — including on a
+			// tab, whose own handler stops nothing but runs first.
+			onFocusCapture={onFocus}
+			onPointerDownCapture={onFocus}
 			className={`flex min-h-0 min-w-0 flex-1 flex-col ${
 				/* Only the second column draws the seam, so an unsplit editor has no
 				   stray border down its left edge. Hidden on a phone, where two
@@ -267,7 +299,6 @@ function EditorColumn({
 				listOpen={listOpen}
 				onSelect={onSelect}
 				onClose={onClose}
-				onNew={onNew}
 				onToggleList={onToggleList}
 				shortNames={shortNames}
 				dirtyFiles={dirtyFiles}
@@ -306,6 +337,21 @@ function EditorColumn({
 							onDirty={onDirty}
 						/>
 					)}
+					{showsDiff && (
+						<DiffView
+							// Same rule as the editor: a merge view is built around its two
+							// documents and cannot be repointed at another file.
+							key={active}
+							path={diffParts(active).path}
+							refName={diffParts(active).ref}
+							cwd={cwd}
+							sessionId={sessionId}
+							// Only this file's hunks: the pane shows one file, and the
+							// others' decisions belong to their own tabs.
+							hunks={hunks.filter((h) => h.path === diffParts(active).path)}
+							onChanged={onHunksChanged}
+						/>
+					)}
 					{/*
 					 * The chat stays MOUNTED under a file tab rather than being swapped
 					 * out: it holds the live EventSource and the transcript's scroll
@@ -315,13 +361,13 @@ function EditorColumn({
 					 */}
 					{chat && (
 						<div
-							className={`flex min-h-0 min-w-0 flex-1 flex-col ${showsFile ? "hidden" : ""}`}
+							className={`flex min-h-0 min-w-0 flex-1 flex-col ${showsDoc ? "hidden" : ""}`}
 						>
 							{chat}
 						</div>
 					)}
 					{/* Nothing to show: an empty column says so rather than going blank. */}
-					{!showsFile && !chat && (
+					{!showsDoc && !chat && (
 						<p className="m-auto px-4 text-center text-sm text-neutral-500">
 							Drag a tab here, or pick one above.
 						</p>
@@ -861,7 +907,10 @@ export default function App() {
 	 * cannot tell the caller that.
 	 */
 	const tabsRef = useRef(tabs);
-	const commitTabs = useCallback((next: Tabs) => {
+	const commitTabs = useCallback((raw: Tabs) => {
+		// An emptied first column takes over the second's tabs; see `collapse`.
+		// Here and not in each caller, because every tab mutation lands here.
+		const next = collapse(raw);
 		tabsRef.current = next;
 		setTabs(next);
 	}, []);
@@ -1116,9 +1165,10 @@ export default function App() {
 			}
 			const next: string | undefined = files[Math.min(index, files.length - 1)];
 			commitTabs({ ...current, files, active: next });
-			// A file tab has no session to attach to, and the attached one is left
-			// alone: closing a file must not detach the conversation behind it.
-			if (next && !isFileTab(next)) void attachRef.current(next);
+			// A file or diff tab has no session to attach to, and the attached one
+			// is left alone: closing a document must not detach the conversation
+			// behind it.
+			if (next && isSessionTab(next)) void attachRef.current(next);
 			else if (!next) detach();
 		},
 		[commitTabs, detach],
@@ -1273,8 +1323,12 @@ export default function App() {
 				 * re-attaches it — which used to append a second tab for it on the
 				 * left, so one session showed up in both columns and the left copy
 				 * rendered an empty pane, because the chat can only be in one place.
+				 *
+				 * A session in NEITHER column is new: it goes where the chat already
+				 * is, so "+" next to a session in the second column opens beside it
+				 * instead of yanking the chat back to the first.
 				 */
-				const side: Side = sideOfTab(current, key, snap.id) ?? "left";
+				const side: Side = sideOfTab(current, key, snap.id) ?? chatSideOf(current);
 				const group = groupOf(current, side);
 				// Replace a placeholder id-keyed tab once the file exists, rather
 				// than ending up with two tabs for one session.
@@ -1476,7 +1530,7 @@ export default function App() {
 		 * session path.
 		 */
 		const restored = [next.active, next.right?.active].find(
-			(entry): entry is string => entry !== undefined && !isFileTab(entry),
+			(entry): entry is string => entry !== undefined && isSessionTab(entry),
 		);
 		if (restored) void attach(restored);
 	}, [project, scope, attach, commitTabs, detach]);
@@ -1504,9 +1558,9 @@ export default function App() {
 	useEffect(() => {
 		if (!listedProject || listedProject !== tabs.project) return;
 		const gone = (file: string) =>
-			// A file tab is not a session and is not in the session listing; only
-			// the sessions are checked for having gone away.
-			!isFileTab(file) && !opened.current.has(file) && !sessions.some((s) => s.path === file);
+			// A file or diff tab is not a session and is not in the session
+			// listing; only the sessions are checked for having gone away.
+			isSessionTab(file) && !opened.current.has(file) && !sessions.some((s) => s.path === file);
 		for (const file of tabs.files) if (gone(file)) closeTab(file);
 		// The second column too: a session deleted elsewhere leaves a broken tab
 		// whichever column it happens to be sitting in.
@@ -1532,7 +1586,7 @@ export default function App() {
 			});
 			// Already attached to this session (switched away to a file and back):
 			// re-attaching would tear down a live EventSource for no reason.
-			if (isFileTab(file) || (snapshotRef.current?.file === file && esRef.current)) return;
+			if (!isSessionTab(file) || (snapshotRef.current?.file === file && esRef.current)) return;
 			void attachRef.current(file);
 		},
 		[commitTabs],
@@ -1591,7 +1645,7 @@ export default function App() {
 			if (!pruned) {
 				if (!target.files.includes(entry)) return;
 				commitTabs(withGroup(current, to, withTab(target, entry)));
-				if (!isFileTab(entry)) void attachRef.current(entry);
+				if (isSessionTab(entry)) void attachRef.current(entry);
 				return;
 			}
 
@@ -1620,8 +1674,8 @@ export default function App() {
 			 * the only thing `attach` cares about — and it no-ops when the session
 			 * is the one already streaming.
 			 */
-			const selected = !isFileTab(entry) ? entry : pruned.active;
-			if (selected && !isFileTab(selected) && selected !== snapshotRef.current?.file) {
+			const selected = isSessionTab(entry) ? entry : pruned.active;
+			if (selected && isSessionTab(selected) && selected !== snapshotRef.current?.file) {
 				void attachRef.current(selected);
 			}
 		},
@@ -1641,7 +1695,7 @@ export default function App() {
 			const current = tabsRef.current;
 			if (!current.right || current.right.active === file) return;
 			commitTabs({ ...current, right: withTab(current.right, file) });
-			if (isFileTab(file) || (snapshotRef.current?.file === file && esRef.current)) return;
+			if (!isSessionTab(file) || (snapshotRef.current?.file === file && esRef.current)) return;
 			void attachRef.current(file);
 		},
 		[commitTabs],
@@ -1668,6 +1722,39 @@ export default function App() {
 			selectTab(entry);
 		},
 		[selectTab, selectRight],
+	);
+
+	/**
+	 * The column a panel's click should open a tab in: the last one touched.
+	 *
+	 * Without this, every diff opened from the sidebar lands on the left and
+	 * covers the chat — which is the one thing you are looking at a diff
+	 * BESIDE. A ref and not state: nothing renders differently because of it,
+	 * and a re-render per click on a tab would be a re-render of the strip
+	 * while you are using it.
+	 */
+	const lastSide = useRef<Side>("left");
+
+	/**
+	 * Open one file's diff in a tab, in the column last used.
+	 *
+	 * Same identity rule as `openFile`: the entry encodes the commit AND the
+	 * path, so the working tree's diff and the same file three commits ago are
+	 * two tabs, while clicking the same row twice focuses the one that is
+	 * already open.
+	 */
+	const openDiff = useCallback(
+		(ref: string, path: string) => {
+			const entry = diffTab(ref, path);
+			const open = sideOfTab(tabsRef.current, entry);
+			// Already open somewhere: focus it there, wherever that is. A second
+			// copy in the other column would be two merge views over one file.
+			const side = open ?? lastSide.current;
+			if (side === "right" && tabsRef.current.right) selectRight(entry);
+			else if (side === "right") moveToGroup(entry, "right");
+			else selectTab(entry);
+		},
+		[selectTab, selectRight, moveToGroup],
 	);
 
 	/**
@@ -2037,8 +2124,7 @@ export default function App() {
 	 * Neither column selecting a session leaves it in the left one, which is
 	 * where the "no session" empty state belongs.
 	 */
-	const chatSide: Side =
-		tabs.right?.active !== undefined && !isFileTab(tabs.right.active) ? "right" : "left";
+	const chatSide: Side = chatSideOf(tabs);
 
 	return (
 		<div ref={splitRow} className="flex h-full bg-neutral-950 text-neutral-100">
@@ -2108,18 +2194,26 @@ export default function App() {
 								</PanelEmpty>
 							))}
 
+						{/*
+						 * Needs a PROJECT and not a session, unlike the panel it replaced:
+						 * the working tree and the log belong to the repository, not to a
+						 * conversation, and refusing to show them until a session is open
+						 * was the old Changes panel asking for something it did not use.
+						 * A session only adds the hunk decisions inside a diff tab.
+						 */}
 						{panel === "review" &&
-							(snapshot ? (
-								<Review
-									sessionId={snapshot.id}
-									cwd={snapshot.cwd}
-									hunks={snapshot.hunks}
+							(snapshot?.cwd || project ? (
+								<SourceControl
+									cwd={snapshot?.cwd || project}
+									// The agent's hunks are the cheapest "the tree moved"
+									// signal this app has; the panel re-reads on it.
+									revision={snapshot?.hunks}
 									onClose={() => showPanel(null)}
-									onChanged={() => void reloadSnapshot()}
+									onOpenDiff={openDiff}
 								/>
 							) : (
-								<PanelEmpty title="Changes" onClose={() => showPanel(null)}>
-									Open a session to review what the agent changed.
+								<PanelEmpty title="Source Control" onClose={() => showPanel(null)}>
+									Pick a project first — a working tree belongs to a repository.
 								</PanelEmpty>
 							))}
 
@@ -2195,11 +2289,16 @@ export default function App() {
 					onClose={closeTab}
 					onReorder={reorderTabs}
 					onMove={moveToGroup}
+					onFocus={() => {
+						lastSide.current = "left";
+					}}
 					listOpen={listOpen}
-					onNew={() => void attach(undefined)}
 					onToggleList={() => setListOpen((o) => !o)}
 					cwd={snapshot?.cwd || project || ""}
 					onDirty={onFileDirty}
+					sessionId={snapshot?.id}
+					hunks={snapshot?.hunks ?? EMPTY_HUNKS}
+					onHunksChanged={() => void reloadSnapshot()}
 					chat={chatSide === "left" ? chat : null}
 				/>
 
@@ -2215,8 +2314,14 @@ export default function App() {
 						onClose={closeRight}
 						onReorder={reorderRight}
 						onMove={moveToGroup}
+						onFocus={() => {
+							lastSide.current = "right";
+						}}
 						cwd={snapshot?.cwd || project || ""}
 						onDirty={onFileDirty}
+						sessionId={snapshot?.id}
+						hunks={snapshot?.hunks ?? EMPTY_HUNKS}
+						onHunksChanged={() => void reloadSnapshot()}
 						chat={chatSide === "right" ? chat : null}
 					/>
 				)}

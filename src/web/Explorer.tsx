@@ -90,7 +90,10 @@ function TreeDir({
 				onClick={() => onToggle(entry.path)}
 				aria-expanded={open}
 				style={{ paddingLeft: `${depth * 12 + 4}px` }}
-				className={`flex w-full items-center gap-1 py-0.5 pr-2 text-left text-xs hover:bg-neutral-800 ${
+				// No focus ring: the tree is a wall of rows and the browser's default
+				// box around one is loud. Keyboard focus still shows, as the same
+				// highlight hover uses.
+				className={`flex w-full items-center gap-1 py-0.5 pr-2 text-left text-xs hover:bg-neutral-800 focus-visible:bg-neutral-800 focus-visible:outline-none ${
 					entry.hidden ? "text-neutral-500" : "text-neutral-300"
 				}`}
 			>
@@ -153,7 +156,7 @@ function TreeFile({
 			// +20 lines a file's name up with a sibling directory's, whose caret
 			// and folder icon sit to the left of where its name begins.
 			style={{ paddingLeft: `${depth * 12 + 20}px` }}
-			className={`flex w-full items-center gap-1 py-0.5 pr-2 text-left text-xs hover:bg-neutral-800 ${tone}`}
+			className={`flex w-full items-center gap-1 py-0.5 pr-2 text-left text-xs hover:bg-neutral-800 focus-visible:bg-neutral-800 focus-visible:outline-none ${tone}`}
 		>
 			<FileGlyph name={entry.name} />
 			<span className="truncate">{entry.name}</span>

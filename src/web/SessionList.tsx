@@ -353,7 +353,7 @@ export function SessionList({
 					)}
 					{ordered.map((s) => {
 						const isOpen = openFiles.includes(s.path);
-						const label = sessionLabel(s.path, s, shortNames);
+						const label = sessionLabel(s, shortNames);
 
 						/*
 						 * Renaming replaces the row rather than opening a dialog: the
@@ -473,7 +473,7 @@ export function SessionList({
 			{menuSession && menu && (
 				<div
 					role="menu"
-					aria-label={`Session ${sessionLabel(menuSession.path, menuSession, shortNames)}`}
+					aria-label={`Session ${sessionLabel(menuSession, shortNames)}`}
 					// The listener that dismisses this is on `pointerdown` at the
 					// window, so the menu has to keep its own clicks to itself.
 					onPointerDown={(e) => e.stopPropagation()}
@@ -490,7 +490,7 @@ export function SessionList({
 						role="menuitem"
 						autoFocus
 						onClick={() => {
-							setDraft(sessionLabel(menuSession.path, menuSession, shortNames));
+							setDraft(sessionLabel(menuSession, shortNames));
 							setRenaming(menuSession.path);
 							setMenu(null);
 						}}

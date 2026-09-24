@@ -30,7 +30,15 @@ import {
 import { readPersonality, writePersonality } from "./personality.js";
 import { listDir, readFile as readReviewFile, writeFile, writeReviewed } from "./files.js";
 import { resolve as resolveHunks } from "../shared/hunks.js";
-import { apply, status as gitStatus, suggestMessage, type GitPlan } from "./git.js";
+import {
+	apply,
+	changes as gitChanges,
+	log as gitLog,
+	show as gitShow,
+	status as gitStatus,
+	suggestMessage,
+	type GitPlan,
+} from "./git.js";
 import { nameCommit, nameSession } from "./autoname.js";
 import { Terminals } from "./terminals.js";
 import { Registry } from "./registry.js";
@@ -805,6 +813,53 @@ app.get("/api/git", async (req, res) => {
 	const cwd = typeof req.query.cwd === "string" && req.query.cwd ? req.query.cwd : CWD;
 	const [state, message] = await Promise.all([gitStatus(cwd), suggestMessage(cwd)]);
 	res.json({ ...state, suggestion: message });
+});
+
+/**
+ * Which paths are uncommitted, and how. NAMES only, no content.
+ *
+ * What the source-control panel's top half reads. Deliberately git and not
+ * the session's own hunk list: hunks only exist for edits THIS server process
+ * watched a tool make, so they miss anything from another session, from
+ * before a restart, or from your own editor — while the commit button counts
+ * all of it. One source for both, and the panel stops disagreeing with the
+ * button.
+ */
+app.get("/api/git/changes", async (req, res) => {
+	const cwd = typeof req.query.cwd === "string" && req.query.cwd ? req.query.cwd : CWD;
+	res.json({ files: await gitChanges(cwd) });
+});
+
+/**
+ * Recent commits with the paths each touched: the panel's bottom half.
+ *
+ * A fixed window rather than a paged log, because this is a tree you glance
+ * at to find the change you just made — scrolling back through a repo's
+ * history is what a real git client is for.
+ */
+app.get("/api/git/log", async (req, res) => {
+	const cwd = typeof req.query.cwd === "string" && req.query.cwd ? req.query.cwd : CWD;
+	const limit = Number(req.query.limit);
+	res.json({ commits: await gitLog(cwd, Number.isFinite(limit) ? limit : undefined) });
+});
+
+/**
+ * One file's two sides, for a diff tab.
+ *
+ * Per file and not per panel: the list shows names, and only an opened diff
+ * pays for content. `ref` empty is the working tree; a sha is that commit
+ * against its parent.
+ */
+app.get("/api/git/show", async (req, res) => {
+	const cwd = typeof req.query.cwd === "string" && req.query.cwd ? req.query.cwd : CWD;
+	const path = typeof req.query.path === "string" ? req.query.path : "";
+	const ref = typeof req.query.ref === "string" ? req.query.ref : "";
+	if (!path) return res.status(400).json({ error: "path required" });
+	try {
+		res.json(await gitShow(cwd, path, ref));
+	} catch (err) {
+		res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
+	}
 });
 
 /**

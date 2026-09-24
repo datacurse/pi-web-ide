@@ -1,10 +1,21 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Plus, X } from "@phosphor-icons/react";
+import { GitDiff, X } from "@phosphor-icons/react";
 import type { KeyboardEvent } from "react";
 import type { PiSessionInfo } from "../shared/types.js";
 import { sessionLabel } from "./sessionName.js";
 import { FileGlyph } from "./fileIcon.js";
-import { isFileTab, tabLabel, tabPath } from "./tabs.js";
+import { diffParts, isDiffTab, isSessionTab, tabLabel, tabPath } from "./tabs.js";
+
+/**
+ * A diff tab's tooltip: the long form VS Code puts in the tab itself.
+ *
+ * The strip shows `name (sha)`; which two things are being compared only
+ * matters when you stop to ask, and that is what a hover is for.
+ */
+const diffTitle = (entry: string): string => {
+	const { ref, path } = diffParts(entry);
+	return ref ? `${path} — ${ref.slice(0, 7)} ↔ parent` : `${path} — HEAD ↔ working tree`;
+};
 
 /**
  * DOM id of the Nth tab. Shared with App, which points the chat panel's
@@ -67,7 +78,6 @@ export function SessionTabs({
 	listOpen,
 	onSelect,
 	onClose,
-	onNew,
 	onToggleList,
 	shortNames,
 	dirtyFiles,
@@ -86,12 +96,10 @@ export function SessionTabs({
 	onSelect: (file: string) => void;
 	onClose: (file: string) => void;
 	/*
-	 * Both absent in the split's second column: it holds files only, so there
-	 * is no session to create and no session list to toggle. Optional rather
-	 * than a `variant` flag — the buttons are gone exactly when the callbacks
-	 * that make them do anything are, and that cannot be set inconsistently.
+	 * Absent in the split's second column: it holds files only, so there is no
+	 * session list to toggle. Optional rather than a `variant` flag — the
+	 * button is gone exactly when the callback that makes it do anything is.
 	 */
-	onNew?: () => void;
 	onToggleList?: () => void;
 	/**
 	 * Take a tab dropped from the OTHER column. Absent means this strip does
@@ -210,20 +218,6 @@ export function SessionTabs({
 			</button>
 			)}
 
-			{/* Left of the strip, outside the scrolling region: a "+" that scrolls
-			    away with twenty open tabs is a "+" you cannot click, and the left
-			    edge is where the strip's chrome already lives. */}
-			{onNew && (
-			<button
-				onClick={onNew}
-				aria-label="New session"
-				title="New session"
-				className="flex size-9 shrink-0 items-center justify-center self-center rounded text-neutral-300 transition-colors duration-150 ease-out hover:bg-neutral-800 hover:text-neutral-50 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 motion-reduce:transition-none"
-			>
-				<Plus size={16} />
-			</button>
-			)}
-
 			<div
 				role="tablist"
 				aria-label={label}
@@ -250,6 +244,14 @@ export function SessionTabs({
 				onDragLeave={(e) => {
 					if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDrag(null);
 				}}
+				// A wheel over the strip scrolls it sideways: the strip only scrolls
+				// horizontally and a mouse has no horizontal wheel, so the vertical
+				// delta is the only gesture most pointers can make here. A trackpad's
+				// own horizontal delta is left to the browser.
+				onWheel={(e) => {
+					if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
+					e.currentTarget.scrollLeft += e.deltaY;
+				}}
 				onDrop={(e) => {
 					const from = dragFrom.current;
 					dragFrom.current = null;
@@ -273,11 +275,17 @@ export function SessionTabs({
 				}`}
 			>
 				{tabs.map((file, i) => {
-					const isFile = isFileTab(file);
+					// A DOCUMENT tab: a file or a diff. `!isSessionTab` and not
+					// `isFileTab`, because a diff is not a file entry — testing for the
+					// file prefix sent every diff down the session branch, where it had
+					// no session to look up and rendered as "New session".
+					const isFile = !isSessionTab(file);
+					const isDiff = isDiffTab(file);
 					const info = isFile ? undefined : byFile.get(file);
-					const label = isFile ? tabLabel(file) : sessionLabel(file, info, shortNames);
+					const label = isFile ? tabLabel(file) : sessionLabel(info, shortNames);
 					const isActive = file === active;
-					const dirty = isFile && dirtyFiles[tabPath(file)] === true;
+					// Only an editable file can be dirty; a diff is read-only.
+					const dirty = isFile && !isDiff && dirtyFiles[tabPath(file)] === true;
 					return (
 						// Wrapper because the close control cannot be a <button> inside
 						// the tab's <button>; role="presentation" keeps the tablist's
@@ -387,7 +395,7 @@ export function SessionTabs({
 								// Roving tabindex: Tab reaches the strip once, arrows walk it.
 								// When nothing is selected the first tab is the entry point.
 								tabIndex={isActive || (activeIndex < 0 && i === 0) ? 0 : -1}
-								title={isFile ? tabPath(file) : label}
+								title={isDiff ? diffTitle(file) : isFile ? tabPath(file) : label}
 								onClick={() => onSelect(file)}
 								onKeyDown={(e) => moveFocus(e, i)}
 								className={`flex h-8 max-w-52 items-center gap-1.5 rounded-t border-t-2 pr-7 pl-2.5 text-xs transition-colors duration-150 ease-out focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 motion-reduce:transition-none ${
@@ -404,8 +412,14 @@ export function SessionTabs({
 										className="size-1.5 shrink-0 animate-pulse rounded-full bg-amber-400"
 									/>
 								)}
+								{/* A diff reads as a diff at a glance, the way VS Code's does —
+								    but as one glyph rather than "x (sha) ↔ x (sha)", which eats
+								    a whole strip. The rest is in `tabLabel` and the tooltip. */}
+								{isDiff && (
+									<GitDiff size={13} weight="bold" className="shrink-0 text-neutral-400" />
+								)}
 								{/* Same glyph the tree uses, so a tab and its row match. */}
-								{isFile && <FileGlyph name={label} size={13} />}
+								{isFile && !isDiff && <FileGlyph name={label} size={13} />}
 								<span className={`truncate text-ellipsis ${isFile ? "font-mono" : ""}`}>
 									{label}
 								</span>

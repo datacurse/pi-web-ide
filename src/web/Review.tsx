@@ -15,13 +15,21 @@
  * rejecting is the action that writes, putting the old text back. The merge
  * view is therefore oriented "what it was" → "what it is", not "what it is" →
  * "what it would be".
+ *
+ * The FILE LIST comes from git, not from the session's hunks. Hunks only
+ * exist for edits this server process watched a tool make, so a pane driven
+ * by them shows nothing after a restart, nothing from another session's tab,
+ * and nothing you typed yourself — while the commit button, counting `git
+ * status`, cheerfully says 11. Same source for both now. Hunks still decorate
+ * the file they belong to, because keep/revert is a per-hunk decision and git
+ * has no opinion about who wrote a line.
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowCounterClockwise, Check, FileCode, X } from "@phosphor-icons/react";
 import type { EditorView } from "@codemirror/view";
 import type { Hunk, HunkState } from "../shared/hunks.js";
-import { fitHunk, revertHunks } from "../shared/hunks.js";
+import { fitHunk } from "../shared/hunks.js";
 import { darkPlus, languageFor, loadCodeMirror } from "./codemirror.js";
 
 /** `/home/me/proj/src/web/App.tsx` → `src/web/App.tsx` when it is under `cwd`. */
@@ -35,6 +43,15 @@ async function getJson<T>(url: string): Promise<T> {
 	return (await r.json()) as T;
 }
 
+/** One working-tree change. Mirrors GitFileDiff in src/server/git.ts. */
+interface FileChange {
+	path: string;
+	status: string;
+	before: string;
+	after: string;
+	skipped?: string;
+}
+
 /**
  * One file's hunks, rendered as a unified merge view.
  *
@@ -43,11 +60,11 @@ async function getJson<T>(url: string): Promise<T> {
  * the only one of the two that survives a phone screen, which is where
  * checking on a running agent actually happens.
  *
- * The "original" side is RECONSTRUCTED by undoing the file's hunks, because
- * the agent's text is what is on disk and the pre-edit content exists nowhere
- * else by the time this renders.
+ * The "original" side is the file as HEAD has it — handed over by git rather
+ * than reconstructed by undoing hunks, which could only ever reach back to
+ * the start of this session.
  */
-function FileDiff({ path, content, hunks }: { path: string; content: string; hunks: Hunk[] }) {
+function FileDiff({ path, before, after }: { path: string; before: string; after: string }) {
 	const host = useRef<HTMLDivElement | null>(null);
 	const view = useRef<EditorView | null>(null);
 
@@ -58,15 +75,10 @@ function FileDiff({ path, content, hunks }: { path: string; content: string; hun
 
 		void Promise.all([loadCodeMirror(), languageFor(path)]).then(([cm, lang]) => {
 			if (!live || !host.current) return;
-			// Everything the agent touched, undone: the file as it was before
-			// this session ran. Hunks already reverted by hand are skipped by
-			// revertHunks rather than forced, so this degrades to "as close to
-			// the original as is still reachable".
-			const original = revertHunks(content, hunks);
 			view.current = new cm.EditorView({
 				parent: host.current,
 				state: cm.EditorState.create({
-					doc: content,
+					doc: after,
 					extensions: [
 						/*
 						 * Read-only, and that is not a simplification. Editing here
@@ -79,7 +91,7 @@ function FileDiff({ path, content, hunks }: { path: string; content: string; hun
 						cm.EditorState.readOnly.of(true),
 						cm.EditorView.lineWrapping,
 						cm.lineNumbers(),
-						cm.unifiedMergeView({ original, mergeControls: false }),
+						cm.unifiedMergeView({ original: before, mergeControls: false }),
 						// Highlighting is best-effort: a language this does not
 						// cover still diffs, just without colour.
 						...lang,
@@ -101,10 +113,9 @@ function FileDiff({ path, content, hunks }: { path: string; content: string; hun
 			view.current?.destroy();
 			view.current = null;
 		};
-		// Rebuilt when the file's text or its hunks change: a merge view's
-		// `original` is fixed at construction, so there is nothing to
-		// reconfigure in place.
-	}, [path, content, hunks]);
+		// Rebuilt when either side's text changes: a merge view's `original` is
+		// fixed at construction, so there is nothing to reconfigure in place.
+	}, [path, before, after]);
 
 	return <div ref={host} className="cm-review overflow-auto text-sm" />;
 }
@@ -194,12 +205,13 @@ function HunkRow({
 }
 
 /**
- * The pane: every file this session's agent touched, newest first.
+ * The pane: every uncommitted change in the project.
  *
  * Hunks come from the snapshot rather than from an event stream of their own,
  * so a reload mid-review shows exactly what was on screen before it — the
  * decisions live on the server, keyed by pi's own tool call ids, and survive
- * a remount, a tab switch and a refresh.
+ * a remount, a tab switch and a refresh. The FILES come from git, so a file
+ * whose hunks this process never saw still shows up with a diff.
  */
 export function Review({
 	sessionId,
@@ -215,40 +227,33 @@ export function Review({
 	/** A revert wrote to disk; the snapshot's hunk states are now out of date. */
 	onChanged: () => void;
 }) {
-	/** Live file contents, keyed by path. The diff is against disk, never a memory of it. */
-	const [files, setFiles] = useState<Record<string, string | null>>({});
+	/** Working-tree changes, straight from git. One request, not one per file. */
+	const [files, setFiles] = useState<FileChange[] | null>(null);
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 
-	const paths = [...new Set(hunks.map((h) => h.path))];
-	// Stable across renders that did not change the set, so the effect below
-	// does not refetch every file on every keystroke elsewhere in the app.
-	const key = paths.join("\0");
-
 	const reload = useCallback(async () => {
-		const entries = await Promise.all(
-			key
-				.split("\0")
-				.filter(Boolean)
-				.map(async (path) => {
-					try {
-						const r = await getJson<{ content: string | null }>(
-							`/api/file?path=${encodeURIComponent(path)}`,
-						);
-						return [path, r.content] as const;
-					} catch {
-						// A file that cannot be read still has hunks worth listing;
-						// null renders the row without a diff rather than dropping it.
-						return [path, null] as const;
-					}
-				}),
-		);
-		setFiles(Object.fromEntries(entries));
-	}, [key]);
+		try {
+			const r = await getJson<{ files: FileChange[] }>(
+				`/api/git/diff?cwd=${encodeURIComponent(cwd)}`,
+			);
+			setFiles(r.files);
+			setError(null);
+		} catch (err) {
+			setFiles([]);
+			setError(err instanceof Error ? err.message : String(err));
+		}
+	}, [cwd]);
 
 	useEffect(() => {
 		void reload();
 	}, [reload]);
+
+	// A hunk decided elsewhere (or an agent still writing) changed the tree;
+	// the snapshot's hunk list is the cheapest signal that it did.
+	useEffect(() => {
+		void reload();
+	}, [hunks, reload]);
 
 	const decide = async (hunk: Hunk, state: HunkState) => {
 		setBusy(true);
@@ -272,6 +277,7 @@ export function Review({
 	};
 
 	const pending = hunks.filter((h) => h.state === "pending").length;
+	const list = files ?? [];
 
 	return (
 		<div className="flex min-h-0 min-w-0 flex-1 flex-col bg-neutral-950">
@@ -295,33 +301,35 @@ export function Review({
 				</div>
 			)}
 
-			{hunks.length === 0 ? (
+			{files === null ? (
+				<p className="p-4 text-sm text-neutral-500">Reading the working tree…</p>
+			) : list.length === 0 ? (
 				<p className="p-4 text-sm text-neutral-500">
-					Nothing edited yet. Changes the agent makes to files show up here.
+					Nothing changed yet. Uncommitted edits — the agent's or your own — show up here.
 				</p>
 			) : (
 				<div className="min-h-0 flex-1 overflow-auto">
-					{paths.map((path) => {
-						const mine = hunks.filter((h) => h.path === path);
-						const content = files[path] ?? null;
+					{list.map((file) => {
+						const mine = hunks.filter((h) => h.path === file.path);
 						return (
-							<div key={path} className="border-b border-neutral-800">
+							<div key={file.path} className="border-b border-neutral-800">
 								<div className="sticky top-0 z-10 bg-neutral-900 px-3 py-1.5 font-mono text-xs text-neutral-400">
-									{shortPath(path, cwd)}
-									{content === null && (
-										<span className="ml-2 text-amber-500">deleted or unreadable</span>
-									)}
+									{shortPath(file.path, cwd)}
+									<span className="ml-2 text-neutral-600">{file.status.trim() || "M"}</span>
+									{file.skipped && <span className="ml-2 text-amber-500">{file.skipped}</span>}
 								</div>
 								{mine.map((h) => (
 									<HunkRow
 										key={h.id}
 										hunk={h}
-										current={content}
+										current={file.after}
 										busy={busy}
 										onDecide={(state) => void decide(h, state)}
 									/>
 								))}
-								{content !== null && <FileDiff path={path} content={content} hunks={mine} />}
+								{!file.skipped && (
+									<FileDiff path={file.path} before={file.before} after={file.after} />
+								)}
 							</div>
 						);
 					})}

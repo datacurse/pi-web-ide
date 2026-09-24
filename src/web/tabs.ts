@@ -6,26 +6,67 @@
  * under `pwi:tabs:<project>`, Alt+1..9, close-and-select-the-neighbour — keeps
  * working on one list instead of growing a parallel one per kind.
  *
- * A file entry is its absolute path behind a `file:` prefix. Sessions are
- * absolute paths to a `.jsonl`, which start with `/` (or a drive letter), so
- * the two can never be confused for one another.
+ * A file entry is its absolute path behind a `file:` prefix, a diff entry is
+ * `diff:<ref>:<path>`. Sessions are absolute paths to a `.jsonl`, which start
+ * with `/` (or a drive letter), so the three can never be confused for one
+ * another.
+ *
+ * `isSessionTab` and not `!isFileTab` is the rule every caller follows, and
+ * the reason this file has three predicates rather than one: App ATTACHES to
+ * anything it believes is a session, so a diff entry that merely fails the
+ * file test would be handed to the EventSource as a session path.
  */
 
 const FILE_PREFIX = "file:";
+const DIFF_PREFIX = "diff:";
 
 /** The tab entry for an open file. */
 export const fileTab = (path: string): string => `${FILE_PREFIX}${path}`;
 
-/** True when this entry is a file rather than a chat session. */
+/** True when this entry is a file rather than a chat session or a diff. */
 export const isFileTab = (entry: string): boolean => entry.startsWith(FILE_PREFIX);
 
-/** The absolute path inside a file entry. Meaningless for a session entry. */
-export const tabPath = (entry: string): string => entry.slice(FILE_PREFIX.length);
+/**
+ * The tab entry for one file's diff. `ref` is a commit sha, or "" for the
+ * working tree — the same two cases `/api/git/show` takes.
+ */
+export const diffTab = (ref: string, path: string): string => `${DIFF_PREFIX}${ref}:${path}`;
 
-/** The name a file tab shows: its basename, or the whole path if it has none. */
+/** True when this entry is a diff view rather than an editable file. */
+export const isDiffTab = (entry: string): boolean => entry.startsWith(DIFF_PREFIX);
+
+/**
+ * The commit and path inside a diff entry.
+ *
+ * Split at the FIRST colon after the prefix: a sha never contains one, and a
+ * path legitimately can.
+ */
+export function diffParts(entry: string): { ref: string; path: string } {
+	const rest = entry.slice(DIFF_PREFIX.length);
+	const cut = rest.indexOf(":");
+	return cut < 0 ? { ref: "", path: rest } : { ref: rest.slice(0, cut), path: rest.slice(cut + 1) };
+}
+
+/** True when this entry is a chat session: the only kind App attaches to. */
+export const isSessionTab = (entry: string): boolean => !isFileTab(entry) && !isDiffTab(entry);
+
+/** The absolute path inside a file or diff entry. Meaningless for a session. */
+export const tabPath = (entry: string): string =>
+	isDiffTab(entry) ? diffParts(entry).path : entry.slice(FILE_PREFIX.length);
+
+/**
+ * The name a tab shows: its basename, or the whole path if it has none.
+ *
+ * A diff carries its commit in the label, because "App.tsx" open twice — once
+ * as it is now and once as it was three commits ago — is otherwise two
+ * identical tabs.
+ */
 export const tabLabel = (entry: string): string => {
 	const path = tabPath(entry);
-	return path.split("/").pop() || path;
+	const name = path.split("/").pop() || path;
+	if (!isDiffTab(entry)) return name;
+	const { ref } = diffParts(entry);
+	return ref ? `${name} (${ref.slice(0, 7)})` : `${name} ↔ working tree`;
 };
 
 /**
@@ -87,6 +128,18 @@ export function sideOfTab<T extends TabState>(
 }
 
 /**
+ * Which column the chat belongs in: the one whose SELECTED tab is a session.
+ *
+ * Selection and not mere membership, because a column showing a file must show
+ * that file. Also where a BRAND-NEW session's tab goes: a new session is in
+ * neither column, and dropping it on the left would move the chat out from
+ * under the column the user was working in.
+ */
+export function chatSideOf<T extends TabState>(tabs: T): Side {
+	return tabs.right?.active !== undefined && isSessionTab(tabs.right.active) ? "right" : "left";
+}
+
+/**
  * `tabs` with one column replaced.
  *
  * An emptied SECOND column collapses the split, because a column with no tabs
@@ -98,6 +151,22 @@ export function withGroup<T extends TabState>(tabs: T, side: Side, group: TabGro
 	return side === "left"
 		? { ...tabs, files: group.files, active: group.active }
 		: { ...tabs, right: group.files.length > 0 ? group : undefined };
+}
+
+/**
+ * `tabs` with an emptied FIRST column filled by the second, which then closes.
+ *
+ * The mirror of `withGroup`'s rule for the right column: one empty column is a
+ * divider and a blank pane either way. Closing the last tab on the left used to
+ * leave that pane sitting beside a perfectly full second column.
+ *
+ * Applied once where tabs are committed rather than inside `withGroup`, because
+ * a move between columns writes BOTH columns and a mid-move collapse would copy
+ * the right column's tabs into the left before the second write lands.
+ */
+export function collapse<T extends TabState>(tabs: T): T {
+	if (tabs.files.length > 0 || !tabs.right) return tabs;
+	return { ...tabs, files: tabs.right.files, active: tabs.right.active, right: undefined };
 }
 
 /**
