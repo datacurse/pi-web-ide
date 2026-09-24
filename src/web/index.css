@@ -289,6 +289,24 @@
 	color-scheme: light;
 }
 
+/* VS Code's Seti file icons (fileIcon.tsx). */
+@font-face {
+	font-family: seti;
+	src: url("/seti.woff") format("woff");
+	font-display: block;
+}
+.seti-icon {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	font-family: seti;
+	line-height: 1;
+	color: var(--seti-dark);
+}
+:root[data-theme="latte"] .seti-icon {
+	color: var(--seti-light);
+}
+
 html,
 body,
 #root {

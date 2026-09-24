@@ -975,6 +975,10 @@ the library (main bundle 314KB → 350KB). Text stays text: the tool-fold lines
 are still `Read 23 files, edited 2 files` in mono with a caret icon, because
 the sentence is the content and only the caret is furniture.
 
+File icons are the other exception: VS Code's default Seti theme, a 37KB font
+(`public/seti.woff`) plus its name/extension table (`src/web/seti.json`),
+vendored by `node scripts/seti.mjs`. Like VS Code, folders get no icon.
+
 ## Commit & Push
 
 A split button above the composer: the primary action on the left, the other

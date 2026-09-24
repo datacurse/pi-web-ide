@@ -11,7 +11,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { CaretDown, CaretRight, X } from "@phosphor-icons/react";
 import type { PiwFileEntry } from "../shared/types.js";
-import { FileGlyph, FolderGlyph } from "./fileIcon.js";
+import { FileGlyph } from "./fileIcon.js";
 import { readExplorerOpen, writeExplorerOpen } from "./prefs.js";
 
 async function getJson<T>(url: string): Promise<T> {
@@ -129,12 +129,11 @@ function TreeDir({
 					entry.hidden ? "text-neutral-500" : "text-neutral-300"
 				}`}
 			>
-				{open ? (
-					<CaretDown size={10} aria-hidden className="shrink-0 text-neutral-500" />
-				) : (
-					<CaretRight size={10} aria-hidden className="shrink-0 text-neutral-500" />
-				)}
-				<FolderGlyph name={entry.name} open={open} />
+				{/* A 16px slot, the width of a file's icon, so names line up the way
+				    VS Code's do: Seti has no folder icons, the chevron stands in. */}
+				<span className="flex w-4 shrink-0 justify-center text-neutral-500" aria-hidden>
+					{open ? <CaretDown size={10} /> : <CaretRight size={10} />}
+				</span>
 				<span className="truncate">{entry.name}</span>
 			</button>
 			{open &&
@@ -185,9 +184,8 @@ function TreeFile({
 		<button
 			type="button"
 			onClick={() => onOpen(entry.path)}
-			// +20 lines a file's name up with a sibling directory's, whose caret
-			// and folder icon sit to the left of where its name begins.
-			style={{ paddingLeft: `${depth * 12 + 20}px` }}
+			// Same indent as a sibling directory: the icon takes the chevron's slot.
+			style={{ paddingLeft: `${depth * 12 + 4}px` }}
 			className={`flex w-full items-center gap-1 py-0.5 pr-2 text-left text-xs hover:bg-neutral-800 focus-visible:bg-neutral-800 focus-visible:outline-none ${tone}`}
 		>
 			<FileGlyph name={entry.name} />

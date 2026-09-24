@@ -1,5 +1,3 @@
 node_modules/
 dist/
 
-# Copied from vscode-material-icons by scripts/sync-icons.mjs (postinstall).
-public/material-icons/
