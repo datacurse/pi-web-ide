@@ -5,6 +5,7 @@ import type {
 	PiAsk,
 	PiEvent,
 	PiImage,
+	PiMessage,
 	PiPartial,
 	PiSessionInfo,
 	Snapshot,
@@ -1895,6 +1896,21 @@ export default function App() {
 			// answer arrives later as a notice, so it starts out running.
 			const trimmed = text.trim();
 			setCommand(trimmed.startsWith("/") ? { text: trimmed, running: true } : null);
+			// Show the message now, not after pi acks it. Every refetch replaces
+			// `messages` wholesale, so the server's copy supersedes this one. Not
+			// while streaming: a follow-up is queued, and would jump position.
+			const optimistic: PiMessage | null =
+				!busy && !trimmed.startsWith("/")
+					? {
+							role: "user",
+							blocks: [
+								...(text ? [{ kind: "text" as const, text }] : []),
+								...(images ?? []).map((i) => ({ kind: "image" as const, ...i })),
+							],
+							timestamp: Date.now(),
+						}
+					: null;
+			if (optimistic) setSnapshot((s) => (s ? { ...s, messages: [...s.messages, optimistic] } : s));
 			const r = await fetch(`/api/sessions/${snapshot.id}/prompt`, {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
@@ -1909,7 +1925,13 @@ export default function App() {
 				setBusy(false);
 				setCommand(null);
 				setSnapshot((s) =>
-					s ? { ...s, error: body.error ?? `prompt failed (${r.status})` } : s,
+					s
+						? {
+								...s,
+								messages: s.messages.filter((m) => m !== optimistic),
+								error: body.error ?? `prompt failed (${r.status})`,
+							}
+						: s,
 				);
 				return;
 			}
@@ -1917,7 +1939,7 @@ export default function App() {
 			const rr = await fetch(`/api/sessions/${snapshot.id}`);
 			if (rr.ok) setSnapshot(toSnapshot(await rr.json()));
 		},
-		[snapshot],
+		[snapshot, busy],
 	);
 
 	const abort = useCallback(async () => {

@@ -255,6 +255,30 @@ app.get("/api/models", async (_req, res) => {
 	}
 });
 
+/**
+ * Claude subscription limits, straight from the endpoint claude.ai's usage
+ * page reads. Borrows pi's OAuth access token from auth.json, newest first.
+ * ponytail: no token refresh — pi refreshes on use, and rotating the refresh
+ * token here could log pi out. An idle pi means "expired" until its next turn.
+ */
+app.get("/api/usage", async (_req, res) => {
+	const dir = process.env.PI_CODING_AGENT_DIR ?? resolve(process.env.HOME ?? "", ".pi/agent");
+	let auth: Record<string, { type?: string; access?: string; expires?: number }> = {};
+	try {
+		auth = JSON.parse(readFileSync(resolve(dir, "auth.json"), "utf8"));
+	} catch {}
+	const tokens = Object.values(auth)
+		.filter((c) => c.type === "oauth" && c.access && (c.expires ?? 0) > Date.now())
+		.sort((a, b) => (b.expires ?? 0) - (a.expires ?? 0));
+	for (const c of tokens) {
+		const r = await fetch("https://api.anthropic.com/api/oauth/usage", {
+			headers: { authorization: `Bearer ${c.access}`, "anthropic-beta": "oauth-2025-04-20" },
+		}).catch(() => null);
+		if (r?.ok) return res.json(await r.json());
+	}
+	res.status(502).json({ error: tokens.length ? "usage request failed" : "no unexpired Claude login in auth.json" });
+});
+
 /** Persist "provider/id" as pi's own startup default, for future sessions. */
 app.post("/api/default-model", async (req, res) => {
 	const model = typeof req.body?.model === "string" ? req.body.model : undefined;

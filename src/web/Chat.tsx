@@ -193,14 +193,14 @@ const PINNED_SLACK_PX = 24;
 /** Braille spinner, same visual language as the TUI. */
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
-function useSpinner(active: boolean): string {
+function useSpinner(active: boolean, frames = SPINNER_FRAMES, ms = 80): string {
 	const [i, setI] = useState(0);
 	useEffect(() => {
 		if (!active) return;
-		const id = setInterval(() => setI((v) => (v + 1) % SPINNER_FRAMES.length), 80);
+		const id = setInterval(() => setI((v) => (v + 1) % frames.length), ms);
 		return () => clearInterval(id);
-	}, [active]);
-	return SPINNER_FRAMES[i];
+	}, [active, frames, ms]);
+	return frames[i % frames.length];
 }
 
 /**
@@ -521,40 +521,37 @@ function ContextMeter({
 	);
 }
 
+/** Claude Code's glyph cycle, there and back. */
+const STAR_FRAMES = ["·", "✢", "✳", "✶", "✻", "✽", "✻", "✶", "✳", "✢"];
+const VERBS = [
+	"Pondering", "Mulling", "Figuring", "Noodling", "Brewing", "Tinkering",
+	"Percolating", "Cogitating", "Scheming", "Conjuring", "Musing", "Wrangling",
+];
+
 /**
- * Persistent status line, pinned above the scrollable transcript.
- *
- * This is the thing a plain console gives you for free and a chat window
- * does not: at a glance, is it thinking, running a tool, writing, or done —
- * without scrolling to the bottom to find out. It reads directly off the
- * same partial state the transcript renders from, so it can never disagree
- * with what is on screen.
+ * The live turn, as the last line of the transcript: a verb picked once per
+ * turn and the elapsed time. Mounted only while busy, so mount IS turn start.
+ * The folded tool line above it already names what is running.
  */
-function StatusLine({ busy, partial }: { busy: boolean; partial: PiPartial }) {
-	const spinner = useSpinner(busy);
-
-	if (!busy) {
-		return (
-			<div className="flex items-center gap-2 py-1.5 text-xs text-neutral-600">
-				<span>○</span>
-				<span>Idle</span>
-			</div>
-		);
-	}
-
-	const runningTool = [...partial.tools].reverse().find((t) => t.result === undefined);
-	const label = runningTool
-		? `Running ${runningTool.name}…`
-		: partial.thinking && !partial.text
-			? "Thinking…"
-			: partial.text
-				? "Writing response…"
-				: "Waiting for model…";
-
+function TurnStatus() {
+	const spinner = useSpinner(true, STAR_FRAMES, 120);
+	const [start] = useState(Date.now);
+	const [verb] = useState(() => VERBS[Math.floor(Math.random() * VERBS.length)]);
+	const [now, setNow] = useState(start);
+	useEffect(() => {
+		const id = setInterval(() => setNow(Date.now()), 1000);
+		return () => clearInterval(id);
+	}, []);
+	const secs = Math.floor((now - start) / 1000);
 	return (
-		<div className="flex items-center gap-2 py-1.5 text-xs text-amber-400">
-			<span className="font-mono">{spinner}</span>
-			<span>{label}</span>
+		<div className="chat-gutter py-3" role="status">
+			<div className="chat-measure flex items-center gap-2 text-sm text-neutral-500">
+				<span aria-hidden className="w-4 text-center text-amber-400">
+					{spinner}
+				</span>
+				<span>{verb}…</span>
+				{secs > 0 && <span className="tabular-nums">{secs}s</span>}
+			</div>
 		</div>
 	);
 }
@@ -1440,6 +1437,12 @@ export function Chat({
 	const lastRow = rows.at(-1);
 	const partialLabelled =
 		!lastRow || (lastRow.kind === "message" && lastRow.role !== "assistant");
+	/*
+	 * A turn is many messages, and the settled ones end in a fold that the
+	 * streaming one continues. Rendered apart they read as two groups; so the
+	 * live fold joins the settled one when nothing came between them.
+	 */
+	const joinFold = busy && folds && partialFold.length > 0 && lastRow?.kind === "tools";
 
 	return (
 		/*
@@ -1470,7 +1473,11 @@ export function Chat({
 					{rows.map((r, i) =>
 						r.kind === "tools" ? (
 							<TranscriptRow key={i} role="assistant" labelled={r.labelled}>
-								<ToolGroup blocks={r.blocks} />
+								{joinFold && i === rows.length - 1 ? (
+									<ToolGroup blocks={[...r.blocks, ...partialFold]} streaming />
+								) : (
+									<ToolGroup blocks={r.blocks} />
+								)}
 							</TranscriptRow>
 						) : r.role === "compaction" ? (
 							<CompactionRow
@@ -1498,7 +1505,9 @@ export function Chat({
 							 * line grows in place instead of the pane growing a line per
 							 * call, and the status line below still names the running tool.
 							 */}
-							{partialFold.length > 0 && <ToolGroup blocks={partialFold} streaming />}
+							{partialFold.length > 0 && !joinFold && (
+								<ToolGroup blocks={partialFold} streaming />
+							)}
 							{/* Unfolded modes show the live thought as itself. */}
 							{!folds && showThinking && partial.thinking && (
 								<div className="chat-measure text-sm whitespace-pre-wrap text-neutral-500 italic">
@@ -1523,6 +1532,8 @@ export function Chat({
 							{partial.text && <MarkdownText text={partial.text} streaming />}
 						</TranscriptRow>
 					)}
+
+					{busy && <TurnStatus />}
 
 					{/* Below the transcript: a local command answers after the last
 				    message, and before the next prompt clears it. */}
@@ -1586,7 +1597,6 @@ export function Chat({
 				<div className="chat-gutter py-2">
 					<div className="chat-measure flex items-center justify-between gap-2">
 						<div className="flex min-w-0 items-center gap-3">
-							<StatusLine busy={busy} partial={partial} />
 							<ContextMeter
 								tokens={snapshot.contextTokens}
 								window={snapshot.contextWindow}

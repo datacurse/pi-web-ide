@@ -12,6 +12,30 @@ interface Personality {
 
 type SaveState = "idle" | "saving" | "saved";
 
+/** The subset of /api/usage (Anthropic's oauth/usage) this dialog reads. */
+interface UsageLimit {
+	kind: string;
+	percent: number;
+	resets_at: string | null;
+	scope: { model?: { display_name?: string | null } } | null;
+}
+
+function limitLabel(l: UsageLimit): string {
+	if (l.kind === "session") return "Current session";
+	if (l.kind === "weekly_all") return "This week";
+	const model = l.scope?.model?.display_name;
+	return model ? `${model} this week` : l.kind.replace(/_/g, " ");
+}
+
+function resetLabel(iso: string | null): string {
+	if (!iso) return "";
+	const d = new Date(iso);
+	const time = d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+	return d.getTime() - Date.now() < 86_400_000
+		? `Resets at ${time}`
+		: `Resets ${d.toLocaleDateString([], { weekday: "long" })} ${time}`;
+}
+
 /**
  * Four squares of a palette's actual colors: backdrop, border, body text,
  * accent.
@@ -119,6 +143,23 @@ export function Settings({
 	const dirty = draft !== null && draft !== personality?.content;
 
 	const [loadError, setLoadError] = useState<string | null>(null);
+
+	const [limits, setLimits] = useState<UsageLimit[] | null>(null);
+	const [usageError, setUsageError] = useState<string | null>(null);
+	useEffect(() => {
+		if (!open) return;
+		void (async () => {
+			const r = await fetch("/api/usage").catch(() => null);
+			const body = (await r?.json().catch(() => null)) as {
+				limits?: UsageLimit[];
+				error?: string;
+			} | null;
+			if (r?.ok && Array.isArray(body?.limits)) {
+				setLimits(body.limits);
+				setUsageError(null);
+			} else setUsageError(body?.error ?? "could not load usage");
+		})();
+	}, [open]);
 
 	useEffect(() => {
 		if (!open || dirty) return;
@@ -231,6 +272,47 @@ export function Settings({
 			</div>
 
 			<div className="p-3">
+				<fieldset className="m-0 mb-4 border-0 p-0">
+					<legend className="mb-2 text-[10px] tracking-wide text-neutral-500 uppercase">
+						Usage remaining
+					</legend>
+					{usageError ? (
+						<p className="px-2 text-xs text-red-400">{usageError}</p>
+					) : !limits ? (
+						<p className="px-2 text-xs text-neutral-500">loading…</p>
+					) : (
+						<div className="flex flex-col gap-3 px-2">
+							{limits.map((l) => {
+								const left = Math.max(0, Math.min(100, 100 - l.percent));
+								return (
+									<div key={`${l.kind}-${limitLabel(l)}`} className="text-sm">
+										<div className="flex items-baseline justify-between gap-2">
+											<span>{limitLabel(l)}</span>
+											<span className="text-xs text-neutral-300">{left}% left</span>
+										</div>
+										<div
+											role="meter"
+											aria-label={`${limitLabel(l)} remaining`}
+											aria-valuenow={left}
+											aria-valuemin={0}
+											aria-valuemax={100}
+											className="mt-1 h-1.5 overflow-hidden rounded-full bg-neutral-800"
+										>
+											<div
+												className="h-full rounded-full bg-green-400"
+												style={{ width: `${left}%` }}
+											/>
+										</div>
+										<span className="mt-0.5 block text-xs text-neutral-500">
+											{resetLabel(l.resets_at)}
+										</span>
+									</div>
+								);
+							})}
+						</div>
+					)}
+				</fieldset>
+
 				{/*
 				  Real radios, visually hidden: the group gets arrow-key
 				  navigation, roving focus and the right screen reader
