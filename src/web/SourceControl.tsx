@@ -146,6 +146,7 @@ export function SourceControl({
 	revision,
 	onClose,
 	onOpenDiff,
+	onChanges,
 }: {
 	cwd: string;
 	/** Changes when something may have touched the tree; re-reads both lists. */
@@ -153,6 +154,8 @@ export function SourceControl({
 	onClose: () => void;
 	/** Show this file's diff in a tab. `ref` is "" for the working tree. */
 	onOpenDiff: (ref: string, path: string) => void;
+	/** Uncommitted file count after each re-read, so the rail badge follows a sync. */
+	onChanges: (count: number) => void;
 }) {
 	const [state, setState] = useState<GitState | null>(null);
 	const [files, setFiles] = useState<Change[] | null>(null);
@@ -173,13 +176,14 @@ export function SourceControl({
 			]);
 			setState(git);
 			setFiles(changes.files);
+			onChanges(changes.files.length);
 			setCommits(log.commits);
 			setError(null);
 		} catch (err) {
 			setFiles([]);
 			setError(err instanceof Error ? err.message : String(err));
 		}
-	}, [cwd]);
+	}, [cwd, onChanges]);
 
 	useEffect(() => {
 		void reload();

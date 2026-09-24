@@ -367,8 +367,6 @@ function ToolGroup({ blocks, streaming }: { blocks: PiBlock[]; streaming?: boole
 	const calls = blocks.filter((b): b is ToolBlock => b.kind === "tool");
 	const running = streaming === true || calls.some((c) => c.result === undefined);
 	const failed = calls.filter((c) => c.isError).length;
-	const spinner = useSpinner(running);
-	const tone = running ? "text-amber-400" : "text-neutral-500";
 	// A fold with no calls is reasoning — say so, rather than counting "steps"
 	// at a reader who cannot tell what a step was.
 	const thoughts = blocks.filter((b) => b.kind === "thinking").length;
@@ -388,13 +386,14 @@ function ToolGroup({ blocks, streaming }: { blocks: PiBlock[]; streaming?: boole
 		<div className="chat-wide my-1">
 			<button
 				onClick={() => setOpen((o) => !o)}
-				className={`flex items-center gap-1 font-mono text-sm ${tone} hover:text-neutral-300`}
+				className="flex items-center gap-1 font-mono text-sm text-neutral-500 hover:text-neutral-300"
 			>
 				{open ? <CaretDown size={11} /> : <CaretRight size={11} />}
 				{label}
-				{running ? (
-					<span>{spinner}</span>
-				) : failed > 0 ? (
+				{/* No spinner while running: TurnStatus below already animates, and a
+				    second one on a line that joins and splits between messages
+				    flickered. */}
+				{running ? null : failed > 0 ? (
 					<span className="flex items-center gap-1 text-red-400">
 						<X size={11} weight="bold" />
 						{failed} failed
@@ -1212,10 +1211,13 @@ export function Chat({
 		 * is part of what it said — but nothing else is peeled: a thought after
 		 * the last paragraph means the turn did not end on prose.
 		 */
-		const flushTurn = () => {
+		const flushTurn = (live = false) => {
 			if (turn.length === 0) return;
 			let cut = turn.length;
-			while (cut > 0 && (turn[cut - 1].kind === "text" || turn[cut - 1].kind === "image"))
+			// Mid-turn, prose is never the answer yet: splitting it out made each
+			// paragraph pop out of the fold and back in when the next call came.
+			// Only the running turn: finished turns keep their answers on screen.
+			while (!live && cut > 0 && (turn[cut - 1].kind === "text" || turn[cut - 1].kind === "image"))
 				cut--;
 			const work = turn.slice(0, cut);
 			const answer = turn.slice(cut);
@@ -1302,9 +1304,9 @@ export function Chat({
 			flushRun();
 		}
 		flushGroup();
-		flushTurn();
+		flushTurn(busy);
 		return out;
-	}, [snapshot?.messages, showThinking, toolMode]);
+	}, [snapshot?.messages, showThinking, toolMode, busy]);
 
 	if (!snapshot) {
 		return (
@@ -1445,6 +1447,10 @@ export function Chat({
 					...(showThinking && partial.thinking
 						? [{ kind: "thinking", text: partial.thinking } as PiBlock]
 						: []),
+					// "Answer only" folds live prose too; it leaves the fold once the turn ends.
+					...(toolMode === "answer" && partial.text
+						? [{ kind: "text", text: partial.text } as PiBlock]
+						: []),
 					...partial.tools.map((t) => ({ kind: "tool", ...t }) as PiBlock),
 				]
 			: [];
@@ -1461,7 +1467,8 @@ export function Chat({
 	 * streaming one continues. Rendered apart they read as two groups; so the
 	 * live fold joins the settled one when nothing came between them.
 	 */
-	const joinFold = busy && folds && partialFold.length > 0 && lastRow?.kind === "tools";
+	const joinFold =
+		busy && folds && lastRow?.kind === "tools" && (partialFold.length > 0 || !hasPartial);
 
 	return (
 		/*
@@ -1558,7 +1565,9 @@ export function Chat({
 							{/* optimizeForStreaming suppresses incomplete inline syntax (an
 						    unclosed ** or a half-typed fence) instead of rendering the raw
 						    markers until the closing delimiter arrives next delta. */}
-							{partial.text && <MarkdownText text={partial.text} streaming />}
+							{partial.text && toolMode !== "answer" && (
+								<MarkdownText text={partial.text} streaming />
+							)}
 						</TranscriptRow>
 					)}
 

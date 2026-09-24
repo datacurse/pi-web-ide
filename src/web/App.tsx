@@ -1848,6 +1848,25 @@ export default function App() {
 	 * are written on every keystroke, so taking it is cheap whenever they like.
 	 */
 	const [restarted, setRestarted] = useState(false);
+
+	/**
+	 * Uncommitted files, for the rail badge. From git, like the panel: the
+	 * session's hunks stay "pending" after a commit, so counting them left the
+	 * badge lit on a clean tree until a new session.
+	 */
+	const [uncommitted, setUncommitted] = useState(0);
+	const gitCwd = snapshot?.cwd || project;
+	useEffect(() => {
+		if (!gitCwd) return setUncommitted(0);
+		let live = true;
+		fetch(`/api/git/changes?cwd=${encodeURIComponent(gitCwd)}`)
+			.then((r) => r.json() as Promise<{ files?: unknown[] }>)
+			.then((b) => live && setUncommitted(b.files?.length ?? 0))
+			.catch(() => {});
+		return () => {
+			live = false;
+		};
+	}, [gitCwd, snapshot?.hunks]);
 	useEffect(() => {
 		let boot: string | undefined;
 		let live = true;
@@ -2180,7 +2199,7 @@ export default function App() {
 			<ActivityBar
 				panel={panel}
 				onSelect={selectPanel}
-				pendingHunks={snapshot?.hunks.filter((h) => h.state === "pending").length ?? 0}
+				uncommitted={uncommitted}
 				onSettings={() => setSettingsOpen(true)}
 				version={__APP_VERSION__}
 			/>
@@ -2242,6 +2261,7 @@ export default function App() {
 									revision={snapshot?.hunks}
 									onClose={() => showPanel(null)}
 									onOpenDiff={openDiff}
+									onChanges={setUncommitted}
 								/>
 							) : (
 								<PanelEmpty title="Source Control" onClose={() => showPanel(null)}>

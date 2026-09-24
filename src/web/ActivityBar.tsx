@@ -71,7 +71,7 @@ function RailButton({
 					>
 						{badge > 9 ? "9+" : badge}
 					</span>
-					<span className="sr-only">, {badge} changes to review</span>
+					<span className="sr-only">, {badge} uncommitted files</span>
 				</>
 			)}
 		</button>
@@ -81,7 +81,7 @@ function RailButton({
 export function ActivityBar({
 	panel,
 	onSelect,
-	pendingHunks,
+	uncommitted,
 	onSettings,
 	version,
 }: {
@@ -89,8 +89,8 @@ export function ActivityBar({
 	panel: Panel;
 	/** Show this panel — or close it, when it is already the one showing. */
 	onSelect: (panel: Panel) => void;
-	/** Hunks still awaiting a decision, for the badge. */
-	pendingHunks: number;
+	/** Uncommitted files, for the badge. */
+	uncommitted: number;
 	onSettings: () => void;
 	/** Full build string. Displayed short, but kept whole in the tooltip. */
 	version: string;
@@ -117,7 +117,7 @@ export function ActivityBar({
 						: "Changes, commits and the commit message"
 				}
 				active={panel === "review"}
-				badge={pendingHunks}
+				badge={uncommitted}
 				onClick={() => onSelect("review")}
 			>
 				<GitBranch size={20} />
