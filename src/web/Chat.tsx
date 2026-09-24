@@ -522,27 +522,46 @@ function ContextMeter({
 }
 
 /** Claude Code's glyph cycle, there and back. */
-const STAR_FRAMES = ["·", "✢", "✳", "✶", "✻", "✽", "✻", "✶", "✳", "✢"];
+// No ✳ (U+2733): it has emoji presentation and Windows draws it as a green
+// square. Claude Code swaps it for `*` on Windows for the same reason.
+const STAR_FRAMES = ["·", "✢", "*", "✶", "✻", "✽", "✻", "✶", "*", "✢"];
+/** Claude Code's spinner verbs. */
 const VERBS = [
-	"Pondering", "Mulling", "Figuring", "Noodling", "Brewing", "Tinkering",
-	"Percolating", "Cogitating", "Scheming", "Conjuring", "Musing", "Wrangling",
+	"Accomplishing", "Actioning", "Actualizing", "Baking", "Booping", "Brewing",
+	"Calculating", "Cerebrating", "Channelling", "Churning", "Clauding", "Coalescing",
+	"Cogitating", "Combobulating", "Computing", "Concocting", "Conjuring", "Considering",
+	"Contemplating", "Cooking", "Crafting", "Creating", "Crunching", "Deciphering",
+	"Deliberating", "Determining", "Discombobulating", "Divining", "Doing", "Effecting",
+	"Elucidating", "Enchanting", "Envisioning", "Finagling", "Flibbertigibbeting",
+	"Forging", "Forming", "Frolicking", "Generating", "Germinating", "Hatching",
+	"Herding", "Honking", "Hustling", "Ideating", "Imagining", "Incubating", "Inferring",
+	"Jiving", "Manifesting", "Marinating", "Meandering", "Moseying", "Mulling",
+	"Mustering", "Musing", "Noodling", "Percolating", "Perusing", "Philosophising",
+	"Pondering", "Pontificating", "Processing", "Puttering", "Puzzling", "Reticulating",
+	"Ruminating", "Scheming", "Schlepping", "Shimmying", "Shucking", "Simmering",
+	"Smooshing", "Spelunking", "Spinning", "Stewing", "Sussing", "Synthesizing",
+	"Thinking", "Tinkering", "Transmuting", "Unfurling", "Unravelling", "Vibing",
+	"Wandering", "Whirring", "Wibbling", "Wizarding", "Working", "Wrangling",
 ];
+const VERB_MS = 4000;
+const randomVerb = () => VERBS[Math.floor(Math.random() * VERBS.length)];
 
 /**
- * The live turn, as the last line of the transcript: a verb picked once per
- * turn and the elapsed time. Mounted only while busy, so mount IS turn start.
+ * The live turn, as the last line of the transcript: a verb that changes
+ * every few seconds and the elapsed time. Mounted only while busy, so mount IS turn start.
  * The folded tool line above it already names what is running.
  */
 function TurnStatus() {
 	const spinner = useSpinner(true, STAR_FRAMES, 120);
 	const [start] = useState(Date.now);
-	const [verb] = useState(() => VERBS[Math.floor(Math.random() * VERBS.length)]);
 	const [now, setNow] = useState(start);
 	useEffect(() => {
 		const id = setInterval(() => setNow(Date.now()), 1000);
 		return () => clearInterval(id);
 	}, []);
 	const secs = Math.floor((now - start) / 1000);
+	const slot = Math.floor((now - start) / VERB_MS);
+	const verb = useMemo(randomVerb, [slot]);
 	return (
 		<div className="chat-gutter py-3" role="status">
 			<div className="chat-measure flex items-center gap-2 text-sm text-neutral-500">
@@ -1470,6 +1489,16 @@ export function Chat({
 					}}
 					className="min-h-0 flex-1 overflow-y-auto pb-3"
 				>
+					{snapshot.messages.length === 0 && !hasPartial && !busy && !command && (
+						<div className="flex h-full flex-col items-center justify-center gap-2 text-center select-none">
+							<div className="text-5xl text-amber-400">π</div>
+							<div className="text-lg text-neutral-200">New session</div>
+							<div className="text-sm text-neutral-500">
+								in <span className="font-mono text-neutral-400">{snapshot.cwd.split(/[\\/]/).filter(Boolean).at(-1) ?? snapshot.cwd}</span>
+								{" · "}type <kbd className="font-mono text-neutral-400">/</kbd> for commands
+							</div>
+						</div>
+					)}
 					{rows.map((r, i) =>
 						r.kind === "tools" ? (
 							<TranscriptRow key={i} role="assistant" labelled={r.labelled}>

@@ -59,6 +59,14 @@ interface Parsed {
 	 * with its message count unchanged.
 	 */
 	lastMessage?: string;
+	/**
+	 * `message.timestamp` of the last `message` entry: when the message STARTED,
+	 * the same clock the live session reports. The entry's own timestamp is the
+	 * append time, which trails it by the whole streaming duration — comparing
+	 * the two made every reply longer than the margin look like a foreign write
+	 * and restarted the child on each tab switch.
+	 */
+	lastMessageMs?: number;
 	/** The session's display name, from the last `session_info` entry. */
 	title?: string;
 	firstMessage: string;
@@ -172,10 +180,7 @@ export async function sessionHeaderCwd(file: string): Promise<string | undefined
  * both meaning "no basis to claim it is ahead".
  */
 export async function lastMessageAt(file: string): Promise<number | undefined> {
-	const ts = (await readParsed(resolve(file)))?.lastMessage;
-	if (!ts) return undefined;
-	const ms = Date.parse(ts);
-	return Number.isNaN(ms) ? undefined : ms;
+	return (await readParsed(resolve(file)))?.lastMessageMs;
 }
 
 async function readParsed(file: string): Promise<Parsed | undefined> {
@@ -250,6 +255,8 @@ async function parse(
 					// Last one wins: the entries are in file order, so this ends
 					// up as the newest real conversation activity.
 					if (typeof entry.timestamp === "string") out.lastMessage = entry.timestamp;
+					const ms = (entry.message as { timestamp?: unknown } | undefined)?.timestamp;
+					out.lastMessageMs = typeof ms === "number" ? ms : undefined;
 					break;
 				}
 				default:

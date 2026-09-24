@@ -35,7 +35,7 @@ function sessionFile(at: number): string {
 		`${JSON.stringify({ type: "session", id: "s", cwd: "/tmp" })}\n${JSON.stringify({
 			type: "message",
 			timestamp: new Date(at).toISOString(),
-			message: { role: "assistant", content: [{ type: "text", text: "hi" }] },
+			message: { role: "assistant", content: [{ type: "text", text: "hi" }], timestamp: at },
 		})}\n`,
 	);
 	return file;
