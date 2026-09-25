@@ -13,7 +13,7 @@ import {
 	toEvents,
 	toPiMessage,
 } from "./agent.js";
-import type { PiEvent } from "../shared/types.js";
+import { ASK_ONLY, type PiEvent } from "../shared/types.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -294,6 +294,11 @@ const withImage = toPiMessage({
 assert.deepEqual(withImage.blocks, [
 	{ kind: "image", data: "AAA", mimeType: "image/png" },
 	{ kind: "text", text: "what is this?" },
+]);
+
+// The "Ask only" suffix is for the model, not the transcript.
+assert.deepEqual(toPiMessage({ role: "user", content: `why?${ASK_ONLY}`, timestamp: 10 }).blocks, [
+	{ kind: "text", text: "why?" },
 ]);
 
 // ---------------------------------------------------------------------------

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { X } from "@phosphor-icons/react";
+import { ASK_ONLY } from "../shared/types.js";
 import type {
 	AskAnswer,
 	PiAsk,
@@ -950,7 +951,7 @@ function useSession({
 	}, [command]);
 
 	const send = useCallback(
-		async (text: string, images?: PiImage[]) => {
+		async (text: string, images?: PiImage[], askOnly = false) => {
 			if (!snapshot) return;
 			setBusy(true);
 			// A local command appends no message: this row IS the record that it
@@ -976,7 +977,8 @@ function useSession({
 			const r = await fetch(`/api/sessions/${snapshot.id}/prompt`, {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ text, images }),
+				// The suffix goes to pi only; toPiMessage strips it from the transcript.
+				body: JSON.stringify({ text: askOnly && !trimmed.startsWith("/") ? text + ASK_ONLY : text, images }),
 			});
 
 			// A rejected prompt (unsupported type, too large, 413) never reaches the

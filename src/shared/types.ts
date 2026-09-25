@@ -21,6 +21,13 @@ import type { Hunk } from "./hunks.js";
 export const PRODUCT = "pi-web-ide";
 
 /**
+ * Appended to a prompt sent with the composer's "Ask only" toggle on. The
+ * server strips it again in toPiMessage, so the transcript never shows it.
+ */
+export const ASK_ONLY =
+	"\n\n<system-reminder>\nThis is a question only. Answer it in prose. Do not write or edit code or files, and do not run commands that change anything. Reading files to answer is fine.\n</system-reminder>";
+
+/**
  * A base64 image. `data` is RAW base64 with no `data:` URL prefix, because
  * that is exactly what pi's RPC `images` field takes — stripping the prefix at
  * the browser edge means there is precisely one representation on the wire and

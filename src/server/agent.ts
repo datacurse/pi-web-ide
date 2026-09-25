@@ -44,6 +44,7 @@ import { fileURLToPath } from "node:url";
 import { personalityPath, readRemind } from "./personality.js";
 import { repairSessionFile } from "./repair.js";
 import { sessionHeaderCwd } from "./sessions.js";
+import { ASK_ONLY } from "../shared/types.js";
 import type {
 	AskAnswer,
 	PiAsk,
@@ -187,11 +188,12 @@ export function toPiMessage(m: AgentMessage): PiMessage {
 		// where the screenshot should be, and the transcript silently loses the
 		// thing the question was about.
 		const blocks: PiBlock[] = [];
+		const clean = (t: string) => (t.endsWith(ASK_ONLY) ? t.slice(0, -ASK_ONLY.length) : t);
 		if (typeof m.content === "string") {
-			blocks.push({ kind: "text", text: m.content });
+			blocks.push({ kind: "text", text: clean(m.content) });
 		} else {
 			for (const c of records(m.content)) {
-				if (c.type === "text") blocks.push({ kind: "text", text: String(c.text ?? "") });
+				if (c.type === "text") blocks.push({ kind: "text", text: clean(String(c.text ?? "")) });
 				else if (c.type === "image")
 					blocks.push({
 						kind: "image",

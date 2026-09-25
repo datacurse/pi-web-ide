@@ -14,6 +14,7 @@ import {
 	CaretRight,
 	Check,
 	Plus,
+	QuestionMark,
 	Square,
 	X,
 } from "@phosphor-icons/react";
@@ -1013,7 +1014,7 @@ export function Chat({
 	 * it on screen; see App.tsx for its lifetime.
 	 */
 	command?: { text: string; running: boolean } | null;
-	onSend: (text: string, images?: PiImage[]) => void;
+	onSend: (text: string, images?: PiImage[], askOnly?: boolean) => void;
 	onAnswerAsk: (askId: string, answer: AskAnswer) => void;
 	onAbort: () => void;
 	onModelChange: (model: string) => void;
@@ -1026,6 +1027,8 @@ export function Chat({
 	onRestart: () => void;
 }) {
 	const [text, setText] = useState("");
+	// Sticky until switched off: a run of questions is the usual case.
+	const [askOnly, setAskOnly] = useState(false);
 	const [images, setImages] = useState<PiImage[]>([]);
 	const [attachError, setAttachError] = useState<string | null>(null);
 	/** The expanded attachment, as a data URL, or null. See Lightbox. */
@@ -1408,7 +1411,7 @@ export function Chat({
 		const t = text.trim();
 		// An image on its own is a valid prompt; only block when nothing is staged.
 		if (!t && images.length === 0) return;
-		onSend(t, images.length > 0 ? images : undefined);
+		onSend(t, images.length > 0 ? images : undefined, askOnly);
 		setText("");
 		setImages([]);
 		staged.current = [];
@@ -1831,6 +1834,15 @@ export function Chat({
 											<Square size={11} weight="fill" />
 										</IconButton>
 									)}
+									<IconButton
+										onClick={() => setAskOnly((a) => !a)}
+										label={askOnly ? "Ask only: on (no code changes)" : "Ask only: off"}
+										aria-pressed={askOnly}
+										variant="outline"
+										round
+									>
+										<QuestionMark size={14} className={askOnly ? "text-amber-400" : ""} />
+									</IconButton>
 									<IconButton
 										onClick={submit}
 										label="Send"

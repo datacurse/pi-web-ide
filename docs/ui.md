@@ -70,6 +70,12 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
 - Primary text `neutral-100`/`200`; secondary `neutral-300`/`400`; hints `neutral-500`; disabled `neutral-600`.
 - Accent and primary action: `amber-*`. Errors: `red-*`. Success: `green-*`.
 
+## Composer
+
+- The `?` button (directly left of Send, so Stop never shifts it) toggles "Ask only": an outline round
+  `IconButton` with a 14px `QuestionMark`, matching the attach `+`;
+  `aria-pressed`, amber icon when on. It stays on until switched off.
+
 ## Tabs
 
 - Session (AI) tabs lead with an amber bold `π` (the greeting-screen mark); file tabs use `FileGlyph`, diff tabs `GitDiff`.
