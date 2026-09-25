@@ -22,6 +22,16 @@ fits none of the existing ones, and record it here.
 | `text-code-inline`  | 0.875em | Inline code and math fallback inside prose.     |
 
 - Never go below 11px.
+- Pick by role, not by how much room there is:
+  - The main line of any row or tab is `text-ui`: Explorer and Source Control
+    files, session list titles, session and terminal tabs, directory-picker
+    rows, package names.
+  - The line under it, hints, paths, timestamps in a subline, status text:
+    `text-meta`.
+  - `text-caption` only for badges and tags (`pinned`, `off`, `added`), counts,
+    compact right-aligned stamps (`2h`), the version string, code-block
+    language labels and uppercase section labels. Never a sentence or a path.
+- A button is never below `text-meta`: use `Button size="sm"`.
 - Hierarchy comes from color and weight first, size second. Section labels are
   `text-caption uppercase tracking-wide text-neutral-500`.
 - Arbitrary sizes (`text-[13px]`) are banned.
@@ -71,27 +81,38 @@ New UI uses these; convert raw markup when you touch it. Tune styles in
 
 | Primitive       | Props                                                       | Use |
 | --------------- | ----------------------------------------------------------- | --- |
-| `Button`        | `variant`: primary / secondary (default) / subtle / ghost; `size`: sm (12px) / md (13px) | Text buttons. One `primary` per dialog or panel. Cancel is `secondary`. |
+| `Button`        | `variant`: primary / secondary (default) / subtle / ghost / warning (inside amber notices); `size`: sm (12px) / md (13px) | Text buttons. One `primary` per dialog or panel. Cancel is `secondary`. |
 | `IconButton`    | `label` (required; aria-label + tooltip), `variant`: ghost / outline / solid, `size`: sm 24px / md 28px, `round` | Icon-only buttons. `round` only in the composer toolbar. |
 | `MenuItem`      | button props                                                | Rows in dropdown and context menus. |
 | `Section`       | `title`                                                     | Settings group (fieldset + uppercase legend). |
 | `OptionRow`     | `selected`, `disabled`                                      | Clickable row wrapping a radio or checkbox. |
 | `sectionLabel`  | class string                                                | Uppercase group heading on any element. |
 | `inputClass.sm/md` | class string                                             | Inputs and textareas (a string so refs pass through). |
+| `ListRow`       | `selected`, `muted`, button props                           | Tree and list rows (Explorer, Source Control, directory picker). 22px; indent with `style.paddingLeft`. |
 | `PanelHeader`   | `title?`, `onClose?`, `closeLabel?`, children               | Top row of a side panel or editor tab. Children go after the title. |
 
 - Body text defaults to `text-ui`; set a size only when it differs.
 - A state color on an icon goes on the icon (`<Star className="text-amber-400">`), not on the button.
 - `check-ui.sh` also fails on hand-rolled copies of `Button` primary/subtle,
   `inputClass` and `sectionLabel`. Add a rule there when a new primitive lands.
+- Every raw `<button>`, `<input>`, `<textarea>` and `<select>` outside `ui.tsx`
+  fails `scripts/check-raw.pl` unless it uses `inputClass` or carries
+  `data-custom="reason"`. Checkbox, radio, file and hidden inputs are exempt.
+  `data-custom` is for one-off controls with no primitive yet; when the same
+  reason appears 3+ times, extract a primitive.
+- Current `data-custom` reasons: `tab` (session and terminal tabs), `tab close`,
+  `composer pill` (model selects, git split button), `composer`, `choice card`
+  (chat question options, package search hits), `session card`, `transcript
+  disclosure`, `context meter`, `image thumbnail`, `thumbnail remove badge`,
+  `pinned-folder chip`, `activity bar item`.
 - xterm reads `--text-body` at mount (Terminal.tsx); it cannot take a class.
 - Buttons default to `type="button"`; pass `type="submit"` explicitly.
 
 ## Open questions
 
-- Not yet converted: Review/DiffView hunk actions (duplicated between the
-  two files), Terminal tab strip, DirectoryPicker breadcrumbs,
-  SourceControl group headers, Packages tab buttons.
+- `Tab` primitive: session and terminal tabs look different today; unify them.
+- `ChoiceCard`: two uses (chat questions, package search) — one more and extract.
+- Review and DiffView duplicate their hunk-action row; merge into one component.
 - Dialog headers (Settings, DirectoryPicker, Packages add) use `text-title`
   and are not `PanelHeader`. Candidate: `Dialog`.
 - Candidates once they repeat: `Badge`, segmented tabs (Packages).

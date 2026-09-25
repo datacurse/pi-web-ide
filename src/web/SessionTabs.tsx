@@ -386,6 +386,7 @@ export function SessionTabs({
 								/>
 							)}
 							<button
+								data-custom="tab"
 								ref={(el) => {
 									buttons.current[i] = el;
 								}}
@@ -399,7 +400,7 @@ export function SessionTabs({
 								title={isDiff ? diffTitle(file) : isFile ? tabPath(file) : label}
 								onClick={() => onSelect(file)}
 								onKeyDown={(e) => moveFocus(e, i)}
-								className={`flex h-8 max-w-52 items-center gap-1.5 rounded-t-sm border-t-2 pr-7 pl-2.5 text-meta transition-colors duration-150 ease-out focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 motion-reduce:transition-none ${
+								className={`flex h-8 max-w-52 items-center gap-1.5 rounded-t-sm border-t-2 pr-7 pl-2.5 text-ui transition-colors duration-150 ease-out focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 motion-reduce:transition-none ${
 									isActive
 										? "border-amber-400 bg-neutral-800 font-semibold text-neutral-50"
 										: "border-transparent text-neutral-300 hover:bg-neutral-900 hover:text-neutral-50"
@@ -439,6 +440,7 @@ export function SessionTabs({
 								{info?.isStreaming && <span className="sr-only">, working</span>}
 							</button>
 							<button
+								data-custom="tab close"
 								onClick={() => onClose(file)}
 								aria-label={`Close tab ${label}`}
 								title={

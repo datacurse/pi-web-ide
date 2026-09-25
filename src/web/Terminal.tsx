@@ -14,6 +14,7 @@ import {
 	toggleDirection,
 	type TermLayout,
 } from "./termLayout.js";
+import { Button, IconButton } from "./ui.js";
 
 /**
  * xterm.js, loaded on demand.
@@ -433,11 +434,12 @@ export function TerminalPane({
 				<div className="flex min-w-0 flex-1 items-stretch gap-0.5 overflow-x-auto">
 					{layout.tabs.map((t, i) => (
 						<button
+							data-custom="tab"
 							key={i}
 							onClick={() => onLayout(selectTab(layout, i))}
 							aria-current={i === layout.active}
 							title={`Terminal tab ${i + 1}${t.terminals.length > 1 ? ` (${t.terminals.length} splits)` : ""}`}
-							className={`shrink-0 rounded-t-sm px-2 py-1 font-mono text-meta transition-colors duration-150 ease-out hover:text-neutral-100 motion-reduce:transition-none ${
+							className={`shrink-0 rounded-t-sm px-2 py-1 font-mono text-ui transition-colors duration-150 ease-out hover:text-neutral-100 motion-reduce:transition-none ${
 								i === layout.active
 									? "bg-neutral-800 text-amber-400"
 									: "text-neutral-400 hover:bg-neutral-900"
@@ -449,47 +451,50 @@ export function TerminalPane({
 							)}
 						</button>
 					))}
-					<button
+					<IconButton
+						size="sm"
+						className="self-center"
 						onClick={() => void spawn(addTab)}
-						aria-label="New terminal tab"
-						title="New terminal tab"
-						className="flex shrink-0 items-center rounded-sm px-1.5 text-neutral-400 hover:bg-neutral-800 hover:text-neutral-100"
+						label="New terminal tab"
 					>
 						<Plus size={13} />
-					</button>
+					</IconButton>
 				</div>
 
-				<button
+				<IconButton
+					size="sm"
+					className="self-center"
 					onClick={() => void spawn(splitActive)}
-					aria-label="Split terminal"
+					label="Split terminal"
 					title="Split: another shell beside this one"
-					className="flex shrink-0 items-center self-center rounded-sm px-1.5 py-0.5 text-neutral-400 hover:bg-neutral-800 hover:text-neutral-100"
 				>
 					{/* The icon shows the direction the new pane will appear in. */}
 					{tab?.direction === "column" ? <Rows size={14} /> : <Columns size={14} />}
-				</button>
+				</IconButton>
 				{tab && tab.terminals.length > 1 && (
-					<button
+					<IconButton
+						size="sm"
+						className="self-center"
 						onClick={() => onLayout(toggleDirection(layout))}
-						aria-label="Change split direction"
+						label="Change split direction"
 						title={
 							tab.direction === "row"
 								? "Stack the splits vertically"
 								: "Put the splits side by side"
 						}
-						className="flex shrink-0 items-center self-center rounded-sm px-1.5 py-0.5 text-neutral-400 hover:bg-neutral-800 hover:text-neutral-100"
 					>
 						{tab.direction === "row" ? <Rows size={14} /> : <Columns size={14} />}
-					</button>
+					</IconButton>
 				)}
-				<button
+				<IconButton
+					size="sm"
+					className="self-center"
 					onClick={onClose}
-					aria-label="Hide terminal"
+					label="Hide terminal"
 					title="Hide (every shell keeps running)"
-					className="shrink-0 self-center rounded-sm px-1.5 py-0.5 text-ui leading-none text-neutral-400 hover:bg-neutral-800 hover:text-neutral-100"
 				>
 					<X size={13} />
-				</button>
+				</IconButton>
 			</div>
 
 			{error && (
@@ -501,12 +506,9 @@ export function TerminalPane({
 			{!tab ? (
 				<div className="flex flex-1 items-center justify-center p-4 text-center text-meta text-neutral-500">
 					No shell yet.
-					<button
-						onClick={() => void spawn(addTab)}
-						className="ml-1 text-amber-400 underline hover:text-amber-300"
-					>
+					<Button variant="subtle" size="sm" className="ml-2" onClick={() => void spawn(addTab)}>
 						Start one
-					</button>
+					</Button>
 				</div>
 			) : (
 				<div
@@ -547,14 +549,15 @@ export function TerminalPane({
 								{/* On the pane, not in the strip: with four splits open
 								    a single close button in the header would be
 								    ambiguous about which shell it ends. */}
-								<button
+								<IconButton
+									size="sm"
+									className="absolute top-1 right-2 opacity-0 focus-visible:opacity-100 group-hover:opacity-100 [div:hover>&]:opacity-100"
 									onClick={() => closeTerm(id)}
-									aria-label="Close this shell"
+									label="Close this shell"
 									title="Close this shell (SIGHUP)"
-									className="absolute top-1 right-2 rounded-sm px-1 text-meta leading-none text-neutral-600 opacity-0 transition-opacity duration-150 ease-out hover:bg-neutral-800 hover:text-neutral-100 focus-visible:opacity-100 motion-reduce:transition-none group-hover:opacity-100 [div:hover>&]:opacity-100"
 								>
 									<X size={13} />
-								</button>
+								</IconButton>
 							</div>
 						</Fragment>
 					))}

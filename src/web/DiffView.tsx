@@ -22,7 +22,7 @@ import type { EditorView } from "@codemirror/view";
 import type { Hunk, HunkState } from "../shared/hunks.js";
 import { fitHunk } from "../shared/hunks.js";
 import { darkPlus, languageFor, loadCodeMirror } from "./codemirror.js";
-import { PanelHeader } from "./ui.js";
+import { Button, PanelHeader } from "./ui.js";
 
 async function getJson<T>(url: string): Promise<T> {
 	const r = await fetch(url);
@@ -140,36 +140,43 @@ function HunkRow({
 			<div className="ml-auto flex items-center gap-1">
 				{hunk.state === "pending" ? (
 					<>
-						<button
+						<Button
+							variant="ghost"
+							size="sm"
 							disabled={busy}
 							onClick={() => onDecide("accepted")}
-							className="flex items-center gap-1 rounded-sm px-2 py-0.5 text-meta text-green-400 hover:bg-neutral-800 disabled:opacity-50"
 						>
-							<Check size={12} weight="bold" />
-							Keep
-						</button>
-						<button
+							<span className="flex items-center gap-1 text-green-400">
+								<Check size={12} weight="bold" />
+								Keep
+							</span>
+						</Button>
+						<Button
+							variant="ghost"
+							size="sm"
 							// A hunk whose text is gone cannot be reverted, and
 							// offering the button would promise a write the server is
 							// right to refuse.
 							disabled={busy || gone}
 							onClick={() => onDecide("rejected")}
-							className="flex items-center gap-1 rounded-sm px-2 py-0.5 text-meta text-red-400 hover:bg-neutral-800 disabled:opacity-50"
 						>
-							<ArrowCounterClockwise size={12} weight="bold" />
-							Revert
-						</button>
+							<span className="flex items-center gap-1 text-red-400">
+								<ArrowCounterClockwise size={12} weight="bold" />
+								Revert
+							</span>
+						</Button>
 					</>
 				) : (
-					<button
+					<Button
+						variant="ghost"
+						size="sm"
 						disabled={busy}
 						onClick={() => onDecide("pending")}
-						className={`rounded-sm px-2 py-0.5 text-meta hover:bg-neutral-800 disabled:opacity-50 ${
-							hunk.state === "accepted" ? "text-green-400" : "text-neutral-500"
-						}`}
 					>
-						{hunk.state === "accepted" ? "Kept" : "Reverted"} · undo
-					</button>
+						<span className={hunk.state === "accepted" ? "text-green-400" : "text-neutral-500"}>
+							{hunk.state === "accepted" ? "Kept" : "Reverted"} · undo
+						</span>
+					</Button>
 				)}
 			</div>
 		</div>

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Star } from "@phosphor-icons/react";
+import { IconButton } from "./ui.js";
 
 /**
  * Header controls for the active session's model: one select for the
@@ -86,6 +87,7 @@ export function ModelSelector({
 	return (
 		<div className="relative flex items-center gap-1">
 			<select
+				data-custom="composer pill"
 				value={provider}
 				disabled={disabled}
 				title={title}
@@ -109,6 +111,7 @@ export function ModelSelector({
 			</select>
 
 			<select
+				data-custom="composer pill"
 				value={model ?? ""}
 				disabled={disabled || forProvider.length === 0}
 				title={title}
@@ -128,6 +131,7 @@ export function ModelSelector({
 
 			{thinkingLevels.length > 0 && (
 				<select
+					data-custom="composer pill"
 					value={thinkingLevel ?? ""}
 					title="Reasoning effort — applies from the next turn"
 					onChange={(e) => onThinkingChange(e.target.value)}
@@ -147,19 +151,19 @@ export function ModelSelector({
 				</select>
 			)}
 
-			<button
-				type="button"
+			<IconButton
+				variant="outline"
+				round
 				disabled={!model || savedDefault}
 				onClick={saveAsDefault}
-				title={savedDefault ? "Saved as startup default" : "Save this model as the startup default"}
-				className={`flex size-7 items-center justify-center rounded-full border border-neutral-800 ${
-					savedDefault
-						? "text-yellow-500"
-						: "text-neutral-500 hover:bg-neutral-900 hover:text-neutral-300"
-				}`}
+				label={savedDefault ? "Saved as startup default" : "Save this model as the startup default"}
 			>
-				<Star size={13} weight={savedDefault ? "fill" : "regular"} />
-			</button>
+				<Star
+					size={13}
+					weight={savedDefault ? "fill" : "regular"}
+					className={savedDefault ? "text-yellow-500" : undefined}
+				/>
+			</IconButton>
 
 			{error && (
 				<div className="absolute right-0 top-full mt-1 w-80 rounded-sm border border-red-900 bg-red-950/80 px-2 py-1 text-meta text-red-300">

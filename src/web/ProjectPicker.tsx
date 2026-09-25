@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { FolderPlus, X } from "@phosphor-icons/react";
 import { DirectoryPicker } from "./DirectoryPicker.js";
-import { Button } from "./ui.js";
+import { Button, inputClass } from "./ui.js";
 
 /**
  * The project list this pwi reports: every directory, plus the cwd it was
@@ -74,7 +74,7 @@ export function ProjectPicker({
 				onChange={(e) => onProject(e.target.value)}
 				title={project}
 				aria-label="Project"
-				className="min-w-0 flex-1 truncate rounded-sm bg-neutral-900 px-1.5 py-1 text-meta text-neutral-300 outline-none"
+				className={`min-w-0 flex-1 truncate ${inputClass.sm}`}
 			>
 				{options.map((p) => (
 					<option key={p} value={p}>

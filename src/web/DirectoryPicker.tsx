@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Star, X } from "@phosphor-icons/react";
 import type { PiwDirListing } from "../shared/types.js";
-import { Button, IconButton, inputClass } from "./ui.js";
+import { Button, IconButton, ListRow, inputClass } from "./ui.js";
 
 /**
  * The project directory picker: a folder explorer over the SERVER's
@@ -289,12 +289,9 @@ export function DirectoryPicker({
 						{/* From the second real segment on: the root crumb IS the
 						    separator, so `i > 0` would print "/ / home". */}
 						{i > 1 && <span className="text-neutral-600">/</span>}
-						<button
-							onClick={() => void go(c.path)}
-							className="rounded-sm px-1 py-0.5 text-neutral-400 transition-colors duration-150 ease-out hover:bg-neutral-800 hover:text-neutral-100 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 motion-reduce:transition-none"
-						>
+						<Button variant="ghost" size="sm" onClick={() => void go(c.path)}>
 							{c.label}
-						</button>
+						</Button>
 					</span>
 				))}
 			</div>
@@ -313,6 +310,7 @@ export function DirectoryPicker({
 							className="group flex items-center rounded-sm bg-neutral-900 text-meta"
 						>
 							<button
+								data-custom="pinned-folder chip"
 								onClick={() => void go(path)}
 								title={path}
 								className={`max-w-40 truncate rounded-l-sm px-1.5 py-0.5 transition-colors duration-150 ease-out hover:bg-neutral-800 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 motion-reduce:transition-none ${
@@ -322,6 +320,7 @@ export function DirectoryPicker({
 								{path.split("/").filter(Boolean).pop() || path}
 							</button>
 							<button
+								data-custom="pinned-folder chip"
 								onClick={() => void togglePin(path, true)}
 								aria-label={`Unpin ${path}`}
 								title="Unpin"
@@ -345,12 +344,7 @@ export function DirectoryPicker({
 					</p>
 				)}
 				{entries.map((e) => (
-					<button
-						key={e.path}
-						onClick={() => void go(e.path)}
-						title={e.path}
-						className="flex w-full items-center gap-2 border-b border-neutral-900 px-3 py-1.5 text-left text-meta transition-colors duration-150 ease-out hover:bg-neutral-900 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 motion-reduce:transition-none"
-					>
+					<ListRow key={e.path} onClick={() => void go(e.path)} title={e.path} className="gap-2">
 						{/* A triangle, not a folder pictograph: U+1F5C1 is absent from
 						    the fonts this chrome actually gets and renders as tofu. It
 						    reads as "opens into", which is what clicking a row does. */}
@@ -378,7 +372,7 @@ export function DirectoryPicker({
 						{projects.includes(e.path) && (
 							<span className="ml-auto shrink-0 text-caption text-neutral-500">added</span>
 						)}
-					</button>
+					</ListRow>
 				))}
 			</div>
 
@@ -393,7 +387,7 @@ export function DirectoryPicker({
 				>
 					{already ? "Already added" : "Add this folder"}
 				</Button>
-				<span className="min-w-0 flex-1 truncate font-mono text-caption text-neutral-500">
+				<span className="min-w-0 flex-1 truncate font-mono text-meta text-neutral-500">
 					{error ? <span className="text-red-400">{error}</span> : current}
 				</span>
 			</div>

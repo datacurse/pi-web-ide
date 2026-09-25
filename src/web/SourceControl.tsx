@@ -40,7 +40,7 @@ import {
 	useGitState,
 } from "./GitActions.js";
 import { readGitAutoName, writeGitAutoName } from "./prefs.js";
-import { Button, PanelHeader, inputClass } from "./ui.js";
+import { Button, IconButton, ListRow, PanelHeader, inputClass, sectionLabel } from "./ui.js";
 
 async function getJson<T>(url: string): Promise<T> {
 	const r = await fetch(url);
@@ -112,11 +112,10 @@ function FileRow({
 	const name = short.split("/").pop() ?? short;
 	const dir = short.slice(0, short.length - name.length).replace(/\/$/, "");
 	return (
-		<button
+		<ListRow
 			onClick={onOpen}
 			title={`${short} — open diff`}
 			style={{ paddingLeft: `${0.75 + depth}rem` }}
-			className="flex w-full items-center gap-1.5 py-1 pr-3 text-left text-meta text-neutral-300 hover:bg-neutral-800/70"
 		>
 			<FileGlyph name={name} size={13} />
 			<span className="truncate">{name}</span>
@@ -126,7 +125,7 @@ function FileRow({
 			<span className="ml-auto flex shrink-0 items-center pl-1">
 				<StatusMark status={change.status} />
 			</span>
-		</button>
+		</ListRow>
 	);
 }
 
@@ -305,15 +304,14 @@ export function SourceControl({
 						}}
 						className={`min-w-0 flex-1 resize-none ${inputClass.sm}`}
 					/>
-					<button
+					<IconButton
 						onClick={() => void requestName()}
 						disabled={naming || running || !dirty}
+						label="Auto-name this commit"
 						title="Write the message with a model that reads the diff"
-						aria-label="Auto-name this commit"
-						className="shrink-0 rounded-sm p-1.5 text-neutral-400 hover:bg-neutral-800 hover:text-neutral-100 disabled:text-neutral-600 disabled:hover:bg-transparent"
 					>
 						<Sparkle size={14} className={naming ? "animate-pulse" : undefined} />
-					</button>
+					</IconButton>
 				</div>
 
 				<Button
@@ -375,7 +373,7 @@ export function SourceControl({
 			    changed files off the top, and they are the half you act on. Equal
 			    halves (flex-1 basis-0) so neither list can starve the other. */}
 			<div className="min-h-0 flex-1 basis-0 overflow-auto">
-				<p className="sticky top-0 z-10 bg-neutral-950 px-3 py-1.5 text-caption font-semibold tracking-wide text-neutral-400 uppercase">
+				<p className={`sticky top-0 z-10 bg-neutral-950 px-3 py-1.5 ${sectionLabel}`}>
 					Changes{dirty && <span className="ml-1 text-neutral-500">{state?.changed}</span>}
 				</p>
 				{files === null ? (
@@ -401,18 +399,18 @@ export function SourceControl({
 			{/* BOTTOM HALF: history. Collapsed, because a commit is a row you
 			    scan and only sometimes open. */}
 			<div className="min-h-0 flex-1 basis-0 overflow-auto border-t border-neutral-800">
-				<p className="sticky top-0 z-10 bg-neutral-950 px-3 py-1.5 text-caption font-semibold tracking-wide text-neutral-400 uppercase">
+				<p className={`sticky top-0 z-10 bg-neutral-950 px-3 py-1.5 ${sectionLabel}`}>
 					Commits
 				</p>
 				{commits.map((c) => {
 					const expanded = open[c.hash] === true;
 					return (
 						<div key={c.hash}>
-							<button
+							<ListRow
 								onClick={() => setOpen((o) => ({ ...o, [c.hash]: !expanded }))}
 								aria-expanded={expanded}
 								title={`${c.subject}\n${c.author} · ${c.when} · ${c.hash.slice(0, 7)}`}
-								className="flex w-full items-center gap-1 py-1 pr-3 pl-1 text-left text-meta text-neutral-300 hover:bg-neutral-800/70"
+								className="gap-1 pl-1"
 							>
 								<span className="shrink-0 text-neutral-600">
 									{expanded ? <CaretDown size={11} /> : <CaretRight size={11} />}
@@ -429,7 +427,7 @@ export function SourceControl({
 								<span className="ml-auto shrink-0 pl-2 text-caption text-neutral-600">
 									{c.when.replace(/ ago$/, "")}
 								</span>
-							</button>
+							</ListRow>
 							{expanded &&
 								c.files.map((f) => (
 									<FileRow

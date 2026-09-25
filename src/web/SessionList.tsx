@@ -191,14 +191,14 @@ export function SessionList({
 					{/* Bordered, with an up/down caret: unstyled text on a row that
 					    reads as a table header looks like a column title, not a
 					    control. */}
-					<button
+					<Button
+						size="sm"
 						onClick={() => onSort(sort === "created" ? "active" : "created")}
 						title="Switch between newest-created and most-recently-active"
-						className="flex items-center gap-1 rounded-sm border border-neutral-800 px-1.5 py-0.5 text-caption text-neutral-400 transition-colors duration-150 ease-out hover:border-neutral-600 hover:bg-neutral-800 hover:text-neutral-200 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 motion-reduce:transition-none"
 					>
 						{SESSION_SORTS.find((s) => s.id === sort)?.label}
 						<CaretUpDown size={10} />
-					</button>
+					</Button>
 				</div>
 
 				{/* min-h-0 for the same reason as the transcript: a flex item is
@@ -251,7 +251,7 @@ export function SessionList({
 										aria-label={`Rename ${label}`}
 										className={`w-full ${inputClass.sm}`}
 									/>
-									<p className="mt-0.5 text-caption text-neutral-500">
+									<p className="mt-0.5 text-meta text-neutral-500">
 										Enter to save, Escape to cancel
 									</p>
 								</form>
@@ -260,6 +260,7 @@ export function SessionList({
 
 						return (
 							<button
+								data-custom="session card"
 								key={s.path}
 								onClick={() => onSelect(s)}
 								/*
@@ -292,7 +293,7 @@ export function SessionList({
 											: ""
 								}`}
 							>
-								<div className="flex items-center gap-1.5 truncate text-meta text-neutral-200">
+								<div className="flex items-center gap-1.5 truncate text-ui text-neutral-200">
 									{/* Live indicator for background work — visible even when this
 									    session isn't the one currently attached. */}
 									{s.isStreaming && (
@@ -313,7 +314,7 @@ export function SessionList({
 								  sort mode exists to answer.
 								*/}
 								<div
-									className="mt-0.5 text-caption text-neutral-400"
+									className="mt-0.5 text-meta text-neutral-400"
 									title={`Created ${dateFmt.format(new Date(s.created))}, ${timeAgo(
 										s.created,
 									)} · last active ${timeAgo(s.lastActive)}`}
@@ -386,7 +387,7 @@ export function SessionList({
 						}}
 					>
 						Summarise with pi
-						<span className="block text-caption text-neutral-500">
+						<span className="block text-meta text-neutral-500">
 							Asks pi to title the conversation
 						</span>
 					</MenuItem>

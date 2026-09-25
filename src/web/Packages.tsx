@@ -148,16 +148,15 @@ export function Packages({
 			<PanelHeader title="Packages" onClose={onClose}>
 				<div className="flex gap-1">
 					{(["installed", "search"] as const).map((t) => (
-						<button
+						<Button
 							key={t}
+							variant={tab === t ? "subtle" : "ghost"}
+							size="sm"
 							onClick={() => setTab(t)}
 							aria-pressed={tab === t}
-							className={`rounded-sm px-2 py-1 text-meta capitalize transition-colors duration-150 ease-out focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 motion-reduce:transition-none ${
-								tab === t ? "bg-neutral-800 text-neutral-100" : "text-neutral-400 hover:bg-neutral-900"
-							}`}
 						>
-							{t}
-						</button>
+							{t === "installed" ? "Installed" : "Search"}
+						</Button>
 					))}
 				</div>
 				<Button variant="ghost" size="sm" onClick={() => void refresh()}>
@@ -220,14 +219,11 @@ export function Packages({
 				<div className="border-t border-neutral-800 bg-neutral-900/60 p-3">
 					<div className="flex items-center justify-between">
 						<span className="font-mono text-meta text-neutral-300">{log.title}</span>
-						<button
-							onClick={() => setLog(null)}
-							className="rounded-sm px-2 text-meta text-neutral-500 hover:text-neutral-200"
-						>
-							dismiss
-						</button>
+						<Button variant="ghost" size="sm" onClick={() => setLog(null)}>
+							Dismiss
+						</Button>
 					</div>
-					<pre className="mt-1 max-h-40 overflow-auto font-mono text-caption whitespace-pre-wrap text-neutral-400">
+					<pre className="mt-1 max-h-40 overflow-auto font-mono text-meta whitespace-pre-wrap text-neutral-400">
 						{log.text}
 					</pre>
 				</div>
@@ -316,24 +312,24 @@ function Installed({
 								)}
 								{p.kind !== "local" && (
 									<span className="ml-2 inline-flex gap-1 opacity-0 transition-opacity duration-150 ease-out group-hover:opacity-100 motion-reduce:transition-none">
-										<button
+										<Button
+											size="sm"
 											onClick={() => onUpdate(p.source)}
 											title={
 												p.pinned
 													? "Pinned: an update will not move it. Install the new version to move the pin."
 													: "Update this package"
 											}
-											className="rounded-sm border border-neutral-700 px-1 text-caption text-neutral-300 hover:bg-neutral-800"
 										>
 											update
-										</button>
-										<button
+										</Button>
+										<Button
+											size="sm"
 											onClick={() => onRemove(p.source)}
 											title="Remove this package"
-											className="rounded-sm border border-neutral-700 px-1 text-caption text-neutral-300 hover:bg-neutral-800"
 										>
 											remove
-										</button>
+										</Button>
 									</span>
 								)}
 							</td>
@@ -356,12 +352,9 @@ function Installed({
 					how a package works on one box and throws on another. Updating is never automatic.
 				</p>
 				<div className="mt-2">
-					<button
-						onClick={onUpdatePi}
-						className="rounded-sm border border-neutral-700 px-2 py-1 font-mono text-meta text-neutral-300 transition-colors duration-150 ease-out hover:bg-neutral-900 motion-reduce:transition-none"
-					>
-						pi {piVersion ?? "?"} → update
-					</button>
+					<Button size="sm" onClick={onUpdatePi}>
+						<span className="font-mono">pi {piVersion ?? "?"} → update</span>
+					</Button>
 				</div>
 			</div>
 
@@ -377,7 +370,7 @@ function Installed({
 					</p>
 					<ul className="mt-2 space-y-0.5">
 						{project.packages.map((p) => (
-							<li key={p.source} className="font-mono text-meta text-neutral-300">
+							<li key={p.source} className="font-mono text-ui text-neutral-300">
 								{p.source}
 								{p.filtered && <span className="ml-2 text-caption text-neutral-500">filtered</span>}
 								{!p.autoload && <span className="ml-2 text-caption text-neutral-500">off</span>}
@@ -447,6 +440,7 @@ function Search({ onPick }: { onPick: (info: PiwPackageInfo) => void }) {
 				{hits.map((h) => (
 					<li key={h.name}>
 						<button
+							data-custom="choice card"
 							onClick={async () => {
 								const info = await getJson<PiwPackageInfo>(
 									`/api/packages/info?name=${encodeURIComponent(h.name)}`,
@@ -458,7 +452,7 @@ function Search({ onPick }: { onPick: (info: PiwPackageInfo) => void }) {
 							<span className="flex items-baseline gap-2">
 								<span className="font-mono text-ui text-neutral-100">{h.name}</span>
 								<span className="font-mono text-meta text-neutral-500">{h.version}</span>
-								<span className="ml-auto text-caption text-neutral-500">
+								<span className="ml-auto text-meta text-neutral-500">
 									{h.publisher} · {shortDate(h.published)}
 								</span>
 							</span>
@@ -514,7 +508,7 @@ function InstallDialog({
 						{known.description && (
 							<p className="mt-2 text-meta text-neutral-400">{known.description}</p>
 						)}
-						<p className="mt-2 flex flex-wrap gap-3 text-caption text-neutral-500">
+						<p className="mt-2 flex flex-wrap gap-3 text-meta text-neutral-500">
 							<span>{known.publisher}</span>
 							<span>{shortDate(known.published)}</span>
 							{known.weeklyDownloads !== undefined && (
@@ -530,7 +524,7 @@ function InstallDialog({
 								href={known.repository}
 								target="_blank"
 								rel="noreferrer noopener"
-								className="mt-1 block font-mono text-caption text-neutral-400 underline"
+								className="mt-1 block font-mono text-meta text-neutral-400 underline"
 							>
 								{known.repository}
 							</a>

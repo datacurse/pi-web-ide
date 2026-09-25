@@ -46,6 +46,7 @@ function RailButton({
 }) {
 	return (
 		<button
+			data-custom="activity bar item"
 			onClick={onClick}
 			aria-label={label}
 			// Only a panel button gets `aria-pressed`: the settings button opens a

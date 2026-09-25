@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { X } from "@phosphor-icons/react";
 import type {
 	AskAnswer,
 	PiAsk,
@@ -68,7 +69,7 @@ import {
 	type ToolMode,
 } from "./prefs.js";
 import { pulseFavicon } from "./favicon.js";
-import { PanelHeader } from "./ui.js";
+import { Button, IconButton, PanelHeader } from "./ui.js";
 
 const emptyPartial = (): PiPartial => ({ text: "", thinking: "", tools: [] });
 
@@ -2208,21 +2209,12 @@ export default function App() {
 			{restarted && (
 				<div className="fixed inset-x-0 top-0 z-50 flex items-center justify-center gap-3 border-b border-amber-800 bg-amber-950/95 px-3 py-1.5 text-ui text-amber-200">
 					<span>pwi restarted — this page is running the previous build.</span>
-					<button
-						type="button"
-						onClick={() => location.reload()}
-						className="rounded-sm border border-amber-700 px-2 py-0.5 hover:bg-amber-900"
-					>
+					<Button variant="warning" size="sm" onClick={() => location.reload()}>
 						Reload
-					</button>
-					<button
-						type="button"
-						onClick={() => setRestarted(false)}
-						className="text-amber-400 hover:text-amber-200"
-						aria-label="Dismiss"
-					>
-						✕
-					</button>
+					</Button>
+					<IconButton size="sm" onClick={() => setRestarted(false)} label="Dismiss">
+						<X size={13} className="text-amber-400" />
+					</IconButton>
 				</div>
 			)}
 			{/* The rail owns every panel toggle, and never scrolls. */}

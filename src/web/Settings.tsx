@@ -430,7 +430,7 @@ export function Settings({
 						<span className="text-ui text-neutral-300">
 							Appended to every new session's system prompt
 						</span>
-						<span className="mt-0.5 block font-mono text-caption break-all text-neutral-500">
+						<span className="mt-0.5 block font-mono text-meta break-all text-neutral-500">
 							{loadError ? (
 								<span className="text-red-400">{loadError}</span>
 							) : (
@@ -466,7 +466,7 @@ export function Settings({
 						>
 							{saveState === "saving" ? "Saving…" : "Save"}
 						</Button>
-						<span className="min-w-0 flex-1 text-caption text-neutral-500">
+						<span className="min-w-0 flex-1 text-meta text-neutral-500">
 							{saveError ? (
 								<span className="text-red-400">{saveError}</span>
 							) : dirty ? (

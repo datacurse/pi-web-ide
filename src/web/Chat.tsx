@@ -102,6 +102,7 @@ function Thumb({
 	return (
 		<div className="group relative">
 			<button
+				data-custom="image thumbnail"
 				onClick={() => zoom(src)}
 				title="Click to expand"
 				className="block size-14 overflow-hidden rounded-md border border-neutral-700 transition-colors duration-150 ease-out hover:border-neutral-500 motion-reduce:transition-none"
@@ -110,6 +111,7 @@ function Thumb({
 			</button>
 			{onRemove && (
 				<button
+					data-custom="thumbnail remove badge"
 					onClick={onRemove}
 					aria-label={`Remove ${label}`}
 					className="absolute -top-1.5 -right-1.5 flex size-5 items-center justify-center rounded-full border border-neutral-700 bg-neutral-900 text-meta text-neutral-400 opacity-0 transition-opacity duration-150 ease-out group-hover:opacity-100 hover:text-neutral-100 focus:opacity-100 motion-reduce:transition-none"
@@ -264,6 +266,7 @@ function Tool({
 	return (
 		<div className="chat-wide my-1">
 			<button
+				data-custom="transcript disclosure"
 				onClick={() => setOpen((o) => !o)}
 				className={`flex items-center gap-1 font-mono text-body ${isError ? "text-red-400" : running ? "text-amber-400" : "text-neutral-500"} hover:text-neutral-300`}
 			>
@@ -386,6 +389,7 @@ function ToolGroup({ blocks, streaming }: { blocks: PiBlock[]; streaming?: boole
 	return (
 		<div className="chat-wide my-1">
 			<button
+				data-custom="transcript disclosure"
 				onClick={() => setOpen((o) => !o)}
 				className="flex items-center gap-1 font-mono text-body text-neutral-500 hover:text-neutral-300"
 			>
@@ -503,6 +507,7 @@ function ContextMeter({
 		share >= 0.9 ? "text-red-400" : share >= 0.75 ? "text-amber-400" : "text-neutral-500";
 	return (
 		<button
+			data-custom="context meter"
 			onClick={onCompact}
 			disabled={busy}
 			title={
@@ -826,6 +831,7 @@ function AskPanel({
 					<div className="mt-3 space-y-1">
 						{ask.options?.map((o) => (
 							<button
+								data-custom="choice card"
 								key={o.label}
 								onClick={() => onAnswer(ask.id, { value: o.label })}
 								className="block w-full rounded-sm border border-neutral-800 bg-neutral-900/60 px-3 py-2 text-left text-body transition-colors duration-150 ease-out hover:border-amber-800 hover:bg-neutral-900 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-amber-400 motion-reduce:transition-none"
@@ -881,12 +887,14 @@ function AskPanel({
 					</form>
 				)}
 
-				<button
+				<Button
+					variant="ghost"
+					size="sm"
+					className="mt-3"
 					onClick={() => onAnswer(ask.id, { cancelled: true })}
-					className="mt-3 text-meta text-neutral-500 hover:text-neutral-300"
 				>
 					Cancel — fails the tool call and ends the turn
-				</button>
+				</Button>
 			</div>
 		</div>
 	);
@@ -1599,7 +1607,9 @@ export function Chat({
 									Packages changed since this session started. Its commands and skills are the
 									old set until it restarts.
 								</span>
-								<button
+								<Button
+									variant="warning"
+									size="sm"
 									onClick={onRestart}
 									disabled={busy}
 									title={
@@ -1607,10 +1617,9 @@ export function Chat({
 											? "Finish the turn first — a restart mid-turn loses it"
 											: "Replace this session's pi process; the conversation is kept"
 									}
-									className="shrink-0 rounded-sm border border-amber-800 px-2 py-0.5 text-meta transition-colors duration-150 ease-out enabled:hover:bg-amber-900/40 disabled:opacity-50 motion-reduce:transition-none"
 								>
 									Restart session
-								</button>
+								</Button>
 							</div>
 						</div>
 					)}
@@ -1648,7 +1657,6 @@ export function Chat({
 									label="Jump to the latest message"
 									variant="outline"
 									round
-									className="bg-neutral-900"
 								>
 									<ArrowDown size={14} />
 								</IconButton>
@@ -1690,6 +1698,7 @@ export function Chat({
 							)}
 
 							<textarea
+								data-custom="composer"
 								ref={composer}
 								value={text}
 								onChange={(e) => changeText(e.target.value)}

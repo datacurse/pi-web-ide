@@ -287,6 +287,7 @@ export function GitActions({
 		<div ref={root} className="relative flex items-center gap-1.5">
 			<div className="flex items-stretch overflow-hidden rounded-full border border-neutral-700 bg-neutral-900 text-meta">
 				<button
+					data-custom="composer pill"
 					onClick={() => void start(primary)}
 					disabled={running}
 					title={
@@ -301,6 +302,7 @@ export function GitActions({
 					{dirty && <span className="text-neutral-500">{state.changed}</span>}
 				</button>
 				<button
+					data-custom="composer pill"
 					onClick={() => setMenuOpen((o) => !o)}
 					aria-label="More git actions"
 					aria-expanded={menuOpen}
@@ -387,6 +389,7 @@ export function GitActions({
 			 */}
 			{result && !result.ok && (
 				<button
+					data-custom="composer pill"
 					onClick={() => setResult(null)}
 					title={result.error}
 					className="max-w-60 truncate rounded-full px-2 py-1 text-meta text-red-400 hover:text-red-300"

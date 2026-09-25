@@ -3,6 +3,7 @@ import Markdown, { RuleType, type MarkdownToJSX } from "markdown-to-jsx";
 
 import { extractMath, PLACEHOLDER, type MathSpan } from "./math.js";
 import { Math } from "./Math.js";
+import { Button } from "./ui.js";
 
 /**
  * Renders one fenced code block with a copy-to-clipboard button.
@@ -30,13 +31,15 @@ function CodeBlock({ lang, text }: { lang?: string; text: string }) {
 			{lang && (
 				<div className="absolute top-1.5 left-2 font-mono text-caption text-neutral-600 select-none">{lang}</div>
 			)}
-			<button
+			<Button
+				variant="subtle"
+				size="sm"
+				className="absolute top-1 right-1 opacity-0 focus-visible:opacity-100 group-hover:opacity-100"
 				onClick={copy}
-				className="absolute top-1.5 right-2 rounded-sm bg-neutral-800 px-1.5 py-0.5 text-caption text-neutral-400 opacity-0 hover:bg-neutral-700 group-hover:opacity-100"
 			>
 				{copied ? "Copied" : "Copy"}
-			</button>
-			<pre className="chat-code overflow-x-auto rounded-sm bg-neutral-900 p-2 pt-6 text-neutral-300">
+			</Button>
+			<pre className="chat-code overflow-x-auto rounded-sm bg-neutral-900 p-2 pt-7 text-neutral-300">
 				<code>{text}</code>
 			</pre>
 		</div>

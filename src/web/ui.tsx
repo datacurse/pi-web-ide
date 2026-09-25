@@ -19,6 +19,9 @@ const BUTTON_VARIANT = {
 		"border border-neutral-700 text-neutral-200 hover:bg-neutral-800 disabled:text-neutral-600 disabled:hover:bg-transparent",
 	/* Standalone utility actions inside pickers (Open, Add, Up). */
 	subtle: "bg-neutral-800 text-neutral-200 hover:bg-neutral-700 disabled:text-neutral-500",
+	/* An action inside an amber notice or banner. */
+	warning:
+		"border border-amber-700 text-amber-200 hover:bg-amber-900/40 disabled:opacity-50 disabled:hover:bg-transparent",
 	/* Low-emphasis actions in toolbars. */
 	ghost:
 		"text-neutral-400 hover:bg-neutral-800 hover:text-neutral-100 disabled:text-neutral-600 disabled:hover:bg-transparent",
@@ -51,7 +54,7 @@ export function Button({
 
 const ICON_VARIANT = {
 	ghost: "text-neutral-400 hover:bg-neutral-800 hover:text-neutral-100",
-	outline: "border border-neutral-700 text-neutral-400 hover:bg-neutral-800 hover:text-neutral-100",
+	outline: "border border-neutral-700 bg-neutral-900 text-neutral-400 hover:bg-neutral-800 hover:text-neutral-100",
 	/* The send button: inverted, the strongest mark in the composer. */
 	solid: "bg-neutral-100 text-neutral-900 hover:bg-neutral-200",
 };
@@ -81,6 +84,28 @@ export function IconButton({
 			aria-label={label}
 			title={label}
 			className={`flex shrink-0 items-center justify-center ${ICON_SIZE[size]} ${round ? "rounded-full" : "rounded-sm"} ${ICON_VARIANT[variant]} disabled:text-neutral-600 disabled:hover:bg-transparent ${EASE} ${FOCUS} ${className}`}
+			{...rest}
+		/>
+	);
+}
+
+/*
+ * A row in a tree or flat list (Explorer, Source Control, directory picker).
+ * 22px, as in VS Code. Indent with `style={{ paddingLeft }}`. Focus shows as the
+ * hover highlight rather than a ring: a ring on a wall of rows is loud.
+ */
+export function ListRow({
+	selected = false,
+	muted = false,
+	type = "button",
+	className = "",
+	...rest
+}: ButtonHTMLAttributes<HTMLButtonElement> & { selected?: boolean; muted?: boolean }) {
+	const tone = selected ? "bg-neutral-800 text-amber-400" : muted ? "text-neutral-500" : "text-neutral-300";
+	return (
+		<button
+			type={type}
+			className={`flex w-full min-w-0 items-center gap-1.5 py-0.5 pr-3 pl-3 text-left text-ui hover:bg-neutral-800 focus-visible:bg-neutral-800 focus-visible:outline-none ${tone} ${className}`}
 			{...rest}
 		/>
 	);

@@ -13,7 +13,7 @@ import { CaretDown, CaretRight } from "@phosphor-icons/react";
 import type { PiwFileEntry } from "../shared/types.js";
 import { FileGlyph } from "./fileIcon.js";
 import { readExplorerOpen, writeExplorerOpen } from "./prefs.js";
-import { PanelHeader } from "./ui.js";
+import { ListRow, PanelHeader } from "./ui.js";
 
 async function getJson<T>(url: string): Promise<T> {
 	const r = await fetch(url);
@@ -118,17 +118,11 @@ function TreeDir({
 
 	return (
 		<>
-			<button
-				type="button"
+			<ListRow
 				onClick={() => onToggle(entry.path)}
+				muted={entry.hidden}
 				aria-expanded={open}
 				style={{ paddingLeft: `${depth * 12 + 4}px` }}
-				// No focus ring: the tree is a wall of rows and the browser's default
-				// box around one is loud. Keyboard focus still shows, as the same
-				// highlight hover uses.
-				className={`flex w-full items-center gap-1 py-0.5 pr-2 text-left text-meta hover:bg-neutral-800 focus-visible:bg-neutral-800 focus-visible:outline-none ${
-					entry.hidden ? "text-neutral-500" : "text-neutral-300"
-				}`}
 			>
 				{/* A 16px slot, the width of a file's icon, so names line up the way
 				    VS Code's do: Seti has no folder icons, the chevron stands in. */}
@@ -136,7 +130,7 @@ function TreeDir({
 					{open ? <CaretDown size={10} /> : <CaretRight size={10} />}
 				</span>
 				<span className="truncate">{entry.name}</span>
-			</button>
+			</ListRow>
 			{open &&
 				children?.map((child) =>
 					child.dir ? (
@@ -174,24 +168,17 @@ function TreeFile({
 	active: boolean;
 	onOpen: (path: string) => void;
 }) {
-	// Flattened out of the className: the selected row wins over the dimming a
-	// dotfile gets, and nesting that as a ternary inside a template literal is
-	// the version nobody can read at a glance.
-	let tone = "text-neutral-300";
-	if (active) tone = "bg-neutral-800 text-amber-400";
-	else if (entry.hidden) tone = "text-neutral-500";
-
 	return (
-		<button
-			type="button"
+		<ListRow
 			onClick={() => onOpen(entry.path)}
+			selected={active}
+			muted={entry.hidden}
 			// Same indent as a sibling directory: the icon takes the chevron's slot.
 			style={{ paddingLeft: `${depth * 12 + 4}px` }}
-			className={`flex w-full items-center gap-1 py-0.5 pr-2 text-left text-meta hover:bg-neutral-800 focus-visible:bg-neutral-800 focus-visible:outline-none ${tone}`}
 		>
 			<FileGlyph name={entry.name} />
 			<span className="truncate">{entry.name}</span>
-		</button>
+		</ListRow>
 	);
 }
 
