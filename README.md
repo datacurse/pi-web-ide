@@ -126,7 +126,7 @@ by definition the *older* build, so on the upgrade that introduced this
 feature it is the only path that works. No `lsof`, no `ss`, no shelling out
 to find a pid we are about to signal.
 
-`SIGTERM` first — the old server disposes its sessions and closes cleanly —
+`SIGTERM` first — the old server detaches its running sessions and closes cleanly —
 then `SIGKILL` after 5s, because a server wedged in shutdown still has to let
 go of the port and everything it owns is on disk anyway. If the port is still
 held after that, startup fails rather than looping.
@@ -135,10 +135,8 @@ held after that, startup fails rather than looping.
 units automatically, two units configured for one port would otherwise take
 turns killing each other forever.
 
-**This kills the agent runs of the server it replaces.** That is what
-restarting a server means, the sessions are all on disk, and a detached run
-is the one thing you might be losing — so it is worth knowing before you
-restart mid-turn.
+A turn running under the old server is not lost: the new one adopts it. See
+[Sessions survive a server restart](#sessions-survive-a-server-restart).
 
 ## Why a subprocess instead of the SDK
 
@@ -159,9 +157,9 @@ more properties fall out of it:
   down that child and nothing else. In-process, all of it was one heap.
 - **Restartability.** Conversation state lives in pi's own JSONL under
   `~/.pi/agent/sessions/<cwd>/`, so a child is disposable: `--session <file>`
-  rehydrates one for the cost of a spawn. Restarting the server loses at most
-  an in-flight turn, never the work — which is what makes running pwi under a
-  supervisor with `Restart=always` a reasonable thing to do.
+  rehydrates one for the cost of a spawn, and a child mid-turn outlives the
+  server entirely — which is what makes running pwi under a supervisor with
+  `Restart=always` a reasonable thing to do.
 
 The cost is real and worth naming: everything is async, and nothing can be read
 out of a live object. `agent.ts` therefore keeps a small server-side mirror of
@@ -1422,6 +1420,52 @@ ask for:
 
 Client disconnect never aborts. `abort()` is only ever an explicit user action.
 
+## Sessions survive a server restart
+
+pwi is often developed from inside pwi. `pnpm dev` runs the server under
+`node --watch`, so an agent editing `src/server/` restarted the server, which
+killed the agent mid-reply. A crash, a deploy or a port takeover did the same.
+
+Two things tied pi's lifetime to the server's. Shutdown killed every child,
+and each child's stdin was a pipe the server owned: when the server died, pi
+read EOF and exited 1.3s later. Now neither holds:
+
+- **stdin is a FIFO pi holds open itself.** pi inherits it opened read-write,
+  so it is always its own writer and never sees EOF. The server opens the
+  write end to send commands and can come and go.
+- **stdout and stderr are files.** The server tails `out` from a byte offset
+  (inotify, plus a 1s poll). pi runs `detached`, in its own process group.
+- **Each child has a record** under `~/.config/pi-web-ide/children/<port>/<uuid>/`:
+  `in`, `out`, `err`, `meta.json` (pid). Keyed by port, because only one pwi
+  can hold a port, so only one ever adopts these children.
+
+On `SIGTERM`, a session that is streaming or waiting on a question is
+**detached**: the server lets go and pi keeps working. Idle sessions are
+killed as before, because reopening from the file costs only a spawn. After a
+crash nothing runs at shutdown, so every child survives.
+
+On startup, before listening, the server **adopts** every recorded child that
+is alive, after checking that `/proc/<pid>/fd/0` is that record's FIFO, so a
+recycled pid is never touched. Adoption asks pi for its state and messages,
+then replays `out` from just past the last `message_end`. That rebuilds what
+`get_messages` cannot show: the partial reply, running tools, and a pending
+question. Request ids carry a per-process prefix so the old server's
+responses in `out` are ignored. It must finish before the first request, or
+a reopened tab would spawn a second pi on the same session file.
+
+`out` is truncated at a settle once it passes 256KB. A frame pi writes in the
+microseconds between the last read and the truncate would be lost; pi is idle
+with nothing asked at that point, so nothing is expected.
+
+Limits: a reboot, or pi itself dying, still ends the turn; the session file
+keeps everything up to it. Hunk review for edits made before the restart is
+lost, as it always was, because the pre-edit text was only in the old
+server's memory. Terminals still die with the server: a PTY needs a process
+holding its master side, which is tmux's job. A pi whose turn ends while no
+server is running stays idle until the next server adopts it and the 30-min
+sweep evicts it. Under systemd this needs `KillMode=process`, which the
+shipped unit sets.
+
 ## Crash policy
 
 Three layers, decreasing confidence:
@@ -1654,7 +1698,7 @@ code that was working rather than whatever published since.
 `deploy/` installs pi-web-ide as a **systemd user service** on one machine:
 
 ```text
-deploy/pi-web-ide.service      systemd user unit: pnpm start, Restart=always, journald
+deploy/pi-web-ide.service      systemd user unit: node server, Restart=always, KillMode=process
 deploy/pi-web-ide.env.example  template for ~/.config/pi-web-ide/env
 deploy/install.sh              idempotent installer, no sudo; --dry-run prints the plan
 ```
@@ -1679,11 +1723,12 @@ Four details that are easy to get wrong:
 - **systemd user units do not source your shell profile.** The inherited PATH
   usually omits the directory `pi` lives in and any fnm/nvm shim (where
   `node` and `pnpm` live). The unit therefore execs through a login shell —
-  `/usr/bin/env /bin/bash -lc "exec pnpm start"` — which picks both up from the
+  `/usr/bin/env /bin/bash -lc "exec node --import tsx src/server/index.ts"` — which picks both up from the
   profile you already maintain instead of pinning a node version into a unit
   file. `exec` is load-bearing: without it systemd supervises the shell and
-  `SIGTERM` never reaches the server. Set `PWI_PI_BIN` if you would rather not
-  depend on the profile.
+  `SIGTERM` never reaches the server. It execs node, not `pnpm start`, for the
+  same reason: under `KillMode=process` only the main process gets the signal.
+  Set `PWI_PI_BIN` if you would rather not depend on the profile.
 - **The unit adds no network exposure of its own.** No bind-address knob exists
   to set by accident — `index.ts` passes the literal `127.0.0.1` to `listen()`.
   There is deliberately no `IPAddressAllow=`/`PrivateNetwork=` either: the pi

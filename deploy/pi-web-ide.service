@@ -38,7 +38,7 @@ EnvironmentFile=%h/.config/pi-web-ide/env
 
 # A login shell, matching the other user units on this host. systemd user units
 # inherit a minimal PATH: no ~/.local/bin, no fnm shims. The server needs two
-# things off PATH — `node`/`pnpm` (fnm-managed, exported from ~/.profile) and
+# things off PATH — `node` (fnm-managed, exported from ~/.profile) and
 # the `pi` binary itself, which agent.ts spawns once per open session.
 # `bash -lc` picks both up from the profile the user already maintains instead
 # of pinning a node version into this file, which would break on the next
@@ -47,7 +47,7 @@ EnvironmentFile=%h/.config/pi-web-ide/env
 #
 # `exec` is load-bearing: without it systemd supervises bash, MAINPID is the
 # shell, and SIGTERM never reaches the server's own handlers.
-ExecStart=/usr/bin/env /bin/bash -lc "exec pnpm start"
+ExecStart=/usr/bin/env /bin/bash -lc "exec node --import tsx src/server/index.ts"
 
 Restart=always
 RestartSec=2
@@ -55,11 +55,13 @@ RestartSec=2
 # broken build should stop flapping and sit in `failed`, where `journalctl
 # --user -u pi-web-ide` explains why, rather than respawning forever.
 
-# Default KillMode=control-group is exactly right here. agent.ts runs one child
-# process per open session and they live in this cgroup, so a stop must take
-# them with it. index.ts handles SIGTERM and closes child stdin first, which is
-# pi's clean shutdown path (the child exits and disposes its session);
-# TimeoutStopSec is the backstop for a child that ignores it.
+# KillMode=process: a restart must NOT take the pi children with it. index.ts
+# detaches sessions that are mid-turn on SIGTERM, and the next server adopts
+# them (README "Sessions survive a server restart"). The default
+# control-group mode would SIGKILL them with the server. This is also why
+# ExecStart execs node itself rather than `pnpm start`: the main process must
+# be the server, since only it receives the SIGTERM.
+KillMode=process
 TimeoutStopSec=15
 
 StandardOutput=journal

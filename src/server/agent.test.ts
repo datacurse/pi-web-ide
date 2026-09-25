@@ -13,6 +13,7 @@ import {
 	toEvents,
 	toPiMessage,
 } from "./agent.js";
+import { replayFrom } from "./agent.js";
 import { ASK_ONLY, type PiEvent } from "../shared/types.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -351,3 +352,17 @@ assert.equal(toAsk({ id: "u5", method: "setWidget" }), null);
 assert.equal(toAsk({ id: "u6", method: "notify", message: "done" }), null);
 
 console.log("ok");
+
+// An adopted child replays from just past the last `message_end`: earlier
+// messages come from get_messages, later frames are the turn in flight.
+{
+	const lines = [
+		{ type: "message_start" },
+		{ type: "message_end" },
+		{ type: "tool_execution_start", args: { note: '"message_end"' } },
+		{ type: "extension_ui_request", method: "select" },
+	].map((f) => `${JSON.stringify(f)}\n`);
+	const out = Buffer.from(lines.join(""));
+	assert.equal(replayFrom(out), Buffer.byteLength(lines[0] + lines[1]));
+	assert.equal(replayFrom(Buffer.from(lines[2] + lines[3])), 0, "no message_end: replay everything");
+}

@@ -14,7 +14,8 @@
  *     ~/.pi/agent/sessions/<cwd>/, so a child is disposable:
  *     `--session <file>` rehydrates one for the cost of a spawn, preserving
  *     both the session id and the file (verified — docs/pi-facts.md §0.4).
- *     Restarting this server loses at most an in-flight turn, not the work.
+ *   - Independence. A child is not tied to this server's lifetime: see
+ *     RpcChild. Restarting the server mid-turn loses nothing.
  *
  * The cost is that everything is async and nothing can be read out of a live
  * object, so this file keeps a small server-side mirror of session state
@@ -34,9 +35,27 @@
  * place where a structural assumption turns into a silent rendering bug.
  */
 
-import { spawn } from "node:child_process";
-import { existsSync, readFileSync, statSync } from "node:fs";
-import type { Readable, Writable } from "node:stream";
+import { execFileSync, spawn, type ChildProcess } from "node:child_process";
+import { randomUUID } from "node:crypto";
+import {
+	closeSync,
+	constants,
+	existsSync,
+	ftruncateSync,
+	mkdirSync,
+	openSync,
+	readdirSync,
+	readFileSync,
+	readlinkSync,
+	readSync,
+	rmSync,
+	statSync,
+	watch,
+	writeFileSync,
+	type FSWatcher,
+} from "node:fs";
+import { Socket } from "node:net";
+import { join } from "node:path";
 
 import { isRecord, records } from "./guards.js";
 import { hunkFromWrite, hunksFromEdit, type Hunk } from "../shared/hunks.js";
@@ -44,6 +63,7 @@ import { fileURLToPath } from "node:url";
 import { personalityPath, readRemind } from "./personality.js";
 import { repairSessionFile } from "./repair.js";
 import { sessionHeaderCwd } from "./sessions.js";
+import { stateDir } from "./state.js";
 import { ASK_ONLY } from "../shared/types.js";
 import type {
 	AskAnswer,
@@ -78,7 +98,7 @@ export const PI_BIN = process.env.PWI_PI_BIN ?? "pi";
  */
 const READY_TIMEOUT_MS = 60_000;
 
-/** Grace between "close stdin" and SIGTERM when disposing a child. */
+/** Grace between SIGTERM and SIGKILL when disposing a child. */
 const DISPOSE_GRACE_MS = 5_000;
 
 /**
@@ -386,6 +406,11 @@ export class FrameReader {
 		private readonly onProtocolError: (message: string) => void,
 	) {}
 
+	/** True when no partial line is buffered. */
+	empty(): boolean {
+		return this.buf.length === 0;
+	}
+
 	push(data: Buffer): void {
 		this.buf = this.buf.length === 0 ? data : Buffer.concat([this.buf, data]);
 		let nl: number;
@@ -425,64 +450,169 @@ interface Pending {
 }
 
 /**
+ * Where live children are recorded: one directory each, holding the stdin
+ * FIFO (`in`), stdout and stderr files (`out`, `err`) and `meta.json`.
+ *
+ * Keyed by port because the port is the lock: only one pwi can hold it, so
+ * only one pwi ever adopts these children. A dev and a production pwi on
+ * different ports share the state directory and must not steal each other's.
+ */
+function childrenDir(): string {
+	return join(stateDir(), "children", process.env.PWI_PORT ?? "8890");
+}
+
+/**
+ * Request ids carry a per-process prefix. An adopted child's `out` file still
+ * holds the previous server's responses, and its `r3` must not resolve ours.
+ */
+const BOOT = randomUUID().slice(0, 8);
+
+/** How often an adopted child is checked for exit, and `out` re-read in case a watch event was missed. */
+const POLL_MS = 1_000;
+
+/**
+ * `out` is cut back to zero at a settle once it passes this. Without a cut it
+ * grows by every delta of every turn for the life of the child.
+ */
+const TRUNCATE_AT = 256 * 1024;
+
+interface Meta {
+	pid: number;
+	/** False for throwaway children (askOnce): never adopted, killed on sight. */
+	keep: boolean;
+}
+
+function alive(pid: number): boolean {
+	try {
+		process.kill(pid, 0);
+		return true;
+	} catch (err) {
+		return (err as NodeJS.ErrnoException).code === "EPERM";
+	}
+}
+
+/** Kill pi and whatever tools it is running: `detached` made it a process-group leader. */
+function killGroup(pid: number, signal: NodeJS.Signals): void {
+	try {
+		process.kill(-pid, signal);
+	} catch {
+		// Already gone.
+	}
+}
+
+/**
  * One pi child process, with request/response correlation.
  *
  * Responses are matched on `id`, never on arrival order: commands are
  * dispatched concurrently by the server, so a later one can answer first.
+ *
+ * The child OUTLIVES this server. Its stdin is a FIFO it opened read-write
+ * itself, so it holds a writer of its own and never reads EOF when we go; its
+ * stdout and stderr are plain files; it runs in its own process group. A
+ * restarted server (a `--watch` reload, a crash, a port takeover) finds it
+ * through `meta.json` and `adopt`s it mid-turn. Pipes would tie pi's lifetime
+ * to ours: pi exits 1.3s after stdin EOF (docs/pi-facts.md).
  */
 class RpcChild {
 	private readonly pending = new Map<string, Pending>();
 	private readonly frameListeners = new Set<(frame: Record<string, unknown>) => void>();
 	private readonly reader: FrameReader;
 	private seq = 0;
-	private stderrTail = "";
 	private exited: { code: number | null; signal: NodeJS.Signals | null } | null = null;
+	private exitListeners = new Set<(message: string) => void>();
+	/** Non-response frames that arrived before `release`. Null once released. */
+	private held: Record<string, unknown>[] | null = [];
+	private offset: number;
+	private settled = false;
+	private closing = false;
+	private readonly readFd: number;
+	private readonly stdin: Socket;
+	private readonly watcher: FSWatcher;
+	private readonly poll: NodeJS.Timeout;
 
 	private constructor(
-		private readonly kill: (signal: NodeJS.Signals) => void,
-		private readonly stdin: Writable,
+		readonly dir: string,
+		readonly pid: number,
+		writeFd: number,
+		offset: number,
+		/** Present when this process spawned the child and so gets its exit code. */
+		proc?: ChildProcess,
 	) {
 		this.reader = new FrameReader(
 			(frame) => this.dispatch(frame),
 			(message) => console.error("[pwi] rpc transport:", message),
 		);
+		this.offset = offset;
+		this.readFd = openSync(join(dir, "out"), "r+");
+		this.stdin = new Socket({ fd: writeFd, readable: false, writable: true });
+		// EPIPE: nobody reads the FIFO any more, so pi is gone.
+		this.stdin.on("error", () => this.checkExit());
+		this.watcher = watch(join(dir, "out"), () => this.pump());
+		this.watcher.unref();
+		this.poll = setInterval(() => {
+			this.pump();
+			if (!proc) this.checkExit();
+		}, POLL_MS);
+		this.poll.unref();
+		proc?.once("exit", (code, signal) => this.onExit(code, signal));
 	}
 
-	static async start(args: string[], cwd: string): Promise<RpcChild> {
-		const proc = spawn(PI_BIN, args, {
-			cwd,
-			stdio: ["pipe", "pipe", "pipe"],
-			// Inherit the environment: pi resolves credentials, settings, and the
-			// model catalog from it.
-			env: process.env,
-		});
+	static async start(args: string[], cwd: string, keep = true): Promise<RpcChild> {
+		const dir = join(childrenDir(), randomUUID());
+		mkdirSync(dir, { recursive: true, mode: 0o700 });
+		const fifo = join(dir, "in");
+		execFileSync("mkfifo", ["-m", "600", fifo]);
+		// O_RDWR never blocks on a FIFO, and it is what pi inherits as fd 0.
+		const rw = openSync(fifo, constants.O_RDWR);
+		const out = openSync(join(dir, "out"), "a", 0o600);
+		const err = openSync(join(dir, "err"), "a", 0o600);
+		let proc: ChildProcess;
+		try {
+			proc = spawn(PI_BIN, args, {
+				cwd,
+				stdio: [rw, out, err],
+				detached: true,
+				// Inherit the environment: pi resolves credentials, settings, and the
+				// model catalog from it.
+				env: process.env,
+			});
+		} finally {
+			closeSync(out);
+			closeSync(err);
+		}
+		// A reader exists (rw), so a non-blocking write open cannot fail with ENXIO.
+		const writeFd = openSync(fifo, constants.O_WRONLY | constants.O_NONBLOCK);
+		closeSync(rw);
 
-		const { stdin, stdout, stderr } = proc;
-		if (!stdin || !stdout || !stderr) throw new Error("pi child was spawned without stdio pipes");
-
-		const child = new RpcChild((signal) => proc.kill(signal), stdin);
-		stdout.on("data", (d: Buffer) => child.reader.push(d));
-		(stderr as Readable).on("data", (d: Buffer) => {
-			child.stderrTail = (child.stderrTail + d.toString("utf8")).slice(-STDERR_KEEP);
-		});
-
-		/*
-		 * Readiness is a round trip, not a frame to wait for. Spawn failure and
-		 * early exit have to be raced against it: an ENOENT or a child that dies
-		 * during package installation would otherwise leave `get_state` pending
-		 * until the timeout, reporting a timeout instead of the real reason.
-		 */
-		const failed = new Promise<never>((_resolve, reject) => {
-			proc.once("error", (err: NodeJS.ErrnoException) => {
+		const spawned = await new Promise<number>((resolve, reject) => {
+			if (proc.pid) return resolve(proc.pid);
+			proc.once("error", (e: NodeJS.ErrnoException) =>
 				reject(
-					err.code === "ENOENT"
+					e.code === "ENOENT"
 						? new Error(
 								`cannot run "${PI_BIN}": not found on PATH. Set PWI_PI_BIN to its absolute path (a systemd user unit does not read your shell profile).`,
 							)
-						: err,
-				);
-			});
-			proc.once("exit", (code, signal) => reject(new Error(child.exitMessage(code, signal))));
+						: e,
+				),
+			);
+		}).catch((e: Error) => {
+			closeSync(writeFd);
+			rmSync(dir, { recursive: true, force: true });
+			throw e;
+		});
+		proc.unref();
+		writeFileSync(join(dir, "meta.json"), JSON.stringify({ pid: spawned, keep } satisfies Meta));
+
+		const child = new RpcChild(dir, spawned, writeFd, 0, proc);
+
+		/*
+		 * Readiness is a round trip, not a frame to wait for. Early exit has to be
+		 * raced against it: a child that dies during package installation would
+		 * otherwise leave `get_state` pending until the timeout, reporting a
+		 * timeout instead of the real reason.
+		 */
+		const failed = new Promise<never>((_resolve, reject) => {
+			child.exitListeners.add((message) => reject(new Error(message)));
 		});
 		const timeout = new Promise<never>((_resolve, reject) => {
 			const timer = setTimeout(
@@ -492,21 +622,115 @@ class RpcChild {
 			timer.unref();
 		});
 
-		proc.once("exit", (code, signal) => child.onExit(code, signal));
-
 		try {
 			await Promise.race([child.send("get_state"), failed, timeout]);
 		} catch (err) {
-			proc.kill("SIGKILL");
+			child.kill();
 			throw err;
 		}
-
 		return child;
+	}
+
+	/**
+	 * Take over a child a previous server left running, or clean up after it.
+	 *
+	 * Identity is checked, not assumed: the pid must be alive AND its fd 0 must
+	 * be this record's FIFO, so a recycled pid is never adopted or killed.
+	 */
+	static adopt(dir: string): RpcChild | undefined {
+		let meta: Meta;
+		try {
+			meta = JSON.parse(readFileSync(join(dir, "meta.json"), "utf8")) as Meta;
+		} catch {
+			// Died between spawn and meta write, or not ours.
+			rmSync(dir, { recursive: true, force: true });
+			return undefined;
+		}
+		const fifo = join(dir, "in");
+		let ours = false;
+		try {
+			ours = alive(meta.pid) && readlinkSync(`/proc/${meta.pid}/fd/0`) === fifo;
+		} catch {
+			// /proc entry vanished: exited.
+		}
+		if (ours && !meta.keep) killGroup(meta.pid, "SIGTERM");
+		if (!ours || !meta.keep) {
+			rmSync(dir, { recursive: true, force: true });
+			return undefined;
+		}
+		const writeFd = openSync(fifo, constants.O_WRONLY | constants.O_NONBLOCK);
+		return new RpcChild(dir, meta.pid, writeFd, replayFrom(readFileSync(join(dir, "out"))));
+	}
+
+	/** Every live child a previous server left in `childrenDir()`. */
+	static adoptAll(): RpcChild[] {
+		let names: string[];
+		try {
+			names = readdirSync(childrenDir());
+		} catch {
+			return [];
+		}
+		return names.flatMap((n) => {
+			try {
+				return RpcChild.adopt(join(childrenDir(), n)) ?? [];
+			} catch (err) {
+				console.error(`[pwi] could not adopt pi child ${n}:`, err);
+				return [];
+			}
+		});
+	}
+
+	/** The directory pi is running in, from /proc: an adopted child has no spawn call to ask. */
+	cwd(): string | undefined {
+		try {
+			return readlinkSync(`/proc/${this.pid}/cwd`);
+		} catch {
+			return undefined;
+		}
 	}
 
 	onFrame(listener: (frame: Record<string, unknown>) => void): () => void {
 		this.frameListeners.add(listener);
 		return () => this.frameListeners.delete(listener);
+	}
+
+	/**
+	 * Deliver the frames held since the child was opened. Until then nothing
+	 * listens, and an adopted child's replay (the in-flight message, a pending
+	 * question) would fall on the floor. Returns how many were held.
+	 */
+	release(): number {
+		const held = this.held ?? [];
+		this.held = null;
+		for (const frame of held) this.deliver(frame);
+		return held.length;
+	}
+
+	/** Read `out` from where we are to its end. Sync, so frames stay in order. */
+	private pump(): void {
+		if (this.closing && this.exited) return;
+		const buf = Buffer.allocUnsafe(64 * 1024);
+		for (;;) {
+			let n: number;
+			try {
+				n = readSync(this.readFd, buf, 0, buf.length, this.offset);
+			} catch {
+				return; // fd closed by detach/exit
+			}
+			if (n <= 0) break;
+			this.offset += n;
+			this.reader.push(Buffer.from(buf.subarray(0, n)));
+		}
+		/*
+		 * ponytail: a frame pi writes between this read and the truncate is lost.
+		 * The window is microseconds and only open while idle with nothing asked,
+		 * when pi has nothing to say. A broker that owns the pipe removes it.
+		 */
+		if (this.settled && this.pending.size === 0 && this.reader.empty() && this.offset > TRUNCATE_AT) {
+			ftruncateSync(this.readFd, 0);
+			this.offset = 0;
+			this.settled = false;
+		}
 	}
 
 	private dispatch(frame: Record<string, unknown>): void {
@@ -522,13 +746,21 @@ class RpcChild {
 			}
 
 			// Parse failures arrive with no id, and so do responses to commands
-			// whose caller has already gone. Neither can be routed.
-			if (frame.success !== true) {
+			// whose caller has already gone — or to a previous server's.
+			if (frame.success !== true && !(id && !id.startsWith(`r${BOOT}-`))) {
 				console.error(`[pwi] pi ${String(frame.command)} failed:`, String(frame.error ?? ""));
 			}
 			return;
 		}
 
+		if (frame.type === "agent_settled") this.settled = true;
+		else if (frame.type === "agent_start") this.settled = false;
+
+		if (this.held) this.held.push(frame);
+		else this.deliver(frame);
+	}
+
+	private deliver(frame: Record<string, unknown>): void {
 		for (const listener of [...this.frameListeners]) {
 			try {
 				listener(frame);
@@ -543,7 +775,7 @@ class RpcChild {
 			return Promise.reject(new Error(this.exitMessage(this.exited.code, this.exited.signal)));
 		}
 
-		const id = `r${++this.seq}`;
+		const id = `r${BOOT}-${++this.seq}`;
 		return new Promise<T>((resolve, reject) => {
 			this.pending.set(id, {
 				command: type,
@@ -564,38 +796,101 @@ class RpcChild {
 		this.stdin.write(`${JSON.stringify(frame)}\n`, () => {});
 	}
 
+	private checkExit(): void {
+		if (!this.exited && !alive(this.pid)) this.onExit(null, null);
+	}
+
 	private onExit(code: number | null, signal: NodeJS.Signals | null): void {
+		if (this.exited) return;
+		this.pump(); // the last frames before it died
 		this.exited = { code, signal };
 		const message = this.exitMessage(code, signal);
 		for (const [id, pending] of this.pending) {
 			this.pending.delete(id);
 			pending.reject(new Error(message));
 		}
+		for (const l of this.exitListeners) l(message);
+		this.stop();
+		rmSync(this.dir, { recursive: true, force: true });
 	}
 
 	private exitMessage(code: number | null, signal: NodeJS.Signals | null): string {
-		const how = signal ? `signal ${signal}` : `code ${code}`;
-		const tail = this.stderrTail.trim().split("\n").slice(-6).join("\n");
+		const how = signal ? `signal ${signal}` : code === null ? "unknown status" : `code ${code}`;
+		let tail = "";
+		try {
+			tail = readFileSync(join(this.dir, "err"), "utf8").slice(-STDERR_KEEP).trim().split("\n").slice(-6).join("\n");
+		} catch {
+			// Already cleaned up.
+		}
 		return tail ? `pi exited (${how}):\n${tail}` : `pi exited (${how})`;
 	}
 
-	/**
-	 * Closing stdin is the clean shutdown: pi drains accepted commands, saves
-	 * the session, and exits. The timers are for the case where it does not —
-	 * a wedged child must not outlive its session and hold a JSONL open.
-	 */
-	close(): void {
-		if (this.exited) return;
+	/** Release our handles on the child. Idempotent. */
+	private stop(): void {
+		clearInterval(this.poll);
+		this.watcher.close();
+		this.stdin.destroy();
 		try {
-			this.stdin.end();
+			closeSync(this.readFd);
 		} catch {
-			// Already gone; the kill timers below still apply.
+			// Already closed.
 		}
-		const term = setTimeout(() => this.kill("SIGTERM"), DISPOSE_GRACE_MS);
-		const hard = setTimeout(() => this.kill("SIGKILL"), DISPOSE_GRACE_MS * 2);
-		term.unref();
+	}
+
+	private kill(): void {
+		killGroup(this.pid, "SIGTERM");
+		const hard = setTimeout(() => killGroup(this.pid, "SIGKILL"), DISPOSE_GRACE_MS);
 		hard.unref();
 	}
+
+	/**
+	 * End the child. SIGTERM to its group (pi and any tool it is running), then
+	 * SIGKILL: a wedged child must not outlive its session and hold a JSONL open.
+	 * There is no stdin EOF to send: pi holds its own writer on the FIFO.
+	 */
+	close(): void {
+		if (this.exited || this.closing) return;
+		this.closing = true;
+		this.kill();
+		// A child we did not spawn has no exit event; the poll is stopped by
+		// nothing but the exit it is waiting for.
+	}
+
+	/**
+	 * Let go without killing: the next server adopts the child where we left it.
+	 * Used at shutdown for a session mid-turn.
+	 */
+	detach(): void {
+		if (this.exited) return;
+		this.stop();
+	}
+}
+
+/**
+ * Where an adopted child's replay starts: just past the last `message_end`.
+ *
+ * Everything before it is in `get_messages`. Everything after it is what
+ * `get_messages` cannot show — the in-flight message's deltas, the tools
+ * running, a question pi is blocked on — and replaying it rebuilds exactly
+ * that. Exported for the test.
+ */
+export function replayFrom(out: Buffer): number {
+	let start = 0;
+	let after = 0;
+	while (start < out.length) {
+		const nl = out.indexOf(0x0a, start);
+		if (nl === -1) break;
+		const line = out.subarray(start, nl);
+		if (line.includes('"message_end"')) {
+			try {
+				if ((JSON.parse(line.toString("utf8")) as { type?: unknown }).type === "message_end") after = nl + 1;
+			} catch {
+				// Not a frame.
+			}
+		}
+		start = nl + 1;
+	}
+	return after;
 }
 // ---------------------------------------------------------------------------
 // Public API
@@ -670,8 +965,11 @@ export interface PiSession {
 	 * has open.
 	 */
 	setName(name: string): Promise<void>;
+	/** The first subscriber also receives the frames held since open (see RpcChild.release). */
 	subscribe(listener: (e: PiEvent) => void): () => void;
 	dispose(): void;
+	/** Let go of the child without killing it, so the next server adopts it. */
+	detach(): void;
 }
 
 export interface OpenOptions {
@@ -740,7 +1038,7 @@ export function spawnArgs(opts: {
  * file allowed to spawn an RPC child or read its frames.
  */
 export async function askOnce<T = unknown>(command: string, cwd: string): Promise<T> {
-	const child = await RpcChild.start(["--mode", "rpc", "--no-session"], cwd);
+	const child = await RpcChild.start(["--mode", "rpc", "--no-session"], cwd, false);
 	try {
 		return await child.send<T>(command);
 	} finally {
@@ -792,7 +1090,28 @@ export async function openSession(opts: OpenOptions): Promise<PiSession> {
 		spawnArgs({ file: opts.file, model: opts.model, personality, remind: readRemind() }),
 		cwd,
 	);
+	return wrap(child, cwd);
+}
 
+/**
+ * Every session a previous server left running, mid-turn or not. Called once
+ * at startup, before anything can open the same file a second time.
+ */
+export async function adoptSessions(fallbackCwd: string): Promise<PiSession[]> {
+	const sessions: PiSession[] = [];
+	for (const child of RpcChild.adoptAll()) {
+		try {
+			sessions.push(await wrap(child, child.cwd() ?? fallbackCwd));
+		} catch (err) {
+			console.error(`[pwi] adopted pi child ${child.pid} did not answer:`, err);
+			child.detach();
+		}
+	}
+	return sessions;
+}
+
+/** The session mirror around a live child, spawned here or adopted. */
+async function wrap(child: RpcChild, cwd: string): Promise<PiSession> {
 	const state = await fetchState(child);
 	let messages = healDanglingToolCalls(await fetchMessages(child));
 	/**
@@ -912,6 +1231,8 @@ export async function openSession(opts: OpenOptions): Promise<PiSession> {
 	 * and the surface they drive is single.
 	 */
 	let pendingAsk: PiAsk | null = null;
+	/** True while held frames are replayed: see `tool_execution_start`. */
+	let replaying = false;
 	let askTimer: NodeJS.Timeout | undefined;
 	const clearAsk = () => {
 		clearTimeout(askTimer);
@@ -946,6 +1267,9 @@ export async function openSession(opts: OpenOptions): Promise<PiSession> {
 			 * hunk whose "before" is its "after".
 			 */
 			case "tool_execution_start": {
+				// A replayed start is from before a restart: the file may already
+				// hold the edit, and a "before" read now would be its "after".
+				if (replaying) break;
 				const tool = String(frame.toolName ?? "");
 				if (tool !== "edit" && tool !== "write") break;
 				const args = isRecord(frame.args) ? frame.args : {};
@@ -1214,6 +1538,11 @@ export async function openSession(opts: OpenOptions): Promise<PiSession> {
 		},
 		subscribe(listener) {
 			listeners.add(listener);
+			replaying = true;
+			const held = child.release();
+			replaying = false;
+			// A held `message_end` may already be in the list get_messages returned.
+			if (held > 0) void resyncMessages();
 			return () => listeners.delete(listener);
 		},
 		dispose() {
@@ -1222,6 +1551,13 @@ export async function openSession(opts: OpenOptions): Promise<PiSession> {
 			disarmLocal();
 			clearTimeout(askTimer);
 			child.close();
+		},
+		detach() {
+			unsubscribe();
+			listeners.clear();
+			disarmLocal();
+			clearTimeout(askTimer);
+			child.detach();
 		},
 	};
 }

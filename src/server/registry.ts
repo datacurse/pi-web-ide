@@ -18,7 +18,7 @@
  * minutes of idleness that triggers eviction.
  */
 
-import { emptyPartial, openSession, type AskAnswer, type PiSession } from "./agent.js";
+import { adoptSessions, emptyPartial, openSession, type AskAnswer, type PiSession } from "./agent.js";
 import { currentEpoch } from "./packages.js";
 import { lastMessageAt } from "./sessions.js";
 import type { Hunk } from "../shared/hunks.js";
@@ -195,7 +195,8 @@ export class Registry {
 		const entry: Entry = {
 			session,
 			partial: emptyPartial(),
-			streaming: false,
+			// An adopted child can be mid-turn already.
+			streaming: session.isStreaming,
 			error: null,
 			notices: [],
 			lastActivity: Date.now(),
@@ -690,11 +691,32 @@ export class Registry {
 		}
 	}
 
-	disposeAll(): void {
+	/**
+	 * Take over the children the previous server left running. Must finish
+	 * before the first request: an `acquire` by file would otherwise spawn a
+	 * second pi on a session file an adopted one is still writing.
+	 */
+	async adopt(): Promise<number> {
+		const sessions = await adoptSessions(this.cwd);
+		for (const session of sessions) {
+			if (this.entries.has(session.id)) session.dispose();
+			else this.install(session, null);
+		}
+		return sessions.length;
+	}
+
+	/**
+	 * Server shutdown. A session mid-turn, or blocked on a question, is
+	 * DETACHED: its child keeps working and the next server adopts it. Idle
+	 * ones are killed, since reopening from the file costs nothing but a spawn.
+	 */
+	shutdown(): void {
 		clearInterval(this.sweeper);
 		for (const entry of this.entries.values()) {
 			entry.unsubscribe();
-			entry.session.dispose();
+			const busy = entry.streaming || entry.session.isStreaming || entry.session.ask !== null;
+			if (busy) entry.session.detach();
+			else entry.session.dispose();
 		}
 		this.entries.clear();
 	}

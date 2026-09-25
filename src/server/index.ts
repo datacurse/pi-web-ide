@@ -1164,6 +1164,9 @@ if (process.env.PWI_TAKEOVER !== "0") {
 	}
 }
 
+const adopted = await registry.adopt();
+if (adopted) console.log(`[pwi] adopted ${adopted} running pi session(s)`);
+
 server.listen(PORT, "127.0.0.1", () => {
 	console.log(`[pwi] http://127.0.0.1:${PORT}  cwd=${CWD}`);
 });
@@ -1181,7 +1184,8 @@ server.on("error", (err: NodeJS.ErrnoException) => {
 
 for (const sig of ["SIGINT", "SIGTERM"] as const) {
 	process.on(sig, () => {
-		registry.disposeAll();
+		// Mid-turn sessions are detached, not killed: the next server adopts them.
+		registry.shutdown();
 		// SIGHUP to each shell, so a restart does not leave orphaned children
 		// holding the project's files (and, under takeover, its ports).
 		terminals.disposeAll();

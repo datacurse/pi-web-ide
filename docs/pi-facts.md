@@ -396,3 +396,12 @@ Consequence: the subscription provider is **bootstrap**. Install it once when
 setting a machine up, by writing it into `~/.pi/agent/settings.json` before
 the first `pi` start, and do not reinstall it from the Packages screen on an
 npm-12 machine.
+
+## RPC stdin EOF ends pi
+
+`pi --mode rpc` exits with code 0 about 1.3 s after its stdin reaches EOF. So a
+child whose stdin is a pipe owned by the server dies with the server. pwi gives
+each child a FIFO it opens read-write itself (it is its own writer, so EOF never
+comes) and plain files for stdout and stderr; see README "Sessions survive a
+server restart". pi reads a FIFO stdin and writes a regular-file stdout without
+complaint; nothing in RPC mode checks for a pipe or a TTY.
