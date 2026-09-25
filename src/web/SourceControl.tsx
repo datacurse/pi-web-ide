@@ -30,6 +30,7 @@ import {
 	X,
 } from "@phosphor-icons/react";
 import { FileGlyph } from "./fileIcon.js";
+import { GIT_CHANGED, gitChanged } from "./GitActions.js";
 import { readGitAutoName, writeGitAutoName } from "./prefs.js";
 
 async function getJson<T>(url: string): Promise<T> {
@@ -189,6 +190,14 @@ export function SourceControl({
 		void reload();
 	}, [reload, revision]);
 
+	useEffect(() => {
+		const on = (e: Event) => {
+			if ((e as CustomEvent<string>).detail === cwd) void reload();
+		};
+		window.addEventListener(GIT_CHANGED, on);
+		return () => window.removeEventListener(GIT_CHANGED, on);
+	}, [cwd, reload]);
+
 	/**
 	 * Ask the model for a subject line, and put it in the box.
 	 *
@@ -258,7 +267,7 @@ export function SourceControl({
 			setError(err instanceof Error ? err.message : String(err));
 		} finally {
 			setRunning(false);
-			await reload();
+			gitChanged(cwd);
 		}
 	};
 

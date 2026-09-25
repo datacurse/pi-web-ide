@@ -71,6 +71,14 @@ function suggestBranch(): string {
  * answers: a model that reads the diff, and a dated `pwi/` branch. With the
  * toggle on, the dialog stops appearing and `Commit & Push` is one click.
  */
+/**
+ * Fired after any commit or push from this page, so every GitActions and
+ * SourceControl on the same `cwd` re-reads instead of showing the old count.
+ */
+export const GIT_CHANGED = "pwi:git-changed";
+export const gitChanged = (cwd: string) =>
+	window.dispatchEvent(new CustomEvent(GIT_CHANGED, { detail: cwd }));
+
 export function GitActions({
 	cwd,
 	onDone,
@@ -104,6 +112,15 @@ export function GitActions({
 		// Only on a project switch: everything else re-reads on open, and
 		// polling a repo whose tree an agent is rewriting would be a fetch per
 		// interval forever for a number nobody is looking at.
+	}, [cwd]);
+
+	// Another pane on the same repo committed: its count is now ours too.
+	useEffect(() => {
+		const on = (e: Event) => {
+			if ((e as CustomEvent<string>).detail === cwd) void refresh();
+		};
+		window.addEventListener(GIT_CHANGED, on);
+		return () => window.removeEventListener(GIT_CHANGED, on);
 	}, [cwd]);
 
 	// A menu that outlives a click elsewhere is a menu you have to dismiss
@@ -203,7 +220,7 @@ export function GitActions({
 		setRunning(false);
 		setPending(null);
 		setResult(body.ok === undefined ? { ok: false, steps: [], error: body.error } : body);
-		await refresh();
+		gitChanged(cwd);
 		onDone?.();
 	};
 
