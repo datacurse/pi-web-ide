@@ -78,7 +78,7 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
 
 ## Tabs
 
-- Session (AI) tabs lead with an amber bold `π` (the greeting-screen mark); file tabs use `FileGlyph`, diff tabs `GitDiff`.
+- Session (AI) tabs lead with a bold `π` (the greeting-screen mark) that is also the live signal: `neutral-500` when idle, amber + `animate-pulse` while streaming. No separate dot. File tabs use `FileGlyph`, diff tabs `GitDiff`.
 
 ## Primitives (`src/web/ui.tsx`)
 

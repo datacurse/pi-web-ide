@@ -402,23 +402,23 @@ export function SessionTabs({
 								onKeyDown={(e) => moveFocus(e, i)}
 								className={`${tabClass(isActive)} pr-7`}
 							>
-								{/* Live even when this session is not the attached one — the
-								    same signal, and the same amber dot, as the list. */}
-								{info?.isStreaming && (
-									<span
-										aria-hidden
-										className="size-1.5 shrink-0 animate-pulse rounded-full bg-amber-400"
-									/>
-								)}
 								{/* A diff reads as a diff at a glance, the way VS Code's does —
 								    but as one glyph rather than "x (sha) ↔ x (sha)", which eats
 								    a whole strip. The rest is in `tabLabel` and the tooltip. */}
 								{isDiff && (
 									<GitDiff size={13} weight="bold" className="shrink-0 text-neutral-400" />
 								)}
-								{/* Marks an AI session so it never reads as a code tab. */}
+								{/* Marks an AI session so it never reads as a code tab, and
+								    doubles as its live signal: grey when idle, amber and
+								    pulsing while it works. Color alone still carries it under
+								    reduced motion, and no dot appears to shift the label. */}
 								{!isFile && (
-									<span aria-hidden className="shrink-0 font-bold leading-none text-amber-400">
+									<span
+										aria-hidden
+										className={`shrink-0 font-bold leading-none ${
+											info?.isStreaming ? "animate-pulse text-amber-400" : "text-neutral-500"
+										}`}
+									>
 										π
 									</span>
 								)}
