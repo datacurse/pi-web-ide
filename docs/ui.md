@@ -95,7 +95,7 @@ New UI uses these; convert raw markup when you touch it. Tune styles in
 | `sectionLabel`  | class string                                                | Uppercase group heading on any element. |
 | `inputClass.sm/md` | class string                                             | Inputs and textareas (a string so refs pass through). |
 | `ListRow`       | `selected`, `muted`, button props                           | Tree and list rows (Explorer, Source Control, directory picker). 22px; indent with `style.paddingLeft`. |
-| `tabClass(active)` | class string; caller adds `pr-7` (with close button) or `pr-2.5` | Session/editor tabs and terminal tabs: 32px, amber top border when active. |
+| `tabClass(active)` | class string; caller adds `pr-7` (with close button) or `pr-3` | Session/editor tabs and terminal tabs: flat, full `bar` height, amber 2px underline when active, no fill. The strip is `h-bar` with a hidden scrollbar (`.tab-strip`). |
 | `PanelHeader`   | `title?`, `onClose?`, `closeLabel?`, children               | Top row of a side panel or editor tab. Children go after the title. |
 
 - Body text defaults to `text-ui`; set a size only when it differs.

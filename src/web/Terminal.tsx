@@ -427,18 +427,18 @@ export function TerminalPane({
 
 	return (
 		<div className="flex min-h-0 min-w-0 flex-1 flex-col border-l border-neutral-800">
-			<div className="flex items-stretch gap-1 border-b border-neutral-800 bg-neutral-950 px-1">
+			<div className="flex h-bar shrink-0 items-stretch gap-1 border-b border-neutral-800 bg-neutral-950 px-1">
 				{/* Tabs are numbered, not named: a shell has no title until it is
 				    running something, and `bash` on all of them is noise. The
 				    number is the position, which is what a hand reaches for. */}
-				<div className="flex min-w-0 flex-1 items-stretch gap-0.5 overflow-x-auto">
+				<div className="tab-strip -mb-px flex min-w-0 flex-1 items-stretch overflow-x-auto">
 					{layout.tabs.map((t, i) => (
 						<button
 							key={i}
 							onClick={() => onLayout(selectTab(layout, i))}
 							aria-current={i === layout.active}
 							title={`Terminal tab ${i + 1}${t.terminals.length > 1 ? ` (${t.terminals.length} splits)` : ""}`}
-							className={`${tabClass(i === layout.active)} pr-2.5 font-mono`}
+							className={`${tabClass(i === layout.active)} pr-3 font-mono`}
 						>
 							{i + 1}
 							{t.terminals.length > 1 && (

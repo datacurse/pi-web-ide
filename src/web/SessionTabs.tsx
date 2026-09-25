@@ -200,7 +200,7 @@ export function SessionTabs({
 	};
 
 	return (
-		<div className="flex items-stretch gap-1 border-b border-neutral-800 bg-neutral-950 px-1">
+		<div className="flex h-bar shrink-0 items-stretch gap-1 border-b border-neutral-800 bg-neutral-950 px-1">
 			{/*
 			  On a narrow viewport the session list is a drawer, so its toggle has
 			  to live somewhere permanent. The strip's left edge is where a tab bar
@@ -271,7 +271,8 @@ export function SessionTabs({
 				// An empty tablist must not claim the free space, or the hint next to
 				// it is pushed into the middle of the strip. It does claim it when it
 				// is a drop target, because an empty column needs somewhere to aim.
-				className={`tab-strip flex min-w-0 items-stretch gap-1 overflow-x-auto ${
+				// -mb-px: the active tab's underline sits on the strip's border.
+				className={`tab-strip -mb-px flex min-w-0 items-stretch overflow-x-auto ${
 					tabs.length > 0 || onAdopt ? "flex-1" : "flex-none"
 				}`}
 			>
@@ -356,7 +357,7 @@ export function SessionTabs({
 								dragFrom.current = null;
 								setDrag(null);
 							}}
-							className={`group relative flex shrink-0 py-1 ${
+							className={`group relative flex shrink-0 ${
 								// The tab being dragged fades, so the marker is clearly a
 								// destination and not the tab itself.
 								drag?.from === i ? "opacity-40" : ""
@@ -375,14 +376,14 @@ export function SessionTabs({
 							{markSlot === i && (
 								<span
 									aria-hidden
-									className="pointer-events-none absolute inset-y-1 -left-[3px] w-0.5 rounded-full bg-amber-400"
+									className="pointer-events-none absolute inset-y-1.5 -left-px w-0.5 rounded-full bg-amber-400"
 								/>
 							)}
 							{/* The last gap has no tab after it to hang off. */}
 							{markSlot === tabs.length && i === tabs.length - 1 && (
 								<span
 									aria-hidden
-									className="pointer-events-none absolute inset-y-1 -right-[3px] w-0.5 rounded-full bg-amber-400"
+									className="pointer-events-none absolute inset-y-1.5 -right-px w-0.5 rounded-full bg-amber-400"
 								/>
 							)}
 							<button
@@ -445,7 +446,7 @@ export function SessionTabs({
 											: "Close tab"
 										: "Close tab (the session keeps running)"
 								}
-								className={`tab-close absolute top-1/2 right-1.5 flex size-6 -translate-y-1/2 items-center justify-center rounded-sm text-ui leading-none text-neutral-400 transition-opacity duration-150 ease-out after:absolute after:-inset-1 after:content-[''] hover:bg-neutral-700 hover:text-neutral-50 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-neutral-400 motion-reduce:transition-none ${
+								className={`tab-close absolute top-1/2 right-1.5 flex size-6 -translate-y-1/2 items-center justify-center rounded-sm text-ui leading-none text-neutral-400 transition-opacity duration-150 ease-out after:absolute after:-inset-1 after:content-[''] hover:bg-neutral-800 hover:text-neutral-50 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-neutral-400 motion-reduce:transition-none ${
 									isActive
 										? "opacity-100"
 										: "opacity-0 group-focus-within:opacity-100 group-hover:opacity-100"

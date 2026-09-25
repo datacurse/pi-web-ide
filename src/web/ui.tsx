@@ -136,13 +136,13 @@ export const inputClass = {
 /*
  * A tab in a strip (editor/session tabs, terminal tabs). A class, not a
  * component, because tabs carry refs and roving-tabindex props. The caller
- * adds right padding: `pr-7` when a close button overlays the tab, else `pr-2.5`.
+ * adds right padding: `pr-7` when a close button overlays the tab, else `pr-3`.
  */
 export const tabClass = (active: boolean) =>
-	`flex h-8 max-w-52 shrink-0 items-center gap-1.5 rounded-t-sm border-t-2 pl-2.5 text-ui ${EASE} ${FOCUS} ${
+	`flex h-bar max-w-52 shrink-0 items-center gap-1.5 border-b-2 pl-3 text-ui ${EASE} ${FOCUS} ${
 		active
-			? "border-amber-400 bg-neutral-800 font-semibold text-neutral-50"
-			: "border-transparent text-neutral-300 hover:bg-neutral-900 hover:text-neutral-50"
+			? "border-amber-400 text-neutral-50"
+			: "border-transparent text-neutral-400 hover:bg-neutral-900 hover:text-neutral-100"
 	}`;
 
 /* A labelled group of settings rows. */

@@ -491,6 +491,9 @@ body {
 	/* Flicking to the end of the strip must not start a page/pull-to-refresh
 	   gesture behind it. */
 	overscroll-behavior-x: contain;
+	/* The wheel and touch already scroll it; a scrollbar row under the tabs is
+	   clutter. */
+	scrollbar-width: none;
 }
 
 /*
