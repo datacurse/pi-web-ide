@@ -221,14 +221,14 @@ export function FileEditor({
 	return (
 		<div className="flex min-h-0 min-w-0 flex-1 flex-col bg-neutral-950" onKeyDown={onKeyDown}>
 			<div className="flex items-center gap-2 border-b border-neutral-800 px-3 py-1.5">
-				<span className="min-w-0 truncate font-mono text-xs text-neutral-400" title={path}>
+				<span className="min-w-0 truncate font-mono text-meta text-neutral-400" title={path}>
 					{shortPath(path, cwd)}
 				</span>
 				<button
 					onClick={() => void save()}
 					disabled={!dirty || saving}
 					title="Save (Ctrl+S)"
-					className="ml-auto flex shrink-0 items-center gap-1 rounded px-2 py-0.5 text-xs text-neutral-300 hover:bg-neutral-800 disabled:opacity-40"
+					className="ml-auto flex shrink-0 items-center gap-1 rounded-sm px-2 py-0.5 text-meta text-neutral-300 hover:bg-neutral-800 disabled:opacity-40"
 				>
 					<FloppyDisk size={13} />
 					Save
@@ -236,7 +236,7 @@ export function FileEditor({
 				<button
 					onClick={() => void reload()}
 					title="Re-read from disk, discarding edits in this tab"
-					className="flex shrink-0 items-center gap-1 rounded px-2 py-0.5 text-xs text-neutral-300 hover:bg-neutral-800"
+					className="flex shrink-0 items-center gap-1 rounded-sm px-2 py-0.5 text-meta text-neutral-300 hover:bg-neutral-800"
 				>
 					<ArrowClockwise size={13} />
 					Reload
@@ -244,12 +244,12 @@ export function FileEditor({
 			</div>
 
 			{error && (
-				<div className="border-b border-red-900 bg-red-950/40 px-3 py-2 text-xs text-red-300">
+				<div className="border-b border-red-900 bg-red-950/40 px-3 py-2 text-meta text-red-300">
 					{error}
 				</div>
 			)}
 
-			<div ref={host} className="cm-editor-host min-h-0 flex-1 overflow-auto text-sm" />
+			<div ref={host} className="cm-editor-host min-h-0 flex-1 overflow-auto text-body" />
 		</div>
 	);
 }

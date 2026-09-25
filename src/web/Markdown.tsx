@@ -28,15 +28,15 @@ function CodeBlock({ lang, text }: { lang?: string; text: string }) {
 	return (
 		<div className="chat-wide group relative my-2">
 			{lang && (
-				<div className="absolute top-1.5 left-2 font-mono text-[10px] text-neutral-600 select-none">{lang}</div>
+				<div className="absolute top-1.5 left-2 font-mono text-caption text-neutral-600 select-none">{lang}</div>
 			)}
 			<button
 				onClick={copy}
-				className="absolute top-1.5 right-2 rounded bg-neutral-800 px-1.5 py-0.5 text-[10px] text-neutral-400 opacity-0 hover:bg-neutral-700 group-hover:opacity-100"
+				className="absolute top-1.5 right-2 rounded-sm bg-neutral-800 px-1.5 py-0.5 text-caption text-neutral-400 opacity-0 hover:bg-neutral-700 group-hover:opacity-100"
 			>
 				{copied ? "Copied" : "Copy"}
 			</button>
-			<pre className="chat-code overflow-x-auto rounded bg-neutral-900 p-2 pt-6 text-neutral-300">
+			<pre className="chat-code overflow-x-auto rounded-sm bg-neutral-900 p-2 pt-6 text-neutral-300">
 				<code>{text}</code>
 			</pre>
 		</div>
@@ -97,7 +97,7 @@ function makeRenderRule(math: MathSpan[]) {
 			return <CodeBlock key={state.key} lang={node.lang} text={node.text} />;
 		if (node.type === RuleType.codeInline)
 			return (
-				<code key={state.key} className="rounded bg-neutral-800 px-1 py-0.5 text-[0.85em] text-neutral-300">
+				<code key={state.key} className="rounded-sm bg-neutral-800 px-1 py-0.5 text-code-inline text-neutral-300">
 					{node.text}
 				</code>
 			);
@@ -140,11 +140,11 @@ const options: MarkdownToJSX.Options = {
 		blockquote: {
 			props: { className: "chat-measure my-1 border-l-2 border-neutral-700 pl-2 text-neutral-400 italic" },
 		},
-		h1: { props: { className: "chat-measure mt-3 mb-1 text-xl font-semibold" } },
-		h2: { props: { className: "chat-measure mt-3 mb-1 text-lg font-semibold" } },
-		h3: { props: { className: "chat-measure mt-3 mb-1 text-base font-semibold" } },
-		h4: { props: { className: "chat-measure mt-2 mb-1 text-base font-semibold" } },
-		table: { props: { className: "chat-wide my-2 border-collapse text-sm" } },
+		h1: { props: { className: "chat-measure mt-3 mb-1 text-h1 font-semibold" } },
+		h2: { props: { className: "chat-measure mt-3 mb-1 text-h2 font-semibold" } },
+		h3: { props: { className: "chat-measure mt-3 mb-1 text-h3 font-semibold" } },
+		h4: { props: { className: "chat-measure mt-2 mb-1 text-h3 font-semibold" } },
+		table: { props: { className: "chat-wide my-2 border-collapse text-body" } },
 		th: { props: { className: "border border-neutral-800 px-2 py-1 text-left font-semibold" } },
 		td: { props: { className: "border border-neutral-800 px-2 py-1" } },
 		// Paragraph spacing tracks the text size rather than a fixed 4px: at

@@ -73,7 +73,7 @@ export function ProjectPicker({
 				onChange={(e) => onProject(e.target.value)}
 				title={project}
 				aria-label="Project"
-				className="min-w-0 flex-1 truncate rounded bg-neutral-900 px-1.5 py-1 text-xs text-neutral-300 outline-none"
+				className="min-w-0 flex-1 truncate rounded-sm bg-neutral-900 px-1.5 py-1 text-meta text-neutral-300 outline-none"
 			>
 				{options.map((p) => (
 					<option key={p} value={p}>
@@ -87,7 +87,7 @@ export function ProjectPicker({
 				disabled={!!projects.error}
 				aria-label="Add project directory"
 				title="Add project directory"
-				className="shrink-0 rounded bg-neutral-800 px-2 py-1 text-xs transition-colors duration-150 ease-out hover:bg-neutral-700 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 disabled:opacity-40 motion-reduce:transition-none"
+				className="shrink-0 rounded-sm bg-neutral-800 px-2 py-1 text-meta transition-colors duration-150 ease-out hover:bg-neutral-700 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 disabled:opacity-40 motion-reduce:transition-none"
 			>
 				<FolderPlus size={13} />
 			</button>
@@ -109,7 +109,7 @@ export function ProjectPicker({
 					}}
 					aria-label={`Remove ${project} from the list`}
 					title="Remove this project from the list (keeps sessions on disk)"
-					className="shrink-0 rounded bg-neutral-800 px-2 py-1 text-xs text-neutral-400 transition-colors duration-150 ease-out hover:bg-neutral-700 hover:text-neutral-100 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 motion-reduce:transition-none"
+					className="shrink-0 rounded-sm bg-neutral-800 px-2 py-1 text-meta text-neutral-400 transition-colors duration-150 ease-out hover:bg-neutral-700 hover:text-neutral-100 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 motion-reduce:transition-none"
 				>
 					<X size={13} />
 				</button>

@@ -22,7 +22,6 @@ import { DiffView } from "./DiffView.js";
 import { Explorer } from "./Explorer.js";
 import { FileEditor } from "./FileEditor.js";
 import {
-	chatSideOf,
 	collapse,
 	diffParts,
 	diffTab,
@@ -105,16 +104,16 @@ function PanelEmpty({
 			className="flex min-h-0 min-w-0 flex-1 flex-col bg-neutral-950"
 		>
 			<div className="flex items-center gap-2 border-b border-neutral-800 px-3 py-2">
-				<span className="text-sm text-neutral-300">{title}</span>
+				<span className="text-ui text-neutral-300">{title}</span>
 				<button
 					onClick={onClose}
 					aria-label={`Close ${title.toLowerCase()}`}
-					className="ml-auto rounded p-1 text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200"
+					className="ml-auto rounded-sm p-1 text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200"
 				>
 					<X size={16} />
 				</button>
 			</div>
-			<p className="p-4 text-sm text-neutral-500">{children}</p>
+			<p className="p-4 text-ui text-neutral-500">{children}</p>
 		</section>
 	);
 }
@@ -221,11 +220,8 @@ const SPLIT_PANEL_ID = "split-panel";
  * symmetric — the same strip, the same drop targets, the same rules — rather
  * than a real editor and a lesser copy of one.
  *
- * `chat` is passed in as an element rather than rendered here, because there
- * is exactly one chat in the app: one EventSource, one transcript, one
- * composer. Handing that single instance to whichever column holds the
- * attached session means dragging the session across MOVES the chat instead
- * of building a second one.
+ * `chat` is passed in as an element: each column's chat is wired to that
+ * column's own session hook (see `useSession`).
  */
 function EditorColumn({
 	side,
@@ -268,7 +264,7 @@ function EditorColumn({
 	sessionId?: string;
 	hunks: Hunk[];
 	onHunksChanged: () => void;
-	/** The one chat, when this column is the one holding the attached session. */
+	/** This column's chat, or null when the column holds no session. */
 	chat: React.ReactNode;
 }) {
 	const active = group.active;
@@ -370,7 +366,7 @@ function EditorColumn({
 					)}
 					{/* Nothing to show: an empty column says so rather than going blank. */}
 					{!showsDoc && !chat && (
-						<p className="m-auto px-4 text-center text-sm text-neutral-500">
+						<p className="m-auto px-4 text-center text-ui text-neutral-500">
 							Drag a tab here, or pick one above.
 						</p>
 					)}
@@ -508,11 +504,7 @@ interface Tabs {
 	/**
 	 * The SECOND editor column, when the strip has been split.
 	 *
-	 * Files only, and that is a constraint rather than a simplification: the
-	 * chat is one EventSource, one snapshot and one composer (see `attach`),
-	 * so a session tab in a second column would need a whole parallel attach
-	 * pipeline to render anything. A session dropped into the split therefore
-	 * stays where it is — see `moveToGroup`.
+	 * Holds files and sessions alike; each column has its own session hook.
 	 *
 	 * Undefined means unsplit, which is distinct from split-and-empty: the
 	 * latter cannot occur, because emptying the column closes it.
@@ -566,17 +558,38 @@ function parseGroup(raw: unknown, taken: string[]): TabGroup | undefined {
 	};
 }
 
-export default function App() {
-	const [sessions, setSessions] = useState<PiSessionInfo[]>([]);
-	/**
-	 * The project whose session list we have actually SEEN, successfully. It
-	 * gates dropping remembered tabs: absence from a list we never received is
-	 * not evidence of absence, and pruning on a failed or restarting-server
-	 * fetch would wipe the whole strip on a transient error.
-	 */
-	const [listedProject, setListedProject] = useState("");
-	/** Why the last session listing failed, shown in place of an empty list. */
-	const [listError, setListError] = useState<string | null>(null);
+/** What a session hook needs from App: the tab strip, and the listing it keeps fresh. */
+interface SessionEnv {
+	side: Side;
+	project: string;
+	scope: string;
+	tabsRef: React.MutableRefObject<Tabs>;
+	commitTabs: (tabs: Tabs) => void;
+	/** Close a tab in whichever column holds it: how a vanished session leaves. */
+	closeRef: React.MutableRefObject<(file: string) => void>;
+	refreshSessions: () => Promise<void>;
+	announce: (file: string | undefined, body: string) => void;
+	opened: React.MutableRefObject<Set<string>>;
+	setPending: React.Dispatch<React.SetStateAction<PiSessionInfo[]>>;
+}
+
+/**
+ * One attached session: its snapshot, its EventSource, its composer actions.
+ *
+ * Called once per editor column, so each column shows its own conversation.
+ */
+function useSession({
+	side,
+	project,
+	scope,
+	tabsRef,
+	commitTabs,
+	closeRef,
+	refreshSessions,
+	announce,
+	opened,
+	setPending,
+}: SessionEnv) {
 	const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
 	/**
 	 * Whether the pane is waiting for a session to open.
@@ -606,6 +619,600 @@ export default function App() {
 	 */
 	const [command, setCommand] = useState<{ text: string; running: boolean } | null>(null);
 	const [modelError, setModelError] = useState<string | null>(null);
+
+	const esRef = useRef<EventSource | null>(null);
+	/**
+	 * Ticket for the newest attach. An attach whose ticket is no longer the
+	 * current one has been superseded by a later selection, and may not move
+	 * the selection or the pane; see attach().
+	 */
+	const attachSeq = useRef(0);
+	// attach() reconnects by calling itself; a useCallback cannot reference itself.
+	const attachRef = useRef<(file?: string) => Promise<void>>(async () => {});
+
+	/**
+	 * The tab this hook is showing or opening. App's `sync` compares a
+	 * column's selected tab against it to decide whether to attach.
+	 */
+	const targetRef = useRef<string | undefined>(undefined);
+
+	/** Stop streaming and show the empty pane. Not an abort: see closeTab. */
+	const detach = useCallback(() => {
+		// An attach still in flight must not land in a pane that was emptied.
+		attachSeq.current++;
+		targetRef.current = undefined;
+		esRef.current?.close();
+		esRef.current = null;
+		setSnapshot(null);
+		setPartial(emptyPartial());
+		setBusy(false);
+		setModelError(null);
+		// Closing the last tab is not a pending open: the pane must fall back to
+		// "Select a session", not sit on "Opening session…".
+		setOpening(false);
+	}, []);
+
+	/**
+	 * Attach to a session. The server is authoritative: we GET the full state
+	 * and only then start applying deltas. On any doubt we refetch rather than
+	 * trying to repair local state.
+	 */
+	const attach = useCallback(
+		async (file?: string) => {
+			/*
+			 * Creating a session needs a project, and the project list arrives
+			 * asynchronously: pressing `+ New` before it does used to POST a blank
+			 * cwd, which the server resolved to its OWN directory — so the session
+			 * was created against a directory the user never selected. Resuming is
+			 * unaffected (the session header carries the cwd), so only the create
+			 * path waits.
+			 */
+			if (!file && !project) return;
+
+			/*
+			 * Every attach takes a ticket, and a stale ticket may not touch the
+			 * screen.
+			 *
+			 * Opening is slow enough to switch tabs during — so `+ New`, or a
+			 * click on a big session, used to land its answer seconds later and
+			 * yank the user out of whatever they had selected meanwhile. The
+			 * session itself is fine (it exists server-side and gets its tab); it
+			 * is the FOCUS that must not move after the user has moved it.
+			 */
+			const seq = ++attachSeq.current;
+			const superseded = () => attachSeq.current !== seq;
+			targetRef.current = file;
+
+			esRef.current?.close();
+			esRef.current = null;
+			setPartial(emptyPartial());
+			setModelError(null);
+
+			/*
+			 * Blank the pane when this attach is for a DIFFERENT session.
+			 *
+			 * Opening spawns a pi child and reads the whole transcript, so on a
+			 * big session it is seconds. Leaving the previous conversation on
+			 * screen for those seconds made a click in the session list look like
+			 * it had done nothing at all — the tab strip changed, the thing filling
+			 * the window did not. A reattach to the SAME session (an EventSource
+			 * that dropped, a server restart) deliberately keeps its transcript:
+			 * there is nothing new to wait for and blanking it would be a flicker.
+			 */
+			const showing = snapshotRef.current;
+			const same = showing && file && (showing.file === file || showing.id === file);
+			if (!same) {
+				setSnapshot(null);
+				setBusy(false);
+				setOpening(true);
+			}
+
+			const r = await fetch(`/api/sessions/open`, {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				// Never a blank string: the server rejects that, precisely because it
+				// used to mean "the server's own cwd" and silently misfiled sessions.
+				body: JSON.stringify({ file, cwd: project || undefined }),
+			}).catch(() => null);
+
+			// Server unreachable (restarting, or not up yet) is TEMPORARY — keep
+			// trying, and keep the tab. Only a 404 below means the session is gone.
+			if (!r) {
+				// "The server is restarting" resolves by waiting, so this one retries
+				// — unless the user has since asked for a different session, in which
+				// case retrying would eventually steal the pane back.
+				if (!superseded()) setTimeout(() => void attachRef.current(file), 1_000);
+				return;
+			}
+			if (!r.ok) {
+				if (superseded()) return;
+				/*
+				 * Two positive answers cost this tab its slot, and nothing else
+				 * does: 404 means neither the registry nor the disk knows this file,
+				 * and 409 means the file belongs to another project — a session
+				 * remembered under the wrong project's key, which must not be shown
+				 * under the selected one. It keeps running server-side and is
+				 * reachable by selecting its real project. Any other status is the
+				 * server having a bad time, not a missing session, and must not cost
+				 * the user a tab.
+				 */
+				// The retry path above keeps `opening` set, because it really is
+				// still opening. This one is over: the session is gone or is not
+				// this project's, and the pane goes back to its resting text.
+				setOpening(false);
+				if (file && (r.status === 404 || r.status === 409)) closeRef.current(file);
+				return;
+			}
+
+			const snap = toSnapshot(await r.json());
+
+			/*
+			 * Open the tab from the SERVER's answer, not from the requested file:
+			 * `+ New` passes no file and only the response knows which session was
+			 * created. One code path therefore covers new sessions, list clicks and
+			 * restores. The id is the fallback key for a session with no file yet,
+			 * so two unsaved sessions cannot collide on `undefined`.
+			 *
+			 * The tab is registered even for a superseded attach — the session was
+			 * created, and a created session with no tab is unreachable — but it is
+			 * only SELECTED when this attach is still the one the user is waiting
+			 * for.
+			 */
+			const key = snap.file ?? snap.id;
+			opened.current.add(key);
+			setPending((list) => {
+				if (list.some((s) => s.path === key)) return list;
+				const now = new Date().toISOString();
+				return [
+					...list,
+					{
+						id: snap.id,
+						path: key,
+						created: now,
+						lastActive: now,
+						messageCount: 0,
+						firstMessage: "",
+					},
+				];
+			});
+			const current = tabsRef.current;
+			if (current.project === scope) {
+				/*
+				 * Which column this session's tab already lives in.
+				 *
+				 * Attaching must not ASSUME the left one. A session dragged into the
+				 * second column is still the attached session, and reloading the page
+				 * re-attaches it — which used to append a second tab for it on the
+				 * left, so one session showed up in both columns and the left copy
+				 * rendered an empty pane, because the chat can only be in one place.
+				 *
+				 * A session in NEITHER column is new: it goes where the chat already
+				 * is, so "+" next to a session in the second column opens beside it
+				 * instead of yanking the chat back to the first.
+				 */
+				const at: Side = sideOfTab(current, key, snap.id) ?? side;
+				const group = groupOf(current, at);
+				// Before the commit: `sync` runs inside it and must see this tab
+				// as already ours, or it would open it a second time.
+				if (!superseded()) targetRef.current = key;
+				// Replace a placeholder id-keyed tab once the file exists, rather
+				// than ending up with two tabs for one session.
+				const files = group.files.filter((f) => f !== snap.id || f === key);
+				commitTabs(
+					withGroup(current, at, {
+						files: files.includes(key) ? files : [...files, key],
+						active: superseded() ? group.active : key,
+					}),
+				);
+			}
+
+			/*
+			 * Past here is the attached state — transcript, deltas, composer — and
+			 * a superseded attach must claim none of it. Installing its
+			 * EventSource would be the worst of it: the stream of a session nobody
+			 * is looking at, writing into the pane of the one they are.
+			 */
+			if (superseded()) return;
+
+			setOpening(false);
+			setSnapshot(snap);
+			// A mid-stream reattach gets the in-flight message from the server, so
+			// there is never a hole where streamed text should be.
+			setPartial(snap.partial ?? emptyPartial());
+			setBusy(snap.isStreaming);
+
+			const es = new EventSource(`/api/sessions/${snap.id}/events`);
+			esRef.current = es;
+
+			/*
+			 * The id is a handle on a LIVE session and the server can lose it —
+			 * restart, crash, idle eviction. The FILE is the durable identity, so
+			 * reopen through it instead of leaving a tab wired to a dead id. Retry
+			 * on a delay because "server is down" and "server just restarted" look
+			 * identical from here, and only one of them resolves by waiting.
+			 */
+			const reattach = () => {
+				if (esRef.current !== es) return; // superseded by a newer attach
+				es.close();
+				setTimeout(() => {
+					if (esRef.current === es) void attachRef.current(snap.file);
+				}, 1_000);
+			};
+
+			const refetch = async (): Promise<Snapshot | undefined> => {
+				const rr = await fetch(`/api/sessions/${snap.id}`).catch(() => null);
+				if (!rr || rr.status === 404) {
+					reattach();
+					return undefined;
+				}
+				if (!rr.ok) return undefined;
+				const s = toSnapshot(await rr.json());
+				setSnapshot(s);
+				setPartial(s.partial ?? emptyPartial());
+				setBusy(s.isStreaming);
+				return s;
+			};
+
+			/*
+			 * Did this attachment actually WATCH a run? An `idle` also arrives
+			 * for a session that was already finished when we attached, and
+			 * announcing that would mean a notification for merely opening a
+			 * tab. Seeded from the snapshot so a mid-stream reattach still
+			 * counts as watching.
+			 */
+			let worked = snap.isStreaming;
+
+			es.onmessage = (raw) => {
+				let e: PiEvent;
+				try {
+					e = JSON.parse(raw.data);
+				} catch {
+					// A malformed frame must not kill the handler for every later event.
+					void refetch();
+					return;
+				}
+				switch (e.type) {
+					case "text":
+						setBusy(true);
+						// A command that turned into a real turn (`/review`) is no
+						// longer waiting on anything — the turn itself is the answer,
+						// and the transcript now shows it.
+						setCommand(null);
+						worked = true;
+						setPartial((p) => ({ ...p, text: p.text + e.delta }));
+						break;
+					case "thinking":
+						setBusy(true);
+						worked = true;
+						setPartial((p) => ({ ...p, thinking: p.thinking + e.delta }));
+						break;
+					case "tool_start":
+						worked = true;
+						setPartial((p) => ({
+							...p,
+							tools: [...p.tools, { id: e.id, name: e.name, args: e.args }],
+						}));
+						break;
+					case "tool_end":
+						setPartial((p) => ({
+							...p,
+							tools: p.tools.map((t) =>
+								t.id === e.id ? { ...t, result: e.result, isError: e.isError } : t,
+							),
+						}));
+						break;
+					case "message_done":
+						// Refetch rather than appending: the server already settled this
+						// into the session, and its copy is the one that matters.
+						void refetch();
+						break;
+					case "notice":
+						// Appended locally rather than refetched: the answer to a
+						// command is the whole event, and a refetch of a long
+						// transcript to learn one line is the wrong trade.
+						setSnapshot((s) => (s ? { ...s, notices: [...s.notices, e.notice] } : s));
+						// This IS the answer a local command was waiting for; the
+						// command itself stays, as the record of what was asked.
+						setCommand((c) => (c ? { ...c, running: false } : c));
+						break;
+					case "ask":
+						// The agent is blocked on this until it is answered, so it is
+						// also the one event worth a notification: nothing else moves
+						// until the user comes back.
+						setSnapshot((s) => (s ? { ...s, ask: e.ask } : s));
+						if (e.ask) announce(snap.file, askLine(e.ask));
+						break;
+					case "tool_update":
+						// Cumulative output: replace, never append.
+						setPartial((p) => ({
+							...p,
+							tools: p.tools.map((t) => (t.id === e.id ? { ...t, result: e.result } : t)),
+						}));
+						break;
+					case "idle":
+						setBusy(false);
+						void (async () => {
+							const settled = await refetch();
+							if (worked) announce(snap.file, replyLine(settled));
+							worked = false;
+						})();
+						void refreshSessions();
+						break;
+					case "error":
+						setBusy(false);
+						setCommand((c) => (c ? { ...c, running: false } : c));
+						if (worked) {
+							worked = false;
+							announce(snap.file, `Failed: ${e.message}`);
+						}
+						setSnapshot((s) => (s ? { ...s, error: e.message } : s));
+						break;
+				}
+			};
+
+			// The browser retries a dropped SSE connection on its own, but gives up
+			// for good on an HTTP error — exactly what a restarted server returns for
+			// an id it no longer has. CLOSED means only we can recover it.
+			es.onerror = () => {
+				if (es.readyState === EventSource.CLOSED) reattach();
+				else void refetch();
+			};
+		},
+		[refreshSessions, project, scope, commitTabs, closeRef, announce, side, tabsRef, opened, setPending],
+	);
+
+	attachRef.current = attach;
+
+	useEffect(() => () => esRef.current?.close(), []);
+
+	// The spinner stops on its own: `/model` and friends change the session
+	// without printing anything, so no answer is ever coming for them and
+	// nothing else would ever take the "running" off.
+	useEffect(() => {
+		if (!command?.running) return;
+		const t = setTimeout(
+			() => setCommand((c) => (c ? { ...c, running: false } : c)),
+			COMMAND_RUNNING_MAX_MS,
+		);
+		return () => clearTimeout(t);
+	}, [command]);
+
+	const send = useCallback(
+		async (text: string, images?: PiImage[]) => {
+			if (!snapshot) return;
+			setBusy(true);
+			// A local command appends no message: this row IS the record that it
+			// was sent. And the ack below is acceptance, not completion — the
+			// answer arrives later as a notice, so it starts out running.
+			const trimmed = text.trim();
+			setCommand(trimmed.startsWith("/") ? { text: trimmed, running: true } : null);
+			// Show the message now, not after pi acks it. Every refetch replaces
+			// `messages` wholesale, so the server's copy supersedes this one. Not
+			// while streaming: a follow-up is queued, and would jump position.
+			const optimistic: PiMessage | null =
+				!busy && !trimmed.startsWith("/")
+					? {
+							role: "user",
+							blocks: [
+								...(text ? [{ kind: "text" as const, text }] : []),
+								...(images ?? []).map((i) => ({ kind: "image" as const, ...i })),
+							],
+							timestamp: Date.now(),
+						}
+					: null;
+			if (optimistic) setSnapshot((s) => (s ? { ...s, messages: [...s.messages, optimistic] } : s));
+			const r = await fetch(`/api/sessions/${snapshot.id}/prompt`, {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ text, images }),
+			});
+
+			// A rejected prompt (unsupported type, too large, 413) never reaches the
+			// session, so no SSE error is coming — surface it here or it is lost and
+			// the UI just sits on a spinner that will never resolve.
+			if (!r.ok) {
+				const body = await r.json().catch(() => ({}) as { error?: string });
+				setBusy(false);
+				setCommand(null);
+				setSnapshot((s) =>
+					s
+						? {
+								...s,
+								messages: s.messages.filter((m) => m !== optimistic),
+								error: body.error ?? `prompt failed (${r.status})`,
+							}
+						: s,
+				);
+				return;
+			}
+
+			const rr = await fetch(`/api/sessions/${snapshot.id}`);
+			if (rr.ok) setSnapshot(toSnapshot(await rr.json()));
+		},
+		[snapshot, busy],
+	);
+
+	const abort = useCallback(async () => {
+		if (!snapshot) return;
+		await fetch(`/api/sessions/${snapshot.id}/abort`, { method: "POST" });
+	}, [snapshot]);
+
+	/**
+	 * Fold the conversation. The transcript and the meter move when
+	 * `compaction_end` arrives over SSE, not here — a compaction takes a model
+	 * call, and pretending otherwise would blank the meter before the summary
+	 * exists. A refusal (mid-turn) is shown where every other session error is.
+	 */
+	const compact = useCallback(async () => {
+		if (!snapshot) return;
+		const r = await fetch(`/api/sessions/${snapshot.id}/compact`, { method: "POST" });
+		if (r.ok) return;
+		const body = await r.json().catch(() => ({}) as { error?: string });
+		setSnapshot((s) => (s ? { ...s, error: body.error ?? "could not compact" } : s));
+	}, [snapshot]);
+
+	/**
+	 * Replace this session's pi child so it picks up a newly installed
+	 * package. The transcript comes back from the server's fresh snapshot —
+	 * the conversation is on disk, only the process changed.
+	 */
+	const restart = useCallback(async () => {
+		if (!snapshot) return;
+		const r = await fetch(`/api/sessions/${snapshot.id}/restart`, { method: "POST" });
+		const body: unknown = await r.json().catch(() => null);
+		if (r.ok && body && typeof body === "object") {
+			setSnapshot(toSnapshot(body as Partial<Snapshot>));
+			return;
+		}
+		const reason =
+			body && typeof body === "object" && "error" in body && typeof body.error === "string"
+				? body.error
+				: "could not restart this session";
+		setSnapshot((s) => (s ? { ...s, error: reason } : s));
+	}, [snapshot]);
+
+	/**
+	 * Re-read the open session's snapshot.
+	 *
+	 * For facts that change OUTSIDE the event stream — a package installed
+	 * from the Packages screen makes this session stale, and nothing in the
+	 * session's own frames will ever say so.
+	 */
+	const reloadSnapshot = useCallback(async () => {
+		if (!snapshot) return;
+		const r = await fetch(`/api/sessions/${snapshot.id}`);
+		if (r.ok) setSnapshot(toSnapshot(await r.json()));
+	}, [snapshot]);
+
+	/**
+	 * Re-read the slash command catalog when the composer's picker opens.
+	 *
+	 * pi pushes nothing when the set changes, and it does change under a live
+	 * session: installing a package, or dropping a file in `.pi/prompts`, adds
+	 * commands the child only sees when asked. Asking on every `/` keystroke
+	 * would be a round trip per character, so the answer is good for half a
+	 * minute — a package install is not a keystroke.
+	 */
+	const commandsFetchedAt = useRef<{ id: string; at: number } | null>(null);
+	const refreshCommands = useCallback(async () => {
+		if (!snapshot) return;
+		const last = commandsFetchedAt.current;
+		if (last && last.id === snapshot.id && Date.now() - last.at < 30_000) return;
+		commandsFetchedAt.current = { id: snapshot.id, at: Date.now() };
+		const r = await fetch(`/api/sessions/${snapshot.id}/commands`, {
+			method: "POST",
+		}).catch(() => null);
+		if (!r?.ok) return;
+		const body: unknown = await r.json().catch(() => null);
+		if (!body || typeof body !== "object" || !("commands" in body)) return;
+		const commands = body.commands;
+		if (!Array.isArray(commands)) return;
+		setSnapshot((s) => (s && s.id === snapshot.id ? { ...s, commands } : s));
+	}, [snapshot]);
+
+	/**
+	 * Answer the question pi is blocked on.
+	 *
+	 * The panel is cleared optimistically: the `ask` event that confirms it
+	 * comes back over SSE, and leaving the question on screen until it arrives
+	 * would invite a second click on a dialog that is already answered. A 409
+	 * means it was gone before the click landed (timed out, or the turn was
+	 * aborted), which the refetch below then reflects.
+	 */
+	const answerAsk = useCallback(
+		async (askId: string, answer: AskAnswer) => {
+			if (!snapshot) return;
+			setSnapshot((s) => (s ? { ...s, ask: null } : s));
+			const r = await fetch(`/api/sessions/${snapshot.id}/ask`, {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ askId, ...answer }),
+			});
+			if (r.ok) return;
+			const rr = await fetch(`/api/sessions/${snapshot.id}`);
+			if (rr.ok) setSnapshot(toSnapshot(await rr.json()));
+		},
+		[snapshot],
+	);
+
+	const changeModel = useCallback(
+		async (model: string) => {
+			if (!snapshot) return;
+			setModelError(null);
+			const r = await fetch(`/api/sessions/${snapshot.id}/model`, {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ model }),
+			});
+			if (!r.ok) {
+				const body = await r.json().catch(() => ({}));
+				setModelError(body.error ?? "failed to switch model");
+				return;
+			}
+			const rr = await fetch(`/api/sessions/${snapshot.id}`);
+			if (rr.ok) setSnapshot(await rr.json());
+		},
+		[snapshot],
+	);
+
+	/**
+	 * Reasoning effort. Shares `modelError` with the model switch: both are
+	 * the same control group saying "the session refused that", and a second
+	 * error slot would be a second thing to render in the same corner.
+	 */
+	const changeThinking = useCallback(
+		async (level: string) => {
+			if (!snapshot) return;
+			setModelError(null);
+			const r = await fetch(`/api/sessions/${snapshot.id}/thinking`, {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ level }),
+			});
+			if (!r.ok) {
+				const body = await r.json().catch(() => ({}));
+				setModelError(body.error ?? "failed to set thinking level");
+				return;
+			}
+			const rr = await fetch(`/api/sessions/${snapshot.id}`);
+			if (rr.ok) setSnapshot(await rr.json());
+		},
+		[snapshot],
+	);
+
+	return {
+		snapshot,
+		partial,
+		busy,
+		opening,
+		command,
+		modelError,
+		targetRef,
+		attach,
+		detach,
+		send,
+		abort,
+		compact,
+		restart,
+		reloadSnapshot,
+		refreshCommands,
+		answerAsk,
+		changeModel,
+		changeThinking,
+	};
+}
+
+export default function App() {
+	const [sessions, setSessions] = useState<PiSessionInfo[]>([]);
+	/**
+	 * The project whose session list we have actually SEEN, successfully. It
+	 * gates dropping remembered tabs: absence from a list we never received is
+	 * not evidence of absence, and pruning on a failed or restarting-server
+	 * fetch would wipe the whole strip on a transient error.
+	 */
+	const [listedProject, setListedProject] = useState("");
+	/** Why the last session listing failed, shown in place of an empty list. */
+	const [listError, setListError] = useState<string | null>(null);
 	const [listOpen, setListOpen] = useState(false);
 	/**
 	 * Which side panel is showing, if any — one value, because they are
@@ -651,15 +1258,6 @@ export default function App() {
 	const [toolMode, setToolMode] = useState<ToolMode>(readToolMode);
 	const [notify, setNotify] = useState(readNotify);
 	const [shortNames, setShortNames] = useState(readShortNames);
-	const esRef = useRef<EventSource | null>(null);
-	/**
-	 * Ticket for the newest attach. An attach whose ticket is no longer the
-	 * current one has been superseded by a later selection, and may not move
-	 * the selection or the pane; see attach().
-	 */
-	const attachSeq = useRef(0);
-	// attach() reconnects by calling itself; a useCallback cannot reference itself.
-	const attachRef = useRef<(file?: string) => Promise<void>>(async () => {});
 	/** This pwi's project list: its directories plus the cwd it was launched against. */
 	const [projects, setProjects] = useState<Projects>({ projects: [], seed: "" });
 	const [project, setProject] = useState<string>(() => readWindowProject() ?? "");
@@ -909,12 +1507,15 @@ export default function App() {
 	 * cannot tell the caller that.
 	 */
 	const tabsRef = useRef(tabs);
+	/** Attaches each column's selected session; assigned below the session hooks. */
+	const syncRef = useRef<(next: Tabs) => void>(() => {});
 	const commitTabs = useCallback((raw: Tabs) => {
 		// An emptied first column takes over the second's tabs; see `collapse`.
 		// Here and not in each caller, because every tab mutation lands here.
 		const next = collapse(raw);
 		tabsRef.current = next;
 		setTabs(next);
+		syncRef.current(next);
 	}, []);
 
 	/**
@@ -1129,18 +1730,37 @@ export default function App() {
 		return () => clearInterval(id);
 	}, [refreshSessions]);
 
-	/** Stop streaming and show the empty pane. Not an abort: see closeTab. */
-	const detach = useCallback(() => {
-		esRef.current?.close();
-		esRef.current = null;
-		setSnapshot(null);
-		setPartial(emptyPartial());
-		setBusy(false);
-		setModelError(null);
-		// Closing the last tab is not a pending open: the pane must fall back to
-		// "Select a session", not sit on "Opening session…".
-		setOpening(false);
-	}, []);
+	/** Closes a tab in whichever column holds it; set once both closers exist. */
+	const closeRef = useRef<(file: string) => void>(() => {});
+	const env = { project, scope, tabsRef, commitTabs, closeRef, refreshSessions, announce, opened, setPending };
+	/** One session per column, so a split shows two conversations side by side. */
+	const left = useSession({ side: "left", ...env });
+	const right = useSession({ side: "right", ...env });
+	/** The session app-wide chrome follows: the explorer's cwd, the git badge. */
+	const snapshot = left.snapshot ?? right.snapshot;
+	const busy = left.busy || right.busy;
+	/** Whose hunks a column's diff tabs decide on: its own session, else the other's. */
+	const leftHunks = left.snapshot ? left : right;
+	const rightHunks = right.snapshot ? right : left;
+
+	/*
+	 * Point each column's session at the session tab it selects. Runs inside
+	 * every tab commit, so no mutation has to remember to attach or detach.
+	 * A column showing a file keeps its session attached underneath, unless
+	 * that session's tab left the column (closed, or dragged across).
+	 */
+	syncRef.current = (next: Tabs) => {
+		for (const [s, side] of [
+			[left, "left"],
+			[right, "right"],
+		] as const) {
+			const group = groupOf(next, side);
+			const target = s.targetRef.current;
+			if (group.active && isSessionTab(group.active)) {
+				if (group.active !== target) void s.attach(group.active);
+			} else if (target && !group.files.includes(target)) s.detach();
+		}
+	};
 
 	/**
 	 * Close a TAB — never the session.
@@ -1167,13 +1787,8 @@ export default function App() {
 			}
 			const next: string | undefined = files[Math.min(index, files.length - 1)];
 			commitTabs({ ...current, files, active: next });
-			// A file or diff tab has no session to attach to, and the attached one
-			// is left alone: closing a document must not detach the conversation
-			// behind it.
-			if (next && isSessionTab(next)) void attachRef.current(next);
-			else if (!next) detach();
 		},
-		[commitTabs, detach],
+		[commitTabs],
 	);
 
 	/**
@@ -1193,314 +1808,10 @@ export default function App() {
 		[commitTabs],
 	);
 
-	/**
-	 * Attach to a session. The server is authoritative: we GET the full state
-	 * and only then start applying deltas. On any doubt we refetch rather than
-	 * trying to repair local state.
-	 */
-	const attach = useCallback(
-		async (file?: string) => {
-			/*
-			 * Creating a session needs a project, and the project list arrives
-			 * asynchronously: pressing `+ New` before it does used to POST a blank
-			 * cwd, which the server resolved to its OWN directory — so the session
-			 * was created against a directory the user never selected. Resuming is
-			 * unaffected (the session header carries the cwd), so only the create
-			 * path waits.
-			 */
-			if (!file && !project) return;
-
-			/*
-			 * Every attach takes a ticket, and a stale ticket may not touch the
-			 * screen.
-			 *
-			 * Opening is slow enough to switch tabs during — so `+ New`, or a
-			 * click on a big session, used to land its answer seconds later and
-			 * yank the user out of whatever they had selected meanwhile. The
-			 * session itself is fine (it exists server-side and gets its tab); it
-			 * is the FOCUS that must not move after the user has moved it.
-			 */
-			const seq = ++attachSeq.current;
-			const superseded = () => attachSeq.current !== seq;
-
-			esRef.current?.close();
-			esRef.current = null;
-			setPartial(emptyPartial());
-			setModelError(null);
-
-			/*
-			 * Blank the pane when this attach is for a DIFFERENT session.
-			 *
-			 * Opening spawns a pi child and reads the whole transcript, so on a
-			 * big session it is seconds. Leaving the previous conversation on
-			 * screen for those seconds made a click in the session list look like
-			 * it had done nothing at all — the tab strip changed, the thing filling
-			 * the window did not. A reattach to the SAME session (an EventSource
-			 * that dropped, a server restart) deliberately keeps its transcript:
-			 * there is nothing new to wait for and blanking it would be a flicker.
-			 */
-			const showing = snapshotRef.current;
-			const same = showing && file && (showing.file === file || showing.id === file);
-			if (!same) {
-				setSnapshot(null);
-				setBusy(false);
-				setOpening(true);
-			}
-
-			const r = await fetch(`/api/sessions/open`, {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				// Never a blank string: the server rejects that, precisely because it
-				// used to mean "the server's own cwd" and silently misfiled sessions.
-				body: JSON.stringify({ file, cwd: project || undefined }),
-			}).catch(() => null);
-
-			// Server unreachable (restarting, or not up yet) is TEMPORARY — keep
-			// trying, and keep the tab. Only a 404 below means the session is gone.
-			if (!r) {
-				// "The server is restarting" resolves by waiting, so this one retries
-				// — unless the user has since asked for a different session, in which
-				// case retrying would eventually steal the pane back.
-				if (!superseded()) setTimeout(() => void attachRef.current(file), 1_000);
-				return;
-			}
-			if (!r.ok) {
-				if (superseded()) return;
-				/*
-				 * Two positive answers cost this tab its slot, and nothing else
-				 * does: 404 means neither the registry nor the disk knows this file,
-				 * and 409 means the file belongs to another project — a session
-				 * remembered under the wrong project's key, which must not be shown
-				 * under the selected one. It keeps running server-side and is
-				 * reachable by selecting its real project. Any other status is the
-				 * server having a bad time, not a missing session, and must not cost
-				 * the user a tab.
-				 */
-				// The retry path above keeps `opening` set, because it really is
-				// still opening. This one is over: the session is gone or is not
-				// this project's, and the pane goes back to its resting text.
-				setOpening(false);
-				if (file && (r.status === 404 || r.status === 409)) closeTab(file);
-				return;
-			}
-
-			const snap = toSnapshot(await r.json());
-
-			/*
-			 * Open the tab from the SERVER's answer, not from the requested file:
-			 * `+ New` passes no file and only the response knows which session was
-			 * created. One code path therefore covers new sessions, list clicks and
-			 * restores. The id is the fallback key for a session with no file yet,
-			 * so two unsaved sessions cannot collide on `undefined`.
-			 *
-			 * The tab is registered even for a superseded attach — the session was
-			 * created, and a created session with no tab is unreachable — but it is
-			 * only SELECTED when this attach is still the one the user is waiting
-			 * for.
-			 */
-			const key = snap.file ?? snap.id;
-			opened.current.add(key);
-			setPending((list) => {
-				if (list.some((s) => s.path === key)) return list;
-				const now = new Date().toISOString();
-				return [
-					...list,
-					{
-						id: snap.id,
-						path: key,
-						created: now,
-						lastActive: now,
-						messageCount: 0,
-						firstMessage: "",
-					},
-				];
-			});
-			const current = tabsRef.current;
-			if (current.project === scope) {
-				/*
-				 * Which column this session's tab already lives in.
-				 *
-				 * Attaching must not ASSUME the left one. A session dragged into the
-				 * second column is still the attached session, and reloading the page
-				 * re-attaches it — which used to append a second tab for it on the
-				 * left, so one session showed up in both columns and the left copy
-				 * rendered an empty pane, because the chat can only be in one place.
-				 *
-				 * A session in NEITHER column is new: it goes where the chat already
-				 * is, so "+" next to a session in the second column opens beside it
-				 * instead of yanking the chat back to the first.
-				 */
-				const side: Side = sideOfTab(current, key, snap.id) ?? chatSideOf(current);
-				const group = groupOf(current, side);
-				// Replace a placeholder id-keyed tab once the file exists, rather
-				// than ending up with two tabs for one session.
-				const files = group.files.filter((f) => f !== snap.id || f === key);
-				commitTabs(
-					withGroup(current, side, {
-						files: files.includes(key) ? files : [...files, key],
-						active: superseded() ? group.active : key,
-					}),
-				);
-			}
-
-			/*
-			 * Past here is the attached state — transcript, deltas, composer — and
-			 * a superseded attach must claim none of it. Installing its
-			 * EventSource would be the worst of it: the stream of a session nobody
-			 * is looking at, writing into the pane of the one they are.
-			 */
-			if (superseded()) return;
-
-			setOpening(false);
-			setSnapshot(snap);
-			// A mid-stream reattach gets the in-flight message from the server, so
-			// there is never a hole where streamed text should be.
-			setPartial(snap.partial ?? emptyPartial());
-			setBusy(snap.isStreaming);
-
-			const es = new EventSource(`/api/sessions/${snap.id}/events`);
-			esRef.current = es;
-
-			/*
-			 * The id is a handle on a LIVE session and the server can lose it —
-			 * restart, crash, idle eviction. The FILE is the durable identity, so
-			 * reopen through it instead of leaving a tab wired to a dead id. Retry
-			 * on a delay because "server is down" and "server just restarted" look
-			 * identical from here, and only one of them resolves by waiting.
-			 */
-			const reattach = () => {
-				if (esRef.current !== es) return; // superseded by a newer attach
-				es.close();
-				setTimeout(() => {
-					if (esRef.current === es) void attachRef.current(snap.file);
-				}, 1_000);
-			};
-
-			const refetch = async (): Promise<Snapshot | undefined> => {
-				const rr = await fetch(`/api/sessions/${snap.id}`).catch(() => null);
-				if (!rr || rr.status === 404) {
-					reattach();
-					return undefined;
-				}
-				if (!rr.ok) return undefined;
-				const s = toSnapshot(await rr.json());
-				setSnapshot(s);
-				setPartial(s.partial ?? emptyPartial());
-				setBusy(s.isStreaming);
-				return s;
-			};
-
-			/*
-			 * Did this attachment actually WATCH a run? An `idle` also arrives
-			 * for a session that was already finished when we attached, and
-			 * announcing that would mean a notification for merely opening a
-			 * tab. Seeded from the snapshot so a mid-stream reattach still
-			 * counts as watching.
-			 */
-			let worked = snap.isStreaming;
-
-			es.onmessage = (raw) => {
-				let e: PiEvent;
-				try {
-					e = JSON.parse(raw.data);
-				} catch {
-					// A malformed frame must not kill the handler for every later event.
-					void refetch();
-					return;
-				}
-				switch (e.type) {
-					case "text":
-						setBusy(true);
-						// A command that turned into a real turn (`/review`) is no
-						// longer waiting on anything — the turn itself is the answer,
-						// and the transcript now shows it.
-						setCommand(null);
-						worked = true;
-						setPartial((p) => ({ ...p, text: p.text + e.delta }));
-						break;
-					case "thinking":
-						setBusy(true);
-						worked = true;
-						setPartial((p) => ({ ...p, thinking: p.thinking + e.delta }));
-						break;
-					case "tool_start":
-						worked = true;
-						setPartial((p) => ({
-							...p,
-							tools: [...p.tools, { id: e.id, name: e.name, args: e.args }],
-						}));
-						break;
-					case "tool_end":
-						setPartial((p) => ({
-							...p,
-							tools: p.tools.map((t) =>
-								t.id === e.id ? { ...t, result: e.result, isError: e.isError } : t,
-							),
-						}));
-						break;
-					case "message_done":
-						// Refetch rather than appending: the server already settled this
-						// into the session, and its copy is the one that matters.
-						void refetch();
-						break;
-					case "notice":
-						// Appended locally rather than refetched: the answer to a
-						// command is the whole event, and a refetch of a long
-						// transcript to learn one line is the wrong trade.
-						setSnapshot((s) => (s ? { ...s, notices: [...s.notices, e.notice] } : s));
-						// This IS the answer a local command was waiting for; the
-						// command itself stays, as the record of what was asked.
-						setCommand((c) => (c ? { ...c, running: false } : c));
-						break;
-					case "ask":
-						// The agent is blocked on this until it is answered, so it is
-						// also the one event worth a notification: nothing else moves
-						// until the user comes back.
-						setSnapshot((s) => (s ? { ...s, ask: e.ask } : s));
-						if (e.ask) announce(snap.file, askLine(e.ask));
-						break;
-					case "tool_update":
-						// Cumulative output: replace, never append.
-						setPartial((p) => ({
-							...p,
-							tools: p.tools.map((t) => (t.id === e.id ? { ...t, result: e.result } : t)),
-						}));
-						break;
-					case "idle":
-						setBusy(false);
-						void (async () => {
-							const settled = await refetch();
-							if (worked) announce(snap.file, replyLine(settled));
-							worked = false;
-						})();
-						void refreshSessions();
-						break;
-					case "error":
-						setBusy(false);
-						setCommand((c) => (c ? { ...c, running: false } : c));
-						if (worked) {
-							worked = false;
-							announce(snap.file, `Failed: ${e.message}`);
-						}
-						setSnapshot((s) => (s ? { ...s, error: e.message } : s));
-						break;
-				}
-			};
-
-			// The browser retries a dropped SSE connection on its own, but gives up
-			// for good on an HTTP error — exactly what a restarted server returns for
-			// an id it no longer has. CLOSED means only we can recover it.
-			es.onerror = () => {
-				if (es.readyState === EventSource.CLOSED) reattach();
-				else void refetch();
-			};
-		},
-		[refreshSessions, project, scope, commitTabs, closeTab],
-	);
-
-	attachRef.current = attach;
-
-	useEffect(() => () => esRef.current?.close(), []);
+	closeRef.current = (file) => {
+		if (sideOfTab(tabsRef.current, file) === "right") closeRight(file);
+		else closeTab(file);
+	};
 
 	/**
 	 * Adopt the tab set of the selected project.
@@ -1519,23 +1830,11 @@ export default function App() {
 	useEffect(() => {
 		if (!project || adopted.current === scope) return;
 		adopted.current = scope;
-		const next = readTabs(scope);
-		commitTabs(next);
-		detach();
-		/*
-		 * Attach to whichever column's selected tab is a session — the split
-		 * can hold the conversation in either one, and a restore that only
-		 * looked left would come back to a chat pane that never attached.
-		 *
-		 * A restored FILE tab has no session behind it: attach to nothing and
-		 * let the file render, because attaching would treat `file:/path` as a
-		 * session path.
-		 */
-		const restored = [next.active, next.right?.active].find(
-			(entry): entry is string => entry !== undefined && isSessionTab(entry),
-		);
-		if (restored) void attach(restored);
-	}, [project, scope, attach, commitTabs, detach]);
+		// Detach first: the commit's sync then attaches each column's session.
+		left.detach();
+		right.detach();
+		commitTabs(readTabs(scope));
+	}, [project, scope, commitTabs, left.detach, right.detach]);
 
 	useEffect(() => {
 		// Never persist the placeholder state that precedes the first adoption;
@@ -1586,10 +1885,6 @@ export default function App() {
 				files: current.files.includes(file) ? current.files : [...current.files, file],
 				active: file,
 			});
-			// Already attached to this session (switched away to a file and back):
-			// re-attaching would tear down a live EventSource for no reason.
-			if (!isSessionTab(file) || (snapshotRef.current?.file === file && esRef.current)) return;
-			void attachRef.current(file);
 		},
 		[commitTabs],
 	);
@@ -1631,10 +1926,8 @@ export default function App() {
 	 * are all the same thing: remove from one column, insert into the other,
 	 * and let an emptied second column collapse.
 	 *
-	 * Sessions move too, not just files. The chat is singular (one
-	 * EventSource, one composer), but it is rendered as ONE element handed to
-	 * whichever column selects a session — see `chatSide` — so moving a
-	 * session across is a move of that element and not a second chat.
+	 * Sessions move too: each column has its own session hook, and the
+	 * commit's sync moves the attachment along with the tab.
 	 */
 	const moveToGroup = useCallback(
 		(entry: string, to: Side, index?: number) => {
@@ -1647,7 +1940,6 @@ export default function App() {
 			if (!pruned) {
 				if (!target.files.includes(entry)) return;
 				commitTabs(withGroup(current, to, withTab(target, entry)));
-				if (isSessionTab(entry)) void attachRef.current(entry);
 				return;
 			}
 
@@ -1666,20 +1958,6 @@ export default function App() {
 			commitTabs(
 				withGroup(withGroup(current, from, pruned), to, { files, active: entry }),
 			);
-
-			/*
-			 * Attach to whatever is now selected, in either column.
-			 *
-			 * Two ways this fires: the moved tab is itself a session (it is now
-			 * showing in the target column), or moving it uncovered a session in
-			 * the column it left. Both are "the selected session changed", which is
-			 * the only thing `attach` cares about — and it no-ops when the session
-			 * is the one already streaming.
-			 */
-			const selected = isSessionTab(entry) ? entry : pruned.active;
-			if (selected && isSessionTab(selected) && selected !== snapshotRef.current?.file) {
-				void attachRef.current(selected);
-			}
 		},
 		[commitTabs],
 	);
@@ -1697,8 +1975,6 @@ export default function App() {
 			const current = tabsRef.current;
 			if (!current.right || current.right.active === file) return;
 			commitTabs({ ...current, right: withTab(current.right, file) });
-			if (!isSessionTab(file) || (snapshotRef.current?.file === file && esRef.current)) return;
-			void attachRef.current(file);
 		},
 		[commitTabs],
 	);
@@ -1894,221 +2170,6 @@ export default function App() {
 		};
 	}, []);
 
-	// The spinner stops on its own: `/model` and friends change the session
-	// without printing anything, so no answer is ever coming for them and
-	// nothing else would ever take the "running" off.
-	useEffect(() => {
-		if (!command?.running) return;
-		const t = setTimeout(
-			() => setCommand((c) => (c ? { ...c, running: false } : c)),
-			COMMAND_RUNNING_MAX_MS,
-		);
-		return () => clearTimeout(t);
-	}, [command]);
-
-	const send = useCallback(
-		async (text: string, images?: PiImage[]) => {
-			if (!snapshot) return;
-			setBusy(true);
-			// A local command appends no message: this row IS the record that it
-			// was sent. And the ack below is acceptance, not completion — the
-			// answer arrives later as a notice, so it starts out running.
-			const trimmed = text.trim();
-			setCommand(trimmed.startsWith("/") ? { text: trimmed, running: true } : null);
-			// Show the message now, not after pi acks it. Every refetch replaces
-			// `messages` wholesale, so the server's copy supersedes this one. Not
-			// while streaming: a follow-up is queued, and would jump position.
-			const optimistic: PiMessage | null =
-				!busy && !trimmed.startsWith("/")
-					? {
-							role: "user",
-							blocks: [
-								...(text ? [{ kind: "text" as const, text }] : []),
-								...(images ?? []).map((i) => ({ kind: "image" as const, ...i })),
-							],
-							timestamp: Date.now(),
-						}
-					: null;
-			if (optimistic) setSnapshot((s) => (s ? { ...s, messages: [...s.messages, optimistic] } : s));
-			const r = await fetch(`/api/sessions/${snapshot.id}/prompt`, {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ text, images }),
-			});
-
-			// A rejected prompt (unsupported type, too large, 413) never reaches the
-			// session, so no SSE error is coming — surface it here or it is lost and
-			// the UI just sits on a spinner that will never resolve.
-			if (!r.ok) {
-				const body = await r.json().catch(() => ({}) as { error?: string });
-				setBusy(false);
-				setCommand(null);
-				setSnapshot((s) =>
-					s
-						? {
-								...s,
-								messages: s.messages.filter((m) => m !== optimistic),
-								error: body.error ?? `prompt failed (${r.status})`,
-							}
-						: s,
-				);
-				return;
-			}
-
-			const rr = await fetch(`/api/sessions/${snapshot.id}`);
-			if (rr.ok) setSnapshot(toSnapshot(await rr.json()));
-		},
-		[snapshot, busy],
-	);
-
-	const abort = useCallback(async () => {
-		if (!snapshot) return;
-		await fetch(`/api/sessions/${snapshot.id}/abort`, { method: "POST" });
-	}, [snapshot]);
-
-	/**
-	 * Fold the conversation. The transcript and the meter move when
-	 * `compaction_end` arrives over SSE, not here — a compaction takes a model
-	 * call, and pretending otherwise would blank the meter before the summary
-	 * exists. A refusal (mid-turn) is shown where every other session error is.
-	 */
-	const compact = useCallback(async () => {
-		if (!snapshot) return;
-		const r = await fetch(`/api/sessions/${snapshot.id}/compact`, { method: "POST" });
-		if (r.ok) return;
-		const body = await r.json().catch(() => ({}) as { error?: string });
-		setSnapshot((s) => (s ? { ...s, error: body.error ?? "could not compact" } : s));
-	}, [snapshot]);
-
-	/**
-	 * Replace this session's pi child so it picks up a newly installed
-	 * package. The transcript comes back from the server's fresh snapshot —
-	 * the conversation is on disk, only the process changed.
-	 */
-	const restart = useCallback(async () => {
-		if (!snapshot) return;
-		const r = await fetch(`/api/sessions/${snapshot.id}/restart`, { method: "POST" });
-		const body: unknown = await r.json().catch(() => null);
-		if (r.ok && body && typeof body === "object") {
-			setSnapshot(toSnapshot(body as Partial<Snapshot>));
-			return;
-		}
-		const reason =
-			body && typeof body === "object" && "error" in body && typeof body.error === "string"
-				? body.error
-				: "could not restart this session";
-		setSnapshot((s) => (s ? { ...s, error: reason } : s));
-	}, [snapshot]);
-
-	/**
-	 * Re-read the open session's snapshot.
-	 *
-	 * For facts that change OUTSIDE the event stream — a package installed
-	 * from the Packages screen makes this session stale, and nothing in the
-	 * session's own frames will ever say so.
-	 */
-	const reloadSnapshot = useCallback(async () => {
-		if (!snapshot) return;
-		const r = await fetch(`/api/sessions/${snapshot.id}`);
-		if (r.ok) setSnapshot(toSnapshot(await r.json()));
-	}, [snapshot]);
-
-	/**
-	 * Re-read the slash command catalog when the composer's picker opens.
-	 *
-	 * pi pushes nothing when the set changes, and it does change under a live
-	 * session: installing a package, or dropping a file in `.pi/prompts`, adds
-	 * commands the child only sees when asked. Asking on every `/` keystroke
-	 * would be a round trip per character, so the answer is good for half a
-	 * minute — a package install is not a keystroke.
-	 */
-	const commandsFetchedAt = useRef<{ id: string; at: number } | null>(null);
-	const refreshCommands = useCallback(async () => {
-		if (!snapshot) return;
-		const last = commandsFetchedAt.current;
-		if (last && last.id === snapshot.id && Date.now() - last.at < 30_000) return;
-		commandsFetchedAt.current = { id: snapshot.id, at: Date.now() };
-		const r = await fetch(`/api/sessions/${snapshot.id}/commands`, {
-			method: "POST",
-		}).catch(() => null);
-		if (!r?.ok) return;
-		const body: unknown = await r.json().catch(() => null);
-		if (!body || typeof body !== "object" || !("commands" in body)) return;
-		const commands = body.commands;
-		if (!Array.isArray(commands)) return;
-		setSnapshot((s) => (s && s.id === snapshot.id ? { ...s, commands } : s));
-	}, [snapshot]);
-
-	/**
-	 * Answer the question pi is blocked on.
-	 *
-	 * The panel is cleared optimistically: the `ask` event that confirms it
-	 * comes back over SSE, and leaving the question on screen until it arrives
-	 * would invite a second click on a dialog that is already answered. A 409
-	 * means it was gone before the click landed (timed out, or the turn was
-	 * aborted), which the refetch below then reflects.
-	 */
-	const answerAsk = useCallback(
-		async (askId: string, answer: AskAnswer) => {
-			if (!snapshot) return;
-			setSnapshot((s) => (s ? { ...s, ask: null } : s));
-			const r = await fetch(`/api/sessions/${snapshot.id}/ask`, {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ askId, ...answer }),
-			});
-			if (r.ok) return;
-			const rr = await fetch(`/api/sessions/${snapshot.id}`);
-			if (rr.ok) setSnapshot(toSnapshot(await rr.json()));
-		},
-		[snapshot],
-	);
-
-	const changeModel = useCallback(
-		async (model: string) => {
-			if (!snapshot) return;
-			setModelError(null);
-			const r = await fetch(`/api/sessions/${snapshot.id}/model`, {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ model }),
-			});
-			if (!r.ok) {
-				const body = await r.json().catch(() => ({}));
-				setModelError(body.error ?? "failed to switch model");
-				return;
-			}
-			const rr = await fetch(`/api/sessions/${snapshot.id}`);
-			if (rr.ok) setSnapshot(await rr.json());
-		},
-		[snapshot],
-	);
-
-	/**
-	 * Reasoning effort. Shares `modelError` with the model switch: both are
-	 * the same control group saying "the session refused that", and a second
-	 * error slot would be a second thing to render in the same corner.
-	 */
-	const changeThinking = useCallback(
-		async (level: string) => {
-			if (!snapshot) return;
-			setModelError(null);
-			const r = await fetch(`/api/sessions/${snapshot.id}/thinking`, {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ level }),
-			});
-			if (!r.ok) {
-				const body = await r.json().catch(() => ({}));
-				setModelError(body.error ?? "failed to set thinking level");
-				return;
-			}
-			const rr = await fetch(`/api/sessions/${snapshot.id}`);
-			if (rr.ok) setSnapshot(await rr.json());
-		},
-		[snapshot],
-	);
-
 	// A session created by `+ New` has no JSONL until its first prompt, so
 	// /api/sessions (which lists disk) cannot see it. Show it anyway — in the
 	// list and as a tab title — for as long as it has a tab and no on-disk
@@ -2124,49 +2185,27 @@ export default function App() {
 		return extra.length ? [...extra, ...sessions] : sessions;
 	}, [sessions, pending, tabs.files, tabs.right]);
 
-	/**
-	 * THE chat, built once and handed to whichever column holds the attached
-	 * session.
-	 *
-	 * One element and not one per column: the app has a single EventSource, a
-	 * single transcript and a single composer, so a second <Chat> would be a
-	 * second view onto state that only has one owner. Rendering the same
-	 * element in the other column moves it, and because React sees the same
-	 * component in the same slot, a turn streaming mid-drag keeps streaming.
-	 */
-	const chat = (
+	/** One column's chat, wired to that column's session. */
+	const chatFor = (s: ReturnType<typeof useSession>) => (
 		<Chat
-			snapshot={snapshot}
-			partial={partial}
-			busy={busy}
-			opening={opening}
+			snapshot={s.snapshot}
+			partial={s.partial}
+			busy={s.busy}
+			opening={s.opening}
 			showThinking={showThinking}
 			toolMode={toolMode}
-			command={command}
-			modelError={modelError}
-			onSend={send}
-			onAnswerAsk={answerAsk}
-			onAbort={abort}
-			onModelChange={changeModel}
-			onThinkingChange={changeThinking}
-			onCommandMenu={refreshCommands}
-			onCompact={compact}
-			onRestart={restart}
+			command={s.command}
+			modelError={s.modelError}
+			onSend={s.send}
+			onAnswerAsk={s.answerAsk}
+			onAbort={s.abort}
+			onModelChange={s.changeModel}
+			onThinkingChange={s.changeThinking}
+			onCommandMenu={s.refreshCommands}
+			onCompact={s.compact}
+			onRestart={s.restart}
 		/>
 	);
-
-	/**
-	 * Which column the chat belongs in: the one whose SELECTED tab is a
-	 * session.
-	 *
-	 * Selection and not mere membership, because a column showing a file must
-	 * show that file — the chat is hidden underneath it either way, and two
-	 * columns both claiming it would render it twice.
-	 *
-	 * Neither column selecting a session leaves it in the left one, which is
-	 * where the "no session" empty state belongs.
-	 */
-	const chatSide: Side = chatSideOf(tabs);
 
 	return (
 		<div ref={splitRow} className="flex h-full bg-neutral-950 text-neutral-100">
@@ -2176,12 +2215,12 @@ export default function App() {
 			  does not have to act on it.
 			*/}
 			{restarted && (
-				<div className="fixed inset-x-0 top-0 z-50 flex items-center justify-center gap-3 border-b border-amber-800 bg-amber-950/95 px-3 py-1.5 text-sm text-amber-200">
+				<div className="fixed inset-x-0 top-0 z-50 flex items-center justify-center gap-3 border-b border-amber-800 bg-amber-950/95 px-3 py-1.5 text-ui text-amber-200">
 					<span>pwi restarted — this page is running the previous build.</span>
 					<button
 						type="button"
 						onClick={() => location.reload()}
-						className="rounded border border-amber-700 px-2 py-0.5 hover:bg-amber-900"
+						className="rounded-sm border border-amber-700 px-2 py-0.5 hover:bg-amber-900"
 					>
 						Reload
 					</button>
@@ -2292,7 +2331,10 @@ export default function App() {
 
 						{panel === "packages" && (
 							<Packages
-								onChanged={() => void reloadSnapshot()}
+								onChanged={() => {
+									void left.reloadSnapshot();
+									void right.reloadSnapshot();
+								}}
 								cwd={project}
 								onClose={() => showPanel(null)}
 							/>
@@ -2348,10 +2390,10 @@ export default function App() {
 					onToggleList={() => setListOpen((o) => !o)}
 					cwd={snapshot?.cwd || project || ""}
 					onDirty={onFileDirty}
-					sessionId={snapshot?.id}
-					hunks={snapshot?.hunks ?? EMPTY_HUNKS}
-					onHunksChanged={() => void reloadSnapshot()}
-					chat={chatSide === "left" ? chat : null}
+					sessionId={leftHunks.snapshot?.id}
+					hunks={leftHunks.snapshot?.hunks ?? EMPTY_HUNKS}
+					onHunksChanged={() => void leftHunks.reloadSnapshot()}
+					chat={chatFor(left)}
 				/>
 
 				{tabs.right && (
@@ -2371,10 +2413,12 @@ export default function App() {
 						}}
 						cwd={snapshot?.cwd || project || ""}
 						onDirty={onFileDirty}
-						sessionId={snapshot?.id}
-						hunks={snapshot?.hunks ?? EMPTY_HUNKS}
-						onHunksChanged={() => void reloadSnapshot()}
-						chat={chatSide === "right" ? chat : null}
+						sessionId={rightHunks.snapshot?.id}
+						hunks={rightHunks.snapshot?.hunks ?? EMPTY_HUNKS}
+						onHunksChanged={() => void rightHunks.reloadSnapshot()}
+						// Only a column holding a session gets a chat; otherwise it says
+						// "drag a tab here" instead of showing an empty conversation.
+						chat={tabs.right.files.some(isSessionTab) ? chatFor(right) : null}
 					/>
 				)}
 			</div>
@@ -2396,7 +2440,10 @@ export default function App() {
 				open={listOpen}
 				onToggle={() => setListOpen((o) => !o)}
 				onSelect={(s) => {
-					selectTab(s.path);
+					// Focus it where it is: adding it to the left while it is open on
+					// the right would put one session in both columns.
+					if (sideOfTab(tabsRef.current, s.path) === "right") selectRight(s.path);
+					else selectTab(s.path);
 					// On a narrow viewport the list is a drawer over the chat; having
 					// picked a session, the chat is what you want to see.
 					setListOpen(false);
@@ -2404,7 +2451,10 @@ export default function App() {
 				onRename={(s, name) => void renameSession(s, name)}
 				onAutoName={autoNameSession}
 				shortNames={shortNames}
-				onNew={() => void attach(undefined)}
+				// Into the column last used, so "+" beside a split opens there.
+				onNew={() =>
+					void (lastSide.current === "right" && tabsRef.current.right ? right : left).attach()
+				}
 			/>
 			<Settings
 				open={settingsOpen}

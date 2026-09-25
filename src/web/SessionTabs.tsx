@@ -212,7 +212,7 @@ export function SessionTabs({
 				aria-controls="session-list"
 				aria-label={listOpen ? "Hide session list" : "Show session list"}
 				title="Sessions"
-				className="size-9 shrink-0 self-center rounded text-neutral-300 transition-colors duration-150 ease-out hover:bg-neutral-800 hover:text-neutral-50 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 motion-reduce:transition-none wide:hidden"
+				className="size-9 shrink-0 self-center rounded-sm text-neutral-300 transition-colors duration-150 ease-out hover:bg-neutral-800 hover:text-neutral-50 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 motion-reduce:transition-none wide:hidden"
 			>
 				<span aria-hidden>{"\u2261"}</span>
 			</button>
@@ -398,7 +398,7 @@ export function SessionTabs({
 								title={isDiff ? diffTitle(file) : isFile ? tabPath(file) : label}
 								onClick={() => onSelect(file)}
 								onKeyDown={(e) => moveFocus(e, i)}
-								className={`flex h-8 max-w-52 items-center gap-1.5 rounded-t border-t-2 pr-7 pl-2.5 text-xs transition-colors duration-150 ease-out focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 motion-reduce:transition-none ${
+								className={`flex h-8 max-w-52 items-center gap-1.5 rounded-t-sm border-t-2 pr-7 pl-2.5 text-meta transition-colors duration-150 ease-out focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 motion-reduce:transition-none ${
 									isActive
 										? "border-amber-400 bg-neutral-800 font-semibold text-neutral-50"
 										: "border-transparent text-neutral-300 hover:bg-neutral-900 hover:text-neutral-50"
@@ -417,6 +417,12 @@ export function SessionTabs({
 								    a whole strip. The rest is in `tabLabel` and the tooltip. */}
 								{isDiff && (
 									<GitDiff size={13} weight="bold" className="shrink-0 text-neutral-400" />
+								)}
+								{/* Marks an AI session so it never reads as a code tab. */}
+								{!isFile && (
+									<span aria-hidden className="shrink-0 font-bold leading-none text-amber-400">
+										π
+									</span>
 								)}
 								{/* Same glyph the tree uses, so a tab and its row match. */}
 								{isFile && !isDiff && <FileGlyph name={label} size={13} />}
@@ -441,7 +447,7 @@ export function SessionTabs({
 											: "Close tab"
 										: "Close tab (the session keeps running)"
 								}
-								className={`tab-close absolute top-1/2 right-1.5 flex size-6 -translate-y-1/2 items-center justify-center rounded text-sm leading-none text-neutral-400 transition-opacity duration-150 ease-out after:absolute after:-inset-1 after:content-[''] hover:bg-neutral-700 hover:text-neutral-50 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-neutral-400 motion-reduce:transition-none ${
+								className={`tab-close absolute top-1/2 right-1.5 flex size-6 -translate-y-1/2 items-center justify-center rounded-sm text-ui leading-none text-neutral-400 transition-opacity duration-150 ease-out after:absolute after:-inset-1 after:content-[''] hover:bg-neutral-700 hover:text-neutral-50 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-neutral-400 motion-reduce:transition-none ${
 									isActive
 										? "opacity-100"
 										: "opacity-0 group-focus-within:opacity-100 group-hover:opacity-100"
@@ -464,7 +470,7 @@ export function SessionTabs({
 			</div>
 
 			{tabs.length === 0 && (
-				<p className="min-w-0 flex-1 self-center truncate px-2 text-xs text-neutral-400">
+				<p className="min-w-0 flex-1 self-center truncate px-2 text-meta text-neutral-400">
 					No open sessions. Press + or pick one from the list.
 				</p>
 			)}

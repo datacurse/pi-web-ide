@@ -103,7 +103,7 @@ function Thumb({
 			<button
 				onClick={() => zoom(src)}
 				title="Click to expand"
-				className="block size-14 overflow-hidden rounded-lg border border-neutral-700 transition-colors duration-150 ease-out hover:border-neutral-500 motion-reduce:transition-none"
+				className="block size-14 overflow-hidden rounded-md border border-neutral-700 transition-colors duration-150 ease-out hover:border-neutral-500 motion-reduce:transition-none"
 			>
 				<img src={src} alt={label} className="size-full object-cover" />
 			</button>
@@ -111,7 +111,7 @@ function Thumb({
 				<button
 					onClick={onRemove}
 					aria-label={`Remove ${label}`}
-					className="absolute -top-1.5 -right-1.5 flex size-5 items-center justify-center rounded-full border border-neutral-700 bg-neutral-900 text-xs text-neutral-400 opacity-0 transition-opacity duration-150 ease-out group-hover:opacity-100 hover:text-neutral-100 focus:opacity-100 motion-reduce:transition-none"
+					className="absolute -top-1.5 -right-1.5 flex size-5 items-center justify-center rounded-full border border-neutral-700 bg-neutral-900 text-meta text-neutral-400 opacity-0 transition-opacity duration-150 ease-out group-hover:opacity-100 hover:text-neutral-100 focus:opacity-100 motion-reduce:transition-none"
 				>
 					<X size={13} />
 				</button>
@@ -153,7 +153,7 @@ function Lightbox({ src, onClose }: { src: string; onClose: () => void }) {
 				src={src}
 				alt="Attachment, full size"
 				onClick={(e) => e.stopPropagation()}
-				className="max-h-full max-w-full rounded border border-neutral-700 object-contain"
+				className="max-h-full max-w-full rounded-sm border border-neutral-700 object-contain"
 			/>
 		</div>
 	);
@@ -264,7 +264,7 @@ function Tool({
 		<div className="chat-wide my-1">
 			<button
 				onClick={() => setOpen((o) => !o)}
-				className={`flex items-center gap-1 font-mono text-sm ${isError ? "text-red-400" : running ? "text-amber-400" : "text-neutral-500"} hover:text-neutral-300`}
+				className={`flex items-center gap-1 font-mono text-body ${isError ? "text-red-400" : running ? "text-amber-400" : "text-neutral-500"} hover:text-neutral-300`}
 			>
 				{open ? <CaretDown size={11} /> : <CaretRight size={11} />}
 				{name}
@@ -278,7 +278,7 @@ function Tool({
 				{preview && <span className="ml-1 font-normal text-neutral-600">{preview}</span>}
 			</button>
 			{open && (
-				<div className="chat-code mt-1 max-h-80 overflow-auto rounded bg-neutral-900 p-2 text-neutral-400">
+				<div className="chat-code mt-1 max-h-80 overflow-auto rounded-sm bg-neutral-900 p-2 text-neutral-400">
 					{args !== undefined && (
 						<pre className="mb-2 whitespace-pre-wrap">
 							{JSON.stringify(args, null, 2)}
@@ -386,7 +386,7 @@ function ToolGroup({ blocks, streaming }: { blocks: PiBlock[]; streaming?: boole
 		<div className="chat-wide my-1">
 			<button
 				onClick={() => setOpen((o) => !o)}
-				className="flex items-center gap-1 font-mono text-sm text-neutral-500 hover:text-neutral-300"
+				className="flex items-center gap-1 font-mono text-body text-neutral-500 hover:text-neutral-300"
 			>
 				{open ? <CaretDown size={11} /> : <CaretRight size={11} />}
 				{label}
@@ -440,12 +440,12 @@ function Block({
 			<img
 				src={`data:${block.mimeType};base64,${block.data}`}
 				alt="attachment"
-				className="chat-wide my-2 max-h-80 rounded border border-neutral-800"
+				className="chat-wide my-2 max-h-80 rounded-sm border border-neutral-800"
 			/>
 		);
 	if (block.kind === "thinking")
 		return (
-			<div className="chat-measure text-sm whitespace-pre-wrap text-neutral-500 italic">
+			<div className="chat-measure text-body whitespace-pre-wrap text-neutral-500 italic">
 				{block.text}
 			</div>
 		);
@@ -509,7 +509,7 @@ function ContextMeter({
 					? `${tokens.toLocaleString()} of ${limit.toLocaleString()} context tokens used — finish the turn to compact`
 					: `${tokens.toLocaleString()} of ${limit.toLocaleString()} context tokens used. Click to compact the conversation into a summary.`
 			}
-			className={`flex shrink-0 items-center gap-1.5 rounded font-mono text-xs transition-colors duration-150 ease-out enabled:hover:text-neutral-200 disabled:cursor-default focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 motion-reduce:transition-none ${tone}`}
+			className={`flex shrink-0 items-center gap-1.5 rounded-sm font-mono text-meta transition-colors duration-150 ease-out enabled:hover:text-neutral-200 disabled:cursor-default focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 motion-reduce:transition-none ${tone}`}
 		>
 			<span aria-hidden className="h-1 w-10 overflow-hidden rounded-full bg-neutral-800">
 				<span className="block h-full bg-current" style={{ width: `${percent}%` }} />
@@ -563,7 +563,7 @@ function TurnStatus() {
 	const verb = useMemo(randomVerb, [slot]);
 	return (
 		<div className="chat-gutter py-3" role="status">
-			<div className="chat-measure flex items-center gap-2 text-sm text-neutral-500">
+			<div className="chat-measure flex items-center gap-2 text-body text-neutral-500">
 				<span aria-hidden className="w-4 text-center text-amber-400">
 					{spinner}
 				</span>
@@ -579,7 +579,7 @@ function TurnStatus() {
  * prose column. Shared by settled messages, a collapsed run of tool calls,
  * and the streaming row — three things that must line up exactly.
  *
- * What the user said gets a PILL instead: a rounded card in the reading
+ * What the user said gets a PILL instead: a rounded-sm card in the reading
  * column, the shape every chat client uses for the half of the conversation
  * you wrote. It replaced a full-bleed stripe, which at this measure was a
  * band of slightly different grey running the whole width of the window —
@@ -598,7 +598,7 @@ function TranscriptRow({
 	if (role === "user") {
 		return (
 			<div className="chat-gutter py-2">
-				<div className="chat-measure chat-prose rounded-2xl bg-neutral-900 px-4 py-3">
+				<div className="chat-measure chat-prose rounded-lg bg-neutral-900 px-4 py-3">
 					{children}
 				</div>
 			</div>
@@ -617,7 +617,7 @@ function TranscriptRow({
 			    so it has to move with it — left in the track while the prose is
 			    centred put the speaker's name nowhere near their words. */}
 			{labelled && (
-				<div className="chat-measure mb-1 text-[10px] tracking-wide text-neutral-500 uppercase">
+				<div className="chat-measure mb-1 text-caption tracking-wide text-neutral-500 uppercase">
 					{role}
 				</div>
 			)}
@@ -677,7 +677,7 @@ function Message({
 function CompactionRow({ text }: { text: string }) {
 	return (
 		<details className="chat-gutter my-4">
-			<summary className="flex cursor-pointer list-none items-center gap-3 text-[10px] tracking-wide text-neutral-500 uppercase select-none">
+			<summary className="flex cursor-pointer list-none items-center gap-3 text-caption tracking-wide text-neutral-500 uppercase select-none">
 				<span className="h-px flex-1 bg-neutral-800" />
 				compacted — context starts here
 				<span className="h-px flex-1 bg-neutral-800" />
@@ -710,7 +710,7 @@ function Notices({ notices }: { notices: PiNotice[] }) {
 			{notices.map((n, i) => (
 				<div
 					key={i}
-					className={`chat-measure rounded border px-3 py-2 text-sm whitespace-pre-wrap ${NOTICE_STYLE[n.level]}`}
+					className={`chat-measure rounded-sm border px-3 py-2 text-body whitespace-pre-wrap ${NOTICE_STYLE[n.level]}`}
 				>
 					{n.text}
 				</div>
@@ -733,9 +733,9 @@ function CommandRow({ command, running }: { command: string; running: boolean })
 	return (
 		<TranscriptRow role="user" labelled>
 			<div className="flex items-center gap-2">
-				<span className="font-mono text-sm">{command}</span>
+				<span className="font-mono text-body">{command}</span>
 				{running && (
-					<span className="flex items-center gap-1.5 font-mono text-xs text-amber-400">
+					<span className="flex items-center gap-1.5 font-mono text-meta text-amber-400">
 						<span>{spinner}</span>
 						<span className="font-sans">working…</span>
 					</span>
@@ -800,7 +800,7 @@ function AskPanel({
 
 	return (
 		<div className="chat-gutter my-3">
-			<div className="chat-measure rounded border border-amber-900/70 bg-amber-950/20 px-3 py-3">
+			<div className="chat-measure rounded-sm border border-amber-900/70 bg-amber-950/20 px-3 py-3">
 				{/*
 				 * The title is NOT a short label. The extension that asks composes
 				 * it in the TUI's terms: the `editor` that follows a picker's
@@ -811,12 +811,12 @@ function AskPanel({
 				 * as the text it is.
 				 */}
 				{ask.title && (
-					<div className="text-sm whitespace-pre-wrap text-amber-200/90">
+					<div className="text-body whitespace-pre-wrap text-amber-200/90">
 						{plain(ask.title)}
 					</div>
 				)}
 				{ask.message && (
-					<div className="mt-1 text-sm whitespace-pre-wrap text-neutral-200">
+					<div className="mt-1 text-body whitespace-pre-wrap text-neutral-200">
 						{plain(ask.message)}
 					</div>
 				)}
@@ -827,7 +827,7 @@ function AskPanel({
 							<button
 								key={o.label}
 								onClick={() => onAnswer(ask.id, { value: o.label })}
-								className="block w-full rounded border border-neutral-800 bg-neutral-900/60 px-3 py-2 text-left text-sm transition-colors duration-150 ease-out hover:border-amber-800 hover:bg-neutral-900 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-amber-400 motion-reduce:transition-none"
+								className="block w-full rounded-sm border border-neutral-800 bg-neutral-900/60 px-3 py-2 text-left text-body transition-colors duration-150 ease-out hover:border-amber-800 hover:bg-neutral-900 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-amber-400 motion-reduce:transition-none"
 							>
 								<span className="text-neutral-100">{o.label}</span>
 							</button>
@@ -839,13 +839,13 @@ function AskPanel({
 					<div className="mt-3 flex gap-2">
 						<button
 							onClick={() => onAnswer(ask.id, { confirmed: true })}
-							className="rounded bg-amber-500 px-3 py-1.5 text-sm font-medium text-neutral-950 hover:bg-amber-400"
+							className="rounded-sm bg-amber-500 px-3 py-1.5 text-ui font-medium text-neutral-950 hover:bg-amber-400"
 						>
 							Yes
 						</button>
 						<button
 							onClick={() => onAnswer(ask.id, { confirmed: false })}
-							className="rounded border border-neutral-700 px-3 py-1.5 text-sm text-neutral-200 hover:bg-neutral-900"
+							className="rounded-sm border border-neutral-700 px-3 py-1.5 text-ui text-neutral-200 hover:bg-neutral-900"
 						>
 							No
 						</button>
@@ -875,16 +875,16 @@ function AskPanel({
 								onAnswer(ask.id, { value: text });
 							}}
 							rows={ask.multiline ? 5 : 2}
-							className="w-full resize-none rounded border border-neutral-800 bg-neutral-950 px-3 py-2 text-sm text-neutral-100 outline-none focus:border-amber-800"
+							className="w-full resize-none rounded-sm border border-neutral-800 bg-neutral-950 px-3 py-2 text-body text-neutral-100 outline-none focus:border-amber-800"
 						/>
 						<div className="mt-2 flex items-center gap-2">
 							<button
 								type="submit"
-								className="rounded bg-amber-500 px-3 py-1.5 text-sm font-medium text-neutral-950 hover:bg-amber-400"
+								className="rounded-sm bg-amber-500 px-3 py-1.5 text-ui font-medium text-neutral-950 hover:bg-amber-400"
 							>
 								Answer
 							</button>
-							<span className="text-xs text-neutral-500">
+							<span className="text-meta text-neutral-500">
 								{ask.multiline ? "Ctrl+Enter to send" : "Enter to send"}
 							</span>
 						</div>
@@ -893,7 +893,7 @@ function AskPanel({
 
 				<button
 					onClick={() => onAnswer(ask.id, { cancelled: true })}
-					className="mt-3 text-xs text-neutral-500 hover:text-neutral-300"
+					className="mt-3 text-meta text-neutral-500 hover:text-neutral-300"
 				>
 					Cancel — fails the tool call and ends the turn
 				</button>
@@ -937,7 +937,7 @@ function CommandPicker({
 			ref={list}
 			role="listbox"
 			aria-label="Slash commands"
-			className="mb-2 max-h-64 overflow-y-auto rounded border border-neutral-700 bg-neutral-900"
+			className="mb-2 max-h-64 overflow-y-auto rounded-sm border border-neutral-700 bg-neutral-900"
 		>
 			{options.map((o, i) => (
 				<div
@@ -949,14 +949,14 @@ function CommandPicker({
 						e.preventDefault();
 						onPick(o);
 					}}
-					className={`flex cursor-pointer items-baseline gap-2 px-3 py-1.5 text-sm ${
+					className={`flex cursor-pointer items-baseline gap-2 px-3 py-1.5 text-ui ${
 						i === selected ? "bg-neutral-800" : ""
 					}`}
 				>
 					<span className="font-mono text-neutral-100">{o.label}</span>
-					{o.source && <span className="font-mono text-xs text-neutral-500">{o.source}</span>}
+					{o.source && <span className="font-mono text-meta text-neutral-500">{o.source}</span>}
 					{o.description && (
-						<span className="truncate text-xs text-neutral-400">{o.description}</span>
+						<span className="truncate text-meta text-neutral-400">{o.description}</span>
 					)}
 				</div>
 			))}
@@ -1310,7 +1310,7 @@ export function Chat({
 
 	if (!snapshot) {
 		return (
-			<main className="flex flex-1 items-center justify-center text-sm text-neutral-500">
+			<main className="flex flex-1 items-center justify-center text-ui text-neutral-500">
 				{/*
 				  Opening a session spawns a pi child and reads the whole
 				  transcript, which on a big session or a Pi is seconds. Showing the
@@ -1498,9 +1498,9 @@ export function Chat({
 				>
 					{snapshot.messages.length === 0 && !hasPartial && !busy && !command && (
 						<div className="flex h-full flex-col items-center justify-center gap-2 text-center select-none">
-							<div className="text-5xl text-amber-400">π</div>
-							<div className="text-lg text-neutral-200">New session</div>
-							<div className="text-sm text-neutral-500">
+							<div className="text-display text-amber-400">π</div>
+							<div className="text-title text-neutral-200">New session</div>
+							<div className="text-ui text-neutral-500">
 								in <span className="font-mono text-neutral-400">{snapshot.cwd.split(/[\\/]/).filter(Boolean).at(-1) ?? snapshot.cwd}</span>
 								{" · "}type <kbd className="font-mono text-neutral-400">/</kbd> for commands
 							</div>
@@ -1546,7 +1546,7 @@ export function Chat({
 							)}
 							{/* Unfolded modes show the live thought as itself. */}
 							{!folds && showThinking && partial.thinking && (
-								<div className="chat-measure text-sm whitespace-pre-wrap text-neutral-500 italic">
+								<div className="chat-measure text-body whitespace-pre-wrap text-neutral-500 italic">
 									{partial.thinking}
 								</div>
 							)}
@@ -1589,7 +1589,7 @@ export function Chat({
 					{/* Errors are visible in the chat, never only in stderr. */}
 					{snapshot.error && (
 						<div className="chat-gutter my-3">
-							<div className="chat-measure rounded border border-red-900 bg-red-950/40 px-3 py-2 text-sm text-red-300">
+							<div className="chat-measure rounded-sm border border-red-900 bg-red-950/40 px-3 py-2 text-body text-red-300">
 								{snapshot.error}
 							</div>
 						</div>
@@ -1604,7 +1604,7 @@ export function Chat({
 					 */}
 					{snapshot.stale && (
 						<div className="chat-gutter my-3">
-							<div className="chat-measure flex items-center gap-3 rounded border border-amber-900 bg-amber-950/30 px-3 py-2 text-sm text-amber-300">
+							<div className="chat-measure flex items-center gap-3 rounded-sm border border-amber-900 bg-amber-950/30 px-3 py-2 text-body text-amber-300">
 								<span className="min-w-0 flex-1">
 									Packages changed since this session started. Its commands and skills are the
 									old set until it restarts.
@@ -1617,7 +1617,7 @@ export function Chat({
 											? "Finish the turn first — a restart mid-turn loses it"
 											: "Replace this session's pi process; the conversation is kept"
 									}
-									className="shrink-0 rounded border border-amber-800 px-2 py-0.5 text-xs transition-colors duration-150 ease-out enabled:hover:bg-amber-900/40 disabled:opacity-50 motion-reduce:transition-none"
+									className="shrink-0 rounded-sm border border-amber-800 px-2 py-0.5 text-meta transition-colors duration-150 ease-out enabled:hover:bg-amber-900/40 disabled:opacity-50 motion-reduce:transition-none"
 								>
 									Restart session
 								</button>
@@ -1688,14 +1688,14 @@ export function Chat({
 						 * widgets that happened to be adjacent rather than as one thing
 						 * you are about to send.
 						 */}
-						<div className="rounded-2xl border border-neutral-800 bg-neutral-900 px-3 py-2 focus-within:border-neutral-700">
+						<div className="rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2 focus-within:border-neutral-700">
 							<Attachments
 								images={images}
 								onRemove={(i) => void changeImages(images.filter((_, n) => n !== i))}
 							/>
 
 							{attachError && (
-								<div className="mb-2 text-xs text-red-400">{attachError}</div>
+								<div className="mb-2 text-meta text-red-400">{attachError}</div>
 							)}
 
 							<textarea

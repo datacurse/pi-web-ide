@@ -195,16 +195,16 @@ export function DirectoryPicker({
 			 * minus its backdrop. The column layout is what makes the entry list
 			 * the only part that scrolls, so it has to be conditional instead.
 			 */
-			className="m-auto hidden h-[min(34rem,88vh)] w-[min(34rem,92vw)] flex-col overflow-hidden rounded-lg border border-neutral-800 bg-neutral-950 p-0 text-neutral-100 shadow-2xl backdrop:bg-black/60 open:flex"
+			className="m-auto hidden h-[min(34rem,88vh)] w-[min(34rem,92vw)] flex-col overflow-hidden rounded-md border border-neutral-800 bg-neutral-950 p-0 text-neutral-100 shadow-2xl backdrop:bg-black/60 open:flex"
 		>
 			<div className="flex items-center justify-between border-b border-neutral-800 px-3 py-2">
-				<h2 id="picker-title" className="text-sm font-semibold tracking-tight">
+				<h2 id="picker-title" className="text-title font-semibold tracking-tight">
 					Add project
 				</h2>
 				<button
 					onClick={onClose}
 					aria-label="Close directory picker"
-					className="size-8 rounded text-neutral-300 transition-colors duration-150 ease-out hover:bg-neutral-800 hover:text-neutral-50 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 motion-reduce:transition-none"
+					className="size-8 rounded-sm text-neutral-300 transition-colors duration-150 ease-out hover:bg-neutral-800 hover:text-neutral-50 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 motion-reduce:transition-none"
 				>
 					<X size={13} />
 				</button>
@@ -226,7 +226,7 @@ export function DirectoryPicker({
 					type="button"
 					onClick={() => void go(listing?.home ?? "~")}
 					title="Home directory"
-					className="shrink-0 rounded bg-neutral-800 px-2 py-1 text-xs transition-colors duration-150 ease-out hover:bg-neutral-700 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 motion-reduce:transition-none"
+					className="shrink-0 rounded-sm bg-neutral-800 px-2 py-1 text-meta transition-colors duration-150 ease-out hover:bg-neutral-700 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 motion-reduce:transition-none"
 				>
 					{/* "~" rather than a house glyph: this row is a path field, the
 					    server expands it, and no font is missing it. */}
@@ -241,7 +241,7 @@ export function DirectoryPicker({
 					disabled={!listing?.parent}
 					title="Parent directory"
 					aria-label="Parent directory"
-					className="shrink-0 rounded bg-neutral-800 px-2 py-1 text-xs transition-colors duration-150 ease-out hover:bg-neutral-700 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 disabled:opacity-40 disabled:hover:bg-neutral-800 motion-reduce:transition-none"
+					className="shrink-0 rounded-sm bg-neutral-800 px-2 py-1 text-meta transition-colors duration-150 ease-out hover:bg-neutral-700 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 disabled:opacity-40 disabled:hover:bg-neutral-800 motion-reduce:transition-none"
 				>
 					<span aria-hidden>{"\u2191"}</span>
 				</button>
@@ -252,7 +252,7 @@ export function DirectoryPicker({
 					title={pinned ? "Unpin this folder" : "Pin this folder"}
 					aria-label={pinned ? "Unpin this folder" : "Pin this folder"}
 					aria-pressed={pinned}
-					className={`shrink-0 rounded bg-neutral-800 px-2 py-1.5 transition-colors duration-150 ease-out hover:bg-neutral-700 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 disabled:opacity-40 disabled:hover:bg-neutral-800 motion-reduce:transition-none ${
+					className={`shrink-0 rounded-sm bg-neutral-800 px-2 py-1.5 transition-colors duration-150 ease-out hover:bg-neutral-700 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 disabled:opacity-40 disabled:hover:bg-neutral-800 motion-reduce:transition-none ${
 						pinned ? "text-amber-400" : "text-neutral-400"
 					}`}
 				>
@@ -265,12 +265,12 @@ export function DirectoryPicker({
 					autoComplete="off"
 					aria-label="Directory path"
 					placeholder="/absolute/path, ~/path, or type to filter"
-					className="min-w-0 flex-1 rounded border border-neutral-800 bg-neutral-900 px-2 py-1 font-mono text-xs text-neutral-200 outline-none focus-visible:border-neutral-600"
+					className="min-w-0 flex-1 rounded-sm border border-neutral-800 bg-neutral-900 px-2 py-1 font-mono text-meta text-neutral-200 outline-none focus-visible:border-neutral-600"
 				/>
 				<button
 					type="submit"
 					title="Go to this path"
-					className="shrink-0 rounded bg-neutral-800 px-2 py-1 text-xs transition-colors duration-150 ease-out hover:bg-neutral-700 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 motion-reduce:transition-none"
+					className="shrink-0 rounded-sm bg-neutral-800 px-2 py-1 text-meta transition-colors duration-150 ease-out hover:bg-neutral-700 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 motion-reduce:transition-none"
 				>
 					Go
 				</button>
@@ -278,7 +278,7 @@ export function DirectoryPicker({
 
 			{/* Breadcrumb: the only place that says what "Add this folder" will
 			    add, so it wraps rather than truncates. */}
-			<div className="flex flex-wrap items-center gap-0.5 border-b border-neutral-800 px-2 py-1 text-xs">
+			<div className="flex flex-wrap items-center gap-0.5 border-b border-neutral-800 px-2 py-1 text-meta">
 				{crumbs.map((c, i) => (
 					<span key={c.path} className="flex items-center gap-0.5">
 						{/* From the second real segment on: the root crumb IS the
@@ -286,7 +286,7 @@ export function DirectoryPicker({
 						{i > 1 && <span className="text-neutral-600">/</span>}
 						<button
 							onClick={() => void go(c.path)}
-							className="rounded px-1 py-0.5 text-neutral-400 transition-colors duration-150 ease-out hover:bg-neutral-800 hover:text-neutral-100 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 motion-reduce:transition-none"
+							className="rounded-sm px-1 py-0.5 text-neutral-400 transition-colors duration-150 ease-out hover:bg-neutral-800 hover:text-neutral-100 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 motion-reduce:transition-none"
 						>
 							{c.label}
 						</button>
@@ -305,12 +305,12 @@ export function DirectoryPicker({
 					{favorites.map((path) => (
 						<span
 							key={path}
-							className="group flex items-center rounded bg-neutral-900 text-xs"
+							className="group flex items-center rounded-sm bg-neutral-900 text-meta"
 						>
 							<button
 								onClick={() => void go(path)}
 								title={path}
-								className={`max-w-40 truncate rounded-l px-1.5 py-0.5 transition-colors duration-150 ease-out hover:bg-neutral-800 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 motion-reduce:transition-none ${
+								className={`max-w-40 truncate rounded-l-sm px-1.5 py-0.5 transition-colors duration-150 ease-out hover:bg-neutral-800 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 motion-reduce:transition-none ${
 									path === current ? "text-amber-400" : "text-neutral-300"
 								}`}
 							>
@@ -320,7 +320,7 @@ export function DirectoryPicker({
 								onClick={() => void togglePin(path, true)}
 								aria-label={`Unpin ${path}`}
 								title="Unpin"
-								className="rounded-r px-1 py-0.5 text-neutral-600 transition-colors duration-150 ease-out hover:bg-neutral-800 hover:text-neutral-200 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 motion-reduce:transition-none"
+								className="rounded-r-sm px-1 py-0.5 text-neutral-600 transition-colors duration-150 ease-out hover:bg-neutral-800 hover:text-neutral-200 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 motion-reduce:transition-none"
 							>
 								<X size={9} />
 							</button>
@@ -333,7 +333,7 @@ export function DirectoryPicker({
 			    viewport and stranding the footer. */}
 			<div className="min-h-0 flex-1 overflow-y-auto">
 				{listing && entries.length === 0 && (
-					<p className="px-3 py-4 text-xs text-neutral-400">
+					<p className="px-3 py-4 text-meta text-neutral-400">
 						{fragment
 							? `Nothing here matches “${fragment}”.`
 							: "No subdirectories here. Add this folder, or go up."}
@@ -344,7 +344,7 @@ export function DirectoryPicker({
 						key={e.path}
 						onClick={() => void go(e.path)}
 						title={e.path}
-						className="flex w-full items-center gap-2 border-b border-neutral-900 px-3 py-1.5 text-left text-xs transition-colors duration-150 ease-out hover:bg-neutral-900 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 motion-reduce:transition-none"
+						className="flex w-full items-center gap-2 border-b border-neutral-900 px-3 py-1.5 text-left text-meta transition-colors duration-150 ease-out hover:bg-neutral-900 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 motion-reduce:transition-none"
 					>
 						{/* A triangle, not a folder pictograph: U+1F5C1 is absent from
 						    the fonts this chrome actually gets and renders as tofu. It
@@ -365,13 +365,13 @@ export function DirectoryPicker({
 						{e.repo && (
 							<span
 								title="Git repository"
-								className="shrink-0 rounded bg-neutral-800 px-1 text-[10px] text-amber-400/90"
+								className="shrink-0 rounded-sm bg-neutral-800 px-1 text-caption text-amber-400/90"
 							>
 								git
 							</span>
 						)}
 						{projects.includes(e.path) && (
-							<span className="ml-auto shrink-0 text-[10px] text-neutral-500">added</span>
+							<span className="ml-auto shrink-0 text-caption text-neutral-500">added</span>
 						)}
 					</button>
 				))}
@@ -383,11 +383,11 @@ export function DirectoryPicker({
 					// Adding an already-listed project is a no-op on the server, so
 					// the button says so instead of pretending to work.
 					disabled={!current || already || busy}
-					className="rounded bg-neutral-800 px-2 py-1 text-xs transition-colors duration-150 ease-out hover:bg-neutral-700 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 disabled:opacity-50 disabled:hover:bg-neutral-800 motion-reduce:transition-none"
+					className="rounded-sm bg-neutral-800 px-2 py-1 text-meta transition-colors duration-150 ease-out hover:bg-neutral-700 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 disabled:opacity-50 disabled:hover:bg-neutral-800 motion-reduce:transition-none"
 				>
 					{already ? "Already added" : "Add this folder"}
 				</button>
-				<span className="min-w-0 flex-1 truncate font-mono text-[10px] text-neutral-500">
+				<span className="min-w-0 flex-1 truncate font-mono text-caption text-neutral-500">
 					{error ? <span className="text-red-400">{error}</span> : current}
 				</span>
 			</div>

@@ -216,7 +216,7 @@ export function GitActions({
 
 	return (
 		<div ref={root} className="relative flex items-center gap-1.5">
-			<div className="flex items-stretch overflow-hidden rounded-full border border-neutral-700 bg-neutral-900 text-xs">
+			<div className="flex items-stretch overflow-hidden rounded-full border border-neutral-700 bg-neutral-900 text-meta">
 				<button
 					onClick={() => void start(primary)}
 					disabled={running || naming}
@@ -243,7 +243,7 @@ export function GitActions({
 			{menuOpen && (
 				// Right-anchored: the button sits at the right edge of the status
 				// row, and a left-anchored menu ran off the window there.
-				<div className="absolute right-0 bottom-full z-20 mb-1 w-60 overflow-hidden rounded-xl border border-neutral-700 bg-neutral-900 py-1 shadow-xl">
+				<div className="absolute right-0 bottom-full z-20 mb-1 w-60 overflow-hidden rounded-md border border-neutral-700 bg-neutral-900 py-1 shadow-xl">
 					{/*
 					 * Where a push would go, at the top of the menu that pushes.
 					 *
@@ -252,7 +252,7 @@ export function GitActions({
 					 * decision, so it belongs where the decision is made — and it is
 					 * the branch that matters as much as the host.
 					 */}
-					<p className="truncate px-3 pt-0.5 pb-1.5 text-xs text-neutral-500">
+					<p className="truncate px-3 pt-0.5 pb-1.5 text-meta text-neutral-500">
 						<span className="text-neutral-400">{state.branch}</span>
 						{state.remote ? ` → ${state.upstream || `${state.remote} (new)`}` : " · no remote"}
 					</p>
@@ -275,7 +275,7 @@ export function GitActions({
 											: "This repository has no remote"
 										: undefined
 								}
-								className="block w-full px-3 py-1.5 text-left text-sm text-neutral-200 transition-colors duration-150 ease-out hover:bg-neutral-800 disabled:text-neutral-600 disabled:hover:bg-transparent motion-reduce:transition-none"
+								className="block w-full px-3 py-1.5 text-left text-ui text-neutral-200 transition-colors duration-150 ease-out hover:bg-neutral-800 disabled:text-neutral-600 disabled:hover:bg-transparent motion-reduce:transition-none"
 							>
 								{action.label}
 							</button>
@@ -296,7 +296,7 @@ export function GitActions({
 						role="menuitemcheckbox"
 						aria-checked={autoName}
 						title="Write the commit message with a model that reads the diff, and stop asking"
-						className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-neutral-300 transition-colors duration-150 ease-out hover:bg-neutral-800 motion-reduce:transition-none"
+						className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-ui text-neutral-300 transition-colors duration-150 ease-out hover:bg-neutral-800 motion-reduce:transition-none"
 					>
 						<span className="flex w-3.5 shrink-0 justify-center text-neutral-400">
 							{autoName && <Check size={12} weight="bold" />}
@@ -320,7 +320,7 @@ export function GitActions({
 				<button
 					onClick={() => setResult(null)}
 					title={result.error}
-					className="max-w-60 truncate rounded-full px-2 py-1 text-xs text-red-400 hover:text-red-300"
+					className="max-w-60 truncate rounded-full px-2 py-1 text-meta text-red-400 hover:text-red-300"
 				>
 					{result.error ?? "Failed"}
 				</button>
@@ -330,7 +330,7 @@ export function GitActions({
 					href={result.url}
 					target="_blank"
 					rel="noreferrer"
-					className="max-w-60 truncate rounded-full px-2 py-1 text-xs text-neutral-400 hover:text-neutral-200"
+					className="max-w-60 truncate rounded-full px-2 py-1 text-meta text-neutral-400 hover:text-neutral-200"
 				>
 					Pull request ↗
 				</a>
@@ -425,11 +425,11 @@ function GitDialog({
 					e.preventDefault();
 					onRun();
 				}}
-				className="w-full max-w-lg rounded-2xl border border-neutral-700 bg-neutral-900 p-4"
+				className="w-full max-w-lg rounded-md border border-neutral-700 bg-neutral-900 p-4"
 			>
 				<div className="mb-3 flex items-baseline justify-between gap-2">
-					<h2 className="text-sm font-semibold text-neutral-100">{action.label}</h2>
-					<span className="truncate font-mono text-xs text-neutral-500">
+					<h2 className="text-title font-semibold text-neutral-100">{action.label}</h2>
+					<span className="truncate font-mono text-meta text-neutral-500">
 						{state.branch}
 						{state.changed > 0 ? ` · ${state.changed} changed` : ""}
 					</span>
@@ -437,19 +437,19 @@ function GitDialog({
 
 				{action.branch && (
 					<label className="mb-3 block">
-						<span className="mb-1 block text-xs text-neutral-400">New branch</span>
+						<span className="mb-1 block text-meta text-neutral-400">New branch</span>
 						<input
 							value={branch}
 							onChange={(e) => onBranch(e.target.value)}
 							spellCheck={false}
-							className="w-full rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-2 font-mono text-sm text-neutral-100 outline-none focus:border-neutral-600"
+							className="w-full rounded-sm border border-neutral-800 bg-neutral-950 px-3 py-2 font-mono text-ui text-neutral-100 outline-none focus:border-neutral-600"
 						/>
 					</label>
 				)}
 
 				{action.commit && (
 					<label className="block">
-						<span className="mb-1 block text-xs text-neutral-400">Commit message</span>
+						<span className="mb-1 block text-meta text-neutral-400">Commit message</span>
 						<textarea
 							ref={field}
 							value={message}
@@ -466,14 +466,14 @@ function GitDialog({
 									onRun();
 								}
 							}}
-							className="w-full resize-none rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-2 text-sm text-neutral-100 outline-none focus:border-neutral-600 placeholder:text-neutral-600"
+							className="w-full resize-none rounded-sm border border-neutral-800 bg-neutral-950 px-3 py-2 text-ui text-neutral-100 outline-none focus:border-neutral-600 placeholder:text-neutral-600"
 						/>
 					</label>
 				)}
 
 				{/* The reason the model could not be asked, where the asking was
 				    done — a pill behind the dialog would be invisible. */}
-				{nameError && <p className="mt-2 text-xs text-red-400">{nameError}</p>}
+				{nameError && <p className="mt-2 text-meta text-red-400">{nameError}</p>}
 
 				<div className="mt-4 flex items-center justify-end gap-2">
 					{/* `mr-auto`: an action ON the message belongs beside the box it
@@ -484,7 +484,7 @@ function GitDialog({
 							onClick={onAutoName}
 							disabled={naming || running}
 							title="Write the message with a model that reads the diff"
-							className="mr-auto flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm text-neutral-400 transition-colors duration-150 ease-out hover:bg-neutral-800 hover:text-neutral-100 disabled:text-neutral-600 disabled:hover:bg-transparent motion-reduce:transition-none"
+							className="mr-auto flex items-center gap-1.5 rounded-sm px-3 py-1.5 text-ui text-neutral-400 transition-colors duration-150 ease-out hover:bg-neutral-800 hover:text-neutral-100 disabled:text-neutral-600 disabled:hover:bg-transparent motion-reduce:transition-none"
 						>
 							<Sparkle size={13} />
 							{naming ? "Naming…" : "Auto-name"}
@@ -493,14 +493,14 @@ function GitDialog({
 					<button
 						type="button"
 						onClick={onCancel}
-						className="rounded-full px-3 py-1.5 text-sm text-neutral-400 hover:bg-neutral-800 hover:text-neutral-100"
+						className="rounded-sm px-3 py-1.5 text-ui text-neutral-400 hover:bg-neutral-800 hover:text-neutral-100"
 					>
 						Cancel
 					</button>
 					<button
 						type="submit"
 						disabled={running || naming || (action.commit && !message.trim() && !state.suggestion)}
-						className="rounded-full bg-neutral-100 px-4 py-1.5 text-sm font-medium text-neutral-900 transition-colors duration-150 ease-out hover:bg-neutral-200 disabled:bg-neutral-700 disabled:text-neutral-400 motion-reduce:transition-none"
+						className="rounded-sm bg-neutral-100 px-4 py-1.5 text-ui font-medium text-neutral-900 transition-colors duration-150 ease-out hover:bg-neutral-200 disabled:bg-neutral-700 disabled:text-neutral-400 motion-reduce:transition-none"
 					>
 						{running ? "Working…" : action.label}
 					</button>

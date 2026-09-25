@@ -30,6 +30,37 @@
 @custom-variant wide (@media (width > 768px));
 
 /*
+ * DESIGN TOKENS — the only sizes and radii that exist. Rules: docs/ui.md.
+ * `initial` deletes Tailwind's defaults, so `text-sm`/`rounded-xl` generate
+ * no CSS; scripts/check-ui.sh catches them and arbitrary values.
+ */
+@theme {
+	--text-*: initial;
+	--text-caption: 11px; /* floor: badges, counts, version */
+	--text-caption--line-height: 16px;
+	--text-meta: 12px; /* hints, secondary labels, mono chips */
+	--text-meta--line-height: 16px;
+	--text-ui: 13px; /* default chrome: buttons, rows, inputs */
+	--text-ui--line-height: 18px;
+	--text-body: 14px; /* chat content, tool output, editors */
+	--text-body--line-height: 20px;
+	--text-title: 16px; /* dialog titles, empty-state heading */
+	--text-title--line-height: 22px;
+	--text-display: 48px; /* the π mark on an empty session; nothing else */
+	--text-display--line-height: 1;
+	/* Relative to surrounding prose (17px, --prose-size). */
+	--text-h1: 1.25em;
+	--text-h2: 1.125em;
+	--text-h3: 1em;
+	--text-code-inline: 0.875em;
+
+	--radius-*: initial;
+	--radius-sm: 4px; /* controls, chips, inline code */
+	--radius-md: 8px; /* popovers, menus, dialogs, thumbnails */
+	--radius-lg: 12px; /* composer, message bubble */
+}
+
+/*
  * THEMES
  *
  * The four Catppuccin flavors plus Claude's own dark interface, as raw

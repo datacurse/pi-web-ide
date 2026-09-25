@@ -49,7 +49,7 @@ function Swatch({ theme }: { theme: ThemeId }) {
 	return (
 		<span
 			aria-hidden
-			className="flex shrink-0 overflow-hidden rounded border border-neutral-700"
+			className="flex shrink-0 overflow-hidden rounded-sm border border-neutral-700"
 		>
 			<span data-theme={theme} className="flex">
 				<span className="block size-4 bg-neutral-950" />
@@ -256,16 +256,16 @@ export function Settings({
 			// max-h + overflow because the dialog outgrew the viewport once the
 			// personality field arrived: a <dialog> does not scroll by default,
 			// so the Save button simply had nowhere to be on a short screen.
-			className="m-auto max-h-[88vh] w-[min(26rem,92vw)] overflow-y-auto rounded-lg border border-neutral-800 bg-neutral-950 p-0 text-neutral-100 shadow-2xl backdrop:bg-black/60"
+			className="m-auto max-h-[88vh] w-[min(26rem,92vw)] overflow-y-auto rounded-md border border-neutral-800 bg-neutral-950 p-0 text-neutral-100 shadow-2xl backdrop:bg-black/60"
 		>
 			<div className="flex items-center justify-between border-b border-neutral-800 px-3 py-2">
-				<h2 id="settings-title" className="text-sm font-semibold tracking-tight">
+				<h2 id="settings-title" className="text-title font-semibold tracking-tight">
 					Settings
 				</h2>
 				<button
 					onClick={onClose}
 					aria-label="Close settings"
-					className="size-8 rounded text-neutral-300 transition-colors duration-150 ease-out hover:bg-neutral-800 hover:text-neutral-50 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 motion-reduce:transition-none"
+					className="size-8 rounded-sm text-neutral-300 transition-colors duration-150 ease-out hover:bg-neutral-800 hover:text-neutral-50 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 motion-reduce:transition-none"
 				>
 					<X size={13} />
 				</button>
@@ -273,22 +273,22 @@ export function Settings({
 
 			<div className="p-3">
 				<fieldset className="m-0 mb-4 border-0 p-0">
-					<legend className="mb-2 text-[10px] tracking-wide text-neutral-500 uppercase">
+					<legend className="mb-2 text-caption tracking-wide text-neutral-500 uppercase">
 						Usage remaining
 					</legend>
 					{usageError ? (
-						<p className="px-2 text-xs text-red-400">{usageError}</p>
+						<p className="px-2 text-meta text-red-400">{usageError}</p>
 					) : !limits ? (
-						<p className="px-2 text-xs text-neutral-500">loading…</p>
+						<p className="px-2 text-meta text-neutral-500">loading…</p>
 					) : (
 						<div className="flex flex-col gap-3 px-2">
 							{limits.map((l) => {
 								const left = Math.max(0, Math.min(100, 100 - l.percent));
 								return (
-									<div key={`${l.kind}-${limitLabel(l)}`} className="text-sm">
+									<div key={`${l.kind}-${limitLabel(l)}`} className="text-ui">
 										<div className="flex items-baseline justify-between gap-2">
 											<span>{limitLabel(l)}</span>
-											<span className="text-xs text-neutral-300">{left}% left</span>
+											<span className="text-meta text-neutral-300">{left}% left</span>
 										</div>
 										<div
 											role="meter"
@@ -303,7 +303,7 @@ export function Settings({
 												style={{ width: `${left}%` }}
 											/>
 										</div>
-										<span className="mt-0.5 block text-xs text-neutral-500">
+										<span className="mt-0.5 block text-meta text-neutral-500">
 											{resetLabel(l.resets_at)}
 										</span>
 									</div>
@@ -319,14 +319,14 @@ export function Settings({
 				  announcement without a line of JavaScript.
 				*/}
 				<fieldset className="m-0 border-0 p-0">
-					<legend className="mb-2 text-[10px] tracking-wide text-neutral-500 uppercase">
+					<legend className="mb-2 text-caption tracking-wide text-neutral-500 uppercase">
 						Theme
 					</legend>
 					<div className="flex flex-col gap-0.5">
 						{THEMES.map((t) => (
 							<label
 								key={t.id}
-								className={`flex cursor-pointer items-center gap-3 rounded px-2 py-2 text-sm transition-colors duration-150 ease-out has-[:focus-visible]:outline-2 has-[:focus-visible]:-outline-offset-2 has-[:focus-visible]:outline-neutral-400 motion-reduce:transition-none ${
+								className={`flex cursor-pointer items-center gap-3 rounded-sm px-2 py-2 text-ui transition-colors duration-150 ease-out has-[:focus-visible]:outline-2 has-[:focus-visible]:-outline-offset-2 has-[:focus-visible]:outline-neutral-400 motion-reduce:transition-none ${
 									t.id === theme ? "bg-neutral-800" : "hover:bg-neutral-900"
 								}`}
 							>
@@ -352,13 +352,13 @@ export function Settings({
 				</fieldset>
 
 				<fieldset className="m-0 mt-4 border-0 p-0">
-					<legend className="mb-2 text-[10px] tracking-wide text-neutral-500 uppercase">
+					<legend className="mb-2 text-caption tracking-wide text-neutral-500 uppercase">
 						Transcript
 					</legend>
 					{/* A real checkbox, visible rather than sr-only: unlike the
 					    theme rows there is no swatch to carry the state, so the
 					    box itself is the affordance. */}
-					<label className="flex cursor-pointer items-center gap-3 rounded px-2 py-2 text-sm transition-colors duration-150 ease-out hover:bg-neutral-900 has-[:focus-visible]:outline-2 has-[:focus-visible]:-outline-offset-2 has-[:focus-visible]:outline-neutral-400 motion-reduce:transition-none">
+					<label className="flex cursor-pointer items-center gap-3 rounded-sm px-2 py-2 text-ui transition-colors duration-150 ease-out hover:bg-neutral-900 has-[:focus-visible]:outline-2 has-[:focus-visible]:-outline-offset-2 has-[:focus-visible]:outline-neutral-400 motion-reduce:transition-none">
 						<input
 							type="checkbox"
 							checked={showThinking}
@@ -367,7 +367,7 @@ export function Settings({
 						/>
 						<span className="flex-1">
 							Show thinking
-							<span className="block text-xs text-neutral-500">
+							<span className="block text-meta text-neutral-500">
 								Reasoning blocks in assistant messages, as they stream and in history.
 							</span>
 						</span>
@@ -377,13 +377,13 @@ export function Settings({
 					    different answers to one question, and a group of two
 					    checkboxes would let you tick both. */}
 					<div role="group" aria-labelledby="tool-mode-label" className="mt-2">
-						<div id="tool-mode-label" className="px-2 pt-1 pb-1 text-sm text-neutral-300">
+						<div id="tool-mode-label" className="px-2 pt-1 pb-1 text-ui text-neutral-300">
 							Tool calls
 						</div>
 						{TOOL_MODES.map((m) => (
 							<label
 								key={m.id}
-								className={`flex cursor-pointer items-start gap-3 rounded px-2 py-1.5 text-sm transition-colors duration-150 ease-out has-[:focus-visible]:outline-2 has-[:focus-visible]:-outline-offset-2 has-[:focus-visible]:outline-neutral-400 motion-reduce:transition-none ${
+								className={`flex cursor-pointer items-start gap-3 rounded-sm px-2 py-1.5 text-ui transition-colors duration-150 ease-out has-[:focus-visible]:outline-2 has-[:focus-visible]:-outline-offset-2 has-[:focus-visible]:outline-neutral-400 motion-reduce:transition-none ${
 									m.id === toolMode ? "bg-neutral-800" : "hover:bg-neutral-900"
 								}`}
 							>
@@ -397,7 +397,7 @@ export function Settings({
 								/>
 								<span className="flex-1">
 									{m.label}
-									<span className="block text-xs text-neutral-500">{m.hint}</span>
+									<span className="block text-meta text-neutral-500">{m.hint}</span>
 								</span>
 							</label>
 						))}
@@ -405,10 +405,10 @@ export function Settings({
 				</fieldset>
 
 				<fieldset className="m-0 mt-4 border-0 p-0">
-					<legend className="mb-2 text-[10px] tracking-wide text-neutral-500 uppercase">
+					<legend className="mb-2 text-caption tracking-wide text-neutral-500 uppercase">
 						Sessions
 					</legend>
-					<label className="flex cursor-pointer items-center gap-3 rounded px-2 py-2 text-sm transition-colors duration-150 ease-out hover:bg-neutral-900 has-[:focus-visible]:outline-2 has-[:focus-visible]:-outline-offset-2 has-[:focus-visible]:outline-neutral-400 motion-reduce:transition-none">
+					<label className="flex cursor-pointer items-center gap-3 rounded-sm px-2 py-2 text-ui transition-colors duration-150 ease-out hover:bg-neutral-900 has-[:focus-visible]:outline-2 has-[:focus-visible]:-outline-offset-2 has-[:focus-visible]:outline-neutral-400 motion-reduce:transition-none">
 						<input
 							type="checkbox"
 							checked={shortNames}
@@ -417,7 +417,7 @@ export function Settings({
 						/>
 						<span className="flex-1">
 							Short names from the first prompt
-							<span className="block text-xs text-neutral-500">
+							<span className="block text-meta text-neutral-500">
 								Names an unnamed session by the opening words of your first message
 								instead of showing the whole line. A name you set with the pencil in the
 								session list always wins.
@@ -427,11 +427,11 @@ export function Settings({
 				</fieldset>
 
 				<fieldset className="m-0 mt-4 border-0 p-0">
-					<legend className="mb-2 text-[10px] tracking-wide text-neutral-500 uppercase">
+					<legend className="mb-2 text-caption tracking-wide text-neutral-500 uppercase">
 						Notifications
 					</legend>
 					<label
-						className={`flex items-center gap-3 rounded px-2 py-2 text-sm transition-colors duration-150 ease-out has-[:focus-visible]:outline-2 has-[:focus-visible]:-outline-offset-2 has-[:focus-visible]:outline-neutral-400 motion-reduce:transition-none ${
+						className={`flex items-center gap-3 rounded-sm px-2 py-2 text-ui transition-colors duration-150 ease-out has-[:focus-visible]:outline-2 has-[:focus-visible]:-outline-offset-2 has-[:focus-visible]:outline-neutral-400 motion-reduce:transition-none ${
 							notifyBlocked ? "opacity-60" : "cursor-pointer hover:bg-neutral-900"
 						}`}
 					>
@@ -444,7 +444,7 @@ export function Settings({
 						/>
 						<span className="flex-1">
 							Notify when a run finishes
-							<span className="block text-xs text-neutral-500">{notifyHint}</span>
+							<span className="block text-meta text-neutral-500">{notifyHint}</span>
 						</span>
 					</label>
 				</fieldset>
@@ -458,14 +458,14 @@ export function Settings({
 				  spawn, so a running session keeps the prompt it started with.
 				*/}
 				<fieldset className="m-0 mt-4 border-0 p-0">
-					<legend className="mb-2 text-[10px] tracking-wide text-neutral-500 uppercase">
+					<legend className="mb-2 text-caption tracking-wide text-neutral-500 uppercase">
 						Personality
 					</legend>
 					<label className="block px-2">
-						<span className="text-sm text-neutral-300">
+						<span className="text-ui text-neutral-300">
 							Appended to every new session's system prompt
 						</span>
-						<span className="mt-0.5 block font-mono text-[10px] break-all text-neutral-500">
+						<span className="mt-0.5 block font-mono text-caption break-all text-neutral-500">
 							{loadError ? (
 								<span className="text-red-400">{loadError}</span>
 							) : (
@@ -489,18 +489,18 @@ export function Settings({
 									? "Unavailable."
 									: "Empty means nothing is appended."
 							}
-							className="mt-2 block w-full resize-y rounded border border-neutral-800 bg-neutral-900 p-2 font-mono text-xs text-neutral-200 outline-none focus-visible:border-neutral-600"
+							className="mt-2 block w-full resize-y rounded-sm border border-neutral-800 bg-neutral-900 p-2 font-mono text-meta text-neutral-200 outline-none focus-visible:border-neutral-600"
 						/>
 					</label>
 					<div className="mt-2 flex items-center gap-2 px-2">
 						<button
 							onClick={() => void savePersonality()}
 							disabled={!dirty || saveState === "saving"}
-							className="rounded bg-neutral-800 px-2 py-1 text-xs transition-colors duration-150 ease-out hover:bg-neutral-700 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 disabled:opacity-50 disabled:hover:bg-neutral-800 motion-reduce:transition-none"
+							className="rounded-sm bg-neutral-800 px-2 py-1 text-meta transition-colors duration-150 ease-out hover:bg-neutral-700 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 disabled:opacity-50 disabled:hover:bg-neutral-800 motion-reduce:transition-none"
 						>
 							{saveState === "saving" ? "Saving…" : "Save"}
 						</button>
-						<span className="min-w-0 flex-1 text-[10px] text-neutral-500">
+						<span className="min-w-0 flex-1 text-caption text-neutral-500">
 							{saveError ? (
 								<span className="text-red-400">{saveError}</span>
 							) : dirty ? (
@@ -512,7 +512,7 @@ export function Settings({
 							)}
 						</span>
 					</div>
-					<label className="mt-2 flex cursor-pointer items-center gap-3 rounded px-2 py-2 text-sm transition-colors duration-150 ease-out hover:bg-neutral-900 has-[:focus-visible]:outline-2 has-[:focus-visible]:-outline-offset-2 has-[:focus-visible]:outline-neutral-400 motion-reduce:transition-none">
+					<label className="mt-2 flex cursor-pointer items-center gap-3 rounded-sm px-2 py-2 text-ui transition-colors duration-150 ease-out hover:bg-neutral-900 has-[:focus-visible]:outline-2 has-[:focus-visible]:-outline-offset-2 has-[:focus-visible]:outline-neutral-400 motion-reduce:transition-none">
 						<input
 							type="checkbox"
 							checked={personality?.remind ?? false}
@@ -522,7 +522,7 @@ export function Settings({
 						/>
 						<span className="flex-1">
 							Repeat before every reply
-							<span className="block text-xs text-neutral-500">
+							<span className="block text-meta text-neutral-500">
 								Also adds the text to the end of your latest message on each model
 								request, so long sessions do not drift from it. Costs its length in
 								tokens per request. Applies to sessions started from now on.

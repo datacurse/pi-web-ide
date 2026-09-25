@@ -60,14 +60,14 @@ function RailButton({
 			    pseudo-element rather than a border so the icon does not shift by
 			    2px when it lights up. */}
 			{active && (
-				<span aria-hidden className="absolute inset-y-1 left-0 w-0.5 rounded-r bg-amber-400" />
+				<span aria-hidden className="absolute inset-y-1 left-0 w-0.5 rounded-r-sm bg-amber-400" />
 			)}
 			{children}
 			{badge !== undefined && badge > 0 && (
 				<>
 					<span
 						aria-hidden
-						className="absolute right-1.5 bottom-1.5 flex min-w-4 items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] leading-4 font-semibold text-neutral-950"
+						className="absolute right-1.5 bottom-1.5 flex min-w-4 items-center justify-center rounded-full bg-amber-500 px-1 text-caption leading-4 font-semibold text-neutral-950"
 					>
 						{badge > 9 ? "9+" : badge}
 					</span>
@@ -163,7 +163,7 @@ export function ActivityBar({
 			 */}
 				<p
 					title={`Version ${version} — version + git commit; * means uncommitted changes`}
-					className="pb-1.5 text-[9px] leading-none text-neutral-600"
+					className="pb-1.5 text-caption leading-none text-neutral-600"
 				>
 					{version.split("+")[0]}
 				</p>

@@ -78,7 +78,7 @@ export function ModelSelector({
 
 	// Pills, not boxed inputs: these now live INSIDE the composer, where a
 	// bordered field inside a bordered field is two edges for one control.
-	const cls = `rounded-full bg-transparent px-2 py-1 font-mono text-xs ${
+	const cls = `rounded-full bg-transparent px-2 py-1 font-mono text-meta ${
 		disabled ? "cursor-not-allowed text-neutral-600" : "text-neutral-300 hover:bg-neutral-800"
 	}`;
 	const title = disabled ? "Cannot switch models while streaming" : "Switch model";
@@ -131,7 +131,7 @@ export function ModelSelector({
 					value={thinkingLevel ?? ""}
 					title="Reasoning effort — applies from the next turn"
 					onChange={(e) => onThinkingChange(e.target.value)}
-					className="rounded-full bg-transparent px-2 py-1 font-mono text-xs text-neutral-300 hover:bg-neutral-800"
+					className="rounded-full bg-transparent px-2 py-1 font-mono text-meta text-neutral-300 hover:bg-neutral-800"
 				>
 					{/* pi can report a level outside the model's own list (a
 					    session resumed under a different model). Show it rather
@@ -162,7 +162,7 @@ export function ModelSelector({
 			</button>
 
 			{error && (
-				<div className="absolute right-0 top-full mt-1 w-80 rounded border border-red-900 bg-red-950/80 px-2 py-1 text-xs text-red-300">
+				<div className="absolute right-0 top-full mt-1 w-80 rounded-sm border border-red-900 bg-red-950/80 px-2 py-1 text-meta text-red-300">
 					{error}
 				</div>
 			)}

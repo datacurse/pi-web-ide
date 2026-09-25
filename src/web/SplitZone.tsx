@@ -121,7 +121,7 @@ export function SplitZone({
 					 * what tells you the two halves are one control with two positions.
 					 * inset-x-0 rather than a width swap so it animates at all.
 					 */
-					className={`pointer-events-none absolute inset-y-0 rounded bg-amber-400/15 ring-2 ring-inset ring-amber-400/60 transition-[left,right] duration-150 ease-out motion-reduce:transition-none ${
+					className={`pointer-events-none absolute inset-y-0 rounded-sm bg-amber-400/15 ring-2 ring-inset ring-amber-400/60 transition-[left,right] duration-150 ease-out motion-reduce:transition-none ${
 						!splits ? "inset-x-0" : side === "left" ? "left-0 right-1/2" : "left-1/2 right-0"
 					}`}
 				/>

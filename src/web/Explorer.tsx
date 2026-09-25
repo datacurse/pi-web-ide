@@ -125,7 +125,7 @@ function TreeDir({
 				// No focus ring: the tree is a wall of rows and the browser's default
 				// box around one is loud. Keyboard focus still shows, as the same
 				// highlight hover uses.
-				className={`flex w-full items-center gap-1 py-0.5 pr-2 text-left text-xs hover:bg-neutral-800 focus-visible:bg-neutral-800 focus-visible:outline-none ${
+				className={`flex w-full items-center gap-1 py-0.5 pr-2 text-left text-meta hover:bg-neutral-800 focus-visible:bg-neutral-800 focus-visible:outline-none ${
 					entry.hidden ? "text-neutral-500" : "text-neutral-300"
 				}`}
 			>
@@ -186,7 +186,7 @@ function TreeFile({
 			onClick={() => onOpen(entry.path)}
 			// Same indent as a sibling directory: the icon takes the chevron's slot.
 			style={{ paddingLeft: `${depth * 12 + 4}px` }}
-			className={`flex w-full items-center gap-1 py-0.5 pr-2 text-left text-xs hover:bg-neutral-800 focus-visible:bg-neutral-800 focus-visible:outline-none ${tone}`}
+			className={`flex w-full items-center gap-1 py-0.5 pr-2 text-left text-meta hover:bg-neutral-800 focus-visible:bg-neutral-800 focus-visible:outline-none ${tone}`}
 		>
 			<FileGlyph name={entry.name} />
 			<span className="truncate">{entry.name}</span>
@@ -265,12 +265,12 @@ export function Explorer({
 			className="flex min-h-0 min-w-0 flex-1 flex-col bg-neutral-950"
 		>
 			<div className="flex items-center gap-2 border-b border-neutral-800 px-3 py-2">
-				<span className="text-sm text-neutral-300">Explorer</span>
+				<span className="text-ui text-neutral-300">Explorer</span>
 				<button
 					type="button"
 					onClick={onClose}
 					aria-label="Close explorer"
-					className="ml-auto rounded p-1 text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200"
+					className="ml-auto rounded-sm p-1 text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200"
 				>
 					<X size={16} />
 				</button>
@@ -278,7 +278,7 @@ export function Explorer({
 			{children}
 
 			{error && (
-				<div className="border-b border-red-900 bg-red-950/40 px-3 py-2 text-xs text-red-300">
+				<div className="border-b border-red-900 bg-red-950/40 px-3 py-2 text-meta text-red-300">
 					{error}
 				</div>
 			)}

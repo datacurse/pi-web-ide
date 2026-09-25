@@ -95,7 +95,7 @@ function StatusMark({ status }: { status: string }) {
 				: letter === "R"
 					? "text-blue-400"
 					: "text-amber-400";
-	return <span className={`shrink-0 font-mono text-xs ${tone}`}>{letter}</span>;
+	return <span className={`shrink-0 font-mono text-meta ${tone}`}>{letter}</span>;
 }
 
 /** One file row, in either half. The whole row is the button. */
@@ -119,7 +119,7 @@ function FileRow({
 			onClick={onOpen}
 			title={`${short} — open diff`}
 			style={{ paddingLeft: `${0.75 + depth}rem` }}
-			className="flex w-full items-center gap-1.5 py-1 pr-3 text-left text-xs text-neutral-300 hover:bg-neutral-800/70"
+			className="flex w-full items-center gap-1.5 py-1 pr-3 text-left text-meta text-neutral-300 hover:bg-neutral-800/70"
 		>
 			<FileGlyph name={name} size={13} />
 			<span className="truncate">{name}</span>
@@ -266,7 +266,7 @@ export function SourceControl({
 		return (
 			<div className="flex min-h-0 min-w-0 flex-1 flex-col bg-neutral-950">
 				<Header onClose={onClose} branch="" />
-				<p className="p-4 text-sm text-neutral-500">
+				<p className="p-4 text-ui text-neutral-500">
 					Not a git repository. `git init` in a terminal and this fills in.
 				</p>
 			</div>
@@ -295,14 +295,14 @@ export function SourceControl({
 								void sync();
 							}
 						}}
-						className="min-w-0 flex-1 resize-none rounded border border-neutral-800 bg-neutral-950 px-2 py-1.5 text-xs text-neutral-100 outline-none focus:border-neutral-600 placeholder:text-neutral-600"
+						className="min-w-0 flex-1 resize-none rounded-sm border border-neutral-800 bg-neutral-950 px-2 py-1.5 text-meta text-neutral-100 outline-none focus:border-neutral-600 placeholder:text-neutral-600"
 					/>
 					<button
 						onClick={() => void requestName()}
 						disabled={naming || running || !dirty}
 						title="Write the message with a model that reads the diff"
 						aria-label="Auto-name this commit"
-						className="shrink-0 rounded p-1.5 text-neutral-400 hover:bg-neutral-800 hover:text-neutral-100 disabled:text-neutral-600 disabled:hover:bg-transparent"
+						className="shrink-0 rounded-sm p-1.5 text-neutral-400 hover:bg-neutral-800 hover:text-neutral-100 disabled:text-neutral-600 disabled:hover:bg-transparent"
 					>
 						<Sparkle size={14} className={naming ? "animate-pulse" : undefined} />
 					</button>
@@ -322,7 +322,7 @@ export function SourceControl({
 					 * use, and VS Code's blue here would be the one control in the
 					 * window ignoring the active theme.
 					 */
-					className="mx-2 mb-2 flex items-center justify-center gap-1.5 rounded bg-amber-500 px-3 py-1.5 text-xs font-medium text-neutral-950 transition-colors duration-150 ease-out hover:bg-amber-400 disabled:bg-neutral-800 disabled:text-neutral-500 motion-reduce:transition-none"
+					className="mx-2 mb-2 flex items-center justify-center gap-1.5 rounded-sm bg-amber-500 px-3 py-1.5 text-meta font-medium text-neutral-950 transition-colors duration-150 ease-out hover:bg-amber-400 disabled:bg-neutral-800 disabled:text-neutral-500 motion-reduce:transition-none"
 				>
 					<ArrowsClockwise size={13} className={running ? "animate-spin" : undefined} />
 					{naming
@@ -346,7 +346,7 @@ export function SourceControl({
 
 				{/* Auto-name is shared with GitActions' menu: one preference, so
 				    flipping it in either place changes both. */}
-				<label className="flex cursor-pointer items-center gap-2 px-3 pb-2 text-xs text-neutral-500 hover:text-neutral-300">
+				<label className="flex cursor-pointer items-center gap-2 px-3 pb-2 text-meta text-neutral-500 hover:text-neutral-300">
 					<input
 						type="checkbox"
 						checked={autoName}
@@ -362,7 +362,7 @@ export function SourceControl({
 			</div>
 
 			{error && (
-				<div className="border-b border-red-900 bg-red-950/40 px-3 py-2 text-xs text-red-300">
+				<div className="border-b border-red-900 bg-red-950/40 px-3 py-2 text-meta text-red-300">
 					{error}
 				</div>
 			)}
@@ -371,13 +371,13 @@ export function SourceControl({
 			    changed files off the top, and they are the half you act on. Equal
 			    halves (flex-1 basis-0) so neither list can starve the other. */}
 			<div className="min-h-0 flex-1 basis-0 overflow-auto">
-				<p className="sticky top-0 z-10 bg-neutral-950 px-3 py-1.5 text-[11px] font-semibold tracking-wide text-neutral-400 uppercase">
+				<p className="sticky top-0 z-10 bg-neutral-950 px-3 py-1.5 text-caption font-semibold tracking-wide text-neutral-400 uppercase">
 					Changes{dirty && <span className="ml-1 text-neutral-500">{state?.changed}</span>}
 				</p>
 				{files === null ? (
-					<p className="px-3 py-2 text-xs text-neutral-500">Reading the working tree…</p>
+					<p className="px-3 py-2 text-meta text-neutral-500">Reading the working tree…</p>
 				) : files.length === 0 ? (
-					<p className="px-3 py-2 text-xs text-neutral-500">
+					<p className="px-3 py-2 text-meta text-neutral-500">
 						Nothing changed. Uncommitted edits — the agent's or your own — show up here.
 					</p>
 				) : (
@@ -397,7 +397,7 @@ export function SourceControl({
 			{/* BOTTOM HALF: history. Collapsed, because a commit is a row you
 			    scan and only sometimes open. */}
 			<div className="min-h-0 flex-1 basis-0 overflow-auto border-t border-neutral-800">
-				<p className="sticky top-0 z-10 bg-neutral-950 px-3 py-1.5 text-[11px] font-semibold tracking-wide text-neutral-400 uppercase">
+				<p className="sticky top-0 z-10 bg-neutral-950 px-3 py-1.5 text-caption font-semibold tracking-wide text-neutral-400 uppercase">
 					Commits
 				</p>
 				{commits.map((c) => {
@@ -408,7 +408,7 @@ export function SourceControl({
 								onClick={() => setOpen((o) => ({ ...o, [c.hash]: !expanded }))}
 								aria-expanded={expanded}
 								title={`${c.subject}\n${c.author} · ${c.when} · ${c.hash.slice(0, 7)}`}
-								className="flex w-full items-center gap-1 py-1 pr-3 pl-1 text-left text-xs text-neutral-300 hover:bg-neutral-800/70"
+								className="flex w-full items-center gap-1 py-1 pr-3 pl-1 text-left text-meta text-neutral-300 hover:bg-neutral-800/70"
 							>
 								<span className="shrink-0 text-neutral-600">
 									{expanded ? <CaretDown size={11} /> : <CaretRight size={11} />}
@@ -422,7 +422,7 @@ export function SourceControl({
 								 * ordering legible at a glance; the full stamp, the author and
 								 * the sha are in the tooltip.
 								 */}
-								<span className="ml-auto shrink-0 pl-2 text-[10px] text-neutral-600">
+								<span className="ml-auto shrink-0 pl-2 text-caption text-neutral-600">
 									{c.when.replace(/ ago$/, "")}
 								</span>
 							</button>
@@ -448,14 +448,14 @@ export function SourceControl({
 function Header({ branch, onClose }: { branch: string; onClose: () => void }) {
 	return (
 		<div className="flex items-center gap-2 border-b border-neutral-800 px-3 py-2">
-			<span className="text-sm text-neutral-300">Source Control</span>
+			<span className="text-ui text-neutral-300">Source Control</span>
 			{/* The branch is a LABEL, not an action: same dim mono the rest of the
 			    app uses for paths, rather than the accent, which in this window
 			    means "working" and would read as a live session. */}
 			{branch && (
 				<span
 					title={`On branch ${branch}`}
-					className="min-w-0 truncate font-mono text-xs text-neutral-500"
+					className="min-w-0 truncate font-mono text-meta text-neutral-500"
 				>
 					{branch}
 				</span>
@@ -463,7 +463,7 @@ function Header({ branch, onClose }: { branch: string; onClose: () => void }) {
 			<button
 				onClick={onClose}
 				aria-label="Close source control"
-				className="ml-auto rounded p-1 text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200"
+				className="ml-auto rounded-sm p-1 text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200"
 			>
 				<X size={16} />
 			</button>

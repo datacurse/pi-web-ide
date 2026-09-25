@@ -158,18 +158,6 @@ export function SessionList({
 					open ? "flex" : "hidden wide:flex"
 				}`}
 			>
-				<div className="flex items-center justify-between border-b border-neutral-800 px-3 py-2">
-					<span className="text-sm font-semibold tracking-tight">pwi</span>
-					<button
-						onClick={onToggle}
-						aria-label="Hide session list"
-						title="Hide sessions"
-						className="size-8 rounded text-neutral-300 transition-colors duration-150 ease-out hover:bg-neutral-800 hover:text-neutral-50 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 motion-reduce:transition-none wide:hidden"
-					>
-						<X size={13} />
-					</button>
-				</div>
-
 				{/*
 				  Sort mode. Two orders, one button, because a dropdown for a
 				  binary choice is a click more for the same information.
@@ -180,18 +168,26 @@ export function SessionList({
 				  session jumped to the top just from being opened, so `active`
 				  reads the timestamp of the last message in the file instead.
 				*/}
-				<div className="border-b border-neutral-800 px-2 py-1.5">
+				<div className="flex gap-1 border-b border-neutral-800 px-2 py-1.5">
 					<button
 						onClick={onNew}
-						className="flex w-full items-center justify-center gap-1.5 rounded bg-neutral-800 px-2 py-1.5 text-xs transition-colors duration-150 ease-out hover:bg-neutral-700 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 motion-reduce:transition-none"
+						className="flex flex-1 items-center justify-center gap-1.5 rounded-sm bg-neutral-800 px-2 py-1.5 text-meta transition-colors duration-150 ease-out hover:bg-neutral-700 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 motion-reduce:transition-none"
 					>
 						<Plus size={12} />
 						New session
 					</button>
+					<button
+						onClick={onToggle}
+						aria-label="Hide session list"
+						title="Hide sessions"
+						className="flex size-8 shrink-0 items-center justify-center rounded-sm text-neutral-300 transition-colors duration-150 ease-out hover:bg-neutral-800 hover:text-neutral-50 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 motion-reduce:transition-none wide:hidden"
+					>
+						<X size={13} />
+					</button>
 				</div>
 
 				<div className="flex items-center justify-between border-b border-neutral-800 px-2 py-1">
-					<span className="text-[10px] tracking-wide text-neutral-500 uppercase">
+					<span className="text-caption tracking-wide text-neutral-500 uppercase">
 						{sessions.length} {sessions.length === 1 ? "session" : "sessions"}
 					</span>
 					{/* Bordered, with an up/down caret: unstyled text on a row that
@@ -200,7 +196,7 @@ export function SessionList({
 					<button
 						onClick={() => onSort(sort === "created" ? "active" : "created")}
 						title="Switch between newest-created and most-recently-active"
-						className="flex items-center gap-1 rounded border border-neutral-800 px-1.5 py-0.5 text-[10px] text-neutral-400 transition-colors duration-150 ease-out hover:border-neutral-600 hover:bg-neutral-800 hover:text-neutral-200 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 motion-reduce:transition-none"
+						className="flex items-center gap-1 rounded-sm border border-neutral-800 px-1.5 py-0.5 text-caption text-neutral-400 transition-colors duration-150 ease-out hover:border-neutral-600 hover:bg-neutral-800 hover:text-neutral-200 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 motion-reduce:transition-none"
 					>
 						{SESSION_SORTS.find((s) => s.id === sort)?.label}
 						<CaretUpDown size={10} />
@@ -213,12 +209,12 @@ export function SessionList({
 				    itself. */}
 				<div className="min-h-0 flex-1 overflow-y-auto">
 					{listError ? (
-						<p className="px-3 py-4 text-xs text-red-400" role="alert">
+						<p className="px-3 py-4 text-meta text-red-400" role="alert">
 							{listError}
 						</p>
 					) : (
 						sessions.length === 0 && (
-							<p className="px-3 py-4 text-xs text-neutral-400">No sessions yet.</p>
+							<p className="px-3 py-4 text-meta text-neutral-400">No sessions yet.</p>
 						)
 					)}
 					{ordered.map((s) => {
@@ -255,9 +251,9 @@ export function SessionList({
 										}}
 										onBlur={() => setRenaming(null)}
 										aria-label={`Rename ${label}`}
-										className="w-full rounded border border-neutral-700 bg-neutral-900 px-1.5 py-1 text-xs text-neutral-100 outline-none"
+										className="w-full rounded-sm border border-neutral-700 bg-neutral-900 px-1.5 py-1 text-meta text-neutral-100 outline-none"
 									/>
-									<p className="mt-0.5 text-[10px] text-neutral-500">
+									<p className="mt-0.5 text-caption text-neutral-500">
 										Enter to save, Escape to cancel
 									</p>
 								</form>
@@ -298,7 +294,7 @@ export function SessionList({
 											: ""
 								}`}
 							>
-								<div className="flex items-center gap-1.5 truncate text-xs text-neutral-200">
+								<div className="flex items-center gap-1.5 truncate text-meta text-neutral-200">
 									{/* Live indicator for background work — visible even when this
 									    session isn't the one currently attached. */}
 									{s.isStreaming && (
@@ -319,7 +315,7 @@ export function SessionList({
 								  sort mode exists to answer.
 								*/}
 								<div
-									className="mt-0.5 text-[10px] text-neutral-400"
+									className="mt-0.5 text-caption text-neutral-400"
 									title={`Created ${dateFmt.format(new Date(s.created))}, ${timeAgo(
 										s.created,
 									)} · last active ${timeAgo(s.lastActive)}`}
@@ -354,7 +350,7 @@ export function SessionList({
 						top: Math.min(menu.y, window.innerHeight - MENU_HEIGHT_PX - 8),
 						width: MENU_WIDTH_PX,
 					}}
-					className="fixed z-40 overflow-hidden rounded-md border border-neutral-700 bg-neutral-900 py-1 text-xs shadow-2xl"
+					className="fixed z-40 overflow-hidden rounded-md border border-neutral-700 bg-neutral-900 py-1 text-meta shadow-2xl"
 				>
 					<button
 						role="menuitem"
@@ -395,7 +391,7 @@ export function SessionList({
 						className="block w-full px-3 py-1.5 text-left text-neutral-200 transition-colors duration-150 ease-out hover:bg-neutral-800 focus-visible:bg-neutral-800 focus-visible:outline-none motion-reduce:transition-none"
 					>
 						Summarise with pi
-						<span className="block text-[10px] text-neutral-500">
+						<span className="block text-caption text-neutral-500">
 							Asks pi to title the conversation
 						</span>
 					</button>

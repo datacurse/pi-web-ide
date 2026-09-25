@@ -11,7 +11,6 @@ import {
 	moveTab,
 	tabLabel,
 	tabPath,
-	chatSideOf,
 	collapse,
 	sideOfTab,
 	withGroup,
@@ -77,9 +76,6 @@ assert.equal(isSessionTab(session), true);
 assert.equal(isSessionTab(d), false);
 assert.equal(isSessionTab(w), false);
 assert.equal(isSessionTab(t), false);
-
-// ...and the chat therefore stays left when the right column shows a diff.
-assert.equal(chatSideOf({ files: [], right: { files: [d], active: d } }), "left");
 
 // --- moveTab ---------------------------------------------------------------
 const strip = ["a", "b", "c", "d"];
@@ -239,13 +235,6 @@ assert.equal(sideOfTab({ files: ["id-7"] }, "/s.jsonl", "id-7"), "left");
 
 // Unsplit: nothing is ever on the right.
 assert.equal(sideOfTab({ files: ["a"], active: "a" }, "a"), "left");
-
-// A new session opens in the column the chat is already in, not always the
-// first one: "+" beside a session in the second column must not yank the chat
-// back to the left. A file selected on the right leaves the chat on the left.
-assert.equal(chatSideOf({ files: ["a"], active: "a", right: { files: ["s"], active: "s" } }), "right");
-assert.equal(chatSideOf({ files: ["a"], active: "a", right: { files: ["file:/x"], active: "file:/x" } }), "left");
-assert.equal(chatSideOf({ files: ["a"], active: "a" }), "left");
 
 // --- collapse: closing the last tab on the LEFT must not leave a blank pane --
 // The mirror of withGroup's rule for the right column: the second column's

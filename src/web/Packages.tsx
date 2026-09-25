@@ -145,14 +145,14 @@ export function Packages({
 			className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-neutral-950 text-neutral-100"
 		>
 			<div className="flex items-center gap-2 border-b border-neutral-800 px-3 py-2">
-				<h2 className="text-sm font-semibold tracking-tight">Packages</h2>
+				<h2 className="text-ui font-semibold tracking-tight">Packages</h2>
 				<div className="flex gap-1">
 					{(["installed", "search"] as const).map((t) => (
 						<button
 							key={t}
 							onClick={() => setTab(t)}
 							aria-pressed={tab === t}
-							className={`rounded px-2 py-1 text-xs capitalize transition-colors duration-150 ease-out focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 motion-reduce:transition-none ${
+							className={`rounded-sm px-2 py-1 text-meta capitalize transition-colors duration-150 ease-out focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 motion-reduce:transition-none ${
 								tab === t ? "bg-neutral-800 text-neutral-100" : "text-neutral-400 hover:bg-neutral-900"
 							}`}
 						>
@@ -162,11 +162,11 @@ export function Packages({
 				</div>
 				<button
 					onClick={() => void refresh()}
-					className="rounded px-2 py-1 text-xs text-neutral-400 transition-colors duration-150 ease-out hover:bg-neutral-900 hover:text-neutral-200 motion-reduce:transition-none"
+					className="rounded-sm px-2 py-1 text-meta text-neutral-400 transition-colors duration-150 ease-out hover:bg-neutral-900 hover:text-neutral-200 motion-reduce:transition-none"
 				>
 					Refresh
 				</button>
-				<span className="ml-auto flex min-w-0 items-center gap-2 font-mono text-[10px] text-neutral-500">
+				<span className="ml-auto flex min-w-0 items-center gap-2 font-mono text-caption text-neutral-500">
 					<span className="truncate" title="pi on this machine">
 						pi {view?.piVersion ?? "?"}
 					</span>
@@ -175,7 +175,7 @@ export function Packages({
 				<button
 					onClick={onClose}
 					aria-label="Close packages"
-					className="size-8 shrink-0 rounded text-neutral-300 transition-colors duration-150 ease-out hover:bg-neutral-800 hover:text-neutral-50 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 motion-reduce:transition-none"
+					className="size-8 shrink-0 rounded-sm text-neutral-300 transition-colors duration-150 ease-out hover:bg-neutral-800 hover:text-neutral-50 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 motion-reduce:transition-none"
 				>
 					<X size={13} />
 				</button>
@@ -229,15 +229,15 @@ export function Packages({
 			{log && (
 				<div className="border-t border-neutral-800 bg-neutral-900/60 p-3">
 					<div className="flex items-center justify-between">
-						<span className="font-mono text-xs text-neutral-300">{log.title}</span>
+						<span className="font-mono text-meta text-neutral-300">{log.title}</span>
 						<button
 							onClick={() => setLog(null)}
-							className="rounded px-2 text-xs text-neutral-500 hover:text-neutral-200"
+							className="rounded-sm px-2 text-meta text-neutral-500 hover:text-neutral-200"
 						>
 							dismiss
 						</button>
 					</div>
-					<pre className="mt-1 max-h-40 overflow-auto font-mono text-[11px] whitespace-pre-wrap text-neutral-400">
+					<pre className="mt-1 max-h-40 overflow-auto font-mono text-caption whitespace-pre-wrap text-neutral-400">
 						{log.text}
 					</pre>
 				</div>
@@ -270,24 +270,24 @@ function Installed({
 			<div className="mb-3 flex items-center gap-2">
 				<button
 					onClick={onAdd}
-					className="rounded border border-neutral-700 px-2 py-1 text-xs text-neutral-200 transition-colors duration-150 ease-out hover:bg-neutral-900 motion-reduce:transition-none"
+					className="rounded-sm border border-neutral-700 px-2 py-1 text-meta text-neutral-200 transition-colors duration-150 ease-out hover:bg-neutral-900 motion-reduce:transition-none"
 				>
 					Add by source
 				</button>
-				<span className="text-xs text-neutral-500">
+				<span className="text-meta text-neutral-500">
 					npm:name@version, git:host/user/repo@ref, or an https/ssh URL
 				</span>
 			</div>
 
 			{error && (
-				<div className="mb-3 rounded border border-amber-900 bg-amber-950/30 px-3 py-2 text-xs text-amber-300">
+				<div className="mb-3 rounded-sm border border-amber-900 bg-amber-950/30 px-3 py-2 text-meta text-amber-300">
 					{error}
 				</div>
 			)}
 
-			<table className="w-full border-collapse text-sm">
+			<table className="w-full border-collapse text-ui">
 				<thead>
-					<tr className="border-b border-neutral-800 text-left text-[10px] tracking-wide text-neutral-500 uppercase">
+					<tr className="border-b border-neutral-800 text-left text-caption tracking-wide text-neutral-500 uppercase">
 						<th className="py-1 pr-3 font-normal">Package</th>
 						<th className="py-1 pr-3 font-normal">Installed</th>
 					</tr>
@@ -297,28 +297,28 @@ function Installed({
 						<tr key={p.identity} className="group border-b border-neutral-900 align-top">
 							<td className="py-1.5 pr-3">
 								<span className="font-mono text-neutral-100">{p.identity}</span>
-								<span className="ml-2 text-[10px] text-neutral-600">{p.kind}</span>
+								<span className="ml-2 text-caption text-neutral-600">{p.kind}</span>
 							</td>
 							<td className="py-1.5 pr-3">
-								<span className="font-mono text-xs text-neutral-300">
+								<span className="font-mono text-meta text-neutral-300">
 									{p.installed ?? "not on disk"}
 								</span>
 								{p.pinned && (
 									<span
-										className="ml-1 rounded bg-neutral-800 px-1 text-[10px] text-neutral-400"
+										className="ml-1 rounded-sm bg-neutral-800 px-1 text-caption text-neutral-400"
 										title={`pinned to ${p.pinned}; package updates skip it`}
 									>
 										pinned
 									</span>
 								)}
 								{p.filtered && (
-									<span className="ml-1 text-[10px] text-neutral-500" title="loads only part of itself">
+									<span className="ml-1 text-caption text-neutral-500" title="loads only part of itself">
 										filtered
 									</span>
 								)}
 								{!p.autoload && (
 									<span
-										className="ml-1 text-[10px] text-neutral-500"
+										className="ml-1 text-caption text-neutral-500"
 										title="installed, but not loaded unless a project asks for it"
 									>
 										off
@@ -333,14 +333,14 @@ function Installed({
 													? "Pinned: an update will not move it. Install the new version to move the pin."
 													: "Update this package"
 											}
-											className="rounded border border-neutral-700 px-1 text-[10px] text-neutral-300 hover:bg-neutral-800"
+											className="rounded-sm border border-neutral-700 px-1 text-caption text-neutral-300 hover:bg-neutral-800"
 										>
 											update
 										</button>
 										<button
 											onClick={() => onRemove(p.source)}
 											title="Remove this package"
-											className="rounded border border-neutral-700 px-1 text-[10px] text-neutral-300 hover:bg-neutral-800"
+											className="rounded-sm border border-neutral-700 px-1 text-caption text-neutral-300 hover:bg-neutral-800"
 										>
 											remove
 										</button>
@@ -351,7 +351,7 @@ function Installed({
 					))}
 					{packages.length === 0 && (
 						<tr>
-							<td colSpan={2} className="py-6 text-center text-xs text-neutral-500">
+							<td colSpan={2} className="py-6 text-center text-meta text-neutral-500">
 								No packages installed yet.
 							</td>
 						</tr>
@@ -360,15 +360,15 @@ function Installed({
 			</table>
 
 			<div className="mt-6 border-t border-neutral-900 pt-3">
-				<h3 className="text-[10px] tracking-wide text-neutral-500 uppercase">pi itself</h3>
-				<p className="mt-1 max-w-prose text-xs text-neutral-500">
+				<h3 className="text-caption tracking-wide text-neutral-500 uppercase">pi itself</h3>
+				<p className="mt-1 max-w-prose text-meta text-neutral-500">
 					Extensions declare pi's own packages as peer dependencies, so a machine on a different pi is
 					how a package works on one box and throws on another. Updating is never automatic.
 				</p>
 				<div className="mt-2">
 					<button
 						onClick={onUpdatePi}
-						className="rounded border border-neutral-700 px-2 py-1 font-mono text-xs text-neutral-300 transition-colors duration-150 ease-out hover:bg-neutral-900 motion-reduce:transition-none"
+						className="rounded-sm border border-neutral-700 px-2 py-1 font-mono text-meta text-neutral-300 transition-colors duration-150 ease-out hover:bg-neutral-900 motion-reduce:transition-none"
 					>
 						pi {piVersion ?? "?"} → update
 					</button>
@@ -377,20 +377,20 @@ function Installed({
 
 			{project && project.packages.length > 0 && (
 				<div className="mt-6 border-t border-neutral-900 pt-3">
-					<h3 className="text-[10px] tracking-wide text-neutral-500 uppercase">
+					<h3 className="text-caption tracking-wide text-neutral-500 uppercase">
 						This project — {project.cwd}
 					</h3>
-					<p className="mt-1 max-w-prose text-xs text-neutral-500">
+					<p className="mt-1 max-w-prose text-meta text-neutral-500">
 						From the project's own <span className="font-mono">.pi/settings.json</span>. pi installs
 						these at startup once the project is trusted, and the file is usually committed — so git
 						is their sync, and they are read-only here.
 					</p>
 					<ul className="mt-2 space-y-0.5">
 						{project.packages.map((p) => (
-							<li key={p.source} className="font-mono text-xs text-neutral-300">
+							<li key={p.source} className="font-mono text-meta text-neutral-300">
 								{p.source}
-								{p.filtered && <span className="ml-2 text-[10px] text-neutral-500">filtered</span>}
-								{!p.autoload && <span className="ml-2 text-[10px] text-neutral-500">off</span>}
+								{p.filtered && <span className="ml-2 text-caption text-neutral-500">filtered</span>}
+								{!p.autoload && <span className="ml-2 text-caption text-neutral-500">off</span>}
 							</li>
 						))}
 					</ul>
@@ -445,14 +445,14 @@ function Search({ onPick }: { onPick: (info: PiwPackageInfo) => void }) {
 				value={query}
 				onChange={(e) => setQuery(e.target.value)}
 				placeholder="Search the pi package gallery"
-				className="w-full rounded border border-neutral-800 bg-neutral-900 px-3 py-2 text-sm text-neutral-100 outline-none focus:border-neutral-600"
+				className="w-full rounded-sm border border-neutral-800 bg-neutral-900 px-3 py-2 text-ui text-neutral-100 outline-none focus:border-neutral-600"
 			/>
 			{reason && (
-				<div className="mt-2 text-xs text-amber-400">
+				<div className="mt-2 text-meta text-amber-400">
 					Could not reach the npm registry: {reason}
 				</div>
 			)}
-			{loading && hits.length === 0 && <div className="mt-3 text-xs text-neutral-500">Searching…</div>}
+			{loading && hits.length === 0 && <div className="mt-3 text-meta text-neutral-500">Searching…</div>}
 			<ul className="mt-3 space-y-1">
 				{hits.map((h) => (
 					<li key={h.name}>
@@ -463,24 +463,24 @@ function Search({ onPick }: { onPick: (info: PiwPackageInfo) => void }) {
 								).catch(() => null);
 								if (info) onPick(info);
 							}}
-							className="block w-full rounded border border-neutral-800 bg-neutral-900/40 px-3 py-2 text-left transition-colors duration-150 ease-out hover:border-neutral-700 hover:bg-neutral-900 motion-reduce:transition-none"
+							className="block w-full rounded-sm border border-neutral-800 bg-neutral-900/40 px-3 py-2 text-left transition-colors duration-150 ease-out hover:border-neutral-700 hover:bg-neutral-900 motion-reduce:transition-none"
 						>
 							<span className="flex items-baseline gap-2">
-								<span className="font-mono text-sm text-neutral-100">{h.name}</span>
-								<span className="font-mono text-xs text-neutral-500">{h.version}</span>
-								<span className="ml-auto text-[10px] text-neutral-500">
+								<span className="font-mono text-ui text-neutral-100">{h.name}</span>
+								<span className="font-mono text-meta text-neutral-500">{h.version}</span>
+								<span className="ml-auto text-caption text-neutral-500">
 									{h.publisher} · {shortDate(h.published)}
 								</span>
 							</span>
 							{h.description && (
-								<span className="mt-0.5 block text-xs text-neutral-400">{h.description}</span>
+								<span className="mt-0.5 block text-meta text-neutral-400">{h.description}</span>
 							)}
 						</button>
 					</li>
 				))}
 			</ul>
 			{!loading && hits.length === 0 && !reason && (
-				<div className="mt-3 text-xs text-neutral-500">Nothing matches.</div>
+				<div className="mt-3 text-meta text-neutral-500">Nothing matches.</div>
 			)}
 		</>
 	);
@@ -508,13 +508,13 @@ function InstallDialog({
 
 	return (
 		<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-			<div className="w-[min(34rem,94vw)] rounded-lg border border-neutral-800 bg-neutral-950 p-3 shadow-2xl">
+			<div className="w-[min(34rem,94vw)] rounded-md border border-neutral-800 bg-neutral-950 p-3 shadow-2xl">
 				<div className="flex items-center justify-between">
-					<h3 className="text-sm font-semibold">{known ? `Install ${known.name}` : "Add a package"}</h3>
+					<h3 className="text-title font-semibold">{known ? `Install ${known.name}` : "Add a package"}</h3>
 					<button
 						onClick={onClose}
 						aria-label="Cancel"
-						className="size-8 rounded text-neutral-400 hover:bg-neutral-800 hover:text-neutral-100"
+						className="size-8 rounded-sm text-neutral-400 hover:bg-neutral-800 hover:text-neutral-100"
 					>
 						<X size={13} />
 					</button>
@@ -523,9 +523,9 @@ function InstallDialog({
 				{known && (
 					<>
 						{known.description && (
-							<p className="mt-2 text-xs text-neutral-400">{known.description}</p>
+							<p className="mt-2 text-meta text-neutral-400">{known.description}</p>
 						)}
-						<p className="mt-2 flex flex-wrap gap-3 text-[11px] text-neutral-500">
+						<p className="mt-2 flex flex-wrap gap-3 text-caption text-neutral-500">
 							<span>{known.publisher}</span>
 							<span>{shortDate(known.published)}</span>
 							{known.weeklyDownloads !== undefined && (
@@ -541,7 +541,7 @@ function InstallDialog({
 								href={known.repository}
 								target="_blank"
 								rel="noreferrer noopener"
-								className="mt-1 block font-mono text-[11px] text-neutral-400 underline"
+								className="mt-1 block font-mono text-caption text-neutral-400 underline"
 							>
 								{known.repository}
 							</a>
@@ -550,13 +550,13 @@ function InstallDialog({
 							<img
 								src={known.image}
 								alt=""
-								className="mt-2 max-h-48 w-full rounded border border-neutral-800 object-contain"
+								className="mt-2 max-h-48 w-full rounded-sm border border-neutral-800 object-contain"
 							/>
 						)}
 					</>
 				)}
 
-				<label className="mt-3 block text-[10px] tracking-wide text-neutral-500 uppercase">
+				<label className="mt-3 block text-caption tracking-wide text-neutral-500 uppercase">
 					Source
 					<input
 						value={source}
@@ -565,20 +565,20 @@ function InstallDialog({
 							setError(null);
 						}}
 						placeholder="npm:my-package@1.0.0"
-						className="mt-1 w-full rounded border border-neutral-800 bg-neutral-900 px-2 py-1.5 font-mono text-xs text-neutral-100 normal-case outline-none focus:border-neutral-600"
+						className="mt-1 w-full rounded-sm border border-neutral-800 bg-neutral-900 px-2 py-1.5 font-mono text-meta text-neutral-100 normal-case outline-none focus:border-neutral-600"
 					/>
 				</label>
 
-				<p className="mt-3 rounded border border-amber-900 bg-amber-950/30 px-2 py-1.5 text-xs text-amber-300">
+				<p className="mt-3 rounded-sm border border-amber-900 bg-amber-950/30 px-2 py-1.5 text-meta text-amber-300">
 					{WARNING}
 				</p>
 
-				{error && <p className="mt-2 text-xs text-red-400">{error}</p>}
+				{error && <p className="mt-2 text-meta text-red-400">{error}</p>}
 
 				<div className="mt-3 flex justify-end gap-2">
 					<button
 						onClick={onClose}
-						className="rounded border border-neutral-700 px-3 py-1.5 text-sm text-neutral-300 hover:bg-neutral-900"
+						className="rounded-sm border border-neutral-700 px-3 py-1.5 text-ui text-neutral-300 hover:bg-neutral-900"
 					>
 						Cancel
 					</button>
@@ -587,7 +587,7 @@ function InstallDialog({
 							if (!source.trim()) return setError("a source is required");
 							onInstall(source.trim());
 						}}
-						className="rounded bg-amber-500 px-3 py-1.5 text-sm font-medium text-neutral-950 hover:bg-amber-400"
+						className="rounded-sm bg-amber-500 px-3 py-1.5 text-ui font-medium text-neutral-950 hover:bg-amber-400"
 					>
 						Install
 					</button>

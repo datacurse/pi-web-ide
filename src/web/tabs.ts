@@ -128,18 +128,6 @@ export function sideOfTab<T extends TabState>(
 }
 
 /**
- * Which column the chat belongs in: the one whose SELECTED tab is a session.
- *
- * Selection and not mere membership, because a column showing a file must show
- * that file. Also where a BRAND-NEW session's tab goes: a new session is in
- * neither column, and dropping it on the left would move the chat out from
- * under the column the user was working in.
- */
-export function chatSideOf<T extends TabState>(tabs: T): Side {
-	return tabs.right?.active !== undefined && isSessionTab(tabs.right.active) ? "right" : "left";
-}
-
-/**
  * `tabs` with one column replaced.
  *
  * An emptied SECOND column collapses the split, because a column with no tabs

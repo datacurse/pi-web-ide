@@ -94,7 +94,7 @@ function Merge({ path, before, after }: { path: string; before: string; after: s
 		// fixed at construction, so there is nothing to reconfigure in place.
 	}, [path, before, after]);
 
-	return <div ref={host} className="cm-review min-h-0 flex-1 overflow-auto text-sm" />;
+	return <div ref={host} className="cm-review min-h-0 flex-1 overflow-auto text-body" />;
 }
 
 /**
@@ -122,18 +122,18 @@ function HunkRow({
 	const removed = hunk.oldText.split("\n").length;
 
 	return (
-		<div className="flex items-center gap-2 border-b border-neutral-800 px-3 py-1.5 text-sm">
-			<span className="font-mono text-xs text-neutral-500">L{hunk.anchor.line + 1}</span>
-			<span className="font-mono text-xs">
+		<div className="flex items-center gap-2 border-b border-neutral-800 px-3 py-1.5 text-ui">
+			<span className="font-mono text-meta text-neutral-500">L{hunk.anchor.line + 1}</span>
+			<span className="font-mono text-meta">
 				{hunk.oldText !== "" && <span className="text-red-400">-{removed}</span>}
 				{hunk.oldText !== "" && hunk.newText !== "" && " "}
 				{hunk.newText !== "" && <span className="text-green-400">+{added}</span>}
 			</span>
 
 			{gone ? (
-				<span className="text-xs text-amber-500">not in the file any more — nothing to revert</span>
+				<span className="text-meta text-amber-500">not in the file any more — nothing to revert</span>
 			) : ambiguous ? (
-				<span className="text-xs text-amber-500">appears {fit.count}× — reverting the nearest</span>
+				<span className="text-meta text-amber-500">appears {fit.count}× — reverting the nearest</span>
 			) : null}
 
 			<div className="ml-auto flex items-center gap-1">
@@ -142,7 +142,7 @@ function HunkRow({
 						<button
 							disabled={busy}
 							onClick={() => onDecide("accepted")}
-							className="flex items-center gap-1 rounded px-2 py-0.5 text-xs text-green-400 hover:bg-neutral-800 disabled:opacity-50"
+							className="flex items-center gap-1 rounded-sm px-2 py-0.5 text-meta text-green-400 hover:bg-neutral-800 disabled:opacity-50"
 						>
 							<Check size={12} weight="bold" />
 							Keep
@@ -153,7 +153,7 @@ function HunkRow({
 							// right to refuse.
 							disabled={busy || gone}
 							onClick={() => onDecide("rejected")}
-							className="flex items-center gap-1 rounded px-2 py-0.5 text-xs text-red-400 hover:bg-neutral-800 disabled:opacity-50"
+							className="flex items-center gap-1 rounded-sm px-2 py-0.5 text-meta text-red-400 hover:bg-neutral-800 disabled:opacity-50"
 						>
 							<ArrowCounterClockwise size={12} weight="bold" />
 							Revert
@@ -163,7 +163,7 @@ function HunkRow({
 					<button
 						disabled={busy}
 						onClick={() => onDecide("pending")}
-						className={`rounded px-2 py-0.5 text-xs hover:bg-neutral-800 disabled:opacity-50 ${
+						className={`rounded-sm px-2 py-0.5 text-meta hover:bg-neutral-800 disabled:opacity-50 ${
 							hunk.state === "accepted" ? "text-green-400" : "text-neutral-500"
 						}`}
 					>
@@ -259,16 +259,16 @@ export function DiffView({
 	return (
 		<div className="flex min-h-0 min-w-0 flex-1 flex-col bg-neutral-950">
 			<div className="flex items-center gap-2 border-b border-neutral-800 px-3 py-1.5">
-				<span className="min-w-0 truncate font-mono text-xs text-neutral-400" title={path}>
+				<span className="min-w-0 truncate font-mono text-meta text-neutral-400" title={path}>
 					{shortPath(path, cwd)}
 				</span>
-				<span className="shrink-0 text-xs text-neutral-500">
+				<span className="shrink-0 text-meta text-neutral-500">
 					{refName ? `${refName.slice(0, 7)} ↔ parent` : "HEAD ↔ working tree"}
 				</span>
 			</div>
 
 			{error && (
-				<div className="border-b border-red-900 bg-red-950/40 px-3 py-2 text-xs text-red-300">
+				<div className="border-b border-red-900 bg-red-950/40 px-3 py-2 text-meta text-red-300">
 					{error}
 				</div>
 			)}
@@ -284,9 +284,9 @@ export function DiffView({
 			))}
 
 			{file === null ? (
-				<p className="p-4 text-sm text-neutral-500">Reading…</p>
+				<p className="p-4 text-ui text-neutral-500">Reading…</p>
 			) : file.skipped ? (
-				<p className="p-4 text-sm text-amber-500">{file.skipped}</p>
+				<p className="p-4 text-ui text-amber-500">{file.skipped}</p>
 			) : (
 				<Merge path={path} before={file.before} after={file.after} />
 			)}

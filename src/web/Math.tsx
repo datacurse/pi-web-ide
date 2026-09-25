@@ -56,7 +56,7 @@ export function Math({ span }: { span: MathSpan }) {
 	 */
 	if (!katex) {
 		return (
-			<code className={`text-[0.9em] text-neutral-400 ${span.display ? "block my-2 text-center" : ""}`}>
+			<code className={`text-code-inline text-neutral-400 ${span.display ? "block my-2 text-center" : ""}`}>
 				{span.tex}
 			</code>
 		);

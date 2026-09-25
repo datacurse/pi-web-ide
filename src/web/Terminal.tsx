@@ -275,7 +275,7 @@ export function Terminal({
 			className="flex min-h-0 min-w-0 flex-1 flex-col bg-neutral-950"
 		>
 			{error && (
-				<div className="border-b border-red-900 bg-red-950/40 px-3 py-2 text-xs text-red-300">
+				<div className="border-b border-red-900 bg-red-950/40 px-3 py-2 text-meta text-red-300">
 					{error}
 				</div>
 			)}
@@ -433,7 +433,7 @@ export function TerminalPane({
 							onClick={() => onLayout(selectTab(layout, i))}
 							aria-current={i === layout.active}
 							title={`Terminal tab ${i + 1}${t.terminals.length > 1 ? ` (${t.terminals.length} splits)` : ""}`}
-							className={`shrink-0 rounded-t px-2 py-1 font-mono text-xs transition-colors duration-150 ease-out hover:text-neutral-100 motion-reduce:transition-none ${
+							className={`shrink-0 rounded-t-sm px-2 py-1 font-mono text-meta transition-colors duration-150 ease-out hover:text-neutral-100 motion-reduce:transition-none ${
 								i === layout.active
 									? "bg-neutral-800 text-amber-400"
 									: "text-neutral-400 hover:bg-neutral-900"
@@ -449,7 +449,7 @@ export function TerminalPane({
 						onClick={() => void spawn(addTab)}
 						aria-label="New terminal tab"
 						title="New terminal tab"
-						className="flex shrink-0 items-center rounded px-1.5 text-neutral-400 hover:bg-neutral-800 hover:text-neutral-100"
+						className="flex shrink-0 items-center rounded-sm px-1.5 text-neutral-400 hover:bg-neutral-800 hover:text-neutral-100"
 					>
 						<Plus size={13} />
 					</button>
@@ -459,7 +459,7 @@ export function TerminalPane({
 					onClick={() => void spawn(splitActive)}
 					aria-label="Split terminal"
 					title="Split: another shell beside this one"
-					className="flex shrink-0 items-center self-center rounded px-1.5 py-0.5 text-neutral-400 hover:bg-neutral-800 hover:text-neutral-100"
+					className="flex shrink-0 items-center self-center rounded-sm px-1.5 py-0.5 text-neutral-400 hover:bg-neutral-800 hover:text-neutral-100"
 				>
 					{/* The icon shows the direction the new pane will appear in. */}
 					{tab?.direction === "column" ? <Rows size={14} /> : <Columns size={14} />}
@@ -473,7 +473,7 @@ export function TerminalPane({
 								? "Stack the splits vertically"
 								: "Put the splits side by side"
 						}
-						className="flex shrink-0 items-center self-center rounded px-1.5 py-0.5 text-neutral-400 hover:bg-neutral-800 hover:text-neutral-100"
+						className="flex shrink-0 items-center self-center rounded-sm px-1.5 py-0.5 text-neutral-400 hover:bg-neutral-800 hover:text-neutral-100"
 					>
 						{tab.direction === "row" ? <Rows size={14} /> : <Columns size={14} />}
 					</button>
@@ -482,20 +482,20 @@ export function TerminalPane({
 					onClick={onClose}
 					aria-label="Hide terminal"
 					title="Hide (every shell keeps running)"
-					className="shrink-0 self-center rounded px-1.5 py-0.5 text-sm leading-none text-neutral-400 hover:bg-neutral-800 hover:text-neutral-100"
+					className="shrink-0 self-center rounded-sm px-1.5 py-0.5 text-ui leading-none text-neutral-400 hover:bg-neutral-800 hover:text-neutral-100"
 				>
 					<X size={13} />
 				</button>
 			</div>
 
 			{error && (
-				<div className="border-b border-red-900 bg-red-950/40 px-3 py-2 text-xs text-red-300">
+				<div className="border-b border-red-900 bg-red-950/40 px-3 py-2 text-meta text-red-300">
 					{error}
 				</div>
 			)}
 
 			{!tab ? (
-				<div className="flex flex-1 items-center justify-center p-4 text-center text-xs text-neutral-500">
+				<div className="flex flex-1 items-center justify-center p-4 text-center text-meta text-neutral-500">
 					No shell yet.
 					<button
 						onClick={() => void spawn(addTab)}
@@ -547,7 +547,7 @@ export function TerminalPane({
 									onClick={() => closeTerm(id)}
 									aria-label="Close this shell"
 									title="Close this shell (SIGHUP)"
-									className="absolute top-1 right-2 rounded px-1 text-xs leading-none text-neutral-600 opacity-0 transition-opacity duration-150 ease-out hover:bg-neutral-800 hover:text-neutral-100 focus-visible:opacity-100 motion-reduce:transition-none group-hover:opacity-100 [div:hover>&]:opacity-100"
+									className="absolute top-1 right-2 rounded-sm px-1 text-meta leading-none text-neutral-600 opacity-0 transition-opacity duration-150 ease-out hover:bg-neutral-800 hover:text-neutral-100 focus-visible:opacity-100 motion-reduce:transition-none group-hover:opacity-100 [div:hover>&]:opacity-100"
 								>
 									<X size={13} />
 								</button>
