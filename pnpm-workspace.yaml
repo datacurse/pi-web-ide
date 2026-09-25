@@ -2,10 +2,8 @@
 # classified. esbuild and tailwind's oxide need their postinstall to link
 # platform binaries; node-pty's picks the right prebuilt binding for this
 # platform and ABI and installs its spawn-helper — without it there is no
-# terminal at all. The rest are transitive SDK deps we never execute.
+# terminal at all.
 allowBuilds:
-  '@google/genai': false
   '@homebridge/node-pty-prebuilt-multiarch': true
   '@tailwindcss/oxide': true
   esbuild: true
-  protobufjs: false

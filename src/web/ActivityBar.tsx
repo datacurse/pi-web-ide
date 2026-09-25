@@ -139,7 +139,7 @@ export function ActivityBar({
 
 			<RailButton
 				label={panel === "packages" ? "Hide packages" : "Show packages"}
-				title="Packages installed on every machine"
+				title="Packages installed on this machine"
 				active={panel === "packages"}
 				onClick={() => onSelect("packages")}
 			>

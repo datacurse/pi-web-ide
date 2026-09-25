@@ -42,8 +42,7 @@ assert.deepEqual(pin("npm:@335g/pi-autocommit@0.3.0"), {
 });
 
 // git: identity is the repo without its ref, and the transport is not part of
-// it — the same repo over ssh and over https is one package, which is what
-// lets the fleet table put it on one row.
+// it — the same repo over ssh and over https is one package.
 const repo = { kind: "git", identity: "github.com/datacurse/pi-config" };
 assert.deepEqual(pin("git:github.com/datacurse/pi-config"), { ...repo, pinned: null });
 assert.deepEqual(pin("git:github.com/datacurse/pi-config@v3"), { ...repo, pinned: "v3" });

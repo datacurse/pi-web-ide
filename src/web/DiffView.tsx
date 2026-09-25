@@ -105,7 +105,6 @@ function Merge({ path, before, after }: { path: string; before: string; after: s
  * answer to "this text is not where the agent left it" is to say so and refuse
  * the revert — a forced write would silently clobber whatever replaced it.
  *
- * Shared with Review.tsx.
  */
 export function HunkRow({
 	hunk,

@@ -1,7 +1,7 @@
 /**
  * codemirror.ts — the editor, loaded once, on demand.
  *
- * Shared by the editor (Editor.tsx) and the review pane (Review.tsx) so there
+ * Shared by the editor (FileEditor.tsx) and diff tabs (DiffView.tsx) so there
  * is ONE module-level promise: two loaders would mean two copies of
  * `@codemirror/state` in the graph, and CodeMirror facets are identity-keyed —
  * an extension built against one copy is silently inert in a view built by the

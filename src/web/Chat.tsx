@@ -50,7 +50,7 @@ const SUPPORTED_IMAGE_MIME = [
  * Read a clipboard/file blob into the wire shape.
  *
  * FileReader hands back a `data:` URL and we keep only the payload: the wire
- * contract is raw base64 (what the SDK's ImageContent wants), so the prefix is
+ * contract is raw base64 (what pi's RPC `images` field takes), so the prefix is
  * stripped once, here, at the boundary where it appears.
  */
 function readImage(file: File): Promise<PiImage> {

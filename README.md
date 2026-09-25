@@ -86,7 +86,7 @@ src/server/git.ts         branch/commit/push/PR, status, log, show; argv-only, n
 src/server/files.ts       list/read/write project files; the path check is a trust boundary
 src/server/repair.ts      heals session files pi can no longer replay
 src/server/remind-extension.ts  a pi extension, loaded with -e: repeats the personality
-src/shared/hunks.ts       diff hunks, shared by the review and diff views
+src/shared/hunks.ts       diff hunks the agent made, reviewed in diff tabs
 src/web/ui.tsx            shared UI primitives; rules in docs/ui.md
 src/web/commands.ts       slash-command completion rules for the composer
 src/web/math.ts           pulls TeX out of markdown before markdown eats it

@@ -3,9 +3,7 @@
  *
  * Everything persistent that is pi-web-ide's rather than pi's lives in one
  * directory: the project list, favourites and the personality text. Not under
- * `~/.pi/agent/`, which is pi's own store and not ours to litter — the old
- * install did exactly that and left its own files sitting next to an agent's
- * credentials.
+ * `~/.pi/agent/`, which is pi's own store and not ours to litter.
  *
  * `PWI_STATE_DIR` overrides it, which is also the seam the tests point at a
  * temp directory. Resolved per call rather than captured at import, so an env
@@ -29,7 +27,7 @@ export function statePath(name: string): string {
  *
  * Written to a sibling temp file and renamed, because `writeFileSync`
  * truncates first: a crash or a full disk mid-write would otherwise leave
- * half a hosts list — or half a personality — on disk. rename(2) within one
+ * half a project list — or half a personality — on disk. rename(2) within one
  * directory is atomic.
  */
 export function writeStateFile(path: string, text: string, mode = 0o600): void {
@@ -39,32 +37,11 @@ export function writeStateFile(path: string, text: string, mode = 0o600): void {
 	renameSync(tmp, path);
 }
 
-/**
- * Read a state file, falling back ONCE to the omp-era install's copy.
- *
- * The old install keeps running (that is the coexistence contract), so the
- * legacy path is opened read-only and never moved or deleted. The first write
- * through `writeStateFile` lands in the new location and the old file stops
- * being consulted, because this only looks there when the new file is absent.
- *
- * Hosts are deliberately NOT migrated: the old list names forward ports that
- * the old server owns and remote ports where an omp-era pwi is listening.
- */
-export function readStateFile(path: string, legacy?: string): string | undefined {
+/** A state file's text, or undefined when it is absent or unreadable. */
+export function readStateFile(path: string): string | undefined {
 	try {
 		return readFileSync(path, "utf8");
 	} catch {
-		// Absent or unreadable: fall through to the legacy copy, if any.
-	}
-	if (!legacy) return undefined;
-	try {
-		return readFileSync(legacy, "utf8");
-	} catch {
 		return undefined;
 	}
-}
-
-/** The omp-era install's state directory. Read-only, for the fallback above. */
-export function legacyPath(name: string): string {
-	return join(homedir(), ".omp", "agent", name);
 }

@@ -553,7 +553,7 @@ body {
 }
 
 /*
- * The review pane's CodeMirror, painted from this app's palette.
+ * CodeMirror (editor and diff tabs), painted from this app's palette.
  *
  * No CodeMirror theme is loaded on purpose: every colour here is one of the
  * same variables the rest of the UI uses, so the pane follows a theme switch

@@ -7,16 +7,12 @@
  * so there is nothing to model here beyond remembering which directories the
  * user cares about. A flat JSON array in this server's state directory is the
  * whole store, and favourites are a second array of exactly the same shape.
- *
- * Both lists are inherited once from an omp-era install if this one has none:
- * they are just paths, they are equally true for either product, and retyping
- * a dozen project directories is a pointless tax. See state.ts.
  */
 
 import { existsSync, readdirSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import { legacyPath, readStateFile, statePath, writeStateFile } from "./state.js";
+import { readStateFile, statePath, writeStateFile } from "./state.js";
 import type { PiwDirEntry, PiwDirListing } from "../shared/types.js";
 
 const PROJECTS = "projects.json";
@@ -29,15 +25,9 @@ const PROJECTS = "projects.json";
  */
 const FAVORITES = "favorites.json";
 
-/** What the omp-era install called the same two lists. */
-const LEGACY: Record<string, string> = {
-	[PROJECTS]: "pwi-projects.json",
-	[FAVORITES]: "pwi-favorites.json",
-};
-
 /** A stored flat array of paths, or nothing when the file is absent or corrupt. */
 function read(name: string): string[] | null {
-	const text = readStateFile(statePath(name), legacyPath(LEGACY[name]));
+	const text = readStateFile(statePath(name));
 	if (text === undefined) return null;
 	try {
 		const raw: unknown = JSON.parse(text);

@@ -151,7 +151,7 @@ function toSnapshot(raw: Partial<Snapshot>): Snapshot {
 		error: typeof raw.error === "string" ? raw.error : null,
 		notices: Array.isArray(raw.notices) ? raw.notices : [],
 		ask: raw.ask ?? null,
-		// An older server sends none, and the review pane simply stays empty.
+		// An older server sends none, and diff tabs show no hunk decisions.
 		hunks: Array.isArray(raw.hunks) ? raw.hunks : [],
 		// An older server sends none, and the picker simply has nothing to offer.
 		commands: Array.isArray(raw.commands) ? raw.commands : [],
@@ -402,26 +402,6 @@ const PROJECT_KEY = "pwi:project";
 const LAST_PROJECT_KEY = "pwi:lastProject";
 
 /**
- * A stored project. A build that managed remote machines wrote `{host,cwd}`
- * here; only the cwd survives, and a remote one resolves to nothing
- * remembered rather than throwing during the first render.
- */
-function parseSelection(raw: string | undefined): string | undefined {
-	if (!raw) return undefined;
-	if (!raw.startsWith("{")) return raw;
-	try {
-		const parsed: unknown = JSON.parse(raw);
-		if (parsed && typeof parsed === "object" && "cwd" in parsed && typeof parsed.cwd === "string") {
-			const host = "host" in parsed && typeof parsed.host === "string" ? parsed.host : "";
-			return host ? undefined : parsed.cwd;
-		}
-	} catch {
-		/* fall through */
-	}
-	return undefined;
-}
-
-/**
  * How long a local slash command may claim to be running before the row stops
  * saying so. A command that answers nothing (`/model`, `/thinking`) emits no
  * `command_output`, so nothing else would ever stop the spinner, and
@@ -457,12 +437,12 @@ function writeStored(key: string, value: string | undefined): void {
  */
 function readWindowProject(): string | undefined {
 	try {
-		return parseSelection(sessionStorage.getItem(PROJECT_KEY) ?? readStored(LAST_PROJECT_KEY));
+		return sessionStorage.getItem(PROJECT_KEY) ?? readStored(LAST_PROJECT_KEY);
 	} catch {
 		// Private mode / disabled storage: the shared key may still be readable,
 		// and a window with no scope of its own is the pre-fix behaviour, which
 		// is correct for a single window.
-		return parseSelection(readStored(LAST_PROJECT_KEY));
+		return readStored(LAST_PROJECT_KEY);
 	}
 }
 

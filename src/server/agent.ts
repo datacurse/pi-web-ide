@@ -320,7 +320,7 @@ export function healDanglingToolCalls(messages: AgentMessage[]): AgentMessage[] 
  * head of every session, with `content: ""` and the real text under
  * `sections`. `get_messages` returns it, so without this filter every
  * transcript opens with a blank row above the first thing anybody said —
- * observed on a 0.86.0 box while the hub was still on 0.85.1.
+ * observed on a machine running 0.86.0.
  *
  * Dropped rather than rendered: the system prompt is configuration, it is
  * the same on every turn, and the personality half of it is already editable
@@ -625,8 +625,8 @@ export interface PiSession {
 	/** The question pi is blocked on, or null if it is not waiting on one. */
 	readonly ask: PiAsk | null;
 	/**
-	 * Every change this session's agent made to a file, oldest first, for the
-	 * review pane. Already applied to disk: pi's edit tool writes during
+	 * Every change this session's agent made to a file, oldest first, for
+	 * diff tabs. Already applied to disk: pi's edit tool writes during
 	 * execution, so these are changes to review, not proposals to approve.
 	 */
 	readonly hunks: Hunk[];
@@ -882,7 +882,7 @@ export async function openSession(opts: OpenOptions): Promise<PiSession> {
 	};
 
 	/**
-	 * Hunks this session's agent produced, oldest first, for the review pane.
+	 * Hunks this session's agent produced, oldest first, for diff tabs.
 	 *
 	 * Server-side because the edit has ALREADY HAPPENED by the time anyone sees
 	 * it: pi's edit tool writes during execution and this server installs no

@@ -1,6 +1,6 @@
 /**
  * files.ts — reading, listing and writing the project's files: the editor's
- * backend, and the review pane's.
+ * backend, and the diff tabs'.
  *
  * This is the one module in the server that writes to arbitrary paths on
  * behalf of the browser, so the path check here is a TRUST BOUNDARY and not a
@@ -146,7 +146,7 @@ export function listDir(seed: string, path: string): PiwFileEntry[] {
 /**
  * Write a file the USER edited.
  *
- * Same concurrency check as the review pane's write and for the same reason —
+ * Same concurrency check as the hunk-revert write and for the same reason —
  * the agent edits these files too, and this server is the only thing that sees
  * both writers. `expect` is what the editor had when it loaded the buffer; a
  * mismatch means the agent (or another tab) saved underneath, and the honest

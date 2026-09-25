@@ -51,42 +51,6 @@ import { claimPort } from "./takeover.js";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, "../..");
 
-/*
- * Variables the previous product read, and this one does not.
- *
- * Silence would be the expensive failure here: somebody copies an env file
- * onto a systemd box, the service starts, and the wrong binary or the wrong
- * directory is only discovered when a session behaves strangely an hour
- * later. So it is a refusal to start, naming the replacement.
- */
-const RETIRED: Record<string, string> = {
-	PIW_OMP_BIN: "PWI_PI_BIN",
-	PIW_APPROVAL_MODE: "nothing — pi has no approval modes",
-	PIW_AGENT_DIR: "PWI_STATE_DIR (this server's own files) or PI_CODING_AGENT_DIR (pi's)",
-};
-for (const [name, replacement] of Object.entries(RETIRED)) {
-	if (process.env[name] === undefined) continue;
-	console.error(`[pwi] ${name} is no longer read. Use ${replacement}.`);
-	process.exit(2);
-}
-
-/*
- * Every remaining `PIW_*` is the same variable under the old spelling, so the
- * rule is mechanical rather than a table of seventeen.
- *
- * This matters more than the named cases above: `PIW_PORT=8891` left in an
- * env file does not fail loudly, it starts a server on the DEFAULT port,
- * which then takes the port from something else or is simply not where the
- * browser is pointed. Same for `PIW_CWD`, where the fallback is the checkout
- * itself. An unread variable that changes behaviour is the whole reason this
- * check exists.
- */
-for (const name of Object.keys(process.env)) {
-	if (!name.startsWith("PIW_")) continue;
-	console.error(`[pwi] ${name} is no longer read. Use PWI_${name.slice(4)}.`);
-	process.exit(2);
-}
-
 const PORT = Number(process.env.PWI_PORT ?? 8890);
 const CWD = resolve(process.env.PWI_CWD ?? process.argv[2] ?? process.cwd());
 /** "provider/id". Pi's own default may select a provider your plan blocks. */

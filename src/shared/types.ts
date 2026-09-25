@@ -22,7 +22,7 @@ export const PRODUCT = "pi-web-ide";
 
 /**
  * A base64 image. `data` is RAW base64 with no `data:` URL prefix, because
- * that is exactly what the SDK's ImageContent wants — stripping the prefix at
+ * that is exactly what pi's RPC `images` field takes — stripping the prefix at
  * the browser edge means there is precisely one representation on the wire and
  * nobody downstream has to guess which form they were handed.
  */
@@ -192,7 +192,7 @@ export interface Snapshot {
 	 * Changes this session's agent made to files, oldest first.
 	 *
 	 * ALREADY ON DISK. pi's edit tool writes during execution and this server
-	 * installs no `tool_call` gate, so the review pane shows what happened
+	 * installs no `tool_call` gate, so a diff tab shows what happened
 	 * rather than what is proposed: accepting is a no-op that records a
 	 * decision, and rejecting is what writes the old text back.
 	 *

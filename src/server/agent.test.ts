@@ -212,8 +212,7 @@ assert.deepEqual(
  * pi 0.86 persists the system prompt as a `system` message at the head of
  * every session — `content: ""`, the real text under `sections` — and
  * `get_messages` hands it back. Rendered, it is a blank row above the first
- * thing anybody said, which is what a 0.86.0 machine showed while the hub
- * was still on 0.85.1.
+ * thing anybody said, which is what a 0.86.0 machine showed.
  */
 const systemMessage = {
 	role: "system",

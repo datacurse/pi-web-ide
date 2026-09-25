@@ -10,36 +10,6 @@
 
 import { EMPTY_LAYOUT, parseLayout, type TermLayout } from "./termLayout.js";
 
-/*
- * Every key this app owns was once prefixed `piw:` and is now `pwi:`.
- *
- * Renaming the prefix without this would silently reset every preference and
- * drop every unsent draft — the one thing drafts.ts exists to prevent. So the
- * old keys are moved across once, on load, before anything reads them.
- *
- * Delete this after a release or two: it is dead weight the moment no browser
- * still holds a `piw:` key, and nothing outside this app ever wrote one.
- */
-function migrateLegacyKeys(): void {
-	try {
-		const stale = Object.keys(localStorage).filter((k) => k.startsWith("piw:"));
-		for (const old of stale) {
-			const value = localStorage.getItem(old);
-			const renamed = `pwi:${old.slice(4)}`;
-			// Never clobber: a key written under the new name is what the user
-			// has actually been using since the rename.
-			if (value !== null && localStorage.getItem(renamed) === null) {
-				localStorage.setItem(renamed, value);
-			}
-			localStorage.removeItem(old);
-		}
-	} catch {
-		// Private mode / disabled storage: nothing to migrate, nothing to fix.
-	}
-}
-
-migrateLegacyKeys();
-
 function readStored(key: string): string | null {
 	try {
 		return localStorage.getItem(key);
@@ -285,14 +255,10 @@ const PANEL_KEY = "pwi:panel";
  * ALL of them, not only the terminal: a closed explorer on every reload is
  * the same annoyance as a closed terminal, and the rail cannot tell you which
  * one you were using if it only remembers one of them.
- *
- * `pwi:terminal` is the old boolean this replaces, read once as a fallback so
- * an open terminal survives the upgrade. Delete that arm after a release.
  */
 export function readPanel(): Panel {
 	const stored = readStored(PANEL_KEY);
-	if (stored !== null) return PANELS.includes(stored) ? (stored as Panel) : null;
-	return readStored(TERM_OPEN_KEY) === "1" ? "terminal" : null;
+	return stored !== null && PANELS.includes(stored) ? (stored as Panel) : null;
 }
 
 export function writePanel(panel: Panel): void {
@@ -313,7 +279,6 @@ export function writePanel(panel: Panel): void {
  * because a stored value can be anything, and a 2% pane is a pane you cannot
  * grab back.
  */
-const TERM_OPEN_KEY = "pwi:terminal";
 const TERM_WIDTH_KEY = "pwi:terminalWidth";
 
 export const TERMINAL_MIN_PERCENT = 15;

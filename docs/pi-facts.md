@@ -330,7 +330,7 @@ session is bricked. `agent.ts` sends `IMAGE_ONLY_PROMPT` instead of empty text, 
 ## Why pi is pinned to 0.85.1
 
 Found during the (since removed) fleet rollout, on a machine that installed `pi` fresh and therefore
-got 0.86.0 while the hub was still on 0.85.1.
+got 0.86.0 while the others were still on 0.85.1.
 
 **Symptom.** Every turn answers without tools. Asked to read a file with a
 random token in it, the model says "I don't have access to a file system".
