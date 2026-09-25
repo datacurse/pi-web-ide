@@ -14,7 +14,7 @@ import {
 	toggleDirection,
 	type TermLayout,
 } from "./termLayout.js";
-import { Button, IconButton } from "./ui.js";
+import { Button, IconButton, tabClass } from "./ui.js";
 
 /**
  * xterm.js, loaded on demand.
@@ -434,16 +434,11 @@ export function TerminalPane({
 				<div className="flex min-w-0 flex-1 items-stretch gap-0.5 overflow-x-auto">
 					{layout.tabs.map((t, i) => (
 						<button
-							data-custom="tab"
 							key={i}
 							onClick={() => onLayout(selectTab(layout, i))}
 							aria-current={i === layout.active}
 							title={`Terminal tab ${i + 1}${t.terminals.length > 1 ? ` (${t.terminals.length} splits)` : ""}`}
-							className={`shrink-0 rounded-t-sm px-2 py-1 font-mono text-ui transition-colors duration-150 ease-out hover:text-neutral-100 motion-reduce:transition-none ${
-								i === layout.active
-									? "bg-neutral-800 text-amber-400"
-									: "text-neutral-400 hover:bg-neutral-900"
-							}`}
+							className={`${tabClass(i === layout.active)} pr-2.5 font-mono`}
 						>
 							{i + 1}
 							{t.terminals.length > 1 && (

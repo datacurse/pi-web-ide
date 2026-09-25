@@ -26,12 +26,12 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowCounterClockwise, Check, FileCode } from "@phosphor-icons/react";
+import { FileCode } from "@phosphor-icons/react";
 import type { EditorView } from "@codemirror/view";
 import type { Hunk, HunkState } from "../shared/hunks.js";
-import { fitHunk } from "../shared/hunks.js";
 import { darkPlus, languageFor, loadCodeMirror } from "./codemirror.js";
-import { Button, PanelHeader } from "./ui.js";
+import { HunkRow } from "./DiffView.js";
+import { PanelHeader } from "./ui.js";
 
 /** `/home/me/proj/src/web/App.tsx` → `src/web/App.tsx` when it is under `cwd`. */
 function shortPath(path: string, cwd: string): string {
@@ -119,97 +119,6 @@ function FileDiff({ path, before, after }: { path: string; before: string; after
 	}, [path, before, after]);
 
 	return <div ref={host} className="cm-review overflow-auto text-body" />;
-}
-
-/**
- * One hunk's row: what it did, and the two decisions.
- *
- * `stale` and `missing` are surfaced rather than hidden, because the honest
- * answer to "this text is not where the agent left it" is to say so and refuse
- * the revert — a forced write would silently clobber whatever replaced it.
- */
-function HunkRow({
-	hunk,
-	current,
-	busy,
-	onDecide,
-}: {
-	hunk: Hunk;
-	current: string | null;
-	busy: boolean;
-	onDecide: (state: HunkState) => void;
-}) {
-	const fit = current === null ? null : fitHunk(hunk, current);
-	const gone = fit?.fit === "missing";
-	const ambiguous = fit?.fit === "ambiguous";
-	const added = hunk.newText.split("\n").length;
-	const removed = hunk.oldText.split("\n").length;
-
-	return (
-		<div className="flex items-center gap-2 border-b border-neutral-800 px-3 py-1.5 text-ui">
-			<span className="font-mono text-meta text-neutral-500">
-				L{hunk.anchor.line + 1}
-			</span>
-			<span className="font-mono text-meta">
-				{hunk.oldText !== "" && <span className="text-red-400">-{removed}</span>}
-				{hunk.oldText !== "" && hunk.newText !== "" && " "}
-				{hunk.newText !== "" && <span className="text-green-400">+{added}</span>}
-			</span>
-
-			{gone ? (
-				<span className="text-meta text-amber-500">
-					not in the file any more — nothing to revert
-				</span>
-			) : ambiguous ? (
-				<span className="text-meta text-amber-500">
-					appears {fit.count}× — reverting the nearest
-				</span>
-			) : null}
-
-			<div className="ml-auto flex items-center gap-1">
-				{hunk.state === "pending" ? (
-					<>
-						<Button
-							variant="ghost"
-							size="sm"
-							disabled={busy}
-							onClick={() => onDecide("accepted")}
-						>
-							<span className="flex items-center gap-1 text-green-400">
-								<Check size={12} weight="bold" />
-								Keep
-							</span>
-						</Button>
-						<Button
-							variant="ghost"
-							size="sm"
-							// A hunk whose text is gone cannot be reverted, and
-							// offering the button would promise a write that the
-							// server is right to refuse.
-							disabled={busy || gone}
-							onClick={() => onDecide("rejected")}
-						>
-							<span className="flex items-center gap-1 text-red-400">
-								<ArrowCounterClockwise size={12} weight="bold" />
-								Revert
-							</span>
-						</Button>
-					</>
-				) : (
-					<Button
-						variant="ghost"
-						size="sm"
-						disabled={busy}
-						onClick={() => onDecide("pending")}
-					>
-						<span className={hunk.state === "accepted" ? "text-green-400" : "text-neutral-500"}>
-							{hunk.state === "accepted" ? "Kept" : "Reverted"} · undo
-						</span>
-					</Button>
-				)}
-			</div>
-		</div>
-	);
 }
 
 /**

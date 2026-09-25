@@ -133,6 +133,18 @@ export const inputClass = {
 	md: "rounded-sm border border-neutral-800 bg-neutral-950 px-3 py-2 text-ui text-neutral-100 outline-none placeholder:text-neutral-600 focus:border-neutral-600",
 };
 
+/*
+ * A tab in a strip (editor/session tabs, terminal tabs). A class, not a
+ * component, because tabs carry refs and roving-tabindex props. The caller
+ * adds right padding: `pr-7` when a close button overlays the tab, else `pr-2.5`.
+ */
+export const tabClass = (active: boolean) =>
+	`flex h-8 max-w-52 shrink-0 items-center gap-1.5 rounded-t-sm border-t-2 pl-2.5 text-ui ${EASE} ${FOCUS} ${
+		active
+			? "border-amber-400 bg-neutral-800 font-semibold text-neutral-50"
+			: "border-transparent text-neutral-300 hover:bg-neutral-900 hover:text-neutral-50"
+	}`;
+
 /* A labelled group of settings rows. */
 export function Section({ title, className = "", children }: { title: string; className?: string; children: ReactNode }) {
 	return (

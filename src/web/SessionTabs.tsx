@@ -5,7 +5,7 @@ import type { PiSessionInfo } from "../shared/types.js";
 import { sessionLabel } from "./sessionName.js";
 import { FileGlyph } from "./fileIcon.js";
 import { diffParts, isDiffTab, isSessionTab, tabLabel, tabPath } from "./tabs.js";
-import { IconButton } from "./ui.js";
+import { IconButton, tabClass } from "./ui.js";
 
 /**
  * A diff tab's tooltip: the long form VS Code puts in the tab itself.
@@ -386,7 +386,6 @@ export function SessionTabs({
 								/>
 							)}
 							<button
-								data-custom="tab"
 								ref={(el) => {
 									buttons.current[i] = el;
 								}}
@@ -400,11 +399,7 @@ export function SessionTabs({
 								title={isDiff ? diffTitle(file) : isFile ? tabPath(file) : label}
 								onClick={() => onSelect(file)}
 								onKeyDown={(e) => moveFocus(e, i)}
-								className={`flex h-8 max-w-52 items-center gap-1.5 rounded-t-sm border-t-2 pr-7 pl-2.5 text-ui transition-colors duration-150 ease-out focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 motion-reduce:transition-none ${
-									isActive
-										? "border-amber-400 bg-neutral-800 font-semibold text-neutral-50"
-										: "border-transparent text-neutral-300 hover:bg-neutral-900 hover:text-neutral-50"
-								}`}
+								className={`${tabClass(isActive)} pr-7`}
 							>
 								{/* Live even when this session is not the attached one — the
 								    same signal, and the same amber dot, as the list. */}

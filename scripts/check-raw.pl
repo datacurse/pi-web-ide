@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 # Raw interactive elements must be a primitive from ui.tsx, or opt out with
-# data-custom="reason". Inputs/textareas/selects may instead use inputClass.
+# data-custom="reason". Inputs/textareas/selects may use inputClass; tabs use tabClass.
 # Checkbox, radio, file and hidden inputs are native and exempt.
 use strict; my $bad = 0;
 for my $f (@ARGV) {
@@ -12,6 +12,7 @@ for my $f (@ARGV) {
 	while ($s =~ /<(button|input|textarea|select)\b((?:[^>{}]|\{(?:[^{}]|\{[^{}]*\})*\})*)>/g) {
 		my ($tag, $attrs) = ($1, $2);
 		next if $attrs =~ /data-custom=/;
+		next if $attrs =~ /tabClass/;
 		next if $tag ne 'button' && $attrs =~ /inputClass/;
 		next if $tag eq 'input' && $attrs =~ /type="(checkbox|radio|file|hidden)"/;
 		my $line = 1 + (() = substr($s, 0, $-[0]) =~ /\n/g);

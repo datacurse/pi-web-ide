@@ -104,8 +104,10 @@ function Merge({ path, before, after }: { path: string; before: string; after: s
  * `stale` and `missing` are surfaced rather than hidden, because the honest
  * answer to "this text is not where the agent left it" is to say so and refuse
  * the revert — a forced write would silently clobber whatever replaced it.
+ *
+ * Shared with Review.tsx.
  */
-function HunkRow({
+export function HunkRow({
 	hunk,
 	current,
 	busy,

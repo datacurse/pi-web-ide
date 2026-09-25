@@ -89,6 +89,7 @@ New UI uses these; convert raw markup when you touch it. Tune styles in
 | `sectionLabel`  | class string                                                | Uppercase group heading on any element. |
 | `inputClass.sm/md` | class string                                             | Inputs and textareas (a string so refs pass through). |
 | `ListRow`       | `selected`, `muted`, button props                           | Tree and list rows (Explorer, Source Control, directory picker). 22px; indent with `style.paddingLeft`. |
+| `tabClass(active)` | class string; caller adds `pr-7` (with close button) or `pr-2.5` | Session/editor tabs and terminal tabs: 32px, amber top border when active. |
 | `PanelHeader`   | `title?`, `onClose?`, `closeLabel?`, children               | Top row of a side panel or editor tab. Children go after the title. |
 
 - Body text defaults to `text-ui`; set a size only when it differs.
@@ -96,11 +97,11 @@ New UI uses these; convert raw markup when you touch it. Tune styles in
 - `check-ui.sh` also fails on hand-rolled copies of `Button` primary/subtle,
   `inputClass` and `sectionLabel`. Add a rule there when a new primitive lands.
 - Every raw `<button>`, `<input>`, `<textarea>` and `<select>` outside `ui.tsx`
-  fails `scripts/check-raw.pl` unless it uses `inputClass` or carries
+  fails `scripts/check-raw.pl` unless it uses `inputClass`/`tabClass` or carries
   `data-custom="reason"`. Checkbox, radio, file and hidden inputs are exempt.
   `data-custom` is for one-off controls with no primitive yet; when the same
   reason appears 3+ times, extract a primitive.
-- Current `data-custom` reasons: `tab` (session and terminal tabs), `tab close`,
+- Current `data-custom` reasons: `tab close`,
   `composer pill` (model selects, git split button), `composer`, `choice card`
   (chat question options, package search hits), `session card`, `transcript
   disclosure`, `context meter`, `image thumbnail`, `thumbnail remove badge`,
@@ -110,9 +111,7 @@ New UI uses these; convert raw markup when you touch it. Tune styles in
 
 ## Open questions
 
-- `Tab` primitive: session and terminal tabs look different today; unify them.
 - `ChoiceCard`: two uses (chat questions, package search) — one more and extract.
-- Review and DiffView duplicate their hunk-action row; merge into one component.
 - Dialog headers (Settings, DirectoryPicker, Packages add) use `text-title`
   and are not `PanelHeader`. Candidate: `Dialog`.
 - Candidates once they repeat: `Badge`, segmented tabs (Packages).
