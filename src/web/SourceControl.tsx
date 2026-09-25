@@ -30,7 +30,16 @@ import {
 	X,
 } from "@phosphor-icons/react";
 import { FileGlyph } from "./fileIcon.js";
-import { GIT_CHANGED, busyLabel, gitChanged, setGitBusy, useGitBusy } from "./GitActions.js";
+import {
+	GIT_CHANGED,
+	type GitState,
+	busyLabel,
+	gitChanged,
+	setGitBusy,
+	setGitState,
+	useGitBusy,
+	useGitState,
+} from "./GitActions.js";
 import { readGitAutoName, writeGitAutoName } from "./prefs.js";
 import { Button, IconButton, inputClass } from "./ui.js";
 
@@ -58,19 +67,6 @@ interface Commit {
 	author: string;
 	when: string;
 	files: Change[];
-}
-
-/** Mirrors the GET /api/git answer. */
-interface GitState {
-	repo: boolean;
-	branch: string;
-	changed: number;
-	ahead: number;
-	behind: number;
-	upstream: string;
-	remote: string;
-	gh: boolean;
-	suggestion: string;
 }
 
 /**
@@ -159,7 +155,7 @@ export function SourceControl({
 	/** Uncommitted file count after each re-read, so the rail badge follows a sync. */
 	onChanges: (count: number) => void;
 }) {
-	const [state, setState] = useState<GitState | null>(null);
+	const state = useGitState(cwd);
 	const [files, setFiles] = useState<Change[] | null>(null);
 	const [commits, setCommits] = useState<Commit[]>([]);
 	const [message, setMessage] = useState("");
@@ -177,7 +173,7 @@ export function SourceControl({
 				getJson<{ files: Change[] }>(`/api/git/changes?cwd=${encodeURIComponent(cwd)}`),
 				getJson<{ commits: Commit[] }>(`/api/git/log?cwd=${encodeURIComponent(cwd)}`),
 			]);
-			setState(git);
+			setGitState(cwd, git);
 			setFiles(changes.files);
 			onChanges(changes.files.length);
 			setCommits(log.commits);

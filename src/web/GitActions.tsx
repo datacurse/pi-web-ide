@@ -4,7 +4,7 @@ import { readGitAutoName, writeGitAutoName } from "./prefs.js";
 import { Button, MenuItem, inputClass } from "./ui.js";
 
 /** What `GET /api/git` answers with. See src/server/git.ts. */
-interface GitState {
+export interface GitState {
 	repo: boolean;
 	branch: string;
 	changed: number;
@@ -92,6 +92,19 @@ export function setGitBusy(cwd: string, label: string | null) {
 	else busy.delete(cwd);
 	window.dispatchEvent(new Event(GIT_BUSY));
 }
+
+/**
+ * The last `GET /api/git` answer per `cwd`, same store as `busy`: whichever
+ * pane fetched last, every pane shows that count, so two buttons on one repo
+ * can never disagree.
+ */
+const states = new Map<string, GitState>();
+export function setGitState(cwd: string, state: GitState) {
+	states.set(cwd, state);
+	window.dispatchEvent(new Event(GIT_BUSY));
+}
+export const useGitState = (cwd: string) =>
+	useSyncExternalStore(subscribeBusy, () => states.get(cwd) ?? null);
 const subscribeBusy = (cb: () => void) => {
 	window.addEventListener(GIT_BUSY, cb);
 	return () => window.removeEventListener(GIT_BUSY, cb);
@@ -118,7 +131,7 @@ export function GitActions({
 	cwd: string;
 	onDone?: () => void;
 }) {
-	const [state, setState] = useState<GitState | null>(null);
+	const state = useGitState(cwd);
 	const [menuOpen, setMenuOpen] = useState(false);
 	const [pending, setPending] = useState<Action | null>(null);
 	const [message, setMessage] = useState("");
@@ -135,11 +148,10 @@ export function GitActions({
 	const refresh = async () => {
 		const r = await fetch(`/api/git?cwd=${encodeURIComponent(cwd)}`);
 		if (!r.ok) return;
-		setState((await r.json()) as GitState);
+		setGitState(cwd, (await r.json()) as GitState);
 	};
 
 	useEffect(() => {
-		setState(null);
 		setResult(null);
 		void refresh();
 		// Only on a project switch: everything else re-reads on open, and
