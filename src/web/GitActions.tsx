@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { CaretDown, Check, GitBranch, Sparkle } from "@phosphor-icons/react";
 import { readGitAutoName, writeGitAutoName } from "./prefs.js";
 import { Button, MenuItem, inputClass } from "./ui.js";
@@ -80,6 +80,37 @@ export const GIT_CHANGED = "pwi:git-changed";
 export const gitChanged = (cwd: string) =>
 	window.dispatchEvent(new CustomEvent(GIT_CHANGED, { detail: cwd }));
 
+/**
+ * What is running on each `cwd` right now ("Committing & pushing…"), shared
+ * by every GitActions and SourceControl so all panes on one repo show the
+ * same button state instead of one saying "Working…" and the rest idle.
+ */
+const busy = new Map<string, string>();
+const GIT_BUSY = "pwi:git-busy";
+export function setGitBusy(cwd: string, label: string | null) {
+	if (label) busy.set(cwd, label);
+	else busy.delete(cwd);
+	window.dispatchEvent(new Event(GIT_BUSY));
+}
+const subscribeBusy = (cb: () => void) => {
+	window.addEventListener(GIT_BUSY, cb);
+	return () => window.removeEventListener(GIT_BUSY, cb);
+};
+export const useGitBusy = (cwd: string) =>
+	useSyncExternalStore(subscribeBusy, () => busy.get(cwd) ?? null);
+
+/** `{commit, push}` → "Committing & pushing…". */
+export function busyLabel(a: { branch?: boolean; commit?: boolean; push?: boolean; pr?: boolean }) {
+	const steps = [
+		a.branch && "creating branch",
+		a.commit && "committing",
+		a.push && "pushing",
+		a.pr && "opening PR",
+	].filter(Boolean) as string[];
+	const text = steps.length > 1 ? `${steps.slice(0, -1).join(", ")} & ${steps.at(-1)}` : (steps[0] ?? "working");
+	return `${text[0].toUpperCase()}${text.slice(1)}…`;
+}
+
 export function GitActions({
 	cwd,
 	onDone,
@@ -92,7 +123,8 @@ export function GitActions({
 	const [pending, setPending] = useState<Action | null>(null);
 	const [message, setMessage] = useState("");
 	const [branch, setBranch] = useState("");
-	const [running, setRunning] = useState(false);
+	const busyNow = useGitBusy(cwd);
+	const running = busyNow !== null;
 	const [result, setResult] = useState<GitResult | null>(null);
 	/** Toggle in the menu: name commits with the model and skip the dialog. */
 	const [autoName, setAutoName] = useState(readGitAutoName);
@@ -150,6 +182,7 @@ export function GitActions({
 	 */
 	const requestName = async (): Promise<string | null> => {
 		setNaming(true);
+		setGitBusy(cwd, "Naming…");
 		setNameError(null);
 		try {
 			const r = await fetch(`/api/git/name`, {
@@ -168,6 +201,7 @@ export function GitActions({
 			return null;
 		} finally {
 			setNaming(false);
+			setGitBusy(cwd, null);
 		}
 	};
 
@@ -205,22 +239,27 @@ export function GitActions({
 	};
 
 	const execute = async (action: Action, fields: { message?: string; branch?: string }) => {
-		setRunning(true);
-		const r = await fetch(`/api/git`, {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({
-				cwd,
-				branch: action.branch ? fields.branch : undefined,
-				message: action.commit ? fields.message : undefined,
-				push: action.push,
-				pr: action.pr,
-			}),
-		});
-		const body = (await r.json().catch(() => ({}))) as GitResult & { error?: string };
-		setRunning(false);
-		setPending(null);
-		setResult(body.ok === undefined ? { ok: false, steps: [], error: body.error } : body);
+		setGitBusy(cwd, busyLabel(action));
+		try {
+			const r = await fetch(`/api/git`, {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					cwd,
+					branch: action.branch ? fields.branch : undefined,
+					message: action.commit ? fields.message : undefined,
+					push: action.push,
+					pr: action.pr,
+				}),
+			});
+			const body = (await r.json().catch(() => ({}))) as GitResult & { error?: string };
+			setResult(body.ok === undefined ? { ok: false, steps: [], error: body.error } : body);
+		} catch (err) {
+			setResult({ ok: false, steps: [], error: err instanceof Error ? err.message : String(err) });
+		} finally {
+			setGitBusy(cwd, null);
+			setPending(null);
+		}
 		gitChanged(cwd);
 		onDone?.();
 	};
@@ -237,7 +276,7 @@ export function GitActions({
 			<div className="flex items-stretch overflow-hidden rounded-full border border-neutral-700 bg-neutral-900 text-meta">
 				<button
 					onClick={() => void start(primary)}
-					disabled={running || naming}
+					disabled={running}
 					title={
 						`${dirty ? `${state.changed} changed file${state.changed === 1 ? "" : "s"}` : "Nothing to commit"} on ${state.branch}` +
 						(autoName ? " · auto-named, no dialog" : "")
@@ -245,7 +284,7 @@ export function GitActions({
 					className="flex items-center gap-1.5 px-3 py-1 text-neutral-200 transition-colors duration-150 ease-out hover:bg-neutral-800 disabled:text-neutral-500 motion-reduce:transition-none"
 				>
 					{autoName ? <Sparkle size={13} /> : <GitBranch size={13} />}
-					{naming ? "Naming…" : running ? "Working…" : primary.label}
+					{busyNow ?? primary.label}
 					{/* The count is the one number that decides whether to click. */}
 					{dirty && <span className="text-neutral-500">{state.changed}</span>}
 				</button>
@@ -360,7 +399,7 @@ export function GitActions({
 					state={state}
 					message={message}
 					branch={branch}
-					running={running}
+					running={busyNow !== null && !naming ? busyNow : null}
 					naming={naming}
 					nameError={nameError}
 					onAutoName={async () => {
@@ -407,7 +446,8 @@ function GitDialog({
 	state: GitState;
 	message: string;
 	branch: string;
-	running: boolean;
+	/** The in-flight step's label, e.g. "Committing & pushing…". */
+	running: string | null;
 	/** A name is being written right now: the model call is in flight. */
 	naming: boolean;
 	/** Why the last naming attempt failed, if it did. */
@@ -502,7 +542,7 @@ function GitDialog({
 							className="mr-auto"
 							type="button"
 							onClick={onAutoName}
-							disabled={naming || running}
+							disabled={naming || !!running}
 							title="Write the message with a model that reads the diff"
 						>
 							<Sparkle size={13} />
@@ -518,9 +558,9 @@ function GitDialog({
 					<Button
 						variant="primary"
 						type="submit"
-						disabled={running || naming || (action.commit && !message.trim() && !state.suggestion)}
+						disabled={!!running || naming || (action.commit && !message.trim() && !state.suggestion)}
 					>
-						{running ? "Working…" : action.label}
+						{running ?? action.label}
 					</Button>
 				</div>
 			</form>

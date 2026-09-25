@@ -30,7 +30,7 @@ import {
 	X,
 } from "@phosphor-icons/react";
 import { FileGlyph } from "./fileIcon.js";
-import { GIT_CHANGED, gitChanged } from "./GitActions.js";
+import { GIT_CHANGED, busyLabel, gitChanged, setGitBusy, useGitBusy } from "./GitActions.js";
 import { readGitAutoName, writeGitAutoName } from "./prefs.js";
 import { Button, IconButton, inputClass } from "./ui.js";
 
@@ -166,7 +166,8 @@ export function SourceControl({
 	const [open, setOpen] = useState<Record<string, boolean>>({});
 	const [autoName, setAutoName] = useState(readGitAutoName);
 	const [naming, setNaming] = useState(false);
-	const [running, setRunning] = useState(false);
+	const busyNow = useGitBusy(cwd);
+	const running = busyNow !== null;
 	const [error, setError] = useState<string | null>(null);
 
 	const reload = useCallback(async () => {
@@ -207,6 +208,7 @@ export function SourceControl({
 	 */
 	const requestName = async (): Promise<string | null> => {
 		setNaming(true);
+		setGitBusy(cwd, "Naming…");
 		setError(null);
 		try {
 			const r = await fetch(`/api/git/name`, {
@@ -226,6 +228,7 @@ export function SourceControl({
 			return null;
 		} finally {
 			setNaming(false);
+			setGitBusy(cwd, null);
 		}
 	};
 
@@ -247,7 +250,7 @@ export function SourceControl({
 			if (!named) return;
 			text = named;
 		}
-		setRunning(true);
+		setGitBusy(cwd, busyLabel({ commit: dirty, push: true }));
 		setError(null);
 		try {
 			const r = await fetch(`/api/git`, {
@@ -267,7 +270,7 @@ export function SourceControl({
 		} catch (err) {
 			setError(err instanceof Error ? err.message : String(err));
 		} finally {
-			setRunning(false);
+			setGitBusy(cwd, null);
 			gitChanged(cwd);
 		}
 	};
@@ -337,13 +340,7 @@ export function SourceControl({
 					 */
 				>
 					<ArrowsClockwise size={13} className={running ? "animate-spin" : undefined} />
-					{naming
-						? "Naming…"
-						: running
-							? "Working…"
-							: dirty
-								? `Commit & Push ${state?.changed}`
-								: "Sync Changes"}
+					{busyNow ?? (dirty ? `Commit & Push ${state?.changed}` : "Sync Changes")}
 					{/* What a sync would actually move, the way git counts it. */}
 					{!dirty && (ahead > 0 || behind > 0) && (
 						// Dimmed against the button's OWN ground rather than given a
