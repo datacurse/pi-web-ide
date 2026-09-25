@@ -46,6 +46,7 @@ Confirmed present:
 | `--model <pattern>`, `--provider <name>`, `--models <patterns>` | `--model provider/id` accepted, `:<thinking>` suffix accepted |
 | `--print, -p`, `--continue, -c`, `--resume, -r` | `-r` takes **no** path; it opens a picker |
 | `--version, -v`, `--offline`, `--verbose`, `--export <file>`, `--list-models` | |
+| `-e <path>` | load one extension file for this run; flags it registers (`registerFlag`) become CLI flags, e.g. `--pwi-remind <file>` |
 
 **No `--cwd` flag exists.** The working directory must be set on the spawn call.
 
@@ -114,6 +115,10 @@ Framing is strict JSONL: split on `\n` only, strip one optional trailing `\r`.
   ```
 
   The last such entry wins. `get_state.sessionName` reports it.
+- **Two timestamps per `message` entry.** The entry's `timestamp` (ISO string) is
+  append time, written after streaming ends. `message.timestamp` (epoch ms) is when
+  the message started, the same clock the live RPC events carry. Compare live state
+  against `message.timestamp`; the entry timestamp trails by the whole reply.
 
 ## 0.4 Resume identity
 
@@ -302,9 +307,29 @@ Confirmed by curl:
 
 ---
 
-## Why the fleet is pinned to pi 0.85.1
+## Extension `context` event
 
-Found during the rollout, on a machine that installed `pi` fresh and therefore
+`pi.on("context", (event) => ({ messages }))` rewrites the messages for one model
+request only. pi restores them afterwards, so nothing is saved to the session file or
+emitted as an event. `remind-extension.ts` uses it to repeat the personality text.
+
+## Image-only prompts persist an empty text block
+
+pi always builds a user turn as `[{type:"text", text}, ...images]`, even when `text`
+is `""`. pi's own anthropic provider drops blank blocks; `pi-sub-anthropic` does not,
+so the API answers:
+
+```text
+400 invalid_request_error: messages: text content blocks must be non-empty
+```
+
+The block is persisted before the request, so every later prompt replays it and the
+session is bricked. `agent.ts` sends `IMAGE_ONLY_PROMPT` instead of empty text, and
+`repair.ts` captions empty blocks already on disk.
+
+## Why pi is pinned to 0.85.1
+
+Found during the (since removed) fleet rollout, on a machine that installed `pi` fresh and therefore
 got 0.86.0 while the hub was still on 0.85.1.
 
 **Symptom.** Every turn answers without tools. Asked to read a file with a
@@ -329,10 +354,10 @@ published 2026-08-29, three weeks before pi 0.86.0 — so it was built against
 the old contract and declares no tools under the new one. A provider package
 that has not caught up costs you every tool, silently.
 
-**Rule.** Pin pi itself across the fleet, and move it deliberately after
-checking that the provider package has been republished. `pi update --self`
-is per machine and never automatic for exactly this reason, and the Packages
-screen shows each machine's pi version so the skew is visible.
+**Rule.** Pin pi on every machine, and move it deliberately after checking
+that the provider package has been republished. `pi update --self` is per
+machine and never automatic for exactly this reason, and the Packages screen
+shows the local pi version.
 
 ```bash
 npm i -g @earendil-works/pi-coding-agent@0.85.1
@@ -345,12 +370,11 @@ system prompt into the session as a `system` message — `content: ""`, the
 real text under a `sections` object — and `get_messages` returns it. Rendered
 naively that is a blank row above the first thing anybody said. `agent.ts`
 drops `system` messages from both the transcript and the event stream
-(`isConversation`), so the fleet can move to 0.86 whenever the provider does.
+(`isConversation`), so pi can move to 0.86 whenever the provider does.
 
 ## npm 12 refuses `pi-sub-anthropic`'s remote dependency
 
-Another rollout finding, and a reason not to put the provider package in the
-fleet manifest. `pi-sub-anthropic@0.1.6` depends transitively on
+Another rollout finding. `pi-sub-anthropic@0.1.6` depends transitively on
 
 ```
 @modelcontextprotocol/core@https://pkg.pr.new/modelcontextprotocol/typescript-sdk/@modelcontextprotocol/core@3b205e7
@@ -368,7 +392,7 @@ one) and succeeds on npm 10 (tg). Both already have it on disk from an
 earlier install, so nothing is broken — but a reconcile that tried to
 install it would fail forever on the npm-12 box.
 
-Consequence: the subscription provider is **bootstrap**, not fleet-managed.
-Install it once when setting a machine up, by writing it into
-`~/.pi/agent/settings.json` before the first `pi` start, and leave it out of
-`packages.json`.
+Consequence: the subscription provider is **bootstrap**. Install it once when
+setting a machine up, by writing it into `~/.pi/agent/settings.json` before
+the first `pi` start, and do not reinstall it from the Packages screen on an
+npm-12 machine.

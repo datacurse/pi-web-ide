@@ -1,7 +1,9 @@
 # pi-web-ide
 
 A deliberately thin web UI for the **pi** coding agent (`pi/0.85.1` here).
-Two panels: session list on the left, chat on the right.
+An activity bar on the left opens the session list, file explorer, source
+control, terminal and packages. The editor area holds chat sessions, files
+and diffs as tabs, in one column or two.
 
 pwi does not link an agent SDK. It spawns `pi --mode rpc` and talks JSONL
 over stdio, so the agent is a *binary* dependency rather than an npm one.
@@ -35,8 +37,7 @@ supervisor where two units could otherwise kill each other in a loop. See
 These are decisions, not omissions. Scope creep should have to argue with this
 list:
 
-- no plugins, no goal mode
-- no file tree, no multi-user
+- no plugins, no goal mode, no multi-user
 - no NESTED terminal splits: each terminal tab is one row or one column of
   shells, never a tree. Panes inside panes are tmux's job, and tmux is one
   command away — see [Terminal](#terminal)
@@ -52,7 +53,7 @@ list:
 - no tab reordering and no drag-drop. Tabs are ordered by when you opened
   them, which is information; a hand-sorted strip is another piece of state to
   persist, reconcile and debug for no gain
-- no syntax highlighting — assistant text goes through `markdown-to-jsx` (one
+- no syntax highlighting in the transcript (the file editor has it) — assistant text goes through `markdown-to-jsx` (one
   dependency, no plugin chain) and user text stays `whitespace-pre-wrap`,
   because you typed it and know what it says. Math is the one exception: see
   [Math](#math)
@@ -81,11 +82,17 @@ src/server/state.ts       ~/.config/pi-web-ide, where this server keeps its own 
 src/server/autoname.ts    one-shot `pi -p` children: commit messages, session names
 src/server/personality.ts the extra system-prompt text, read and replaced in place
 src/server/terminals.ts   one login shell per project, on a real PTY
-src/server/git.ts         branch/commit/push/PR, argv-only, no shell
+src/server/git.ts         branch/commit/push/PR, status, log, show; argv-only, no shell
+src/server/files.ts       list/read/write project files; the path check is a trust boundary
+src/server/repair.ts      heals session files pi can no longer replay
+src/server/remind-extension.ts  a pi extension, loaded with -e: repeats the personality
+src/shared/hunks.ts       diff hunks, shared by the review and diff views
+src/web/ui.tsx            shared UI primitives; rules in docs/ui.md
 src/web/commands.ts       slash-command completion rules for the composer
 src/web/math.ts           pulls TeX out of markdown before markdown eats it
 src/web/termLayout.ts     terminal tabs + splits: the arrangement, not the shells
-src/web/                  React: SessionTabs + SessionList + Chat + Settings
+src/web/                  React: ActivityBar + SessionTabs + Chat + Explorer +
+                          FileEditor + SourceControl + DiffView + Settings
 ```
 
 `types.ts` keeps its `Pi*` names (`PiEvent`, `PiMessage`, `PiBlock`,
@@ -382,8 +389,8 @@ the page itself.
 ## Open tabs are restored on reload
 
 Several sessions of one project stay open as tabs, switched like editor tabs,
-but only the **selected** tab is attached — one `EventSource`, exactly as
-before. Inactive tabs are just files in a list; their live dot comes from the
+but only the **selected** tab of each column is attached — one `EventSource`
+per column. Inactive tabs are just files in a list; their live dot comes from the
 session list the app already polls, so there is no per-tab connection and no
 new endpoint. Closing a tab closes only the tab: no abort, no delete, the
 session keeps streaming server-side and stays in the list. That is the first
@@ -393,10 +400,15 @@ The session list is therefore no longer the primary navigation but the "all
 sessions" surface: clicking an entry opens it in a tab, and at ≤768px it
 collapses into a drawer so the chat gets the width.
 
+**Split columns.** The editor area splits into two columns, each with its own
+tabs and its own attached session, so two conversations run side by side. A
+tab lives in one column at a time; emptying the second column closes it.
+
 The ordered open set and the selection are kept in `localStorage` under
-`pwi:tabs:<project cwd>` (value `{"files":[…],"active":"…"}`). One key per
-project, because the strip only ever shows one project's sessions: the key is
-read and written whole, and switching projects cannot corrupt the other
+`pwi:tabs:<project cwd>` (value `{"files":[…],"active":"…"}`, plus `right` with the
+second column's `{files, active}` when split). One key per project, because
+the strip only ever shows one project's sessions: the key is read and written
+whole, and switching projects cannot corrupt the other
 project's entry.
 
 The session **file** is the identity, not the id. It is the stable on-disk
@@ -740,7 +752,7 @@ instead of your real file.
 Five palettes — the four Catppuccin flavors, Mocha (default), Macchiato,
 Frappé and the light Latte, plus **Claude**, a near-black neutral dark theme
 under warm ivory text with Anthropic's clay orange as its accent — from the
-settings dialog in the bottom-left corner of the session list.
+settings dialog at the bottom of the activity bar.
 
 No component knows a theme exists. Tailwind v4 compiles `bg-neutral-900` to
 `background-color: var(--color-neutral-900)`, so `src/web/index.css`
@@ -781,7 +793,7 @@ preview is the palette itself and no hex value is duplicated outside
 
 ## Settings
 
-One dialog, reached from the bottom-left corner of the session list, holding
+One dialog, reached from the gear at the bottom of the activity bar, holding
 everything that is a property of *this browser* rather than of the agent:
 
 | setting | key | default |
@@ -796,13 +808,19 @@ All of them live in `localStorage` via `src/web/prefs.ts`, which validates on
 every read — storage is user-writable and outlives any rename, so an unknown
 value falls back rather than rendering something broken.
 
+The dialog also shows how much of each **Claude subscription limit** is left
+and when it resets. `GET /api/usage` asks Anthropic's `oauth/usage` endpoint
+with the OAuth token pi stored in `auth.json`. It never refreshes that token,
+so a machine whose pi has been idle past the token's expiry reports "no
+unexpired Claude login" until pi's next turn refreshes it.
+
 **Show thinking** hides reasoning blocks, streaming and historical, and it
 *filters* rather than `display: none`s them: reasoning is routinely the
 longest part of a message, and a hidden subtree would still pay for the
 markdown render and still turn up in find-in-page. A message that was
 nothing but reasoning disappears entirely instead of leaving an empty
 `assistant` label behind, and the streaming placeholder waits for real
-output for the same reason. The status line still says "Thinking…" while it
+output for the same reason. The turn status row still spins while it
 happens — that is state, not content, and hiding the transcript of a thought
 should not hide the fact that the agent is having one.
 
@@ -830,7 +848,7 @@ is decided when a call mounts, so switching to `collapsed` would otherwise
 leave exactly the wall of expanded calls you switched to get rid of. A call
 opened by hand stays open until the setting itself moves.
 
-Under `hidden` the status line still reads "Running eval…". That is the same
+Under `hidden` the turn status row still spins and counts seconds. That is the same
 rule as thinking: the setting hides the *transcript* of the work, never the
 fact that work is happening.
 
@@ -839,8 +857,8 @@ session and carrying the first line of the answer, so a long run can be left
 alone. Three guards, each for a different kind of wrong:
 
 - **Only in the background.** `document.visibilityState === "visible" &&
-  document.hasFocus()` suppresses it: on screen and focused, the status line
-  and the tab title already said so, and a notification would be a second
+  document.hasFocus()` suppresses it: on screen and focused, the turn status
+  row and the tab title already said so, and a notification would be a second
   copy of news you are looking at.
 - **Only for a run this page watched.** An `idle` event also arrives right
   after attaching to a session that had already finished, so a per-attachment
@@ -979,6 +997,33 @@ File icons are the other exception: VS Code's default Seti theme, a 37KB font
 (`public/seti.woff`) plus its name/extension table (`src/web/seti.json`),
 vendored by `node scripts/seti.mjs`. Like VS Code, folders get no icon.
 
+## Files and source control
+
+**Explorer** is the project's file tree. Opening a file adds a tab to the same
+strip the sessions live in, rendered by CodeMirror (`FileEditor.tsx`), so
+closing the tree does not close your files. The tree skips `node_modules`,
+`.git`, `dist` and other build directories, and remembers which directories
+were open.
+
+**Saves never overwrite blindly.** The agent, this editor and your own editor
+can all write one file. The buffer remembers the text it loaded, every save
+sends it, and the server answers 409 if the disk no longer matches. Your
+edits stay in the tab until you press Reload.
+
+**`files.ts` is a trust boundary.** It is the one module that writes to paths
+the browser names, so every path must resolve inside a known project, checked
+by path segments rather than by prefix (`/proj-secrets` is not inside `/proj`).
+A path outside every project is refused, not clamped. Files over 4MB are
+refused too.
+
+**Source control** reads `git status` directly, so it sees every change: the
+agent's, another session's, yours. The top half is the working tree with a
+commit message and one button; the bottom is recent commits, each opening to
+the files it touched. Neither half renders a diff. A row opens a diff *tab*
+in the column you last used, where a merge view has the width to be read.
+Working-tree diffs offer keep/revert per hunk; commit diffs are
+read-only. Commit refs are checked as hex shas before they reach `git show`.
+
 ## Commit & Push
 
 A split button above the composer: the primary action on the left, the other
@@ -987,9 +1032,10 @@ changes, and the next thing anybody does is commit them — from a browser on
 another machine there is no terminal to do it in, and typing `git add -A &&
 git commit -m …` on a phone is not the point of having the button.
 
-**Deliberately not a git client.** No staging UI, no hunks, no log, no diff
-viewer: that is a real application, and the [terminal](#terminal) covers
-everything this does not. What is here is the end of a turn, composed from
+**Deliberately not a git client.** No staging, no amend, no rebase, no
+merge: that is a real application, and the [terminal](#terminal) covers
+everything this does not. Changes, history and diffs are read-only in
+[source control](#files-and-source-control). What is here is the end of a turn, composed from
 four steps applied in one order — branch → commit → push → PR — because
 every action anybody asks for is a subset of those four:
 
@@ -1053,6 +1099,13 @@ The state (branch, changed count, upstream) is read fresh on open rather than
 polled: the tree changes constantly while an agent works in it, and a count
 that is thirty seconds stale is worse than one fetched when you looked. The
 button hides itself entirely outside a git repository.
+
+Every pane on one repo shows the same thing. The last `GET /api/git` answer
+and the running action are kept per cwd in one store (`useSyncExternalStore`),
+so a commit started from one column disables the button in every other
+column and the source control panel, with the same label (`Committing &
+pushing…`). When an action finishes, a window-level `pwi:git-changed` event
+makes every view on that cwd refetch, the one that ran it included.
 
 A **jump to latest** button appears next to it whenever the transcript is
 scrolled away from the bottom, and only then: a button that does nothing is
@@ -1257,7 +1310,7 @@ Two tracks, one left edge:
 
 | track | width | what lives there |
 | --- | --- | --- |
-| measure | `--measure: 38rem` (~66 characters, 608px) | paragraphs, lists, headings, quotes, user text, thinking, error text, role labels, the status line, the composer |
+| measure | `--measure: 38rem` (~66 characters, 608px) | paragraphs, lists, headings, quotes, user text, thinking, error text, role labels, the turn status row, the composer |
 | content | `--content-max: 68rem` (1088px) | code blocks, tool output, tables, images |
 
 The measure used to sit flush left inside the content track. That kept every
@@ -1313,7 +1366,7 @@ The composer is in the **measure**, sharing both edges with the answer above
 it, and there is no rule between them. It used to span the full content track
 with a `border-t` across the pane, which drew a second panel docked under the
 chat: a wide input under narrow prose reads as a different surface, and a
-separator says so out loud. The status line, context meter and git button are
+separator says so out loud. The turn status row, context meter and git button are
 in the same column for the same reason — everything from the last paragraph
 to the send button now shares one pair of edges.
 
@@ -1444,6 +1497,14 @@ against the newest we hold, and reopen when the file is ahead — on
 `POST /api/sessions/open`, which is the path a restored tab actually takes.
 `acquire` hands back the entry already in the map, message list and all, so
 the reattach path is exactly where the question needs asking.
+
+Which timestamp matters. A `message` entry carries two: the entry's own
+`timestamp` is when it was *appended*, after the reply finished streaming,
+and `message.timestamp` is when the message *started*, the clock the live
+child reports. Comparing the live side against the append time made every
+reply longer than the margin look like a foreign write, and restarted the
+child on every tab switch (`0cc82ba`). `lastMessageAt` reads
+`message.timestamp`.
 
 Timestamps are the one quantity both sides agree on, and the comparison
 **converges**: after reopening, our newest *is* the file's newest, so it goes
