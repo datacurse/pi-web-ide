@@ -139,7 +139,13 @@ export function writeSettings(settings: Record<string, unknown>): void {
  * time, so a typo would persist happily and then fail at the start of every
  * future session, far from the mistake.
  */
-export async function setDefaultModel(spec: string): Promise<void> {
+export async function setDefaultModel(spec: string | null): Promise<void> {
+	if (spec === null) {
+		const settings = readSettings();
+		delete settings.defaultProvider;
+		delete settings.defaultModel;
+		return writeSettings(settings);
+	}
 	const slash = spec.indexOf("/");
 	if (slash <= 0 || slash === spec.length - 1) {
 		throw new Error(`model must be "provider/id", got: ${spec}`);

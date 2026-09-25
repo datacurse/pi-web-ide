@@ -92,7 +92,7 @@ const newId = () => randomBytes(4).toString("hex");
  * Collected across the WHOLE file before anything is rewritten, because a
  * result does not have to sit on the line after its call.
  *
- * ponytail: parses every line, so a repaired file is parsed twice. ~60ms on a
+ * Parses every line, so a repaired file is parsed twice. ~60ms on a
  * 2.5MB session, once at open. Fuse the passes if that ever shows up.
  */
 function unansweredCalls(lines: string[]): Map<string, string> {

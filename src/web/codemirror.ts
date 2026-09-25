@@ -97,7 +97,7 @@ export function loadCodeMirror(): Promise<CmModules> {
  * one. Switching the app palette to Latte will leave code looking like VS
  * Code, which is exactly what was asked for.
  *
- * ponytail: one hard-coded theme. If a second one is ever wanted, this becomes
+ * One hard-coded theme. If a second one is ever wanted, this becomes
  * a table keyed by theme id and a Compartment to swap it live.
  */
 export function darkPlus(cm: CmModules) {

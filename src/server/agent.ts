@@ -208,7 +208,10 @@ export function toPiMessage(m: AgentMessage): PiMessage {
 		// where the screenshot should be, and the transcript silently loses the
 		// thing the question was about.
 		const blocks: PiBlock[] = [];
-		const clean = (t: string) => (t.endsWith(ASK_ONLY) ? t.slice(0, -ASK_ONLY.length) : t);
+		// Older sessions saved the earlier wording, which said "Answer it in prose."
+		const oldAsk = ASK_ONLY.replace("only. Do not", "only. Answer it in prose. Do not");
+		const clean = (t: string) =>
+			[ASK_ONLY, oldAsk].reduce((s, a) => (s.endsWith(a) ? s.slice(0, -a.length) : s), t);
 		if (typeof m.content === "string") {
 			blocks.push({ kind: "text", text: clean(m.content) });
 		} else {
@@ -722,7 +725,7 @@ class RpcChild {
 			this.reader.push(Buffer.from(buf.subarray(0, n)));
 		}
 		/*
-		 * ponytail: a frame pi writes between this read and the truncate is lost.
+		 * A frame pi writes between this read and the truncate is lost.
 		 * The window is microseconds and only open while idle with nothing asked,
 		 * when pi has nothing to say. A broker that owns the pipe removes it.
 		 */

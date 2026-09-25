@@ -101,7 +101,7 @@ export type HunkFit =
  * and `node:crypto` is absent from the browser bundle while `SubtleCrypto` is
  * async and would make every hunk construction a promise.
  *
- * ponytail: 32-bit FNV. Collision odds are irrelevant for "same file, seconds
+ * 32-bit FNV. Collision odds are irrelevant for "same file, seconds
  * apart"; move to SHA-256 if hashes are ever compared across machines.
  */
 export function hashContent(text: string): string {

@@ -489,9 +489,10 @@ export function Settings({
 						<span className="flex-1">
 							Repeat before every reply
 							<span className="block text-meta text-neutral-500">
-								Also adds the text to the end of your latest message on each model
+								Also adds the text to the end of each of your messages on every model
 								request, so long sessions do not drift from it. Costs its length in
-								tokens per request. Applies to sessions started from now on.
+								tokens per message, mostly at the cache-read rate. Applies to sessions
+								started from now on.
 							</span>
 						</span>
 					</OptionRow>

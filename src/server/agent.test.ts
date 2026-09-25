@@ -301,6 +301,12 @@ assert.deepEqual(withImage.blocks, [
 assert.deepEqual(toPiMessage({ role: "user", content: `why?${ASK_ONLY}`, timestamp: 10 }).blocks, [
 	{ kind: "text", text: "why?" },
 ]);
+// Sessions saved before the wording change still hide it.
+const oldAsk =
+	"\n\n<system-reminder>\nThis is a question only. Answer it in prose. Do not write or edit code or files, and do not run commands that change anything. Reading files to answer is fine.\n</system-reminder>";
+assert.deepEqual(toPiMessage({ role: "user", content: `why?${oldAsk}`, timestamp: 10 }).blocks, [
+	{ kind: "text", text: "why?" },
+]);
 
 // ---------------------------------------------------------------------------
 // Commands

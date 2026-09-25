@@ -25,7 +25,7 @@ export const PRODUCT = "pi-web-ide";
  * server strips it again in toPiMessage, so the transcript never shows it.
  */
 export const ASK_ONLY =
-	"\n\n<system-reminder>\nThis is a question only. Answer it in prose. Do not write or edit code or files, and do not run commands that change anything. Reading files to answer is fine.\n</system-reminder>";
+	"\n\n<system-reminder>\nThis is a question only. Do not write or edit code or files, and do not run commands that change anything. Reading files to answer is fine.\n</system-reminder>";
 
 /**
  * A base64 image. `data` is RAW base64 with no `data:` URL prefix, because

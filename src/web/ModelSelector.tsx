@@ -39,14 +39,18 @@ export function ModelSelector({
 	onThinkingChange: (level: string) => void;
 }) {
 	const [models, setModels] = useState<string[]>([]);
-	const [savedDefault, setSavedDefault] = useState(false);
+	/** pi's saved startup model, so the star shows the truth after a reload or a switch. */
+	const [defaultModel, setDefaultModel] = useState<string | null>(null);
+	const savedDefault = !!model && model === defaultModel;
 
 	useEffect(() => {
 		let cancelled = false;
 		fetch(`/api/models`)
 			.then((r) => r.json())
 			.then((d) => {
-				if (!cancelled) setModels(d.models ?? []);
+				if (cancelled) return;
+				setModels(d.models ?? []);
+				setDefaultModel(d.default ?? null);
 			})
 			.catch(() => {});
 		return () => {
@@ -56,24 +60,23 @@ export function ModelSelector({
 
 	const providers = useMemo(() => [...new Set(models.map((m) => m.split("/")[0]))].sort(), [models]);
 
-	// Reset the "saved" confirmation whenever the selection moves on — it marks
-	// that THIS model was just saved, not a permanent state of the button.
-	useEffect(() => setSavedDefault(false), [model]);
-
-	const saveAsDefault = async () => {
+	/** Star toggles: set this model as the default, or clear the default if it already is. */
+	const toggleDefault = async () => {
 		if (!model) return;
+		const next = savedDefault ? null : model;
 		const r = await fetch(`/api/default-model`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ model }),
+			body: JSON.stringify({ model: next }),
 		});
-		if (r.ok) setSavedDefault(true);
+		if (r.ok) setDefaultModel(next);
+		else alert(`Could not save default: ${(await r.json().catch(() => ({}))).error ?? r.status}`);
 	};
 
 	// Pills, not boxed inputs: these live INSIDE the composer, where a
 	// bordered field inside a bordered field is two edges for one control.
 	// Sans, like the rest of the composer.
-	const cls = "field-sizing-content max-w-44 truncate rounded-full bg-transparent px-2 py-1 text-meta";
+	const cls = "pill-select field-sizing-content max-w-44 truncate rounded-full bg-transparent px-2 py-1 text-meta";
 	const tone = disabled ? "cursor-not-allowed text-neutral-600" : "text-neutral-300 hover:bg-neutral-800";
 
 	return (
@@ -127,9 +130,9 @@ export function ModelSelector({
 			<IconButton
 				size="sm"
 				round
-				disabled={!model || savedDefault}
-				onClick={saveAsDefault}
-				label={savedDefault ? "Saved as startup default" : "Save this model as the startup default"}
+				disabled={!model}
+				onClick={toggleDefault}
+				label={savedDefault ? "Startup default \u2014 click to clear" : "Save this model as the startup default"}
 			>
 				<Star
 					size={13}

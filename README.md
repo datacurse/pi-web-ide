@@ -734,11 +734,13 @@ Three details that are the feature rather than incidental:
 
 **Repeat before every reply** (`personality-remind.json` in the same
 directory) also loads `src/server/remind-extension.ts` into each new session
-child. On every model request it adds the personality text to the end of the
-latest user message, because a system prompt loses weight as a session grows.
+child. On every model request it adds the personality text to the end of
+every user message, because a system prompt loses weight as a session grows.
 The change applies only to the request: pi restores the messages, so nothing
-is saved to the session or shown in the transcript. The extension reads the
-file on every request, so text edits reach running sessions too.
+is saved to the session or shown in the transcript. Tagging every message and
+reading the file once per session keep earlier turns byte-identical, so the
+prompt cache holds and Opus 5.5 does not reject edited thinking history. Text
+edits reach new sessions only.
 
 There is no project-level personality: one file, named in the dialog, for
 every session this server starts. `PWI_STATE_DIR` relocates it along with the

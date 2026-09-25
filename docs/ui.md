@@ -78,6 +78,10 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
   a 14px `QuestionMark`, `aria-pressed`, amber icon when on. It stays on until switched off.
 - One model select, providers as `<optgroup>`s, plus the thinking select. Pills are
   sans `text-meta` with `field-sizing-content` so each fits its current option.
+  Their popup is styled like a menu via `.pill-select` (index.css, customizable
+  `<select>`, Chromium 135+): `rounded-md` neutral-900 surface, `text-ui` rows,
+  provider labels as uppercase captions, current option in amber. Other browsers
+  show the native popup.
 - The context meter sits in the composer's right group, before Stop. Git stays in
   the row above the box.
 - Placeholder is `Message pi…`; key hints live in the textarea's `title`. The field

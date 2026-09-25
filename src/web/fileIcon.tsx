@@ -24,7 +24,7 @@ const LANGS: Record<string, string> = seti.languageIds;
  * not extension, because VS Code resolves ids from each language extension's
  * own registration — which a browser does not have.
  *
- * ponytail: hand-kept, covers the common ones. Add a line when a type shows
+ * Hand-kept, covers the common ones. Add a line when a type shows
  * the default glyph but has a Seti icon in LANGS.
  */
 const LANG_BY_EXT: Record<string, string> = {

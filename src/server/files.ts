@@ -153,7 +153,7 @@ export function listDir(seed: string, path: string): PiwFileEntry[] {
  * answer is to refuse and let the UI offer a reload rather than silently
  * discard the other write.
  *
- * ponytail: content comparison, not mtime/inode. Costs a read per save, which
+ * Content comparison, not mtime/inode. Costs a read per save, which
  * is nothing next to the round trip; revisit if saves ever get chatty.
  */
 export function writeFile(seed: string, path: string, expect: string, next: string): void {

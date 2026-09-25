@@ -325,6 +325,52 @@
 	color-scheme: light;
 }
 
+/*
+ * Composer selects (ModelSelector.tsx). Chromium 135+ customizable select, so
+ * the popup looks like our menus instead of the OS list. Other browsers keep
+ * the native popup.
+ */
+@supports (appearance: base-select) {
+	.pill-select,
+	.pill-select::picker(select) {
+		appearance: base-select;
+	}
+	.pill-select::picker(select) {
+		max-height: 60vh;
+		padding-block: 4px;
+		border: 1px solid var(--color-neutral-700);
+		border-radius: var(--radius-md);
+		background: var(--color-neutral-900);
+		box-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.5);
+	}
+	.pill-select optgroup {
+		padding-top: 4px;
+		font-size: var(--text-caption);
+		font-weight: normal;
+		letter-spacing: var(--tracking-wide);
+		text-transform: uppercase;
+		color: var(--color-neutral-500);
+	}
+	.pill-select option {
+		padding: 4px 12px;
+		font-size: var(--text-ui);
+		letter-spacing: normal;
+		text-transform: none;
+		color: var(--color-neutral-200);
+	}
+	.pill-select option:hover,
+	.pill-select option:focus-visible {
+		background: var(--color-neutral-800);
+		outline: none;
+	}
+	.pill-select option:checked {
+		color: var(--color-amber-400);
+	}
+	.pill-select option::checkmark {
+		display: none;
+	}
+}
+
 /* VS Code's Seti file icons (fileIcon.tsx). */
 @font-face {
 	font-family: seti;

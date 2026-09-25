@@ -16,7 +16,7 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { promisify } from "node:util";
-import { listModels, setDefaultModel } from "./models.js";
+import { listModels, readSettings, setDefaultModel } from "./models.js";
 import { listSessions, sameProject } from "./sessions.js";
 import {
 	addFavorite,
@@ -213,7 +213,8 @@ app.get("/api/health", (_req, res) => {
 
 app.get("/api/models", async (_req, res) => {
 	try {
-		res.json({ models: await listModels() });
+		const { defaultProvider: p, defaultModel: m } = readSettings();
+		res.json({ models: await listModels(), default: p && m ? `${p}/${m}` : null });
 	} catch (err) {
 		res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
 	}
@@ -222,7 +223,7 @@ app.get("/api/models", async (_req, res) => {
 /**
  * Claude subscription limits, straight from the endpoint claude.ai's usage
  * page reads. Borrows pi's OAuth access token from auth.json, newest first.
- * ponytail: no token refresh — pi refreshes on use, and rotating the refresh
+ * No token refresh — pi refreshes on use, and rotating the refresh
  * token here could log pi out. An idle pi means "expired" until its next turn.
  */
 app.get("/api/usage", async (_req, res) => {
@@ -243,10 +244,12 @@ app.get("/api/usage", async (_req, res) => {
 	res.status(502).json({ error: tokens.length ? "usage request failed" : "no unexpired Claude login in auth.json" });
 });
 
-/** Persist "provider/id" as pi's own startup default, for future sessions. */
+/** Persist "provider/id" as pi's own startup default, for future sessions; `null` clears it. */
 app.post("/api/default-model", async (req, res) => {
-	const model = typeof req.body?.model === "string" ? req.body.model : undefined;
-	if (!model) return res.status(400).json({ error: "model required" });
+	const model = req.body?.model;
+	if (model !== null && (typeof model !== "string" || !model)) {
+		return res.status(400).json({ error: "model required" });
+	}
 	try {
 		await setDefaultModel(model);
 		// A prewarmed session booted under the OLD default, and handing that to
