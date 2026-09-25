@@ -53,10 +53,12 @@ export function Button({
 }
 
 const ICON_VARIANT = {
-	ghost: "text-neutral-400 hover:bg-neutral-800 hover:text-neutral-100",
-	outline: "border border-neutral-700 bg-neutral-900 text-neutral-400 hover:bg-neutral-800 hover:text-neutral-100",
-	/* The send button: inverted, the strongest mark in the composer. */
-	solid: "bg-neutral-100 text-neutral-900 hover:bg-neutral-200",
+	ghost: "text-neutral-400 hover:bg-neutral-800 hover:text-neutral-100 disabled:text-neutral-600 disabled:hover:bg-transparent",
+	outline:
+		"border border-neutral-700 bg-neutral-900 text-neutral-400 hover:bg-neutral-800 hover:text-neutral-100 disabled:text-neutral-600 disabled:hover:bg-transparent",
+	/* The send button: inverted, the strongest mark in the composer. Disabled
+	   drops to a flat grey disc so it lights up only when there is a message. */
+	solid: "bg-neutral-100 text-neutral-900 enabled:hover:bg-neutral-200 disabled:bg-neutral-800 disabled:text-neutral-500",
 };
 const ICON_SIZE = { sm: "size-control-sm", md: "size-control-md" };
 
@@ -83,7 +85,7 @@ export function IconButton({
 			type={type}
 			aria-label={label}
 			title={label}
-			className={`flex shrink-0 items-center justify-center ${ICON_SIZE[size]} ${round ? "rounded-full" : "rounded-sm"} ${ICON_VARIANT[variant]} disabled:text-neutral-600 disabled:hover:bg-transparent ${EASE} ${FOCUS} ${className}`}
+			className={`flex shrink-0 items-center justify-center ${ICON_SIZE[size]} ${round ? "rounded-full" : "rounded-sm"} ${ICON_VARIANT[variant]} ${EASE} ${FOCUS} ${className}`}
 			{...rest}
 		/>
 	);

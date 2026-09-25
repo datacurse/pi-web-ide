@@ -516,7 +516,7 @@ function ContextMeter({
 					? `${tokens.toLocaleString()} of ${limit.toLocaleString()} context tokens used — finish the turn to compact`
 					: `${tokens.toLocaleString()} of ${limit.toLocaleString()} context tokens used. Click to compact the conversation into a summary.`
 			}
-			className={`flex shrink-0 items-center gap-1.5 rounded-sm font-mono text-meta transition-colors duration-150 ease-out enabled:hover:text-neutral-200 disabled:cursor-default focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 motion-reduce:transition-none ${tone}`}
+			className={`flex shrink-0 items-center gap-1.5 rounded-sm px-1 text-meta tabular-nums transition-colors duration-150 ease-out enabled:hover:text-neutral-200 disabled:cursor-default focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 motion-reduce:transition-none ${tone}`}
 		>
 			<span aria-hidden className="h-1 w-10 overflow-hidden rounded-full bg-neutral-800">
 				<span className="block h-full bg-current" style={{ width: `${percent}%` }} />
@@ -1629,21 +1629,13 @@ export function Chat({
 				</div>
 
 				{/*
-				 * Status, context meter and git sit in the READING column, not the
-				 * wide track, and no rule separates them from the transcript: the
-				 * composer is the bottom of the chat, not a panel docked under it.
-				 * A border here drew exactly that second panel.
+				 * Git sits in the READING column, not the wide track, and no rule
+				 * separates it from the transcript: the composer is the bottom of
+				 * the chat, not a panel docked under it. A border here drew exactly
+				 * that second panel. The context meter lives inside the composer.
 				 */}
 				<div className="chat-gutter py-2">
-					<div className="chat-measure flex items-center justify-between gap-2">
-						<div className="flex min-w-0 items-center gap-3">
-							<ContextMeter
-								tokens={snapshot.contextTokens}
-								window={snapshot.contextWindow}
-								busy={busy}
-								onCompact={onCompact}
-							/>
-						</div>
+					<div className="chat-measure flex items-center justify-end gap-2">
 						{/*
 						 * Git on the right of the status line and ABOVE the composer,
 						 * which is where it belongs in the flow: you finish reading the
@@ -1774,15 +1766,18 @@ export function Chat({
 										submit();
 									}
 								}}
-								rows={3}
-								placeholder={
+								// `rows` is the fallback; where `field-sizing: content` is
+								// supported the box starts at one line and grows to max-h-60.
+								rows={2}
+								placeholder="Message pi…"
+								title={
 									canAttach
 										? "Enter to send, Shift+Enter for newline, Ctrl+V to paste a screenshot"
 										: "Enter to send, Shift+Enter for newline"
 								}
 								// Transparent and borderless: the BOX is the control now, and a
 								// second inset panel inside it was two edges for one field.
-								className="chat-prose w-full resize-none bg-transparent outline-none placeholder:text-neutral-600"
+								className="chat-prose field-sizing-content max-h-60 w-full resize-none bg-transparent outline-none placeholder:text-neutral-600"
 							/>
 
 							{/* Attach and the model on the left, send on the right. */}
@@ -1793,7 +1788,6 @@ export function Chat({
 											<IconButton
 												onClick={() => fileInput.current?.click()}
 												label="Attach an image"
-												variant="outline"
 												round
 											>
 												<Plus size={14} />
@@ -1823,6 +1817,12 @@ export function Chat({
 									/>
 								</div>
 								<div className="flex shrink-0 items-center gap-1.5">
+									<ContextMeter
+										tokens={snapshot.contextTokens}
+										window={snapshot.contextWindow}
+										busy={busy}
+										onCompact={onCompact}
+									/>
 									{busy && (
 										<IconButton
 											onClick={onAbort}
@@ -1838,13 +1838,13 @@ export function Chat({
 										onClick={() => setAskOnly((a) => !a)}
 										label={askOnly ? "Ask only: on (no code changes)" : "Ask only: off"}
 										aria-pressed={askOnly}
-										variant="outline"
 										round
 									>
 										<QuestionMark size={14} className={askOnly ? "text-amber-400" : ""} />
 									</IconButton>
 									<IconButton
 										onClick={submit}
+										disabled={!text.trim() && images.length === 0}
 										label="Send"
 										title="Send (Enter)"
 										variant="solid"

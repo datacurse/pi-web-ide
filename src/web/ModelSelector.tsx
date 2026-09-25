@@ -3,13 +3,14 @@ import { Star } from "@phosphor-icons/react";
 import { IconButton } from "./ui.js";
 
 /**
- * Header controls for the active session's model: one select for the
- * provider, one for that provider's models, one for reasoning effort.
+ * Composer controls for the active session's model: one select for the model
+ * (grouped by provider), one for reasoning effort.
  *
  * All native <select>. A custom dropdown bought us a filter box and cost
- * click-outside handling, escape handling, and a scroll container; splitting
- * provider from model shortens each list enough that the filter stopped
- * earning its keep.
+ * click-outside handling, escape handling, and a scroll container; provider
+ * `<optgroup>`s keep the one list scannable without it. `field-sizing: content`
+ * sizes each select to its CURRENT option rather than its widest one, which
+ * left a gap before the chevron; browsers without it fall back to `max-w-44`.
  *
  * Models are fetched once per mount and cached — the available set only
  * changes when auth changes, which happens outside this app. Switching is
@@ -38,7 +39,6 @@ export function ModelSelector({
 	onThinkingChange: (level: string) => void;
 }) {
 	const [models, setModels] = useState<string[]>([]);
-	const [provider, setProvider] = useState(model?.split("/")[0] ?? "");
 	const [savedDefault, setSavedDefault] = useState(false);
 
 	useEffect(() => {
@@ -54,14 +54,7 @@ export function ModelSelector({
 		};
 	}, []);
 
-	// Follow the session: a model set elsewhere (resume, another tab) must move
-	// the provider select with it, or the two boxes disagree about reality.
-	useEffect(() => {
-		if (model) setProvider(model.split("/")[0]);
-	}, [model]);
-
 	const providers = useMemo(() => [...new Set(models.map((m) => m.split("/")[0]))].sort(), [models]);
-	const forProvider = useMemo(() => models.filter((m) => m.startsWith(`${provider}/`)), [models, provider]);
 
 	// Reset the "saved" confirmation whenever the selection moves on — it marks
 	// that THIS model was just saved, not a permanent state of the button.
@@ -77,55 +70,35 @@ export function ModelSelector({
 		if (r.ok) setSavedDefault(true);
 	};
 
-	// Pills, not boxed inputs: these now live INSIDE the composer, where a
+	// Pills, not boxed inputs: these live INSIDE the composer, where a
 	// bordered field inside a bordered field is two edges for one control.
-	const cls = `rounded-full bg-transparent px-2 py-1 font-mono text-meta ${
-		disabled ? "cursor-not-allowed text-neutral-600" : "text-neutral-300 hover:bg-neutral-800"
-	}`;
-	const title = disabled ? "Cannot switch models while streaming" : "Switch model";
+	// Sans, like the rest of the composer.
+	const cls = "field-sizing-content max-w-44 truncate rounded-full bg-transparent px-2 py-1 text-meta";
+	const tone = disabled ? "cursor-not-allowed text-neutral-600" : "text-neutral-300 hover:bg-neutral-800";
 
 	return (
-		<div className="relative flex items-center gap-1">
-			<select
-				data-custom="composer pill"
-				value={provider}
-				disabled={disabled}
-				title={title}
-				// Switching provider commits its first model immediately: leaving the
-				// pair in a state where the provider box disagrees with the session is
-				// worse than picking a default the user can then change.
-				onChange={(e) => {
-					const p = e.target.value;
-					setProvider(p);
-					const first = models.find((m) => m.startsWith(`${p}/`));
-					if (first && first !== model) onChange(first);
-				}}
-				className={cls}
-			>
-				{providers.length === 0 && <option value="">(no providers)</option>}
-				{providers.map((p) => (
-					<option key={p} value={p}>
-						{p}
-					</option>
-				))}
-			</select>
-
+		<div className="relative flex items-center gap-0.5">
 			<select
 				data-custom="composer pill"
 				value={model ?? ""}
-				disabled={disabled || forProvider.length === 0}
-				title={title}
+				disabled={disabled || models.length === 0}
+				title={disabled ? "Cannot switch models while streaming" : (model ?? "Switch model")}
 				onChange={(e) => onChange(e.target.value)}
-				// Capped: the model list holds names like
-				// `claude-sonnet-4-5-20250929`, and a select sized to its widest
-				// option pushed the send button off the composer row.
-				className={`${cls} max-w-44 truncate`}
+				className={`${cls} ${tone}`}
 			>
-				{!model && <option value="">(no model)</option>}
-				{forProvider.map((m) => (
-					<option key={m} value={m}>
-						{m.slice(provider.length + 1)}
-					</option>
+				{/* The session's model may be missing from the list (not fetched
+				    yet, or auth changed); show it rather than a wrong one. */}
+				{(!model || !models.includes(model)) && <option value={model ?? ""}>{model?.split("/").pop() ?? "(no model)"}</option>}
+				{providers.map((p) => (
+					<optgroup key={p} label={p}>
+						{models
+							.filter((m) => m.startsWith(`${p}/`))
+							.map((m) => (
+								<option key={m} value={m}>
+									{m.slice(p.length + 1)}
+								</option>
+							))}
+					</optgroup>
 				))}
 			</select>
 
@@ -135,7 +108,7 @@ export function ModelSelector({
 					value={thinkingLevel ?? ""}
 					title="Reasoning effort — applies from the next turn"
 					onChange={(e) => onThinkingChange(e.target.value)}
-					className="rounded-full bg-transparent px-2 py-1 font-mono text-meta text-neutral-300 hover:bg-neutral-800"
+					className={`${cls} text-neutral-300 hover:bg-neutral-800`}
 				>
 					{/* pi can report a level outside the model's own list (a
 					    session resumed under a different model). Show it rather
@@ -152,7 +125,7 @@ export function ModelSelector({
 			)}
 
 			<IconButton
-				variant="outline"
+				size="sm"
 				round
 				disabled={!model || savedDefault}
 				onClick={saveAsDefault}
@@ -161,7 +134,7 @@ export function ModelSelector({
 				<Star
 					size={13}
 					weight={savedDefault ? "fill" : "regular"}
-					className={savedDefault ? "text-yellow-500" : undefined}
+					className={savedDefault ? "text-amber-400" : undefined}
 				/>
 			</IconButton>
 

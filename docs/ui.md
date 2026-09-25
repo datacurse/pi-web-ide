@@ -72,9 +72,16 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
 
 ## Composer
 
-- The `?` button (directly left of Send, so Stop never shifts it) toggles "Ask only": an outline round
-  `IconButton` with a 14px `QuestionMark`, matching the attach `+`;
-  `aria-pressed`, amber icon when on. It stays on until switched off.
+- Only Send is a filled disc (`solid`); it greys out while there is nothing to send.
+  Attach `+`, `?` and the star are `ghost` round `IconButton`s. Stop stays `outline`.
+- The `?` button (directly left of Send, so Stop never shifts it) toggles "Ask only":
+  a 14px `QuestionMark`, `aria-pressed`, amber icon when on. It stays on until switched off.
+- One model select, providers as `<optgroup>`s, plus the thinking select. Pills are
+  sans `text-meta` with `field-sizing-content` so each fits its current option.
+- The context meter sits in the composer's right group, before Stop. Git stays in
+  the row above the box.
+- Placeholder is `Message pi…`; key hints live in the textarea's `title`. The field
+  uses `field-sizing-content max-h-60` and grows as you type.
 
 ## Tabs
 
