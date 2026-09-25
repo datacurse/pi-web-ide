@@ -26,12 +26,12 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowCounterClockwise, Check, FileCode, X } from "@phosphor-icons/react";
+import { ArrowCounterClockwise, Check, FileCode } from "@phosphor-icons/react";
 import type { EditorView } from "@codemirror/view";
 import type { Hunk, HunkState } from "../shared/hunks.js";
 import { fitHunk } from "../shared/hunks.js";
 import { darkPlus, languageFor, loadCodeMirror } from "./codemirror.js";
-import { IconButton } from "./ui.js";
+import { PanelHeader } from "./ui.js";
 
 /** `/home/me/proj/src/web/App.tsx` → `src/web/App.tsx` when it is under `cwd`. */
 function shortPath(path: string, cwd: string): string {
@@ -282,20 +282,12 @@ export function Review({
 
 	return (
 		<div className="flex min-h-0 min-w-0 flex-1 flex-col bg-neutral-950">
-			<div className="flex items-center gap-2 border-b border-neutral-800 px-3 py-2">
+			<PanelHeader onClose={onClose} closeLabel="Close review">
 				<FileCode size={16} className="text-neutral-400" />
 				<span className="text-ui text-neutral-300">
 					Changes{pending > 0 && <span className="text-amber-400"> · {pending} to review</span>}
 				</span>
-				<IconButton
-					size="sm"
-					className="ml-auto"
-					onClick={onClose}
-					label="Close review"
-				>
-					<X size={16} />
-				</IconButton>
-			</div>
+			</PanelHeader>
 
 			{error && (
 				<div className="border-b border-red-900 bg-red-950/40 px-3 py-2 text-ui text-red-300">

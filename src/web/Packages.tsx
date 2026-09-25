@@ -17,7 +17,7 @@ import type {
 	PiwPackagesView,
 	PiwSearchHit,
 } from "../shared/types.js";
-import { Button, IconButton, inputClass, sectionLabel } from "./ui.js";
+import { Button, IconButton, PanelHeader, inputClass, sectionLabel } from "./ui.js";
 
 /** `2026-09-14T20:53:55.440Z` → `14 Sep 2026`. A publish date is a month, not a minute. */
 function shortDate(iso: string | undefined): string {
@@ -145,8 +145,7 @@ export function Packages({
 			aria-label="Packages"
 			className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-neutral-950 text-neutral-100"
 		>
-			<div className="flex items-center gap-2 border-b border-neutral-800 px-3 py-2">
-				<h2 className="text-ui font-semibold tracking-tight">Packages</h2>
+			<PanelHeader title="Packages" onClose={onClose}>
 				<div className="flex gap-1">
 					{(["installed", "search"] as const).map((t) => (
 						<button
@@ -161,25 +160,16 @@ export function Packages({
 						</button>
 					))}
 				</div>
-				<button
-					onClick={() => void refresh()}
-					className="rounded-sm px-2 py-1 text-meta text-neutral-400 transition-colors duration-150 ease-out hover:bg-neutral-900 hover:text-neutral-200 motion-reduce:transition-none"
-				>
+				<Button variant="ghost" size="sm" onClick={() => void refresh()}>
 					Refresh
-				</button>
+				</Button>
 				<span className="ml-auto flex min-w-0 items-center gap-2 font-mono text-caption text-neutral-500">
 					<span className="truncate" title="pi on this machine">
 						pi {view?.piVersion ?? "?"}
 					</span>
 					{working && <span className="truncate text-amber-400">{working}…</span>}
 				</span>
-				<IconButton
-					onClick={onClose}
-					label="Close packages"
-				>
-					<X size={13} />
-				</IconButton>
-			</div>
+			</PanelHeader>
 
 			<div className="min-h-0 flex-1 overflow-y-auto p-3">
 				{tab === "installed" && (

@@ -9,11 +9,11 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
-import { CaretDown, CaretRight, X } from "@phosphor-icons/react";
+import { CaretDown, CaretRight } from "@phosphor-icons/react";
 import type { PiwFileEntry } from "../shared/types.js";
 import { FileGlyph } from "./fileIcon.js";
 import { readExplorerOpen, writeExplorerOpen } from "./prefs.js";
-import { IconButton } from "./ui.js";
+import { PanelHeader } from "./ui.js";
 
 async function getJson<T>(url: string): Promise<T> {
 	const r = await fetch(url);
@@ -265,18 +265,7 @@ export function Explorer({
 			aria-label="Explorer"
 			className="flex min-h-0 min-w-0 flex-1 flex-col bg-neutral-950"
 		>
-			<div className="flex items-center gap-2 border-b border-neutral-800 px-3 py-2">
-				<span className="text-ui text-neutral-300">Explorer</span>
-				<IconButton
-					size="sm"
-					className="ml-auto"
-					type="button"
-					onClick={onClose}
-					label="Close explorer"
-				>
-					<X size={16} />
-				</IconButton>
-			</div>
+			<PanelHeader title="Explorer" onClose={onClose} />
 			{children}
 
 			{error && (

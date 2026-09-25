@@ -22,6 +22,7 @@ import type { EditorView } from "@codemirror/view";
 import type { Hunk, HunkState } from "../shared/hunks.js";
 import { fitHunk } from "../shared/hunks.js";
 import { darkPlus, languageFor, loadCodeMirror } from "./codemirror.js";
+import { PanelHeader } from "./ui.js";
 
 async function getJson<T>(url: string): Promise<T> {
 	const r = await fetch(url);
@@ -258,14 +259,14 @@ export function DiffView({
 
 	return (
 		<div className="flex min-h-0 min-w-0 flex-1 flex-col bg-neutral-950">
-			<div className="flex items-center gap-2 border-b border-neutral-800 px-3 py-1.5">
+			<PanelHeader>
 				<span className="min-w-0 truncate font-mono text-meta text-neutral-400" title={path}>
 					{shortPath(path, cwd)}
 				</span>
 				<span className="shrink-0 text-meta text-neutral-500">
 					{refName ? `${refName.slice(0, 7)} ↔ parent` : "HEAD ↔ working tree"}
 				</span>
-			</div>
+			</PanelHeader>
 
 			{error && (
 				<div className="border-b border-red-900 bg-red-950/40 px-3 py-2 text-meta text-red-300">

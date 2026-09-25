@@ -58,6 +58,11 @@
 	--radius-sm: 4px; /* controls, chips, inline code */
 	--radius-md: 8px; /* popovers, menus, dialogs, thumbnails */
 	--radius-lg: 12px; /* composer, message bubble */
+
+	/* Control heights. Named spacing keys, so they work as h-*, size-*, min-h-*. */
+	--spacing-control-sm: 24px; /* toolbar buttons, icon buttons in headers */
+	--spacing-control-md: 28px; /* dialog buttons, composer icon buttons */
+	--spacing-bar: 36px; /* panel and editor header rows */
 }
 
 /*

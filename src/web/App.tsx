@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { X } from "@phosphor-icons/react";
 import type {
 	AskAnswer,
 	PiAsk,
@@ -69,7 +68,7 @@ import {
 	type ToolMode,
 } from "./prefs.js";
 import { pulseFavicon } from "./favicon.js";
-import { IconButton } from "./ui.js";
+import { PanelHeader } from "./ui.js";
 
 const emptyPartial = (): PiPartial => ({ text: "", thinking: "", tools: [] });
 
@@ -104,17 +103,7 @@ function PanelEmpty({
 			aria-label={title}
 			className="flex min-h-0 min-w-0 flex-1 flex-col bg-neutral-950"
 		>
-			<div className="flex items-center gap-2 border-b border-neutral-800 px-3 py-2">
-				<span className="text-ui text-neutral-300">{title}</span>
-				<IconButton
-					size="sm"
-					className="ml-auto"
-					onClick={onClose}
-					label={`Close ${title.toLowerCase()}`}
-				>
-					<X size={16} />
-				</IconButton>
-			</div>
+			<PanelHeader title={title} onClose={onClose} />
 			<p className="p-4 text-ui text-neutral-500">{children}</p>
 		</section>
 	);

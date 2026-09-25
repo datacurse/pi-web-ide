@@ -25,6 +25,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowClockwise, FloppyDisk } from "@phosphor-icons/react";
 import type { EditorView } from "@codemirror/view";
 import { darkPlus, languageFor, loadCodeMirror } from "./codemirror.js";
+import { Button, PanelHeader } from "./ui.js";
 
 async function getJson<T>(url: string): Promise<T> {
 	const r = await fetch(url);
@@ -220,28 +221,31 @@ export function FileEditor({
 
 	return (
 		<div className="flex min-h-0 min-w-0 flex-1 flex-col bg-neutral-950" onKeyDown={onKeyDown}>
-			<div className="flex items-center gap-2 border-b border-neutral-800 px-3 py-1.5">
+			<PanelHeader>
 				<span className="min-w-0 truncate font-mono text-meta text-neutral-400" title={path}>
 					{shortPath(path, cwd)}
 				</span>
-				<button
+				<Button
+					variant="ghost"
+					size="sm"
+					className="ml-auto"
 					onClick={() => void save()}
 					disabled={!dirty || saving}
 					title="Save (Ctrl+S)"
-					className="ml-auto flex shrink-0 items-center gap-1 rounded-sm px-2 py-0.5 text-meta text-neutral-300 hover:bg-neutral-800 disabled:opacity-40"
 				>
 					<FloppyDisk size={13} />
 					Save
-				</button>
-				<button
+				</Button>
+				<Button
+					variant="ghost"
+					size="sm"
 					onClick={() => void reload()}
 					title="Re-read from disk, discarding edits in this tab"
-					className="flex shrink-0 items-center gap-1 rounded-sm px-2 py-0.5 text-meta text-neutral-300 hover:bg-neutral-800"
 				>
 					<ArrowClockwise size={13} />
 					Reload
-				</button>
-			</div>
+				</Button>
+			</PanelHeader>
 
 			{error && (
 				<div className="border-b border-red-900 bg-red-950/40 px-3 py-2 text-meta text-red-300">

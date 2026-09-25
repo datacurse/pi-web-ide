@@ -14,5 +14,6 @@ check "Hand-rolled primary button (use <Button variant=\"primary\">)" 'bg-amber-
 check "Hand-rolled subtle button (use <Button variant=\"subtle\">)" 'rounded-sm bg-neutral-800 px-2'
 check "Hand-rolled input (use inputClass)" 'outline-none[^"`]*focus(-visible)?:border-'
 check "Hand-rolled section label (use sectionLabel)" 'text-caption tracking-wide text-neutral-500 uppercase'
+check "Arbitrary spacing or height (use the 4px scale or a control token)" '\b-?(p|m)[xytblr]?-\[[0-9.]+px\]|\b(gap(-[xy])?|h|size|min-h)-\[[0-9.]+px\]'
 [ $fail = 1 ] && echo "See docs/ui.md."
 exit $fail

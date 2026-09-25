@@ -38,6 +38,21 @@ fits none of the existing ones, and record it here.
 - Side variants use the same scale: `rounded-t-sm`.
 - Dialog and form buttons are `rounded-sm`, not pills.
 
+## Spacing and heights
+
+- Spacing uses Tailwind's 4px scale: `0.5 1 1.5 2 3 4 6`. Markdown's `pl-5`
+  list indent and em-based prose margins are the only exceptions.
+- Arbitrary px spacing or heights (`py-[5px]`, `h-[30px]`) fail the check.
+
+| Token            | Size | Use                                              |
+| ---------------- | ---- | ------------------------------------------------ |
+| `control-sm`     | 24px | `Button`/`IconButton` `sm`: toolbars, headers.   |
+| `control-md`     | 28px | `Button`/`IconButton` `md`: dialogs, composer.   |
+| `bar`            | 36px | `PanelHeader`: every panel and editor top row.   |
+
+They are spacing keys, so `h-control-sm`, `size-control-md` and `h-bar` all work.
+Text and icon buttons of the same size share a height and line up in a row.
+
 ## Color roles
 
 Themes remap `neutral-*`, so components name the neutral step, never a hex.
@@ -63,6 +78,7 @@ New UI uses these; convert raw markup when you touch it. Tune styles in
 | `OptionRow`     | `selected`, `disabled`                                      | Clickable row wrapping a radio or checkbox. |
 | `sectionLabel`  | class string                                                | Uppercase group heading on any element. |
 | `inputClass.sm/md` | class string                                             | Inputs and textareas (a string so refs pass through). |
+| `PanelHeader`   | `title?`, `onClose?`, `closeLabel?`, children               | Top row of a side panel or editor tab. Children go after the title. |
 
 - Body text defaults to `text-ui`; set a size only when it differs.
 - A state color on an icon goes on the icon (`<Star className="text-amber-400">`), not on the button.
@@ -73,7 +89,9 @@ New UI uses these; convert raw markup when you touch it. Tune styles in
 
 ## Open questions
 
-- Not yet converted: Review/DiffView toolbar actions (duplicated between the
+- Not yet converted: Review/DiffView hunk actions (duplicated between the
   two files), Terminal tab strip, DirectoryPicker breadcrumbs,
   SourceControl group headers, Packages tab buttons.
-- Candidates once they repeat: `PanelHeader`, `Badge`, `Dialog`.
+- Dialog headers (Settings, DirectoryPicker, Packages add) use `text-title`
+  and are not `PanelHeader`. Candidate: `Dialog`.
+- Candidates once they repeat: `Badge`, segmented tabs (Packages).

@@ -1640,7 +1640,6 @@ export function Chat({
 						 * transcript's context, so the caller gets a hook.
 						 */}
 						<div className="flex shrink-0 items-center gap-2">
-							{snapshot.cwd && <GitActions cwd={snapshot.cwd} />}
 							{/* Jump to the newest message. Only while scrolled away from it:
 						    a button that does nothing is worse than no button. */}
 							{!atBottom && (
@@ -1654,6 +1653,7 @@ export function Chat({
 									<ArrowDown size={14} />
 								</IconButton>
 							)}
+							{snapshot.cwd && <GitActions cwd={snapshot.cwd} />}
 						</div>
 					</div>
 				</div>

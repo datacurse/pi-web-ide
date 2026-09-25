@@ -4,6 +4,7 @@
  * (margins, flex, width) only; restyling through it fights these classes.
  */
 import type { ButtonHTMLAttributes, ReactNode } from "react";
+import { X } from "@phosphor-icons/react";
 
 const EASE = "transition-colors duration-150 ease-out motion-reduce:transition-none";
 const FOCUS =
@@ -23,8 +24,8 @@ const BUTTON_VARIANT = {
 		"text-neutral-400 hover:bg-neutral-800 hover:text-neutral-100 disabled:text-neutral-600 disabled:hover:bg-transparent",
 };
 const BUTTON_SIZE = {
-	sm: "gap-1 px-2 py-1 text-meta",
-	md: "gap-1.5 px-3 py-1.5 text-ui",
+	sm: "h-control-sm gap-1 px-2 text-meta",
+	md: "h-control-md gap-1.5 px-3 text-ui",
 };
 
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
@@ -54,7 +55,7 @@ const ICON_VARIANT = {
 	/* The send button: inverted, the strongest mark in the composer. */
 	solid: "bg-neutral-100 text-neutral-900 hover:bg-neutral-200",
 };
-const ICON_SIZE = { sm: "size-6", md: "size-7" };
+const ICON_SIZE = { sm: "size-control-sm", md: "size-control-md" };
 
 type IconButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
 	/* Required: an icon has no text, so this is its accessible name and tooltip. */
@@ -144,5 +145,33 @@ export function OptionRow({
 		>
 			{children}
 		</label>
+	);
+}
+
+/*
+ * The top row of a panel or editor tab. Fixed height so panels side by side
+ * line up. `title` is plain text; anything richer goes in `children`.
+ */
+export function PanelHeader({
+	title,
+	onClose,
+	closeLabel = `Close ${title?.toLowerCase() ?? "panel"}`,
+	children,
+}: {
+	title?: string;
+	onClose?: () => void;
+	closeLabel?: string;
+	children?: ReactNode;
+}) {
+	return (
+		<div className="flex h-bar shrink-0 items-center gap-2 border-b border-neutral-800 px-3">
+			{title && <span className="shrink-0 text-ui text-neutral-300">{title}</span>}
+			{children}
+			{onClose && (
+				<IconButton size="sm" className="ml-auto" onClick={onClose} label={closeLabel}>
+					<X size={16} />
+				</IconButton>
+			)}
+		</div>
 	);
 }

@@ -27,7 +27,6 @@ import {
 	CaretRight,
 	GitCommit,
 	Sparkle,
-	X,
 } from "@phosphor-icons/react";
 import { FileGlyph } from "./fileIcon.js";
 import {
@@ -41,7 +40,7 @@ import {
 	useGitState,
 } from "./GitActions.js";
 import { readGitAutoName, writeGitAutoName } from "./prefs.js";
-import { Button, IconButton, inputClass } from "./ui.js";
+import { Button, PanelHeader, inputClass } from "./ui.js";
 
 async function getJson<T>(url: string): Promise<T> {
 	const r = await fetch(url);
@@ -452,8 +451,7 @@ export function SourceControl({
 /** The panel's title row. Its own component only because two returns use it. */
 function Header({ branch, onClose }: { branch: string; onClose: () => void }) {
 	return (
-		<div className="flex items-center gap-2 border-b border-neutral-800 px-3 py-2">
-			<span className="text-ui text-neutral-300">Source Control</span>
+		<PanelHeader title="Source Control" onClose={onClose}>
 			{/* The branch is a LABEL, not an action: same dim mono the rest of the
 			    app uses for paths, rather than the accent, which in this window
 			    means "working" and would read as a live session. */}
@@ -465,14 +463,6 @@ function Header({ branch, onClose }: { branch: string; onClose: () => void }) {
 					{branch}
 				</span>
 			)}
-			<IconButton
-				size="sm"
-				className="ml-auto"
-				onClick={onClose}
-				label="Close source control"
-			>
-				<X size={16} />
-			</IconButton>
-		</div>
+		</PanelHeader>
 	);
 }
