@@ -29,6 +29,7 @@ import type {
 	PiPartial,
 	Snapshot,
 } from "../shared/types.js";
+import { Button, IconButton, inputClass, sectionLabel } from "./ui.js";
 import { ModelSelector } from "./ModelSelector.js";
 import { GitActions } from "./GitActions.js";
 import { MarkdownText } from "./Markdown.js";
@@ -617,7 +618,7 @@ function TranscriptRow({
 			    so it has to move with it — left in the track while the prose is
 			    centred put the speaker's name nowhere near their words. */}
 			{labelled && (
-				<div className="chat-measure mb-1 text-caption tracking-wide text-neutral-500 uppercase">
+				<div className={`chat-measure mb-1 ${sectionLabel}`}>
 					{role}
 				</div>
 			)}
@@ -677,7 +678,7 @@ function Message({
 function CompactionRow({ text }: { text: string }) {
 	return (
 		<details className="chat-gutter my-4">
-			<summary className="flex cursor-pointer list-none items-center gap-3 text-caption tracking-wide text-neutral-500 uppercase select-none">
+			<summary className={`flex cursor-pointer list-none items-center gap-3 ${sectionLabel} select-none`}>
 				<span className="h-px flex-1 bg-neutral-800" />
 				compacted — context starts here
 				<span className="h-px flex-1 bg-neutral-800" />
@@ -837,18 +838,10 @@ function AskPanel({
 
 				{ask.kind === "confirm" && (
 					<div className="mt-3 flex gap-2">
-						<button
-							onClick={() => onAnswer(ask.id, { confirmed: true })}
-							className="rounded-sm bg-amber-500 px-3 py-1.5 text-ui font-medium text-neutral-950 hover:bg-amber-400"
-						>
+						<Button variant="primary" onClick={() => onAnswer(ask.id, { confirmed: true })}>
 							Yes
-						</button>
-						<button
-							onClick={() => onAnswer(ask.id, { confirmed: false })}
-							className="rounded-sm border border-neutral-700 px-3 py-1.5 text-ui text-neutral-200 hover:bg-neutral-900"
-						>
-							No
-						</button>
+						</Button>
+						<Button onClick={() => onAnswer(ask.id, { confirmed: false })}>No</Button>
 					</div>
 				)}
 
@@ -875,15 +868,12 @@ function AskPanel({
 								onAnswer(ask.id, { value: text });
 							}}
 							rows={ask.multiline ? 5 : 2}
-							className="w-full resize-none rounded-sm border border-neutral-800 bg-neutral-950 px-3 py-2 text-body text-neutral-100 outline-none focus:border-amber-800"
+							className={`w-full resize-none ${inputClass.md}`}
 						/>
 						<div className="mt-2 flex items-center gap-2">
-							<button
-								type="submit"
-								className="rounded-sm bg-amber-500 px-3 py-1.5 text-ui font-medium text-neutral-950 hover:bg-amber-400"
-							>
+							<Button type="submit" variant="primary">
 								Answer
-							</button>
+							</Button>
 							<span className="text-meta text-neutral-500">
 								{ask.multiline ? "Ctrl+Enter to send" : "Enter to send"}
 							</span>
@@ -1654,14 +1644,15 @@ export function Chat({
 							{/* Jump to the newest message. Only while scrolled away from it:
 						    a button that does nothing is worse than no button. */}
 							{!atBottom && (
-								<button
+								<IconButton
 									onClick={toBottom}
-									aria-label="Jump to the latest message"
-									title="Jump to the latest message"
-									className="flex size-7 items-center justify-center rounded-full border border-neutral-700 bg-neutral-900 text-neutral-300 transition-colors duration-150 ease-out hover:bg-neutral-800 hover:text-neutral-100 motion-reduce:transition-none"
+									label="Jump to the latest message"
+									variant="outline"
+									round
+									className="bg-neutral-900"
 								>
 									<ArrowDown size={14} />
-								</button>
+								</IconButton>
 							)}
 						</div>
 					</div>
@@ -1787,14 +1778,14 @@ export function Chat({
 								<div className="flex min-w-0 items-center gap-1.5">
 									{canAttach && (
 										<>
-											<button
+											<IconButton
 												onClick={() => fileInput.current?.click()}
-												aria-label="Attach an image"
-												title="Attach an image"
-												className="flex size-7 shrink-0 items-center justify-center rounded-full border border-neutral-700 text-neutral-400 transition-colors duration-150 ease-out hover:bg-neutral-800 hover:text-neutral-100 motion-reduce:transition-none"
+												label="Attach an image"
+												variant="outline"
+												round
 											>
 												<Plus size={14} />
-											</button>
+											</IconButton>
 											<input
 												ref={fileInput}
 												type="file"
@@ -1821,27 +1812,29 @@ export function Chat({
 								</div>
 								<div className="flex shrink-0 items-center gap-1.5">
 									{busy && (
-										<button
+										<IconButton
 											onClick={onAbort}
-											aria-label="Stop"
+											label="Stop"
 											title="Stop this turn"
-											className="flex size-7 items-center justify-center rounded-full border border-neutral-700 text-neutral-400 transition-colors duration-150 ease-out hover:bg-neutral-800 hover:text-neutral-100 motion-reduce:transition-none"
+											variant="outline"
+											round
 										>
 											<Square size={11} weight="fill" />
-										</button>
+										</IconButton>
 									)}
-									<button
+									<IconButton
 										onClick={submit}
-										aria-label="Send"
+										label="Send"
 										title="Send (Enter)"
+										variant="solid"
+										round
 										// `neutral-200` and not `white`: under a light theme the button
 										// is dark text on a light page, and hovering to white would
 										// erase it. One step along the ramp moves in a useful direction
 										// whichever way the theme runs.
-										className="flex size-7 items-center justify-center rounded-full bg-neutral-100 text-neutral-900 transition-colors duration-150 ease-out hover:bg-neutral-200 motion-reduce:transition-none"
 									>
 										<ArrowUp size={14} weight="bold" />
-									</button>
+									</IconButton>
 								</div>
 							</div>
 						</div>

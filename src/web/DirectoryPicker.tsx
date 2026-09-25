@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Star, X } from "@phosphor-icons/react";
 import type { PiwDirListing } from "../shared/types.js";
+import { Button, IconButton, inputClass } from "./ui.js";
 
 /**
  * The project directory picker: a folder explorer over the SERVER's
@@ -201,13 +202,12 @@ export function DirectoryPicker({
 				<h2 id="picker-title" className="text-title font-semibold tracking-tight">
 					Add project
 				</h2>
-				<button
+				<IconButton
 					onClick={onClose}
-					aria-label="Close directory picker"
-					className="size-8 rounded-sm text-neutral-300 transition-colors duration-150 ease-out hover:bg-neutral-800 hover:text-neutral-50 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 motion-reduce:transition-none"
+					label="Close directory picker"
 				>
 					<X size={13} />
-				</button>
+				</IconButton>
 			</div>
 
 			{/*
@@ -222,17 +222,20 @@ export function DirectoryPicker({
 				}}
 				className="flex items-center gap-1 border-b border-neutral-800 px-2 py-1.5"
 			>
-				<button
+				<Button
+					variant="subtle"
+					size="sm"
 					type="button"
 					onClick={() => void go(listing?.home ?? "~")}
 					title="Home directory"
-					className="shrink-0 rounded-sm bg-neutral-800 px-2 py-1 text-meta transition-colors duration-150 ease-out hover:bg-neutral-700 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 motion-reduce:transition-none"
 				>
 					{/* "~" rather than a house glyph: this row is a path field, the
 					    server expands it, and no font is missing it. */}
 					<span aria-hidden>~</span>
-				</button>
-				<button
+				</Button>
+				<Button
+					variant="subtle"
+					size="sm"
 					type="button"
 					onClick={() => listing?.parent && void go(listing.parent)}
 					// Disabled only at the filesystem root, where the server
@@ -241,23 +244,24 @@ export function DirectoryPicker({
 					disabled={!listing?.parent}
 					title="Parent directory"
 					aria-label="Parent directory"
-					className="shrink-0 rounded-sm bg-neutral-800 px-2 py-1 text-meta transition-colors duration-150 ease-out hover:bg-neutral-700 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 disabled:opacity-40 disabled:hover:bg-neutral-800 motion-reduce:transition-none"
 				>
 					<span aria-hidden>{"\u2191"}</span>
-				</button>
-				<button
-					type="button"
+				</Button>
+				<Button
+					variant="subtle"
+					size="sm"
 					onClick={() => current && void togglePin(current, pinned)}
 					disabled={!current}
 					title={pinned ? "Unpin this folder" : "Pin this folder"}
 					aria-label={pinned ? "Unpin this folder" : "Pin this folder"}
 					aria-pressed={pinned}
-					className={`shrink-0 rounded-sm bg-neutral-800 px-2 py-1.5 transition-colors duration-150 ease-out hover:bg-neutral-700 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 disabled:opacity-40 disabled:hover:bg-neutral-800 motion-reduce:transition-none ${
-						pinned ? "text-amber-400" : "text-neutral-400"
-					}`}
 				>
-					<Star size={13} weight={pinned ? "fill" : "regular"} />
-				</button>
+					<Star
+						size={13}
+						weight={pinned ? "fill" : "regular"}
+						className={pinned ? "text-amber-400" : "text-neutral-400"}
+					/>
+				</Button>
 				<input
 					value={draft}
 					onChange={(e) => setDraft(e.target.value)}
@@ -265,15 +269,16 @@ export function DirectoryPicker({
 					autoComplete="off"
 					aria-label="Directory path"
 					placeholder="/absolute/path, ~/path, or type to filter"
-					className="min-w-0 flex-1 rounded-sm border border-neutral-800 bg-neutral-900 px-2 py-1 font-mono text-meta text-neutral-200 outline-none focus-visible:border-neutral-600"
+					className={`min-w-0 flex-1 font-mono ${inputClass.sm}`}
 				/>
-				<button
+				<Button
+					variant="subtle"
+					size="sm"
 					type="submit"
 					title="Go to this path"
-					className="shrink-0 rounded-sm bg-neutral-800 px-2 py-1 text-meta transition-colors duration-150 ease-out hover:bg-neutral-700 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 motion-reduce:transition-none"
 				>
 					Go
-				</button>
+				</Button>
 			</form>
 
 			{/* Breadcrumb: the only place that says what "Add this folder" will
@@ -378,15 +383,16 @@ export function DirectoryPicker({
 			</div>
 
 			<div className="flex items-center gap-2 border-t border-neutral-800 px-2 py-2">
-				<button
+				<Button
+					variant="subtle"
+					size="sm"
 					onClick={() => current && onPick(current)}
 					// Adding an already-listed project is a no-op on the server, so
 					// the button says so instead of pretending to work.
 					disabled={!current || already || busy}
-					className="rounded-sm bg-neutral-800 px-2 py-1 text-meta transition-colors duration-150 ease-out hover:bg-neutral-700 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 disabled:opacity-50 disabled:hover:bg-neutral-800 motion-reduce:transition-none"
 				>
 					{already ? "Already added" : "Add this folder"}
-				</button>
+				</Button>
 				<span className="min-w-0 flex-1 truncate font-mono text-caption text-neutral-500">
 					{error ? <span className="text-red-400">{error}</span> : current}
 				</span>

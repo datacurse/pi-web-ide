@@ -17,6 +17,7 @@ import type {
 	PiwPackagesView,
 	PiwSearchHit,
 } from "../shared/types.js";
+import { Button, IconButton, inputClass, sectionLabel } from "./ui.js";
 
 /** `2026-09-14T20:53:55.440Z` → `14 Sep 2026`. A publish date is a month, not a minute. */
 function shortDate(iso: string | undefined): string {
@@ -172,13 +173,12 @@ export function Packages({
 					</span>
 					{working && <span className="truncate text-amber-400">{working}…</span>}
 				</span>
-				<button
+				<IconButton
 					onClick={onClose}
-					aria-label="Close packages"
-					className="size-8 shrink-0 rounded-sm text-neutral-300 transition-colors duration-150 ease-out hover:bg-neutral-800 hover:text-neutral-50 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 motion-reduce:transition-none"
+					label="Close packages"
 				>
 					<X size={13} />
-				</button>
+				</IconButton>
 			</div>
 
 			<div className="min-h-0 flex-1 overflow-y-auto p-3">
@@ -268,12 +268,12 @@ function Installed({
 	return (
 		<>
 			<div className="mb-3 flex items-center gap-2">
-				<button
+				<Button
+					size="sm"
 					onClick={onAdd}
-					className="rounded-sm border border-neutral-700 px-2 py-1 text-meta text-neutral-200 transition-colors duration-150 ease-out hover:bg-neutral-900 motion-reduce:transition-none"
 				>
 					Add by source
-				</button>
+				</Button>
 				<span className="text-meta text-neutral-500">
 					npm:name@version, git:host/user/repo@ref, or an https/ssh URL
 				</span>
@@ -287,7 +287,7 @@ function Installed({
 
 			<table className="w-full border-collapse text-ui">
 				<thead>
-					<tr className="border-b border-neutral-800 text-left text-caption tracking-wide text-neutral-500 uppercase">
+					<tr className={`border-b border-neutral-800 text-left ${sectionLabel}`}>
 						<th className="py-1 pr-3 font-normal">Package</th>
 						<th className="py-1 pr-3 font-normal">Installed</th>
 					</tr>
@@ -360,7 +360,7 @@ function Installed({
 			</table>
 
 			<div className="mt-6 border-t border-neutral-900 pt-3">
-				<h3 className="text-caption tracking-wide text-neutral-500 uppercase">pi itself</h3>
+				<h3 className={sectionLabel}>pi itself</h3>
 				<p className="mt-1 max-w-prose text-meta text-neutral-500">
 					Extensions declare pi's own packages as peer dependencies, so a machine on a different pi is
 					how a package works on one box and throws on another. Updating is never automatic.
@@ -377,7 +377,7 @@ function Installed({
 
 			{project && project.packages.length > 0 && (
 				<div className="mt-6 border-t border-neutral-900 pt-3">
-					<h3 className="text-caption tracking-wide text-neutral-500 uppercase">
+					<h3 className={sectionLabel}>
 						This project — {project.cwd}
 					</h3>
 					<p className="mt-1 max-w-prose text-meta text-neutral-500">
@@ -445,7 +445,7 @@ function Search({ onPick }: { onPick: (info: PiwPackageInfo) => void }) {
 				value={query}
 				onChange={(e) => setQuery(e.target.value)}
 				placeholder="Search the pi package gallery"
-				className="w-full rounded-sm border border-neutral-800 bg-neutral-900 px-3 py-2 text-ui text-neutral-100 outline-none focus:border-neutral-600"
+				className={`w-full ${inputClass.md}`}
 			/>
 			{reason && (
 				<div className="mt-2 text-meta text-amber-400">
@@ -511,13 +511,12 @@ function InstallDialog({
 			<div className="w-[min(34rem,94vw)] rounded-md border border-neutral-800 bg-neutral-950 p-3 shadow-2xl">
 				<div className="flex items-center justify-between">
 					<h3 className="text-title font-semibold">{known ? `Install ${known.name}` : "Add a package"}</h3>
-					<button
+					<IconButton
 						onClick={onClose}
-						aria-label="Cancel"
-						className="size-8 rounded-sm text-neutral-400 hover:bg-neutral-800 hover:text-neutral-100"
+						label="Cancel"
 					>
 						<X size={13} />
-					</button>
+					</IconButton>
 				</div>
 
 				{known && (
@@ -556,7 +555,7 @@ function InstallDialog({
 					</>
 				)}
 
-				<label className="mt-3 block text-caption tracking-wide text-neutral-500 uppercase">
+				<label className={`mt-3 block ${sectionLabel}`}>
 					Source
 					<input
 						value={source}
@@ -565,7 +564,7 @@ function InstallDialog({
 							setError(null);
 						}}
 						placeholder="npm:my-package@1.0.0"
-						className="mt-1 w-full rounded-sm border border-neutral-800 bg-neutral-900 px-2 py-1.5 font-mono text-meta text-neutral-100 normal-case outline-none focus:border-neutral-600"
+						className={`mt-1 w-full font-mono normal-case ${inputClass.sm}`}
 					/>
 				</label>
 
@@ -576,21 +575,20 @@ function InstallDialog({
 				{error && <p className="mt-2 text-meta text-red-400">{error}</p>}
 
 				<div className="mt-3 flex justify-end gap-2">
-					<button
+					<Button
 						onClick={onClose}
-						className="rounded-sm border border-neutral-700 px-3 py-1.5 text-ui text-neutral-300 hover:bg-neutral-900"
 					>
 						Cancel
-					</button>
-					<button
+					</Button>
+					<Button
+						variant="primary"
 						onClick={() => {
 							if (!source.trim()) return setError("a source is required");
 							onInstall(source.trim());
 						}}
-						className="rounded-sm bg-amber-500 px-3 py-1.5 text-ui font-medium text-neutral-950 hover:bg-amber-400"
 					>
 						Install
-					</button>
+					</Button>
 				</div>
 			</div>
 		</div>

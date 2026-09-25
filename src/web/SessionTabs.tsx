@@ -5,6 +5,7 @@ import type { PiSessionInfo } from "../shared/types.js";
 import { sessionLabel } from "./sessionName.js";
 import { FileGlyph } from "./fileIcon.js";
 import { diffParts, isDiffTab, isSessionTab, tabLabel, tabPath } from "./tabs.js";
+import { IconButton } from "./ui.js";
 
 /**
  * A diff tab's tooltip: the long form VS Code puts in the tab itself.
@@ -206,16 +207,16 @@ export function SessionTabs({
 			  already carries chrome, and it stays out of the scrolling region.
 			*/}
 			{onToggleList && (
-			<button
+			<IconButton
 				onClick={onToggleList}
 				aria-expanded={listOpen}
 				aria-controls="session-list"
-				aria-label={listOpen ? "Hide session list" : "Show session list"}
+				label={listOpen ? "Hide session list" : "Show session list"}
 				title="Sessions"
-				className="size-9 shrink-0 self-center rounded-sm text-neutral-300 transition-colors duration-150 ease-out hover:bg-neutral-800 hover:text-neutral-50 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 motion-reduce:transition-none wide:hidden"
+				className="self-center wide:hidden"
 			>
 				<span aria-hidden>{"\u2261"}</span>
-			</button>
+			</IconButton>
 			)}
 
 			<div

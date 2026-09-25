@@ -32,6 +32,7 @@ import {
 import { FileGlyph } from "./fileIcon.js";
 import { GIT_CHANGED, gitChanged } from "./GitActions.js";
 import { readGitAutoName, writeGitAutoName } from "./prefs.js";
+import { Button, IconButton, inputClass } from "./ui.js";
 
 async function getJson<T>(url: string): Promise<T> {
 	const r = await fetch(url);
@@ -304,7 +305,7 @@ export function SourceControl({
 								void sync();
 							}
 						}}
-						className="min-w-0 flex-1 resize-none rounded-sm border border-neutral-800 bg-neutral-950 px-2 py-1.5 text-meta text-neutral-100 outline-none focus:border-neutral-600 placeholder:text-neutral-600"
+						className={`min-w-0 flex-1 resize-none ${inputClass.sm}`}
 					/>
 					<button
 						onClick={() => void requestName()}
@@ -317,7 +318,10 @@ export function SourceControl({
 					</button>
 				</div>
 
-				<button
+				<Button
+					variant="primary"
+					size="sm"
+					className="mx-2 mb-2"
 					onClick={() => void sync()}
 					disabled={running || naming || (!dirty && ahead === 0 && behind === 0)}
 					title={
@@ -331,7 +335,6 @@ export function SourceControl({
 					 * use, and VS Code's blue here would be the one control in the
 					 * window ignoring the active theme.
 					 */
-					className="mx-2 mb-2 flex items-center justify-center gap-1.5 rounded-sm bg-amber-500 px-3 py-1.5 text-meta font-medium text-neutral-950 transition-colors duration-150 ease-out hover:bg-amber-400 disabled:bg-neutral-800 disabled:text-neutral-500 motion-reduce:transition-none"
 				>
 					<ArrowsClockwise size={13} className={running ? "animate-spin" : undefined} />
 					{naming
@@ -351,7 +354,7 @@ export function SourceControl({
 							{behind > 0 && ` ${behind}↓`}
 						</span>
 					)}
-				</button>
+				</Button>
 
 				{/* Auto-name is shared with GitActions' menu: one preference, so
 				    flipping it in either place changes both. */}
@@ -469,13 +472,14 @@ function Header({ branch, onClose }: { branch: string; onClose: () => void }) {
 					{branch}
 				</span>
 			)}
-			<button
+			<IconButton
+				size="sm"
+				className="ml-auto"
 				onClick={onClose}
-				aria-label="Close source control"
-				className="ml-auto rounded-sm p-1 text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200"
+				label="Close source control"
 			>
 				<X size={16} />
-			</button>
+			</IconButton>
 		</div>
 	);
 }

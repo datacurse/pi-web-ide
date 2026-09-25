@@ -3,6 +3,7 @@ import { CaretUpDown, Plus, X } from "@phosphor-icons/react";
 import type { PiSessionInfo } from "../shared/types.js";
 import { SESSION_SORTS, type SessionSort } from "./prefs.js";
 import { sessionLabel, shortName } from "./sessionName.js";
+import { Button, IconButton, MenuItem, inputClass, sectionLabel } from "./ui.js";
 
 /** The menu's own box, needed before it renders so it can be kept on screen. */
 const MENU_WIDTH_PX = 220;
@@ -169,25 +170,22 @@ export function SessionList({
 				  reads the timestamp of the last message in the file instead.
 				*/}
 				<div className="flex gap-1 border-b border-neutral-800 px-2 py-1.5">
-					<button
-						onClick={onNew}
-						className="flex flex-1 items-center justify-center gap-1.5 rounded-sm bg-neutral-800 px-2 py-1.5 text-meta transition-colors duration-150 ease-out hover:bg-neutral-700 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 motion-reduce:transition-none"
-					>
+					<Button variant="subtle" size="sm" onClick={onNew} className="flex-1">
 						<Plus size={12} />
 						New session
-					</button>
-					<button
+					</Button>
+					<IconButton
 						onClick={onToggle}
-						aria-label="Hide session list"
+						label="Hide session list"
 						title="Hide sessions"
-						className="flex size-8 shrink-0 items-center justify-center rounded-sm text-neutral-300 transition-colors duration-150 ease-out hover:bg-neutral-800 hover:text-neutral-50 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 motion-reduce:transition-none wide:hidden"
+						className="wide:hidden"
 					>
 						<X size={13} />
-					</button>
+					</IconButton>
 				</div>
 
 				<div className="flex items-center justify-between border-b border-neutral-800 px-2 py-1">
-					<span className="text-caption tracking-wide text-neutral-500 uppercase">
+					<span className={sectionLabel}>
 						{sessions.length} {sessions.length === 1 ? "session" : "sessions"}
 					</span>
 					{/* Bordered, with an up/down caret: unstyled text on a row that
@@ -251,7 +249,7 @@ export function SessionList({
 										}}
 										onBlur={() => setRenaming(null)}
 										aria-label={`Rename ${label}`}
-										className="w-full rounded-sm border border-neutral-700 bg-neutral-900 px-1.5 py-1 text-meta text-neutral-100 outline-none"
+										className={`w-full ${inputClass.sm}`}
 									/>
 									<p className="mt-0.5 text-caption text-neutral-500">
 										Enter to save, Escape to cancel
@@ -350,9 +348,9 @@ export function SessionList({
 						top: Math.min(menu.y, window.innerHeight - MENU_HEIGHT_PX - 8),
 						width: MENU_WIDTH_PX,
 					}}
-					className="fixed z-40 overflow-hidden rounded-md border border-neutral-700 bg-neutral-900 py-1 text-meta shadow-2xl"
+					className="fixed z-40 overflow-hidden rounded-md border border-neutral-700 bg-neutral-900 py-1 shadow-2xl"
 				>
-					<button
+					<MenuItem
 						role="menuitem"
 						autoFocus
 						onClick={() => {
@@ -360,16 +358,15 @@ export function SessionList({
 							setRenaming(menuSession.path);
 							setMenu(null);
 						}}
-						className="block w-full px-3 py-1.5 text-left text-neutral-200 transition-colors duration-150 ease-out hover:bg-neutral-800 focus-visible:bg-neutral-800 focus-visible:outline-none motion-reduce:transition-none"
 					>
 						Rename…
-					</button>
+					</MenuItem>
 					{/*
 					  The two automatic options, cheapest first. Naming from the
 					  first prompt is local and instant; summarising spends a model
 					  call and a few seconds on the opening request.
 					*/}
-					<button
+					<MenuItem
 						role="menuitem"
 						disabled={!menuSession.firstMessage?.trim()}
 						onClick={() => {
@@ -377,24 +374,22 @@ export function SessionList({
 							setMenu(null);
 							if (next) onRename(menuSession, next);
 						}}
-						className="block w-full px-3 py-1.5 text-left text-neutral-200 transition-colors duration-150 ease-out hover:bg-neutral-800 focus-visible:bg-neutral-800 focus-visible:outline-none disabled:text-neutral-600 disabled:hover:bg-transparent motion-reduce:transition-none"
 					>
 						Name from first prompt
-					</button>
-					<button
+					</MenuItem>
+					<MenuItem
 						role="menuitem"
 						onClick={() => {
 							setMenu(null);
 							setNaming(menuSession.path);
 							void onAutoName(menuSession).finally(() => setNaming(null));
 						}}
-						className="block w-full px-3 py-1.5 text-left text-neutral-200 transition-colors duration-150 ease-out hover:bg-neutral-800 focus-visible:bg-neutral-800 focus-visible:outline-none motion-reduce:transition-none"
 					>
 						Summarise with pi
 						<span className="block text-caption text-neutral-500">
 							Asks pi to title the conversation
 						</span>
-					</button>
+					</MenuItem>
 				</div>
 			)}
 

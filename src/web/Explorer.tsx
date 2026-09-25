@@ -13,6 +13,7 @@ import { CaretDown, CaretRight, X } from "@phosphor-icons/react";
 import type { PiwFileEntry } from "../shared/types.js";
 import { FileGlyph } from "./fileIcon.js";
 import { readExplorerOpen, writeExplorerOpen } from "./prefs.js";
+import { IconButton } from "./ui.js";
 
 async function getJson<T>(url: string): Promise<T> {
 	const r = await fetch(url);
@@ -266,14 +267,15 @@ export function Explorer({
 		>
 			<div className="flex items-center gap-2 border-b border-neutral-800 px-3 py-2">
 				<span className="text-ui text-neutral-300">Explorer</span>
-				<button
+				<IconButton
+					size="sm"
+					className="ml-auto"
 					type="button"
 					onClick={onClose}
-					aria-label="Close explorer"
-					className="ml-auto rounded-sm p-1 text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200"
+					label="Close explorer"
 				>
 					<X size={16} />
-				</button>
+				</IconButton>
 			</div>
 			{children}
 

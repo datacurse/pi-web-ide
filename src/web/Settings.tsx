@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { X } from "@phosphor-icons/react";
+import { Button, IconButton, inputClass, OptionRow, Section } from "./ui.js";
 import { THEMES, TOOL_MODES, type ThemeId, type ToolMode } from "./prefs.js";
 
 /** What GET/PUT /api/personality answer with. */
@@ -262,20 +263,13 @@ export function Settings({
 				<h2 id="settings-title" className="text-title font-semibold tracking-tight">
 					Settings
 				</h2>
-				<button
-					onClick={onClose}
-					aria-label="Close settings"
-					className="size-8 rounded-sm text-neutral-300 transition-colors duration-150 ease-out hover:bg-neutral-800 hover:text-neutral-50 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 motion-reduce:transition-none"
-				>
+				<IconButton onClick={onClose} label="Close settings">
 					<X size={13} />
-				</button>
+				</IconButton>
 			</div>
 
 			<div className="p-3">
-				<fieldset className="m-0 mb-4 border-0 p-0">
-					<legend className="mb-2 text-caption tracking-wide text-neutral-500 uppercase">
-						Usage remaining
-					</legend>
+				<Section title="Usage remaining" className="mb-4">
 					{usageError ? (
 						<p className="px-2 text-meta text-red-400">{usageError}</p>
 					) : !limits ? (
@@ -311,25 +305,17 @@ export function Settings({
 							})}
 						</div>
 					)}
-				</fieldset>
+				</Section>
 
 				{/*
 				  Real radios, visually hidden: the group gets arrow-key
 				  navigation, roving focus and the right screen reader
 				  announcement without a line of JavaScript.
 				*/}
-				<fieldset className="m-0 border-0 p-0">
-					<legend className="mb-2 text-caption tracking-wide text-neutral-500 uppercase">
-						Theme
-					</legend>
+				<Section title="Theme">
 					<div className="flex flex-col gap-0.5">
 						{THEMES.map((t) => (
-							<label
-								key={t.id}
-								className={`flex cursor-pointer items-center gap-3 rounded-sm px-2 py-2 text-ui transition-colors duration-150 ease-out has-[:focus-visible]:outline-2 has-[:focus-visible]:-outline-offset-2 has-[:focus-visible]:outline-neutral-400 motion-reduce:transition-none ${
-									t.id === theme ? "bg-neutral-800" : "hover:bg-neutral-900"
-								}`}
-							>
+							<OptionRow key={t.id} selected={t.id === theme}>
 								<input
 									type="radio"
 									name="theme"
@@ -346,19 +332,16 @@ export function Settings({
 								>
 									{"\u2713"}
 								</span>
-							</label>
+							</OptionRow>
 						))}
 					</div>
-				</fieldset>
+				</Section>
 
-				<fieldset className="m-0 mt-4 border-0 p-0">
-					<legend className="mb-2 text-caption tracking-wide text-neutral-500 uppercase">
-						Transcript
-					</legend>
+				<Section title="Transcript" className="mt-4">
 					{/* A real checkbox, visible rather than sr-only: unlike the
 					    theme rows there is no swatch to carry the state, so the
 					    box itself is the affordance. */}
-					<label className="flex cursor-pointer items-center gap-3 rounded-sm px-2 py-2 text-ui transition-colors duration-150 ease-out hover:bg-neutral-900 has-[:focus-visible]:outline-2 has-[:focus-visible]:-outline-offset-2 has-[:focus-visible]:outline-neutral-400 motion-reduce:transition-none">
+					<OptionRow>
 						<input
 							type="checkbox"
 							checked={showThinking}
@@ -371,7 +354,7 @@ export function Settings({
 								Reasoning blocks in assistant messages, as they stream and in history.
 							</span>
 						</span>
-					</label>
+					</OptionRow>
 
 					{/* Radios, not a second checkbox: "collapsed" and "hidden" are
 					    different answers to one question, and a group of two
@@ -381,34 +364,26 @@ export function Settings({
 							Tool calls
 						</div>
 						{TOOL_MODES.map((m) => (
-							<label
-								key={m.id}
-								className={`flex cursor-pointer items-start gap-3 rounded-sm px-2 py-1.5 text-ui transition-colors duration-150 ease-out has-[:focus-visible]:outline-2 has-[:focus-visible]:-outline-offset-2 has-[:focus-visible]:outline-neutral-400 motion-reduce:transition-none ${
-									m.id === toolMode ? "bg-neutral-800" : "hover:bg-neutral-900"
-								}`}
-							>
+							<OptionRow key={m.id} selected={m.id === toolMode}>
 								<input
 									type="radio"
 									name="toolMode"
 									value={m.id}
 									checked={m.id === toolMode}
 									onChange={() => onToolMode(m.id)}
-									className="mt-1 size-3.5 shrink-0 accent-amber-400"
+									className="size-3.5 shrink-0 accent-amber-400"
 								/>
 								<span className="flex-1">
 									{m.label}
 									<span className="block text-meta text-neutral-500">{m.hint}</span>
 								</span>
-							</label>
+							</OptionRow>
 						))}
 					</div>
-				</fieldset>
+				</Section>
 
-				<fieldset className="m-0 mt-4 border-0 p-0">
-					<legend className="mb-2 text-caption tracking-wide text-neutral-500 uppercase">
-						Sessions
-					</legend>
-					<label className="flex cursor-pointer items-center gap-3 rounded-sm px-2 py-2 text-ui transition-colors duration-150 ease-out hover:bg-neutral-900 has-[:focus-visible]:outline-2 has-[:focus-visible]:-outline-offset-2 has-[:focus-visible]:outline-neutral-400 motion-reduce:transition-none">
+				<Section title="Sessions" className="mt-4">
+					<OptionRow>
 						<input
 							type="checkbox"
 							checked={shortNames}
@@ -423,18 +398,11 @@ export function Settings({
 								session list always wins.
 							</span>
 						</span>
-					</label>
-				</fieldset>
+					</OptionRow>
+				</Section>
 
-				<fieldset className="m-0 mt-4 border-0 p-0">
-					<legend className="mb-2 text-caption tracking-wide text-neutral-500 uppercase">
-						Notifications
-					</legend>
-					<label
-						className={`flex items-center gap-3 rounded-sm px-2 py-2 text-ui transition-colors duration-150 ease-out has-[:focus-visible]:outline-2 has-[:focus-visible]:-outline-offset-2 has-[:focus-visible]:outline-neutral-400 motion-reduce:transition-none ${
-							notifyBlocked ? "opacity-60" : "cursor-pointer hover:bg-neutral-900"
-						}`}
-					>
+				<Section title="Notifications" className="mt-4">
+					<OptionRow disabled={notifyBlocked}>
 						<input
 							type="checkbox"
 							checked={notify}
@@ -446,8 +414,8 @@ export function Settings({
 							Notify when a run finishes
 							<span className="block text-meta text-neutral-500">{notifyHint}</span>
 						</span>
-					</label>
-				</fieldset>
+					</OptionRow>
+				</Section>
 
 				{/*
 				  The one control here that is not browser-local: it edits this
@@ -457,10 +425,7 @@ export function Settings({
 				  the file is handed to each child as `--append-system-prompt` at
 				  spawn, so a running session keeps the prompt it started with.
 				*/}
-				<fieldset className="m-0 mt-4 border-0 p-0">
-					<legend className="mb-2 text-caption tracking-wide text-neutral-500 uppercase">
-						Personality
-					</legend>
+				<Section title="Personality" className="mt-4">
 					<label className="block px-2">
 						<span className="text-ui text-neutral-300">
 							Appended to every new session's system prompt
@@ -489,17 +454,18 @@ export function Settings({
 									? "Unavailable."
 									: "Empty means nothing is appended."
 							}
-							className="mt-2 block w-full resize-y rounded-sm border border-neutral-800 bg-neutral-900 p-2 font-mono text-meta text-neutral-200 outline-none focus-visible:border-neutral-600"
+							className={`mt-2 block w-full resize-y font-mono ${inputClass.sm}`}
 						/>
 					</label>
 					<div className="mt-2 flex items-center gap-2 px-2">
-						<button
+						<Button
+							variant="subtle"
+							size="sm"
 							onClick={() => void savePersonality()}
 							disabled={!dirty || saveState === "saving"}
-							className="rounded-sm bg-neutral-800 px-2 py-1 text-meta transition-colors duration-150 ease-out hover:bg-neutral-700 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 disabled:opacity-50 disabled:hover:bg-neutral-800 motion-reduce:transition-none"
 						>
 							{saveState === "saving" ? "Saving…" : "Save"}
-						</button>
+						</Button>
 						<span className="min-w-0 flex-1 text-caption text-neutral-500">
 							{saveError ? (
 								<span className="text-red-400">{saveError}</span>
@@ -512,7 +478,7 @@ export function Settings({
 							)}
 						</span>
 					</div>
-					<label className="mt-2 flex cursor-pointer items-center gap-3 rounded-sm px-2 py-2 text-ui transition-colors duration-150 ease-out hover:bg-neutral-900 has-[:focus-visible]:outline-2 has-[:focus-visible]:-outline-offset-2 has-[:focus-visible]:outline-neutral-400 motion-reduce:transition-none">
+					<OptionRow className="mt-2">
 						<input
 							type="checkbox"
 							checked={personality?.remind ?? false}
@@ -528,8 +494,8 @@ export function Settings({
 								tokens per request. Applies to sessions started from now on.
 							</span>
 						</span>
-					</label>
-				</fieldset>
+					</OptionRow>
+				</Section>
 			</div>
 		</dialog>
 	);

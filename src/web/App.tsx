@@ -69,6 +69,7 @@ import {
 	type ToolMode,
 } from "./prefs.js";
 import { pulseFavicon } from "./favicon.js";
+import { IconButton } from "./ui.js";
 
 const emptyPartial = (): PiPartial => ({ text: "", thinking: "", tools: [] });
 
@@ -105,13 +106,14 @@ function PanelEmpty({
 		>
 			<div className="flex items-center gap-2 border-b border-neutral-800 px-3 py-2">
 				<span className="text-ui text-neutral-300">{title}</span>
-				<button
+				<IconButton
+					size="sm"
+					className="ml-auto"
 					onClick={onClose}
-					aria-label={`Close ${title.toLowerCase()}`}
-					className="ml-auto rounded-sm p-1 text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200"
+					label={`Close ${title.toLowerCase()}`}
 				>
 					<X size={16} />
-				</button>
+				</IconButton>
 			</div>
 			<p className="p-4 text-ui text-neutral-500">{children}</p>
 		</section>

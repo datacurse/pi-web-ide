@@ -142,7 +142,11 @@ export function Terminal({
 			term = new XTermCtor({
 				fontFamily:
 					'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace',
-				fontSize: 13,
+				// The `text-body` token: terminal output is content. xterm wants
+				// a number, so it is read from the CSS rather than duplicated.
+				fontSize:
+					parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--text-body")) ||
+					14,
 				// Enough that a reload is not the only way to see what scrolled
 				// past, and small enough that it is not a memory decision.
 				scrollback: 5000,

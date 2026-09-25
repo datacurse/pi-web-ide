@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { FolderPlus, X } from "@phosphor-icons/react";
 import { DirectoryPicker } from "./DirectoryPicker.js";
+import { Button } from "./ui.js";
 
 /**
  * The project list this pwi reports: every directory, plus the cwd it was
@@ -82,22 +83,25 @@ export function ProjectPicker({
 				))}
 			</select>
 			{/* A folder icon, not a bare `+`: `+` elsewhere makes a session. */}
-			<button
+			<Button
+				variant="subtle"
+				size="sm"
 				onClick={() => setPickerOpen(true)}
 				disabled={!!projects.error}
 				aria-label="Add project directory"
 				title="Add project directory"
-				className="shrink-0 rounded-sm bg-neutral-800 px-2 py-1 text-meta transition-colors duration-150 ease-out hover:bg-neutral-700 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 disabled:opacity-40 motion-reduce:transition-none"
 			>
 				<FolderPlus size={13} />
-			</button>
+			</Button>
 			{/*
 			  Not offered for the seed: the server re-adds it on every read, so the
 			  button would appear to do nothing. Confirmed, and the wording says
 			  what is NOT happening, since "remove project" usually means the files.
 			*/}
 			{project && !projects.error && project !== projects.seed && (
-				<button
+				<Button
+					variant="subtle"
+					size="sm"
 					onClick={() => {
 						if (
 							confirm(
@@ -109,10 +113,9 @@ export function ProjectPicker({
 					}}
 					aria-label={`Remove ${project} from the list`}
 					title="Remove this project from the list (keeps sessions on disk)"
-					className="shrink-0 rounded-sm bg-neutral-800 px-2 py-1 text-meta text-neutral-400 transition-colors duration-150 ease-out hover:bg-neutral-700 hover:text-neutral-100 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 motion-reduce:transition-none"
 				>
 					<X size={13} />
-				</button>
+				</Button>
 			)}
 			{/* `open` drives showModal(), so an unopened picker never fetches. */}
 			<DirectoryPicker

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { CaretDown, Check, GitBranch, Sparkle } from "@phosphor-icons/react";
 import { readGitAutoName, writeGitAutoName } from "./prefs.js";
+import { Button, MenuItem, inputClass } from "./ui.js";
 
 /** What `GET /api/git` answers with. See src/server/git.ts. */
 interface GitState {
@@ -281,7 +282,7 @@ export function GitActions({
 						const blocked =
 							(action.pr && !state.gh) || (action.push && !state.remote && !action.branch);
 						return (
-							<button
+							<MenuItem
 								key={action.label}
 								onClick={() => void start(action)}
 								disabled={blocked}
@@ -292,10 +293,9 @@ export function GitActions({
 											: "This repository has no remote"
 										: undefined
 								}
-								className="block w-full px-3 py-1.5 text-left text-ui text-neutral-200 transition-colors duration-150 ease-out hover:bg-neutral-800 disabled:text-neutral-600 disabled:hover:bg-transparent motion-reduce:transition-none"
 							>
 								{action.label}
-							</button>
+							</MenuItem>
 						);
 					})}
 					{/*
@@ -304,7 +304,7 @@ export function GitActions({
 					 * flipped: the point of clicking it is to see it change.
 					 */}
 					<div className="my-1 border-t border-neutral-800" />
-					<button
+					<MenuItem
 						onClick={() => {
 							const next = !autoName;
 							setAutoName(next);
@@ -313,13 +313,14 @@ export function GitActions({
 						role="menuitemcheckbox"
 						aria-checked={autoName}
 						title="Write the commit message with a model that reads the diff, and stop asking"
-						className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-ui text-neutral-300 transition-colors duration-150 ease-out hover:bg-neutral-800 motion-reduce:transition-none"
 					>
-						<span className="flex w-3.5 shrink-0 justify-center text-neutral-400">
-							{autoName && <Check size={12} weight="bold" />}
+						<span className="flex items-center gap-2">
+							<span className="flex w-3.5 shrink-0 justify-center text-neutral-400">
+								{autoName && <Check size={12} weight="bold" />}
+							</span>
+							Auto-name commits
 						</span>
-						Auto-name commits
-					</button>
+					</MenuItem>
 				</div>
 			)}
 
@@ -459,7 +460,7 @@ function GitDialog({
 							value={branch}
 							onChange={(e) => onBranch(e.target.value)}
 							spellCheck={false}
-							className="w-full rounded-sm border border-neutral-800 bg-neutral-950 px-3 py-2 font-mono text-ui text-neutral-100 outline-none focus:border-neutral-600"
+							className={`w-full font-mono ${inputClass.md}`}
 						/>
 					</label>
 				)}
@@ -483,7 +484,7 @@ function GitDialog({
 									onRun();
 								}
 							}}
-							className="w-full resize-none rounded-sm border border-neutral-800 bg-neutral-950 px-3 py-2 text-ui text-neutral-100 outline-none focus:border-neutral-600 placeholder:text-neutral-600"
+							className={`w-full resize-none ${inputClass.md}`}
 						/>
 					</label>
 				)}
@@ -496,31 +497,31 @@ function GitDialog({
 					{/* `mr-auto`: an action ON the message belongs beside the box it
 					    fills, not next to the button that commits it. */}
 					{action.commit && (
-						<button
+						<Button
+							variant="ghost"
+							className="mr-auto"
 							type="button"
 							onClick={onAutoName}
 							disabled={naming || running}
 							title="Write the message with a model that reads the diff"
-							className="mr-auto flex items-center gap-1.5 rounded-sm px-3 py-1.5 text-ui text-neutral-400 transition-colors duration-150 ease-out hover:bg-neutral-800 hover:text-neutral-100 disabled:text-neutral-600 disabled:hover:bg-transparent motion-reduce:transition-none"
 						>
 							<Sparkle size={13} />
 							{naming ? "Naming…" : "Auto-name"}
-						</button>
+						</Button>
 					)}
-					<button
+					<Button
 						type="button"
 						onClick={onCancel}
-						className="rounded-sm px-3 py-1.5 text-ui text-neutral-400 hover:bg-neutral-800 hover:text-neutral-100"
 					>
 						Cancel
-					</button>
-					<button
+					</Button>
+					<Button
+						variant="primary"
 						type="submit"
 						disabled={running || naming || (action.commit && !message.trim() && !state.suggestion)}
-						className="rounded-sm bg-neutral-100 px-4 py-1.5 text-ui font-medium text-neutral-900 transition-colors duration-150 ease-out hover:bg-neutral-200 disabled:bg-neutral-700 disabled:text-neutral-400 motion-reduce:transition-none"
 					>
 						{running ? "Working…" : action.label}
-					</button>
+					</Button>
 				</div>
 			</form>
 		</div>

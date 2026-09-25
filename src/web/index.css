@@ -351,6 +351,9 @@ body,
  */
 body {
 	background: var(--color-neutral-950);
+	/* Unclassed text is chrome, so it defaults to the chrome size, not 16px. */
+	font-size: var(--text-ui);
+	line-height: var(--text-ui--line-height);
 }
 
 /*

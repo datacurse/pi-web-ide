@@ -49,9 +49,31 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
 
 - Session (AI) tabs lead with an amber bold `π` (the greeting-screen mark); file tabs use `FileGlyph`, diff tabs `GitDiff`.
 
+## Primitives (`src/web/ui.tsx`)
+
+New UI uses these; convert raw markup when you touch it. Tune styles in
+`ui.tsx`, never at call sites. `className` is for layout only (margin, width, flex).
+
+| Primitive       | Props                                                       | Use |
+| --------------- | ----------------------------------------------------------- | --- |
+| `Button`        | `variant`: primary / secondary (default) / subtle / ghost; `size`: sm (12px) / md (13px) | Text buttons. One `primary` per dialog or panel. Cancel is `secondary`. |
+| `IconButton`    | `label` (required; aria-label + tooltip), `variant`: ghost / outline / solid, `size`: sm 24px / md 28px, `round` | Icon-only buttons. `round` only in the composer toolbar. |
+| `MenuItem`      | button props                                                | Rows in dropdown and context menus. |
+| `Section`       | `title`                                                     | Settings group (fieldset + uppercase legend). |
+| `OptionRow`     | `selected`, `disabled`                                      | Clickable row wrapping a radio or checkbox. |
+| `sectionLabel`  | class string                                                | Uppercase group heading on any element. |
+| `inputClass.sm/md` | class string                                             | Inputs and textareas (a string so refs pass through). |
+
+- Body text defaults to `text-ui`; set a size only when it differs.
+- A state color on an icon goes on the icon (`<Star className="text-amber-400">`), not on the button.
+- `check-ui.sh` also fails on hand-rolled copies of `Button` primary/subtle,
+  `inputClass` and `sectionLabel`. Add a rule there when a new primitive lands.
+- xterm reads `--text-body` at mount (Terminal.tsx); it cannot take a class.
+- Buttons default to `type="button"`; pass `type="submit"` explicitly.
+
 ## Open questions
 
-- Control heights (target 24/28/32px) are not tokenized yet.
-- Shared primitives (`Button`, `IconButton`, `Badge`, `Input`, `SectionLabel`,
-  `PanelHeader`, `MenuItem`) do not exist yet. Extract one when a pattern
-  repeats 3+ times; put them in `src/web/ui/`.
+- Not yet converted: Review/DiffView toolbar actions (duplicated between the
+  two files), Terminal tab strip, DirectoryPicker breadcrumbs,
+  SourceControl group headers, Packages tab buttons.
+- Candidates once they repeat: `PanelHeader`, `Badge`, `Dialog`.

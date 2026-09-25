@@ -31,6 +31,7 @@ import type { EditorView } from "@codemirror/view";
 import type { Hunk, HunkState } from "../shared/hunks.js";
 import { fitHunk } from "../shared/hunks.js";
 import { darkPlus, languageFor, loadCodeMirror } from "./codemirror.js";
+import { IconButton } from "./ui.js";
 
 /** `/home/me/proj/src/web/App.tsx` → `src/web/App.tsx` when it is under `cwd`. */
 function shortPath(path: string, cwd: string): string {
@@ -286,13 +287,14 @@ export function Review({
 				<span className="text-ui text-neutral-300">
 					Changes{pending > 0 && <span className="text-amber-400"> · {pending} to review</span>}
 				</span>
-				<button
+				<IconButton
+					size="sm"
+					className="ml-auto"
 					onClick={onClose}
-					aria-label="Close review"
-					className="ml-auto rounded-sm p-1 text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200"
+					label="Close review"
 				>
 					<X size={16} />
-				</button>
+				</IconButton>
 			</div>
 
 			{error && (
