@@ -1027,7 +1027,7 @@ export function Chat({
 	onRestart: () => void;
 }) {
 	const [text, setText] = useState("");
-	// Sticky until switched off: a run of questions is the usual case.
+	// Sticky until switched off or the session changes: a run of questions is the usual case.
 	const [askOnly, setAskOnly] = useState(false);
 	const [images, setImages] = useState<PiImage[]>([]);
 	const [attachError, setAttachError] = useState<string | null>(null);
@@ -1090,6 +1090,7 @@ export function Chat({
 		setImages(draft.images);
 		staged.current = draft.images;
 		setAttachError(null);
+		setAskOnly(false);
 	}, [draftKey]);
 
 	/*
@@ -1838,9 +1839,10 @@ export function Chat({
 										onClick={() => setAskOnly((a) => !a)}
 										label={askOnly ? "Ask only: on (no code changes)" : "Ask only: off"}
 										aria-pressed={askOnly}
+										variant={askOnly ? "on" : "ghost"}
 										round
 									>
-										<QuestionMark size={14} className={askOnly ? "text-amber-400" : ""} />
+										<QuestionMark size={14} weight={askOnly ? "bold" : "regular"} />
 									</IconButton>
 									<IconButton
 										onClick={submit}

@@ -75,7 +75,8 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
 - Only Send is a filled disc (`solid`); it greys out while there is nothing to send.
   Attach `+`, `?` and the star are `ghost` round `IconButton`s. Stop stays `outline`.
 - The `?` button (directly left of Send, so Stop never shifts it) toggles "Ask only":
-  a 14px `QuestionMark`, `aria-pressed`, amber icon when on. It stays on until switched off.
+  a 14px `QuestionMark`, `aria-pressed`. When on it uses the `on` variant (amber disc, dark
+  bold icon) so the state reads at a glance. It stays on until switched off.
 - One model select, providers as `<optgroup>`s, plus the thinking select. Pills are
   sans `text-meta` with `field-sizing-content` so each fits its current option.
   Their popup is styled like a menu via `.pill-select` (index.css, customizable

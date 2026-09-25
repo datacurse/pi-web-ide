@@ -465,6 +465,7 @@ body {
 .chat-prose {
 	font-size: var(--prose-size);
 	line-height: 1.6;
+	overflow-wrap: break-word;
 }
 
 /*

@@ -59,6 +59,8 @@ const ICON_VARIANT = {
 	/* The send button: inverted, the strongest mark in the composer. Disabled
 	   drops to a flat grey disc so it lights up only when there is a message. */
 	solid: "bg-neutral-100 text-neutral-900 enabled:hover:bg-neutral-200 disabled:bg-neutral-800 disabled:text-neutral-500",
+	/* A toggle that is on (aria-pressed): amber disc, dark icon. */
+	on: "bg-amber-400 text-neutral-950 hover:bg-amber-300",
 };
 const ICON_SIZE = { sm: "size-control-sm", md: "size-control-md" };
 

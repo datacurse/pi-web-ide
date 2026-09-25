@@ -1167,7 +1167,11 @@ if (process.env.PWI_TAKEOVER !== "0") {
 	}
 }
 
-const adopted = await registry.adopt();
+// Adoption waits on children whose watchers and polls are unref'd, and the
+// listener does not exist yet: without a ref'd handle the loop drains and
+// Node exits 13 on the unsettled top-level await.
+const keepAlive = setInterval(() => {}, 60_000);
+const adopted = await registry.adopt().finally(() => clearInterval(keepAlive));
 if (adopted) console.log(`[pwi] adopted ${adopted} running pi session(s)`);
 
 server.listen(PORT, "127.0.0.1", () => {
