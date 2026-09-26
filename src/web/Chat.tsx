@@ -2,6 +2,7 @@ import {
 	createContext,
 	useContext,
 	useEffect,
+	useLayoutEffect,
 	useMemo,
 	useRef,
 	useState,
@@ -12,6 +13,7 @@ import {
 	ArrowUp,
 	CaretDown,
 	CaretRight,
+	CaretUp,
 	Check,
 	Plus,
 	QuestionMark,
@@ -437,7 +439,7 @@ function Block({
 		// No `chat-measure` on the user branch: the pill IS the column, and a
 		// second centred box inside it would indent the text off its own edge.
 		return isUser ? (
-			<div className="whitespace-pre-wrap">{block.text}</div>
+			<UserText text={block.text} />
 		) : (
 			<MarkdownText text={block.text} />
 		);
@@ -463,6 +465,44 @@ function Block({
 			args={block.args}
 			autoOpen={autoOpenTools}
 		/>
+	);
+}
+
+/**
+ * A user message clamped to 3 lines so a long prompt does not bury the
+ * transcript. The toggle shows only when the clamp actually cuts text.
+ */
+function UserText({ text }: { text: string }) {
+	const ref = useRef<HTMLDivElement>(null);
+	const [open, setOpen] = useState(false);
+	const [overflows, setOverflows] = useState(false);
+	useLayoutEffect(() => {
+		const el = ref.current;
+		if (!el || open) return;
+		const check = () => setOverflows(el.scrollHeight > el.clientHeight + 1);
+		check();
+		const ro = new ResizeObserver(check);
+		ro.observe(el);
+		return () => ro.disconnect();
+	}, [text, open]);
+	return (
+		<>
+			<div ref={ref} className={`whitespace-pre-wrap ${open ? "" : "line-clamp-3"}`}>
+				{text}
+			</div>
+			{overflows && (
+				<Button
+					variant="ghost"
+					size="sm"
+					className="mt-1 -ml-2"
+					aria-expanded={open}
+					onClick={() => setOpen((o) => !o)}
+				>
+					{open ? <CaretUp size={12} /> : <CaretDown size={12} />}
+					{open ? "Show less" : "Show more"}
+				</Button>
+			)}
+		</>
 	);
 }
 

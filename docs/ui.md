@@ -97,6 +97,11 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
 
 - Session (AI) tabs lead with a bold `π` (the greeting-screen mark) that is also the live signal: `neutral-500` when idle, amber + `animate-pulse` while streaming. No separate dot. File tabs use `FileGlyph`, diff tabs `GitDiff`.
 
+## User message bubble
+
+- Text is clamped to 3 lines (`line-clamp-3`, ellipsis). When it overflows, a ghost
+  `Button size="sm"` below it toggles `Show more` / `Show less` with a 12px caret.
+
 ## Explorer
 
 - The header has a refresh `IconButton` (`ArrowClockwise`, `sm`) left of the close ✕.
