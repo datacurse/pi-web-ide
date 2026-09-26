@@ -218,3 +218,31 @@ export function moveTab(files: string[], from: number, to: number): string[] {
 	next.splice(to, 0, moved);
 	return next;
 }
+
+/**
+ * The tabs after a file or folder at `from` was renamed to `to`, or deleted
+ * when `to` is null. File tabs at or under `from` follow it or close; diff
+ * tabs are left alone, because they show git's history of a path, not a file.
+ */
+export function afterPathChange<T extends TabState>(tabs: T, from: string, to: string | null): T {
+	const hit = (e: string) => {
+		if (!isFileTab(e)) return false;
+		const p = tabPath(e);
+		return p === from || p.startsWith(`${from}/`);
+	};
+	const moved = (e: string) => fileTab(`${to}${tabPath(e).slice(from.length)}`);
+	const fix = (group: TabGroup): TabGroup => {
+		if (to !== null) {
+			return {
+				files: group.files.map((e) => (hit(e) ? moved(e) : e)),
+				active: group.active && hit(group.active) ? moved(group.active) : group.active,
+			};
+		}
+		// One at a time through withoutTab, so the selection lands on a neighbour.
+		let g = group;
+		for (const e of group.files) if (hit(e)) g = withoutTab(g, e) ?? g;
+		return g;
+	};
+	const next = withGroup(tabs, "left", fix(groupOf(tabs, "left")));
+	return tabs.right ? withGroup(next, "right", fix(tabs.right)) : next;
+}

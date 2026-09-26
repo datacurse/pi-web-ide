@@ -1055,6 +1055,7 @@ export function Chat({
 	onCommandMenu,
 	onCompact,
 	onRestart,
+	draftRev = 0,
 }: {
 	snapshot: Snapshot | null;
 	partial: PiPartial;
@@ -1087,6 +1088,11 @@ export function Chat({
 	onCompact: () => void;
 	/** Replace this session's pi child so it sees newly installed packages. */
 	onRestart: () => void;
+	/**
+	 * Bumped when App wrote this session's draft (Explorer's "Add to Chat"):
+	 * re-read it and put the caret at its end.
+	 */
+	draftRev?: number;
 }) {
 	const [text, setText] = useState("");
 	// Sticky until switched off or the session changes: a run of questions is the usual case.
@@ -1145,15 +1151,29 @@ export function Chat({
 	 * a tab switch swaps composers and a reload lands on what was typed.
 	 */
 	const draftKey = snapshot?.id;
+	const seenRev = useRef(draftRev);
+	const seenKey = useRef(draftKey);
 	useEffect(() => {
 		if (!draftKey) return;
 		const draft = readDraft(draftKey);
 		setText(draft.text);
+		const sameSession = seenKey.current === draftKey;
+		seenKey.current = draftKey;
+		// An insert, not a session switch: the rest of the composer stays.
+		if (sameSession && draftRev !== seenRev.current) {
+			seenRev.current = draftRev;
+			if (draftRev === 0) return;
+			const el = composer.current;
+			el?.focus();
+			el?.setSelectionRange(draft.text.length, draft.text.length);
+			return;
+		}
+		seenRev.current = draftRev;
 		setImages(draft.images);
 		staged.current = draft.images;
 		setAttachError(null);
 		setAskOnly(false);
-	}, [draftKey]);
+	}, [draftKey, draftRev]);
 
 	/*
 	 * The picker's contents, derived from the text rather than held in state:

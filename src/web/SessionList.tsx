@@ -1,13 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { CaretUpDown, Plus, PushPin, X } from "@phosphor-icons/react";
 import type { PiSessionInfo } from "../shared/types.js";
 import { SESSION_SORTS, type SessionSort } from "./prefs.js";
 import { sessionLabel, shortName } from "./sessionName.js";
-import { Button, IconButton, MenuItem, inputClass, sectionLabel } from "./ui.js";
-
-/** The menu's own box, needed before it renders so it can be kept on screen. */
-const MENU_WIDTH_PX = 220;
-const MENU_HEIGHT_PX = 148;
+import { ATTENTION_UI, attentionRank, type Attention } from "./attention.js";
+import { Button, ContextMenu, IconButton, MenuItem, inputClass, sectionLabel } from "./ui.js";
 
 /** The timestamp a row shows, which is always the one it is sorted by. */
 function stamp(s: PiSessionInfo, sort: SessionSort): string {
@@ -45,6 +42,7 @@ const dateFmt = new Intl.DateTimeFormat(undefined, {
  */
 export function SessionList({
 	sessions,
+	attention,
 	listError,
 	activeFile,
 	openFiles,
@@ -61,6 +59,8 @@ export function SessionList({
 	onNew,
 }: {
 	sessions: PiSessionInfo[];
+	/** Each session's working / ready / needs state, keyed by file. */
+	attention: Map<string, Attention>;
 	/** Why the listing failed, when it did; shown instead of "No sessions yet". */
 	listError: string | null;
 	activeFile: string | undefined;
@@ -93,15 +93,17 @@ export function SessionList({
 	 * request. Descending in both modes — a session list is read newest-first
 	 * in either question it answers.
 	 */
-	// Pinned sessions first, each group in the chosen order.
+	// Pinned sessions first, then the ones waiting on you (questions before
+	// replies), each group in the chosen order.
 	const ordered = useMemo(
 		() =>
 			[...sessions].sort(
 				(a, b) =>
 					Number(pins.includes(b.path)) - Number(pins.includes(a.path)) ||
+					attentionRank(attention.get(a.path) ?? null) - attentionRank(attention.get(b.path) ?? null) ||
 					stamp(b, sort).localeCompare(stamp(a, sort)),
 			),
-		[sessions, sort, pins],
+		[sessions, sort, pins, attention],
 	);
 
 	/*
@@ -120,26 +122,6 @@ export function SessionList({
 	const [menu, setMenu] = useState<{ path: string; x: number; y: number } | null>(null);
 	/** The row waiting on a generated name, so it can say so instead of looking idle. */
 	const [naming, setNaming] = useState<string | null>(null);
-
-	useEffect(() => {
-		if (!menu) return;
-		const close = () => setMenu(null);
-		const onKey = (e: KeyboardEvent) => {
-			if (e.key === "Escape") close();
-		};
-		// `capture` on scroll: a scroll inside the list does not bubble, and an
-		// anchored menu left behind by one is worse than no menu.
-		window.addEventListener("pointerdown", close);
-		window.addEventListener("scroll", close, true);
-		window.addEventListener("resize", close);
-		window.addEventListener("keydown", onKey);
-		return () => {
-			window.removeEventListener("pointerdown", close);
-			window.removeEventListener("scroll", close, true);
-			window.removeEventListener("resize", close);
-			window.removeEventListener("keydown", onKey);
-		};
-	}, [menu]);
 
 	const menuSession = menu ? sessions.find((s) => s.path === menu.path) : undefined;
 
@@ -229,6 +211,7 @@ export function SessionList({
 					{ordered.map((s) => {
 						const isOpen = openFiles.includes(s.path);
 						const label = sessionLabel(s, shortNames);
+						const state = attention.get(s.path) ?? null;
 
 						/*
 						 * Renaming replaces the row rather than opening a dialog: the
@@ -305,12 +288,13 @@ export function SessionList({
 								}`}
 							>
 								<div className="flex items-center gap-1.5 truncate text-ui text-neutral-200">
-									{/* Live indicator for background work — visible even when this
-									    session isn't the one currently attached. */}
-									{s.isStreaming && (
+									{/* The session's state, the same colors as its tab π: amber
+									    pulsing while it works, steady amber for a new reply, red
+									    for a question. */}
+									{state && (
 										<span
-											className="size-1.5 shrink-0 animate-pulse rounded-full bg-amber-400"
-											title="Working…"
+											className={`size-1.5 shrink-0 rounded-full ${ATTENTION_UI[state].dot}`}
+											title={ATTENTION_UI[state].label}
 										/>
 									)}
 									{pins.includes(s.path) && (
@@ -343,27 +327,12 @@ export function SessionList({
 
 			</aside>
 
-			{/*
-			  The row menu. `fixed` and positioned from the pointer, outside the
-			  <aside> so the panel's own scrolling and overflow cannot clip it.
-			  Closed by the effect above before any action runs, so a click never
-			  leaves a stale menu over the list.
-			*/}
 			{menuSession && menu && (
-				<div
-					role="menu"
-					aria-label={`Session ${sessionLabel(menuSession, shortNames)}`}
-					// The listener that dismisses this is on `pointerdown` at the
-					// window, so the menu has to keep its own clicks to itself.
-					onPointerDown={(e) => e.stopPropagation()}
-					style={{
-						// Clamped so a right-click near the bottom or right edge does
-						// not open a menu half off screen.
-						left: Math.min(menu.x, window.innerWidth - MENU_WIDTH_PX - 8),
-						top: Math.min(menu.y, window.innerHeight - MENU_HEIGHT_PX - 8),
-						width: MENU_WIDTH_PX,
-					}}
-					className="fixed z-40 overflow-hidden rounded-md border border-neutral-700 bg-neutral-900 py-1 shadow-2xl"
+				<ContextMenu
+					x={menu.x}
+					y={menu.y}
+					label={`Session ${sessionLabel(menuSession, shortNames)}`}
+					onClose={() => setMenu(null)}
 				>
 					<MenuItem
 						role="menuitem"
@@ -414,7 +383,7 @@ export function SessionList({
 							Asks pi to title the conversation
 						</span>
 					</MenuItem>
-				</div>
+				</ContextMenu>
 			)}
 
 		</>

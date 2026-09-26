@@ -676,6 +676,13 @@ export class Registry {
 		return ids;
 	}
 
+	/** IDs of sessions blocked on a question, for the list's "needs you" state. */
+	askingIds(): Set<string> {
+		const ids = new Set<string>();
+		for (const [id, entry] of this.entries) if (entry.session.ask !== null) ids.add(id);
+		return ids;
+	}
+
 	private sweep(): void {
 		const now = Date.now();
 		for (const [id, entry] of this.entries) {

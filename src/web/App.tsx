@@ -22,8 +22,10 @@ import { SourceControl } from "./SourceControl.js";
 import { GIT_CHANGED } from "./GitActions.js";
 import { DiffView } from "./DiffView.js";
 import { Explorer } from "./Explorer.js";
+import { readDraft, writeDraftText } from "./drafts.js";
 import { FileEditor } from "./FileEditor.js";
 import {
+	afterPathChange,
 	collapse,
 	diffParts,
 	diffTab,
@@ -42,7 +44,7 @@ import {
 } from "./tabs.js";
 import type { Side, TabGroup } from "./tabs.js";
 import { SplitZone } from "./SplitZone.js";
-import { EMPTY_LAYOUT, reconcile, type TermLayout } from "./termLayout.js";
+import { EMPTY_LAYOUT, addTab, reconcile, type TermLayout } from "./termLayout.js";
 import { Settings } from "./Settings.js";
 import { Packages } from "./Packages.js";
 import {
@@ -50,6 +52,7 @@ import {
 	readNotify,
 	readPanel,
 	readPinnedSessions,
+	readSeenSessions,
 	readSessionSort,
 	readShortNames,
 	readShowThinking,
@@ -62,6 +65,7 @@ import {
 	writeNotify,
 	writePanel,
 	writePinnedSessions,
+	writeSeenSessions,
 	writeSessionSort,
 	writeShortNames,
 	writeShowThinking,
@@ -73,7 +77,8 @@ import {
 	type ThemeId,
 	type ToolMode,
 } from "./prefs.js";
-import { pulseFavicon } from "./favicon.js";
+import { setFavicon } from "./favicon.js";
+import { attentionOf, attentionTitle, nextWaiting, type Attention } from "./attention.js";
 import { Button, IconButton, PanelHeader } from "./ui.js";
 
 const emptyPartial = (): PiPartial => ({ text: "", thinking: "", tools: [] });
@@ -225,6 +230,7 @@ function EditorColumn({
 	group,
 	panelId,
 	sessions,
+	attention,
 	shortNames,
 	pinned,
 	dirtyFiles,
@@ -241,11 +247,13 @@ function EditorColumn({
 	hunks,
 	onHunksChanged,
 	chat,
+	focused,
 }: {
 	side: Side;
 	group: TabGroup;
 	panelId: string;
 	sessions: PiSessionInfo[];
+	attention: Map<string, Attention>;
 	shortNames: boolean;
 	pinned: string[];
 	dirtyFiles: Record<string, boolean>;
@@ -265,6 +273,8 @@ function EditorColumn({
 	onHunksChanged: () => void;
 	/** This column's chat, or null when the column holds no session. */
 	chat: React.ReactNode;
+	/** In a split, whether this is the column keys and new tabs go to. */
+	focused: boolean;
 }) {
 	const active = group.active;
 	const activeIndex = active ? group.files.indexOf(active) : -1;
@@ -290,6 +300,7 @@ function EditorColumn({
 			<SessionTabs
 				tabs={group.files}
 				sessions={sessions}
+				attention={attention}
 				active={active}
 				panelId={panelId}
 				label={side === "left" ? "Open sessions" : "Open sessions, second column"}
@@ -299,6 +310,7 @@ function EditorColumn({
 				onToggleList={onToggleList}
 				shortNames={shortNames}
 				pinned={pinned}
+				focused={focused}
 				dirtyFiles={dirtyFiles}
 				onReorder={onReorder}
 				// A tab dropped on THIS strip belongs in THIS column, at the slot it
@@ -1380,6 +1392,22 @@ export default function App() {
 		[project, scope],
 	);
 
+	/**
+	 * A new terminal tab whose shell starts in `dir`, then the terminal panel.
+	 * Keyed by the project like every other shell, so it survives a reload.
+	 */
+	const openTerminalAt = async (dir: string) => {
+		const r = await fetch("/api/terminals", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ cwd: project, dir }),
+		});
+		const body = (await r.json().catch(() => ({}))) as { id?: string; error?: string };
+		if (!r.ok || !body.id) throw new Error(body.error ?? `could not start a shell (${r.status})`);
+		changeTermLayout(addTab(termLayout, body.id));
+		showTerminal(true);
+	};
+
 	/** Clamped here, not at the call sites: every path in is a raw number. */
 	const resizePanel = useCallback((percent: number) => {
 		setPanelWidth(clampPanel(percent));
@@ -2026,11 +2054,15 @@ export default function App() {
 	 *
 	 * Without this, every diff opened from the sidebar lands on the left and
 	 * covers the chat — which is the one thing you are looking at a diff
-	 * BESIDE. A ref and not state: nothing renders differently because of it,
-	 * and a re-render per click on a tab would be a re-render of the strip
-	 * while you are using it.
+	 * BESIDE. A ref for synchronous reads; the state copy drives the split's
+	 * focus cue, and only re-renders when the column actually changes.
 	 */
 	const lastSide = useRef<Side>("left");
+	const [focusedSide, setFocusedSide] = useState<Side>("left");
+	const markSide = useCallback((side: Side) => {
+		lastSide.current = side;
+		setFocusedSide(side);
+	}, []);
 
 	/**
 	 * Open one file's diff in a tab, in the column last used.
@@ -2055,6 +2087,67 @@ export default function App() {
 	);
 
 	/**
+	 * Open a file in the second column, splitting if there is none.
+	 *
+	 * One tab per file still holds: a file already open on the left MOVES
+	 * right rather than getting a second editor over the same document.
+	 */
+	const openToSide = useCallback(
+		(path: string) => {
+			const entry = fileTab(path);
+			const current = tabsRef.current;
+			const side = sideOfTab(current, entry);
+			markSide("right");
+			if (side === "right") selectRight(entry);
+			else if (side === "left") moveToGroup(entry, "right");
+			else commitTabs(withGroup(current, "right", withTab(groupOf(current, "right"), entry)));
+		},
+		[commitTabs, selectRight, moveToGroup],
+	);
+
+	/**
+	 * The last "Add to Chat": which column's composer it went into, and a
+	 * counter that tells that Chat to re-read its draft and take focus.
+	 */
+	const [inserted, setInserted] = useState<{ side: Side; n: number }>({ side: "left", n: 0 });
+
+	/**
+	 * Which column's session "Add to Chat" writes to: a session SHOWING in the
+	 * last-used column, then one showing in the other, then any attached one.
+	 * Null when no session is open, which disables the action.
+	 */
+	const chatTarget = (): { side: Side; id: string; entry: string; showing: boolean } | null => {
+		const order: Side[] = lastSide.current === "right" ? ["right", "left"] : ["left", "right"];
+		const hits = order.map((side) => {
+			const snap = (side === "left" ? left : right).snapshot;
+			if (!snap) return null;
+			const group = groupOf(tabsRef.current, side);
+			const entry = group.files.find(
+				(f) => isSessionTab(f) && (f === snap.file || f === snap.id),
+			);
+			return entry ? { side, id: snap.id, entry, showing: group.active === entry } : null;
+		});
+		return hits.find((h) => h?.showing) ?? hits.find((h) => h !== null) ?? null;
+	};
+
+	/**
+	 * Append text to a session's composer, through its persisted draft so the
+	 * Chat's one restore path picks it up, and bring that session forward.
+	 */
+	const addToChat = (text: string) => {
+		const target = chatTarget();
+		if (!target) return;
+		const prev = readDraft(target.id).text;
+		writeDraftText(target.id, `${prev}${prev && !/\s$/.test(prev) ? " " : ""}${text} `);
+		if (!target.showing) {
+			if (target.side === "right") selectRight(target.entry);
+			else selectTab(target.entry);
+		}
+		markSide(target.side);
+		setInserted((i) => ({ side: target.side, n: i.n + 1 }));
+	};
+
+	/**
 	 * Which open files have unsaved edits, so the strip can dot them.
 	 *
 	 * Held here rather than in FileEditor because the strip is rendered from
@@ -2069,6 +2162,15 @@ export default function App() {
 			(current[path] ?? false) === dirty ? current : { ...current, [path]: dirty },
 		);
 	}, []);
+
+	/** The explorer renamed `from` to `to`, or deleted it (null): open file tabs follow. */
+	const onPathChange = useCallback(
+		(from: string, to: string | null) => commitTabs(afterPathChange(tabsRef.current, from, to)),
+		[commitTabs],
+	);
+	/** Unsaved edits at or under `path`, which a rename or delete would strand. */
+	const hasUnsaved = (path: string) =>
+		Object.entries(dirtyFiles).some(([p, dirty]) => dirty && (p === path || p.startsWith(`${path}/`)));
 
 	/**
 	 * Alt+1..9 selects the Nth tab.
@@ -2114,19 +2216,6 @@ export default function App() {
 		window.addEventListener("keydown", onKeyDown);
 		return () => window.removeEventListener("keydown", onKeyDown);
 	}, [selectPanel]);
-
-	// Tab title reflects activity so switching away doesn't lose the signal —
-	// the one thing a background terminal gives you for free.
-	useEffect(() => {
-		document.title = busy ? "\u25cf pwi \u2014 working\u2026" : "pwi";
-	}, [busy]);
-
-	// The same signal in the icon, for a tab narrow enough that the title is
-	// clipped to nothing — which is every tab, once a few are open.
-	useEffect(() => {
-		if (!busy) return;
-		return pulseFavicon();
-	}, [busy]);
 
 	/*
 	 * Notice when the server we are talking to is not the one that served this
@@ -2212,20 +2301,128 @@ export default function App() {
 		const all = extra.length ? [...extra, ...sessions] : sessions;
 		// An attached session's live stream beats the 5s poll, so the tab's π
 		// lights the moment a prompt is sent and dims the moment it ends.
-		const live = new Map<string, boolean>();
-		for (const c of [left, right]) if (c.snapshot?.file) live.set(c.snapshot.file, c.busy);
+		// The same for a question: it arrives as an event, long before a poll.
+		const live = new Map<string, { isStreaming: boolean; needsInput: boolean }>();
+		for (const c of [left, right])
+			if (c.snapshot?.file)
+				live.set(c.snapshot.file, { isStreaming: c.busy, needsInput: c.snapshot.ask !== null });
 		if (!live.size) return all;
-		return all.map((s) =>
-			live.has(s.path) && live.get(s.path) !== s.isStreaming
-				? { ...s, isStreaming: live.get(s.path) }
-				: s,
-		);
-	}, [sessions, pending, tabs.files, tabs.right, left.snapshot?.file, left.busy, right.snapshot?.file, right.busy]);
+		return all.map((s) => {
+			const l = live.get(s.path);
+			return l && (l.isStreaming !== s.isStreaming || l.needsInput !== s.needsInput) ? { ...s, ...l } : s;
+		});
+	}, [
+		sessions,
+		pending,
+		tabs.files,
+		tabs.right,
+		left.snapshot?.file,
+		left.snapshot?.ask,
+		left.busy,
+		right.snapshot?.file,
+		right.snapshot?.ask,
+		right.busy,
+	]);
+
+	/*
+	 * What this browser has seen of each session, and whether the user can see
+	 * the window at all: a reply that lands while they are in another app is
+	 * still one they have not read. Another pwi window's reads count too.
+	 */
+	const [seen, setSeen] = useState(readSeenSessions);
+	const [looking, setLooking] = useState(
+		() => document.visibilityState === "visible" && document.hasFocus(),
+	);
+	useEffect(() => {
+		const update = () => setLooking(document.visibilityState === "visible" && document.hasFocus());
+		const reload = () => setSeen(readSeenSessions());
+		window.addEventListener("focus", update);
+		window.addEventListener("blur", update);
+		document.addEventListener("visibilitychange", update);
+		window.addEventListener("storage", reload);
+		return () => {
+			window.removeEventListener("focus", update);
+			window.removeEventListener("blur", update);
+			document.removeEventListener("visibilitychange", update);
+			window.removeEventListener("storage", reload);
+		};
+	}, []);
+
+	const onScreen = useMemo(
+		() => (looking ? [tabs.active, tabs.right?.active] : []),
+		[looking, tabs.active, tabs.right?.active],
+	);
+
+	// A session on screen is seen up to its latest activity. Re-read first, so
+	// another window's marks are merged rather than overwritten.
+	useEffect(() => {
+		const stale = shown.filter((s) => onScreen.includes(s.path) && seen.seen[s.path] !== s.lastActive);
+		if (!stale.length) return;
+		const fresh = readSeenSessions();
+		for (const s of stale) fresh.seen[s.path] = s.lastActive;
+		writeSeenSessions(fresh);
+		setSeen(fresh);
+	}, [shown, onScreen, seen]);
+
+	// On-screen sessions never count as waiting, even for the render before
+	// the effect above records them.
+	const attention = useMemo(
+		() =>
+			new Map<string, Attention>(
+				shown.map((s) => {
+					const a = attentionOf(s, seen);
+					return [s.path, a === "ready" && onScreen.includes(s.path) ? null : a];
+				}),
+			),
+		[shown, seen, onScreen],
+	);
+
+	// Title and icon carry it for a tab you are not looking at: the title is
+	// readable, the icon survives a strip too narrow for any title.
+	const states = [...attention.values()];
+	const working = states.includes("working");
+	const badge = states.includes("needs") ? "needs" : states.includes("ready") ? "ready" : null;
+	const title = attentionTitle(states);
+	useEffect(() => {
+		document.title = title;
+	}, [title]);
+	useEffect(() => setFavicon(working, badge), [working, badge]);
+
+	/** Focus a session where it is open, or open it on the left. */
+	const focusSession = useCallback(
+		(path: string) => {
+			// Adding it to the left while it is open on the right would put one
+			// session in both columns.
+			if (sideOfTab(tabsRef.current, path) === "right") selectRight(path);
+			else selectTab(path);
+		},
+		[selectTab, selectRight],
+	);
+
+	/**
+	 * Alt+J jumps to the next session waiting on you: questions first, then
+	 * the reply that has waited longest. Alt for the same reason as Alt+1..9,
+	 * and J because no browser binds Alt+J.
+	 */
+	useEffect(() => {
+		const onKeyDown = (e: KeyboardEvent) => {
+			if (e.code !== "KeyJ" || !e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+			const t = tabsRef.current;
+			const current = lastSide.current === "right" && t.right ? t.right.active : t.active;
+			const next = nextWaiting(shown, attention, current);
+			if (!next) return;
+			e.preventDefault();
+			focusSession(next);
+		};
+		window.addEventListener("keydown", onKeyDown);
+		return () => window.removeEventListener("keydown", onKeyDown);
+	}, [shown, attention, focusSession]);
 
 	/** One column's chat, wired to that column's session. */
-	const chatFor = (s: ReturnType<typeof useSession>) => (
+	const chatFor = (s: ReturnType<typeof useSession>, side: Side) => (
 		<Chat
 			snapshot={s.snapshot}
+			draftRev={inserted.side === side ? inserted.n : 0}
 			partial={s.partial}
 			busy={s.busy}
 			opening={s.opening}
@@ -2296,6 +2493,12 @@ export default function App() {
 										tabs.active && isFileTab(tabs.active) ? tabPath(tabs.active) : null
 									}
 									onOpen={openFile}
+									onOpenSide={openToSide}
+									onPathChange={onPathChange}
+									hasUnsaved={hasUnsaved}
+									onOpenDiff={openDiff}
+									onOpenTerminal={project ? openTerminalAt : undefined}
+									onAddToChat={left.snapshot || right.snapshot ? addToChat : undefined}
 									onClose={() => showPanel(null)}
 									revision={replies}
 								>
@@ -2406,6 +2609,7 @@ export default function App() {
 					group={groupOf(tabs, "left")}
 					panelId={CHAT_PANEL_ID}
 					sessions={shown}
+					attention={attention}
 					shortNames={shortNames}
 					pinned={pinned}
 					dirtyFiles={dirtyFiles}
@@ -2414,7 +2618,7 @@ export default function App() {
 					onReorder={reorderTabs}
 					onMove={moveToGroup}
 					onFocus={() => {
-						lastSide.current = "left";
+						markSide("left");
 					}}
 					listOpen={listOpen}
 					onToggleList={() => setListOpen((o) => !o)}
@@ -2423,7 +2627,8 @@ export default function App() {
 					sessionId={leftHunks.snapshot?.id}
 					hunks={leftHunks.snapshot?.hunks ?? EMPTY_HUNKS}
 					onHunksChanged={() => void leftHunks.reloadSnapshot()}
-					chat={chatFor(left)}
+					chat={chatFor(left, "left")}
+					focused={!tabs.right || focusedSide === "left"}
 				/>
 
 				{tabs.right && (
@@ -2432,6 +2637,7 @@ export default function App() {
 						group={tabs.right}
 						panelId={SPLIT_PANEL_ID}
 						sessions={shown}
+						attention={attention}
 						shortNames={shortNames}
 						pinned={pinned}
 						dirtyFiles={dirtyFiles}
@@ -2440,7 +2646,7 @@ export default function App() {
 						onReorder={reorderRight}
 						onMove={moveToGroup}
 						onFocus={() => {
-							lastSide.current = "right";
+							markSide("right");
 						}}
 						cwd={snapshot?.cwd || project || ""}
 						onDirty={onFileDirty}
@@ -2449,7 +2655,8 @@ export default function App() {
 						onHunksChanged={() => void rightHunks.reloadSnapshot()}
 						// Only a column holding a session gets a chat; otherwise it says
 						// "drag a tab here" instead of showing an empty conversation.
-						chat={tabs.right.files.some(isSessionTab) ? chatFor(right) : null}
+						chat={tabs.right.files.some(isSessionTab) ? chatFor(right, "right") : null}
+						focused={focusedSide === "right"}
 					/>
 				)}
 			</div>
@@ -2460,6 +2667,7 @@ export default function App() {
 			    behaviour, which now slides in from the right. */}
 			<SessionList
 				sessions={shown}
+				attention={attention}
 				listError={listError}
 				activeFile={snapshot?.file}
 				openFiles={tabs.files}
@@ -2473,10 +2681,7 @@ export default function App() {
 				open={listOpen}
 				onToggle={() => setListOpen((o) => !o)}
 				onSelect={(s) => {
-					// Focus it where it is: adding it to the left while it is open on
-					// the right would put one session in both columns.
-					if (sideOfTab(tabsRef.current, s.path) === "right") selectRight(s.path);
-					else selectTab(s.path);
+					focusSession(s.path);
 					// On a narrow viewport the list is a drawer over the chat; having
 					// picked a session, the chat is what you want to see.
 					setListOpen(false);

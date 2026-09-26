@@ -11,9 +11,19 @@
  * second one.
  */
 
-import { readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import {
+	cpSync,
+	lstatSync,
+	mkdirSync,
+	readdirSync,
+	readFileSync,
+	renameSync,
+	rmSync,
+	statSync,
+	writeFileSync,
+} from "node:fs";
 import { homedir } from "node:os";
-import { isAbsolute, join, relative, resolve, sep } from "node:path";
+import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { listProjects } from "./projects.js";
 import type { PiwFileEntry } from "../shared/types.js";
 
@@ -181,4 +191,112 @@ export function writeReviewed(seed: string, path: string, expect: string, next: 
 	if (current !== expect) throw new Error(`file changed on disk since it was read: ${full}`);
 	if (next === current) return;
 	writeFileSync(full, next, "utf8");
+}
+
+/*
+ * File operations from the explorer's menu. Every path goes through
+ * `safePath`, and none of them overwrites: an existing target is refused,
+ * because a rename or paste that silently replaced a file would be the one
+ * action here that loses data with no way back.
+ */
+
+/** Exists, including a dangling symlink, which `existsSync` reports as absent. */
+function taken(path: string): boolean {
+	try {
+		lstatSync(path);
+		return true;
+	} catch {
+		return false;
+	}
+}
+
+/**
+ * A client path that may be moved, copied or deleted: inside a project and
+ * not a project root itself, whose removal would take the project with it.
+ */
+function movable(seed: string, path: string): string {
+	const full = safePath(seed, path);
+	if (listProjects(seed).map(expand).includes(full)) throw new Error(`cannot change a project root: ${full}`);
+	if (!taken(full)) throw new Error(`no such file: ${full}`);
+	return full;
+}
+
+/** `rename`, falling back to copy-then-delete across filesystems. */
+function moveAcross(from: string, to: string): void {
+	try {
+		renameSync(from, to);
+	} catch (err) {
+		if ((err as NodeJS.ErrnoException).code !== "EXDEV") throw err;
+		cpSync(from, to, { recursive: true, errorOnExist: true, force: false, verbatimSymlinks: true });
+		rmSync(from, { recursive: true, force: true });
+	}
+}
+
+/** `name`, or `name copy`, `name copy 2`… — the first that is free in `dir`. */
+function freeName(dir: string, name: string, suffix: string): string {
+	if (!taken(join(dir, name))) return join(dir, name);
+	const ext = extname(name);
+	const stem = ext && ext !== name ? name.slice(0, -ext.length) : name;
+	const tail = ext && ext !== name ? ext : "";
+	for (let n = 1; ; n++) {
+		const candidate = join(dir, `${stem} ${suffix}${n > 1 ? ` ${n}` : ""}${tail}`);
+		if (!taken(candidate)) return candidate;
+	}
+}
+
+/** A new empty file or directory. Missing parents are created; the target is not replaced. */
+export function createEntry(seed: string, path: string, dir: boolean): string {
+	const full = safePath(seed, path);
+	if (taken(full)) throw new Error(`already exists: ${full}`);
+	mkdirSync(dirname(full), { recursive: true });
+	if (dir) mkdirSync(full);
+	else writeFileSync(full, "", { flag: "wx" });
+	return full;
+}
+
+/** Rename or move. Refuses an existing target and a move into its own subtree. */
+export function moveEntry(seed: string, from: string, to: string): string {
+	const src = movable(seed, from);
+	const dst = safePath(seed, to);
+	if (dst === src) return dst;
+	if (within(src, dst)) throw new Error(`cannot move a folder into itself: ${dst}`);
+	if (taken(dst)) throw new Error(`already exists: ${dst}`);
+	if (!statSync(dirname(dst)).isDirectory()) throw new Error(`not a directory: ${dirname(dst)}`);
+	moveAcross(src, dst);
+	return dst;
+}
+
+/** Copy into `toDir`, named like the source or `… copy` when that is taken. */
+export function copyEntry(seed: string, from: string, toDir: string): string {
+	const src = movable(seed, from);
+	const dir = safePath(seed, toDir);
+	if (!statSync(dir).isDirectory()) throw new Error(`not a directory: ${dir}`);
+	if (within(src, dir)) throw new Error(`cannot copy a folder into itself: ${dir}`);
+	const dst = freeName(dir, basename(src), "copy");
+	cpSync(src, dst, { recursive: true, errorOnExist: true, force: false, verbatimSymlinks: true });
+	return dst;
+}
+
+/**
+ * Delete by moving to the desktop Trash (the freedesktop.org layout that
+ * file managers read), so a mistaken delete can be restored. Never inside
+ * the project: a trash folder there would show up in git and in the tree.
+ */
+export function trashEntry(seed: string, path: string): void {
+	const full = movable(seed, path);
+	const trash = join(process.env.XDG_DATA_HOME || join(homedir(), ".local", "share"), "Trash");
+	mkdirSync(join(trash, "files"), { recursive: true });
+	mkdirSync(join(trash, "info"), { recursive: true });
+	// The info file is written first: it claims the name, and a trashed item
+	// without one is invisible to the file manager that would restore it.
+	const dst = freeName(join(trash, "files"), basename(full), "trashed");
+	const info = join(trash, "info", `${basename(dst)}.trashinfo`);
+	const stamp = new Date().toISOString().slice(0, 19);
+	writeFileSync(info, `[Trash Info]\nPath=${encodeURI(full)}\nDeletionDate=${stamp}\n`, { flag: "wx" });
+	try {
+		moveAcross(full, dst);
+	} catch (err) {
+		rmSync(info, { force: true });
+		throw err;
+	}
 }

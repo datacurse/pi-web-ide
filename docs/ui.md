@@ -95,7 +95,28 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
 
 ## Tabs
 
-- Session (AI) tabs lead with a bold `π` (the greeting-screen mark) that is also the live signal: `neutral-500` when idle, amber + `animate-pulse` while streaming. No separate dot. File tabs use `FileGlyph`, diff tabs `GitDiff`.
+- Session (AI) tabs lead with a bold `π` (the greeting-screen mark) that is also the live signal (see Attention). File tabs use `FileGlyph`, diff tabs `GitDiff`.
+- In a split, only the focused column (the one last clicked or focused) keeps the amber
+  underline; the other column's active tab drops to `neutral-600` (`tabClass(active, focused)`).
+
+## Attention
+
+Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `attention.ts`):
+
+| State   | Meaning                                  | Tab `π`            | Dot (tab end, list row) |
+| ------- | ---------------------------------------- | ------------------ | ----------------------- |
+| idle    | nothing new                              | `neutral-500`      | none                    |
+| working | streaming                                | amber, pulsing     | list only, pulsing amber |
+| ready   | new activity since this browser saw it   | amber, steady      | amber                   |
+| needs   | blocked on a question (`ask`)            | `red-400`, steady  | red                     |
+
+- "Seen" means on screen in either column while the window is visible and focused.
+  Per-browser (`localStorage`), synced across pwi windows.
+- Window title: `N ● pwi` — N = ready + needs (omitted at 0), `●` while anything works. No brackets.
+- Favicon: the `π` breathes while anything works; a corner dot (red for needs, else amber)
+  while anything waits.
+- The session list sorts needs, then ready, right after pinned rows.
+- Alt+J jumps to the next waiting session: needs first, then the longest-waiting reply.
 
 ## Session list
 
@@ -114,6 +135,25 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
 - The header has a refresh `IconButton` (`ArrowClockwise`, `sm`) left of the close ✕.
   It re-reads the root and every expanded folder. The tree also re-reads each time
   the agent finishes a reply.
+- Right-click a row → `ContextMenu`, groups split by `MenuSeparator`:
+  1. Files: `Open`, `Open to the Side`, and `Open Changes` only when git reports
+     the file changed. Folders: `New File…`, `New Folder…`.
+  2. `Add to Chat` (appends the project-relative path to the open session's
+     composer, disabled with no session), `Open in Terminal` (a new terminal tab in
+     the folder, or the file's folder), `Download` (files only).
+  3. `Cut`, `Copy`, `Paste` (into the folder, or the file's folder; a cut is used
+     up by one paste, a copy of a taken name becomes `name copy.ext`).
+  4. `Copy Path`, `Copy Relative Path`.
+  5. `Rename…`, `Delete`.
+- Right-click the empty space below the rows → the same menu for the project root,
+  without the entries that would change or name the root itself.
+- New File/Folder and Rename type into an inline field in the row's place:
+  Enter or leaving it commits, Escape cancels. Rename selects the name without
+  its extension.
+- Delete asks with `window.confirm` and moves to the desktop Trash
+  (`~/.local/share/Trash`), so it can be restored. Rename, move and delete are
+  refused while a file under the path has unsaved edits; open tabs follow a
+  rename and close on delete.
 
 ## Primitives (`src/web/ui.tsx`)
 
@@ -125,6 +165,8 @@ New UI uses these; convert raw markup when you touch it. Tune styles in
 | `Button`        | `variant`: primary / secondary (default) / subtle / ghost / warning (inside amber notices); `size`: sm (12px) / md (13px) | Text buttons. One `primary` per dialog or panel. Cancel is `secondary`. |
 | `IconButton`    | `label` (required; aria-label + tooltip), `variant`: ghost / outline / solid, `size`: sm 24px / md 28px, `round` | Icon-only buttons. `round` only in the composer toolbar. |
 | `MenuItem`      | button props                                                | Rows in dropdown and context menus. |
+| `MenuSeparator` | —                                                           | Rule between groups of `MenuItem`s. |
+| `ContextMenu`   | `x`, `y`, `label`, `width` (220), `onClose`                 | Right-click menu at the pointer: fixed, clamped on screen, closes on outside click, Escape, scroll, resize. Items call `onClose` after acting. |
 | `Section`       | `title`                                                     | Settings group (fieldset + uppercase legend). |
 | `OptionRow`     | `selected`, `disabled`                                      | Clickable row wrapping a radio or checkbox. |
 | `sectionLabel`  | class string                                                | Uppercase group heading on any element. |

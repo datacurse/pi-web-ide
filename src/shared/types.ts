@@ -156,6 +156,8 @@ export interface PiSessionInfo {
 	firstMessage: string;
 	/** True if this session is currently streaming, even with no client attached. */
 	isStreaming?: boolean;
+	/** True if the session is blocked on a question (`ask`) only the user can answer. */
+	needsInput?: boolean;
 }
 
 /** A partially-streamed assistant message, assembled server-side. */

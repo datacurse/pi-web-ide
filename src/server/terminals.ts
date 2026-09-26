@@ -97,9 +97,11 @@ export class Terminals {
 	 * client owns. Nothing here knows about tabs or panes, which is why one
 	 * shell can be moved between them without touching its process.
 	 */
-	create(cwd: string, cols = 80, rows = 24): Term {
-		if (!(existsSync(cwd) && statSync(cwd).isDirectory()))
-			throw new Error(`not a directory: ${cwd}`);
+	create(cwd: string, cols = 80, rows = 24, dir = cwd): Term {
+		// `cwd` is the project the shell is listed under; `dir` is where it
+		// starts, so "Open in Terminal" on a subfolder stays in its project.
+		for (const d of [cwd, dir])
+			if (!(existsSync(d) && statSync(d).isDirectory())) throw new Error(`not a directory: ${d}`);
 		if (this.live().length >= MAX_TERMINALS)
 			throw new Error(`too many terminals (${MAX_TERMINALS}); close one first`);
 
@@ -107,7 +109,7 @@ export class Terminals {
 			id: randomUUID(),
 			cwd,
 			pty: spawn(shellPath(), ["-l"], {
-				cwd,
+				cwd: dir,
 				cols,
 				rows,
 				name: "xterm-256color",

@@ -3,7 +3,7 @@
  * Tune a control here, not at its call sites. `className` is for layout
  * (margins, flex, width) only; restyling through it fights these classes.
  */
-import type { ButtonHTMLAttributes, ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from "react";
 import { X } from "@phosphor-icons/react";
 
 const EASE = "transition-colors duration-150 ease-out motion-reduce:transition-none";
@@ -125,6 +125,79 @@ export function MenuItem({ type = "button", className = "", ...rest }: ButtonHTM
 	);
 }
 
+/* A rule between groups of MenuItems. */
+export function MenuSeparator() {
+	return <div role="separator" className="my-1 border-t border-neutral-800" />;
+}
+
+/*
+ * A right-click menu at the pointer. `fixed`, so the panel it came from cannot
+ * clip it, and pulled back inside the window once its real size is known.
+ * Closes on anything that would make its position a lie: a click elsewhere,
+ * Escape, a scroll, a resize. Items close it themselves after acting.
+ */
+export function ContextMenu({
+	x,
+	y,
+	label,
+	width = 220,
+	onClose,
+	children,
+}: {
+	x: number;
+	y: number;
+	label: string;
+	width?: number;
+	onClose: () => void;
+	children: ReactNode;
+}) {
+	const box = useRef<HTMLDivElement>(null);
+	const [pos, setPos] = useState({ left: x, top: y });
+	const close = useRef(onClose);
+	close.current = onClose;
+
+	useLayoutEffect(() => {
+		const el = box.current;
+		if (!el) return;
+		setPos({
+			left: Math.max(8, Math.min(x, window.innerWidth - el.offsetWidth - 8)),
+			top: Math.max(8, Math.min(y, window.innerHeight - el.offsetHeight - 8)),
+		});
+	}, [x, y]);
+
+	useEffect(() => {
+		const dismiss = () => close.current();
+		const onKey = (e: KeyboardEvent) => {
+			if (e.key === "Escape") dismiss();
+		};
+		// `capture` on scroll: a scroll inside a panel does not bubble.
+		window.addEventListener("pointerdown", dismiss);
+		window.addEventListener("scroll", dismiss, true);
+		window.addEventListener("resize", dismiss);
+		window.addEventListener("keydown", onKey);
+		return () => {
+			window.removeEventListener("pointerdown", dismiss);
+			window.removeEventListener("scroll", dismiss, true);
+			window.removeEventListener("resize", dismiss);
+			window.removeEventListener("keydown", onKey);
+		};
+	}, []);
+
+	return (
+		<div
+			ref={box}
+			role="menu"
+			aria-label={label}
+			// The dismiss listener is on the window, so keep the menu's own clicks.
+			onPointerDown={(e) => e.stopPropagation()}
+			style={{ ...pos, width }}
+			className="fixed z-40 overflow-hidden rounded-md border border-neutral-700 bg-neutral-900 py-1 shadow-2xl"
+		>
+			{children}
+		</div>
+	);
+}
+
 /* Uppercase group heading. A string, not a component, because it lands on
    <legend>, <summary>, <th> and <div> alike. */
 export const sectionLabel = "text-caption tracking-wide text-neutral-500 uppercase";
@@ -141,10 +214,12 @@ export const inputClass = {
  * component, because tabs carry refs and roving-tabindex props. The caller
  * adds right padding: `pr-7` when a close button overlays the tab, else `pr-3`.
  */
-export const tabClass = (active: boolean) =>
+export const tabClass = (active: boolean, focused = true) =>
 	`flex h-bar max-w-52 shrink-0 items-center gap-1.5 border-b-2 pl-3 text-ui ${EASE} ${
 		active
-			? "border-amber-400 text-neutral-50"
+			? focused
+				? "border-amber-400 text-neutral-50"
+				: "border-neutral-600 text-neutral-200"
 			: "border-transparent text-neutral-400 hover:bg-neutral-900 hover:text-neutral-100"
 	}`;
 

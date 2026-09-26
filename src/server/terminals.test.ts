@@ -70,6 +70,22 @@ assert.deepEqual(new Set(listed), new Set([one.id, two.id]));
 assert.deepEqual(terminals.list("/tmp/pwi-not-a-project"), []);
 
 /*
+ * "Open in Terminal" on a subfolder: the shell STARTS there but is listed
+ * under its project, or a reload's reconcile would drop it from the layout.
+ */
+const { mkdtempSync, realpathSync, rmSync } = await import("node:fs");
+const sub = realpathSync(mkdtempSync(`${CWD}/pwi-term-`));
+const inSub = terminals.create(CWD, 80, 24, sub);
+assert.ok(terminals.list(CWD).some((t) => t.id === inSub.id));
+const subClient = client(inSub.id);
+terminals.write(inSub.id, "pwd\n");
+await subClient.match(new RegExp(sub));
+subClient.detach();
+terminals.close(inSub.id);
+rmSync(sub, { recursive: true, force: true });
+assert.throws(() => terminals.create(CWD, 80, 24, "/tmp/pwi-does-not-exist-ever"), /not a directory/);
+
+/*
  * Attach replays the scrollback BEFORE subscribing. A client that only got
  * live output would open on a blank pane after a reload, with the output of
  * whatever is running already lost.

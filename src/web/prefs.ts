@@ -254,6 +254,41 @@ export function writePinnedSessions(paths: string[]): void {
 	writeStored(PINNED_SESSIONS_KEY, JSON.stringify(paths));
 }
 
+const SEEN_SESSIONS_KEY = "pwi:seenSessions";
+
+/**
+ * What this browser has already seen of each session: the `lastActive` it had
+ * when last on screen. `baseline` stands in for sessions never viewed, and is
+ * set the first time this is read, so upgrading does not flag every old
+ * session as a new reply.
+ */
+export interface SeenSessions {
+	baseline: string;
+	seen: Record<string, string>;
+}
+
+export function readSeenSessions(): SeenSessions {
+	const raw = readStored(SEEN_SESSIONS_KEY);
+	try {
+		const parsed: unknown = raw ? JSON.parse(raw) : null;
+		if (parsed && typeof parsed === "object" && "baseline" in parsed && typeof parsed.baseline === "string") {
+			const seen: Record<string, string> = {};
+			const stored = "seen" in parsed && parsed.seen && typeof parsed.seen === "object" ? parsed.seen : {};
+			for (const [k, v] of Object.entries(stored)) if (typeof v === "string") seen[k] = v;
+			return { baseline: parsed.baseline, seen };
+		}
+	} catch {
+		/* fall through to a fresh baseline */
+	}
+	const fresh = { baseline: new Date().toISOString(), seen: {} };
+	writeSeenSessions(fresh);
+	return fresh;
+}
+
+export function writeSeenSessions(value: SeenSessions): void {
+	writeStored(SEEN_SESSIONS_KEY, JSON.stringify(value));
+}
+
 /**
  * The side panels, which are mutually exclusive: one column, one divider, and
  * the rail switches between them the way an activity bar does.

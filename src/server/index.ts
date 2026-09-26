@@ -28,7 +28,17 @@ import {
 	removeProject,
 } from "./projects.js";
 import { readPersonality, writePersonality, writeRemind } from "./personality.js";
-import { listDir, readFile as readReviewFile, writeFile, writeReviewed } from "./files.js";
+import {
+	copyEntry,
+	createEntry,
+	listDir,
+	moveEntry,
+	readFile as readReviewFile,
+	safePath,
+	trashEntry,
+	writeFile,
+	writeReviewed,
+} from "./files.js";
 import { resolve as resolveHunks } from "../shared/hunks.js";
 import {
 	apply,
@@ -399,10 +409,12 @@ app.get("/api/sessions", async (req, res) => {
 		// Streaming status only exists for sessions the registry has open (cached
 		// or attached); everything on disk but not live is implicitly idle.
 		const streamingIds = registry.streamingIds();
+		const askingIds = registry.askingIds();
 		res.json({
 			sessions: sessions.map((s) => ({
 				...s,
 				isStreaming: streamingIds.has(s.id),
+				needsInput: askingIds.has(s.id),
 			})),
 		});
 	} catch (err) {
@@ -763,6 +775,38 @@ app.put("/api/file", (req, res) => {
 	}
 });
 
+/**
+ * A file as a download, for the explorer's "Download". Raw bytes and no size
+ * cap: unlike /api/file it is streamed to disk, never rendered.
+ */
+app.get("/api/download", (req, res) => {
+	try {
+		const full = safePath(CWD, typeof req.query.path === "string" ? req.query.path : "");
+		if (!statSync(full).isFile()) throw new Error(`not a file: ${full}`);
+		res.download(full);
+	} catch (err) {
+		res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
+	}
+});
+
+/**
+ * The explorer's file operations. Each takes paths the browser names, so all
+ * of them go through files.ts's project check; none overwrites an existing
+ * target, and delete moves to the desktop Trash rather than unlinking.
+ */
+const str = (v: unknown) => (typeof v === "string" ? v : "");
+const fileOp = (run: (body: Record<string, unknown>) => unknown) => (req: express.Request, res: express.Response) => {
+	try {
+		res.json({ ok: true, path: run((req.body ?? {}) as Record<string, unknown>) ?? null });
+	} catch (err) {
+		res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
+	}
+};
+app.post("/api/files/create", fileOp((b) => createEntry(CWD, str(b.path), b.dir === true)));
+app.post("/api/files/move", fileOp((b) => moveEntry(CWD, str(b.from), str(b.to))));
+app.post("/api/files/copy", fileOp((b) => copyEntry(CWD, str(b.from), str(b.toDir))));
+app.post("/api/files/trash", fileOp((b) => trashEntry(CWD, str(b.path))));
+
 /** One directory's files and subdirectories, for the editor's tree. */
 app.get("/api/files", (req, res) => {
 	const path = typeof req.query.path === "string" ? req.query.path : "";
@@ -1044,8 +1088,9 @@ app.post("/api/terminals", (req, res) => {
 	const cwd = typeof req.body?.cwd === "string" && req.body.cwd ? req.body.cwd : CWD;
 	const cols = Number(req.body?.cols) || 80;
 	const rows = Number(req.body?.rows) || 24;
+	const dir = typeof req.body?.dir === "string" && req.body.dir ? req.body.dir : cwd;
 	try {
-		const term = terminals.create(cwd, cols, rows);
+		const term = terminals.create(cwd, cols, rows, dir);
 		res.json({ id: term.id, cwd: term.cwd, running: true });
 	} catch (err) {
 		res.status(400).json({ error: err instanceof Error ? err.message : String(err) });

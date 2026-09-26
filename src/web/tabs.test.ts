@@ -1,6 +1,7 @@
 // Run: node --import tsx src/web/tabs.test.ts
 import assert from "node:assert/strict";
 import {
+	afterPathChange,
 	diffParts,
 	diffTab,
 	fileTab,
@@ -254,5 +255,28 @@ assert.deepEqual(collapse({ files: [] }), { files: [] });
 // A non-empty left column is untouched.
 const kept = { files: ["a"], active: "a", right: { files: ["b"], active: "b" } };
 assert.equal(collapse(kept), kept);
+
+// --- afterPathChange: a rename or delete from the explorer ---
+{
+	const a = fileTab("/p/src/a.ts");
+	const b = fileTab("/p/src/b.ts");
+	const other = fileTab("/p/srcx/c.ts");
+	const d = diffTab("", "src/a.ts");
+	const tabs = { files: ["/s.jsonl", a, other, d], active: a, right: { files: [b], active: b } };
+	// A folder rename carries every file under it, in both columns, and keeps the selection.
+	assert.deepEqual(afterPathChange(tabs, "/p/src", "/p/lib"), {
+		files: ["/s.jsonl", fileTab("/p/lib/a.ts"), other, d],
+		active: fileTab("/p/lib/a.ts"),
+		right: { files: [fileTab("/p/lib/b.ts")], active: fileTab("/p/lib/b.ts") },
+	});
+	// A delete closes them: the selection moves to a neighbour, an emptied right column goes.
+	assert.deepEqual(afterPathChange(tabs, "/p/src", null), {
+		files: ["/s.jsonl", other, d],
+		active: other,
+		right: undefined,
+	});
+	// A prefix sibling (`/p/srcx`) is a different folder.
+	assert.equal(afterPathChange(tabs, "/p/src", null).files.includes(other), true);
+}
 
 console.log("tabs: ok");

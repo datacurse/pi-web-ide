@@ -3,6 +3,7 @@ import { GitDiff, PushPin, X } from "@phosphor-icons/react";
 import type { KeyboardEvent } from "react";
 import type { PiSessionInfo } from "../shared/types.js";
 import { sessionLabel } from "./sessionName.js";
+import { ATTENTION_UI, type Attention } from "./attention.js";
 import { FileGlyph } from "./fileIcon.js";
 import { diffParts, isDiffTab, isSessionTab, tabLabel, tabPath } from "./tabs.js";
 import { IconButton, tabClass } from "./ui.js";
@@ -74,6 +75,7 @@ export function slotFor(x: number, left: number, width: number, index: number): 
 export function SessionTabs({
 	tabs,
 	sessions,
+	attention,
 	active,
 	panelId,
 	listOpen,
@@ -82,6 +84,7 @@ export function SessionTabs({
 	onToggleList,
 	shortNames,
 	pinned,
+	focused = true,
 	dirtyFiles,
 	onReorder,
 	onAdopt,
@@ -91,6 +94,8 @@ export function SessionTabs({
 	tabs: string[];
 	/** The polled session list, used for titles and live state. */
 	sessions: PiSessionInfo[];
+	/** Each session's working / ready / needs state, keyed by file. */
+	attention: Map<string, Attention>;
 	active: string | undefined;
 	/** Element the tabs control — the chat panel. */
 	panelId: string;
@@ -114,6 +119,8 @@ export function SessionTabs({
 	shortNames: boolean;
 	/** Pinned session paths; App already sorts them to the front. */
 	pinned: string[];
+	/** False for the split column you are not in: its active tab dims. */
+	focused?: boolean;
 	/** Open files with unsaved edits, keyed by absolute path. */
 	dirtyFiles: Record<string, boolean>;
 	/** Move the tab at `from` to index `to`. */
@@ -287,6 +294,7 @@ export function SessionTabs({
 					const isFile = !isSessionTab(file);
 					const isDiff = isDiffTab(file);
 					const info = isFile ? undefined : byFile.get(file);
+					const state = isFile ? null : (attention.get(file) ?? null);
 					const label = isFile ? tabLabel(file) : sessionLabel(info, shortNames);
 					const isActive = file === active;
 					// Only an editable file can be dirty; a diff is read-only.
@@ -403,7 +411,7 @@ export function SessionTabs({
 								title={isDiff ? diffTitle(file) : isFile ? tabPath(file) : label}
 								onClick={() => onSelect(file)}
 								onKeyDown={(e) => moveFocus(e, i)}
-								className={`${tabClass(isActive)} pr-7`}
+								className={`${tabClass(isActive, focused)} pr-7`}
 							>
 								{/* A diff reads as a diff at a glance, the way VS Code's does —
 								    but as one glyph rather than "x (sha) ↔ x (sha)", which eats
@@ -416,13 +424,14 @@ export function SessionTabs({
 								)}
 								{/* Marks an AI session so it never reads as a code tab, and
 								    doubles as its live signal: grey when idle, amber and
-								    pulsing while it works. Color alone still carries it under
-								    reduced motion, and no dot appears to shift the label. */}
+								    pulsing while it works, steady amber for a new reply, red
+								    for a question. Color alone still carries it under reduced
+								    motion. */}
 								{!isFile && (
 									<span
 										aria-hidden
 										className={`shrink-0 font-bold leading-none ${
-											info?.isStreaming ? "animate-pulse text-amber-400" : "text-neutral-500"
+											state ? ATTENTION_UI[state].text : "text-neutral-500"
 										}`}
 									>
 										π
@@ -439,7 +448,11 @@ export function SessionTabs({
 									<span aria-hidden className="size-1.5 shrink-0 rounded-full bg-amber-400" />
 								)}
 								{dirty && <span className="sr-only">, unsaved changes</span>}
-								{info?.isStreaming && <span className="sr-only">, working</span>}
+								{/* Waiting on you: the same dot as unsaved, in the state's color. */}
+								{(state === "ready" || state === "needs") && (
+									<span aria-hidden className={`size-1.5 shrink-0 rounded-full ${ATTENTION_UI[state].dot}`} />
+								)}
+								{state && <span className="sr-only">, {ATTENTION_UI[state].label}</span>}
 							</button>
 							<button
 								data-custom="tab close"

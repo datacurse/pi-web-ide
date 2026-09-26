@@ -8,12 +8,12 @@
  * closing this panel must not close what you opened.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type MouseEvent } from "react";
 import { ArrowClockwise, CaretDown, CaretRight } from "@phosphor-icons/react";
 import type { PiwFileEntry } from "../shared/types.js";
 import { FileGlyph } from "./fileIcon.js";
 import { readExplorerOpen, writeExplorerOpen } from "./prefs.js";
-import { IconButton, ListRow, PanelHeader } from "./ui.js";
+import { ContextMenu, IconButton, ListRow, MenuItem, MenuSeparator, PanelHeader, inputClass } from "./ui.js";
 
 async function getJson<T>(url: string): Promise<T> {
 	const r = await fetch(url);
@@ -47,6 +47,85 @@ function listDir(path: string): Promise<PiwFileEntry[]> {
 	return p;
 }
 
+/** Right-click on a row: open the panel's menu for that entry. */
+type RowMenu = (entry: PiwFileEntry, e: MouseEvent<HTMLButtonElement>) => void;
+
+/** `path` relative to the project, which is how prompts and shells name it. */
+function relativePath(cwd: string, path: string): string {
+	if (path === cwd) return ".";
+	return path.startsWith(`${cwd}/`) ? path.slice(cwd.length + 1) : path;
+}
+
+/** The folder holding `path`. */
+const parentOf = (path: string) => path.slice(0, path.lastIndexOf("/"));
+
+async function postJson<T>(url: string, body: unknown): Promise<T> {
+	const r = await fetch(url, {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify(body),
+	});
+	const out = (await r.json().catch(() => ({}))) as T & { error?: string };
+	if (!r.ok) throw new Error(out.error ?? `${r.status}`);
+	return out;
+}
+
+/** A name being typed in the tree: a new entry inside `parent`, or a rename. */
+type NameEdit =
+	| { kind: "file" | "folder"; parent: string }
+	| { kind: "rename"; path: string; name: string; dir: boolean };
+
+/**
+ * The edit in progress, read by whichever row it belongs to. Context rather
+ * than props because it is needed at one row at any depth, and threading it
+ * through every node would re-render the whole tree per keystroke.
+ */
+const EditContext = createContext<{ edit: NameEdit | null; done: (name: string | null) => void }>({
+	edit: null,
+	done: () => {},
+});
+
+/**
+ * The inline name field, in the row's own place and indent. Enter or leaving
+ * the field commits; Escape cancels. A rename selects the name without its
+ * extension, as VS Code does, since that is the part usually changed.
+ */
+function NameRow({ depth, dir, initial }: { depth: number; dir: boolean; initial: string }) {
+	const { done } = useContext(EditContext);
+	const [value, setValue] = useState(initial);
+	const field = useRef<HTMLInputElement>(null);
+	const finished = useRef(false);
+	const finish = (name: string | null) => {
+		if (finished.current) return;
+		finished.current = true;
+		done(name?.trim() || null);
+	};
+	useEffect(() => {
+		const dot = initial.lastIndexOf(".");
+		field.current?.setSelectionRange(0, dot > 0 ? dot : initial.length);
+	}, [initial]);
+	return (
+		<div className="flex items-center gap-1.5 py-0.5 pr-3" style={{ paddingLeft: `${depth * 12 + 4}px` }}>
+			<span className="flex w-4 shrink-0 justify-center text-neutral-500" aria-hidden>
+				{dir ? <CaretRight size={14} /> : <FileGlyph name={value} />}
+			</span>
+			<input
+				ref={field}
+				autoFocus
+				aria-label={dir ? "Folder name" : "File name"}
+				value={value}
+				onChange={(e) => setValue(e.target.value)}
+				onKeyDown={(e) => {
+					if (e.key === "Enter") finish(value);
+					else if (e.key === "Escape") finish(null);
+				}}
+				onBlur={() => finish(value)}
+				className={`min-w-0 flex-1 ${inputClass.sm}`}
+			/>
+		</div>
+	);
+}
+
 /**
  * One expandable directory.
  *
@@ -61,6 +140,7 @@ function TreeDir({
 	onOpen,
 	openDirs,
 	onToggle,
+	onMenu,
 	rev,
 }: {
 	entry: PiwFileEntry;
@@ -70,6 +150,7 @@ function TreeDir({
 	/** Every expanded directory, by absolute path. Owned by Explorer. */
 	openDirs: Set<string>;
 	onToggle: (path: string) => void;
+	onMenu: RowMenu;
 	/** Changes when the tree should be re-read from disk. */
 	rev: string;
 }) {
@@ -119,22 +200,32 @@ function TreeDir({
 		};
 	}, [open, fetched, rev, entry.path]);
 
+	const { edit } = useContext(EditContext);
+	const renaming = edit?.kind === "rename" && edit.path === entry.path;
+	const adding = edit && edit.kind !== "rename" && edit.parent === entry.path ? edit : null;
+
 	return (
 		<>
-			<ListRow
-				onClick={() => onToggle(entry.path)}
-				muted={entry.hidden}
-				size="body"
-				aria-expanded={open}
-				style={{ paddingLeft: `${depth * 12 + 4}px` }}
-			>
-				{/* A 16px slot, the width of a file's icon, so names line up the way
-				    VS Code's do: Seti has no folder icons, the chevron stands in. */}
-				<span className="flex w-4 shrink-0 justify-center text-neutral-500" aria-hidden>
-					{open ? <CaretDown size={14} /> : <CaretRight size={14} />}
-				</span>
-				<span className="truncate">{entry.name}</span>
-			</ListRow>
+			{renaming ? (
+				<NameRow depth={depth} dir initial={entry.name} />
+			) : (
+				<ListRow
+					onClick={() => onToggle(entry.path)}
+					onContextMenu={(e) => onMenu(entry, e)}
+					muted={entry.hidden}
+					size="body"
+					aria-expanded={open}
+					style={{ paddingLeft: `${depth * 12 + 4}px` }}
+				>
+					{/* A 16px slot, the width of a file's icon, so names line up the way
+					    VS Code's do: Seti has no folder icons, the chevron stands in. */}
+					<span className="flex w-4 shrink-0 justify-center text-neutral-500" aria-hidden>
+						{open ? <CaretDown size={14} /> : <CaretRight size={14} />}
+					</span>
+					<span className="truncate">{entry.name}</span>
+				</ListRow>
+			)}
+			{open && adding && <NameRow depth={depth + 1} dir={adding.kind === "folder"} initial="" />}
 			{open &&
 				children?.map((child) =>
 					child.dir ? (
@@ -146,6 +237,7 @@ function TreeDir({
 							onOpen={onOpen}
 							openDirs={openDirs}
 							onToggle={onToggle}
+							onMenu={onMenu}
 							rev={rev}
 						/>
 					) : (
@@ -155,6 +247,7 @@ function TreeDir({
 							depth={depth + 1}
 							active={child.path === openPath}
 							onOpen={onOpen}
+							onMenu={onMenu}
 						/>
 					),
 				)}
@@ -167,15 +260,22 @@ function TreeFile({
 	depth,
 	active,
 	onOpen,
+	onMenu,
 }: {
 	entry: PiwFileEntry;
 	depth: number;
 	active: boolean;
 	onOpen: (path: string) => void;
+	onMenu: RowMenu;
 }) {
+	const { edit } = useContext(EditContext);
+	if (edit?.kind === "rename" && edit.path === entry.path) {
+		return <NameRow depth={depth} dir={false} initial={entry.name} />;
+	}
 	return (
 		<ListRow
 			onClick={() => onOpen(entry.path)}
+			onContextMenu={(e) => onMenu(entry, e)}
 			selected={active}
 			muted={entry.hidden}
 			size="body"
@@ -192,6 +292,12 @@ export function Explorer({
 	cwd,
 	openPath,
 	onOpen,
+	onOpenSide,
+	onOpenDiff,
+	onOpenTerminal,
+	onAddToChat,
+	onPathChange,
+	hasUnsaved,
 	onClose,
 	revision,
 	children,
@@ -205,6 +311,18 @@ export function Explorer({
 	openPath: string | null;
 	/** Open this file in a tab. */
 	onOpen: (path: string) => void;
+	/** Open this file in the second column, splitting if needed. */
+	onOpenSide: (path: string) => void;
+	/** Open a diff tab: `ref` empty is the working tree, `path` project-relative. */
+	onOpenDiff: (ref: string, path: string) => void;
+	/** A new terminal starting in this directory; absent with no project. */
+	onOpenTerminal?: (dir: string) => Promise<void>;
+	/** Append text to the open session's composer; absent when none is open. */
+	onAddToChat?: (text: string) => void;
+	/** A path was renamed to `to`, or deleted (null): open tabs follow. */
+	onPathChange: (from: string, to: string | null) => void;
+	/** Unsaved edits at or under a path; renaming or deleting it is refused. */
+	hasUnsaved: (path: string) => boolean;
 	onClose: () => void;
 }) {
 	const [roots, setRoots] = useState<PiwFileEntry[]>(() => listings.get(cwd) ?? []);
@@ -219,6 +337,38 @@ export function Explorer({
 	 * first render, with no frame of the previous project's tree.
 	 */
 	const [openDirs, setOpenDirs] = useState<Set<string>>(() => new Set(readExplorerOpen(cwd)));
+	/** `root`: opened on the empty area below the rows, acting on the project itself. */
+	const [menu, setMenu] = useState<{ entry: PiwFileEntry; x: number; y: number; root?: boolean } | null>(
+		null,
+	);
+	const [edit, setEdit] = useState<NameEdit | null>(null);
+	/** Cut or copied, waiting for Paste. Cut is a move, so it is used up by one paste. */
+	const [clip, setClip] = useState<{ path: string; cut: boolean } | null>(null);
+	/** Project-relative paths git reports as changed, read when a menu opens. */
+	const [changed, setChanged] = useState<Set<string>>(() => new Set());
+
+	const openMenu = useCallback<RowMenu>((entry, e) => {
+		e.preventDefault();
+		// Not a repo, or git failed: no "Open Changes", nothing else lost.
+		if (!entry.dir) {
+			void getJson<{ files: Array<{ path: string }> }>(
+				`/api/git/changes?cwd=${encodeURIComponent(cwd)}`,
+			)
+				.then((r) => setChanged(new Set(r.files.map((f) => f.path))))
+				.catch(() => setChanged(new Set()));
+		}
+		// A keyboard-raised menu reports (0,0); anchor it to the row instead.
+		const box = e.currentTarget.getBoundingClientRect();
+		setMenu({ entry, x: e.clientX || box.left + 16, y: e.clientY || box.bottom });
+	}, [cwd]);
+
+	/** Run a menu action, closing the menu first. */
+	const act = (fn: () => void | Promise<void>) => () => {
+		setMenu(null);
+		void Promise.resolve()
+			.then(fn)
+			.catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)));
+	};
 
 	// Fetch every remembered open directory at once, so a cold restore is one
 	// round trip instead of one per depth level. Nodes pick these up through
@@ -241,6 +391,66 @@ export function Explorer({
 		},
 		[cwd],
 	);
+
+	const refresh = () => setManual((n) => n + 1);
+	const fail = (err: unknown) => setError(err instanceof Error ? err.message : String(err));
+	const guard = (path: string) => {
+		if (hasUnsaved(path)) throw new Error("Save or discard the unsaved edits under it first.");
+	};
+
+	/** Start a new file or folder in `parent`, opening it so the field shows. */
+	const startNew = (kind: "file" | "folder", parent: string) => {
+		if (parent !== cwd && !openDirs.has(parent)) toggleDir(parent);
+		setEdit({ kind, parent });
+	};
+
+	/** The inline field finished: create or rename, or nothing on cancel. */
+	const finishEdit = (name: string | null) => {
+		const current = edit;
+		setEdit(null);
+		if (!current || !name) return;
+		void (async () => {
+			if (current.kind === "rename") {
+				if (name === current.name) return;
+				const to = `${parentOf(current.path)}/${name}`;
+				await postJson("/api/files/move", { from: current.path, to });
+				onPathChange(current.path, to);
+			} else {
+				const r = await postJson<{ path: string }>("/api/files/create", {
+					path: `${current.parent}/${name}`,
+					dir: current.kind === "folder",
+				});
+				if (current.kind === "file") onOpen(r.path);
+			}
+			refresh();
+		})().catch(fail);
+	};
+
+	/** Paste the clipboard into `dir`: a cut moves (and is used up), a copy copies. */
+	const paste = async (dir: string) => {
+		if (!clip) return;
+		if (clip.cut) {
+			const to = `${dir}/${clip.path.slice(clip.path.lastIndexOf("/") + 1)}`;
+			if (to !== clip.path) {
+				guard(clip.path);
+				await postJson("/api/files/move", { from: clip.path, to });
+				onPathChange(clip.path, to);
+			}
+			setClip(null);
+		} else {
+			await postJson("/api/files/copy", { from: clip.path, toDir: dir });
+		}
+		refresh();
+	};
+
+	const trash = async (entry: PiwFileEntry) => {
+		guard(entry.path);
+		if (!window.confirm(`Move "${entry.name}" to the Trash?`)) return;
+		await postJson("/api/files/trash", { path: entry.path });
+		onPathChange(entry.path, null);
+		if (clip && (clip.path === entry.path || clip.path.startsWith(`${entry.path}/`))) setClip(null);
+		refresh();
+	};
 
 	useEffect(() => {
 		if (!cwd) return;
@@ -265,7 +475,7 @@ export function Explorer({
 			className="flex min-h-0 min-w-0 flex-1 flex-col bg-neutral-950"
 		>
 			<PanelHeader title="Explorer" onClose={onClose}>
-				<IconButton size="sm" className="ml-auto" onClick={() => setManual((n) => n + 1)} label="Refresh explorer">
+				<IconButton size="sm" className="ml-auto" onClick={refresh} label="Refresh explorer">
 					<ArrowClockwise size={16} />
 				</IconButton>
 			</PanelHeader>
@@ -277,30 +487,154 @@ export function Explorer({
 				</div>
 			)}
 
-			<div className="min-h-0 flex-1 overflow-auto py-1">
-				{roots.map((entry) =>
-					entry.dir ? (
-						<TreeDir
-							key={entry.path}
-							entry={entry}
-							depth={0}
-							openPath={openPath}
-							onOpen={onOpen}
-							openDirs={openDirs}
-							onToggle={toggleDir}
-							rev={rev}
-						/>
-					) : (
-						<TreeFile
-							key={entry.path}
-							entry={entry}
-							depth={0}
-							active={entry.path === openPath}
-							onOpen={onOpen}
-						/>
-					),
-				)}
-			</div>
+			<EditContext.Provider value={{ edit, done: finishEdit }}>
+				<div
+					className="min-h-0 flex-1 overflow-auto py-1"
+					// The empty space below the rows: a menu for the project itself.
+					onContextMenu={(e) => {
+						if (e.target !== e.currentTarget) return;
+						e.preventDefault();
+						const name = cwd.slice(cwd.lastIndexOf("/") + 1);
+						setMenu({ entry: { name, path: cwd, dir: true, hidden: false }, x: e.clientX, y: e.clientY, root: true });
+					}}
+				>
+					{edit && edit.kind !== "rename" && edit.parent === cwd && (
+						<NameRow depth={0} dir={edit.kind === "folder"} initial="" />
+					)}
+					{roots.map((entry) =>
+						entry.dir ? (
+							<TreeDir
+								key={entry.path}
+								entry={entry}
+								depth={0}
+								openPath={openPath}
+								onOpen={onOpen}
+								openDirs={openDirs}
+								onToggle={toggleDir}
+								onMenu={openMenu}
+								rev={rev}
+							/>
+						) : (
+							<TreeFile
+								key={entry.path}
+								entry={entry}
+								depth={0}
+								active={entry.path === openPath}
+								onOpen={onOpen}
+								onMenu={openMenu}
+							/>
+						),
+					)}
+				</div>
+			</EditContext.Provider>
+
+			{menu && (() => {
+				const m = menu.entry;
+				const dir = m.dir ? m.path : parentOf(m.path);
+				return (
+					<ContextMenu x={menu.x} y={menu.y} label={m.name} onClose={() => setMenu(null)}>
+						{m.dir ? (
+							<>
+								<MenuItem role="menuitem" autoFocus onClick={act(() => startNew("file", m.path))}>
+									New File…
+								</MenuItem>
+								<MenuItem role="menuitem" onClick={act(() => startNew("folder", m.path))}>
+									New Folder…
+								</MenuItem>
+							</>
+						) : (
+							<>
+								<MenuItem role="menuitem" autoFocus onClick={act(() => onOpen(m.path))}>
+									Open
+								</MenuItem>
+								<MenuItem role="menuitem" onClick={act(() => onOpenSide(m.path))}>
+									Open to the Side
+								</MenuItem>
+								{changed.has(relativePath(cwd, m.path)) && (
+									<MenuItem role="menuitem" onClick={act(() => onOpenDiff("", relativePath(cwd, m.path)))}>
+										Open Changes
+									</MenuItem>
+								)}
+							</>
+						)}
+						<MenuSeparator />
+						{!menu.root && (
+							<MenuItem
+								role="menuitem"
+								disabled={!onAddToChat}
+								title={onAddToChat ? undefined : "Open a session first"}
+								onClick={act(() => onAddToChat?.(relativePath(cwd, m.path)))}
+							>
+								Add to Chat
+							</MenuItem>
+						)}
+						<MenuItem role="menuitem" disabled={!onOpenTerminal} onClick={act(() => onOpenTerminal?.(dir))}>
+							Open in Terminal
+						</MenuItem>
+						{!m.dir && (
+							<MenuItem
+								role="menuitem"
+								onClick={act(() => {
+									const a = document.createElement("a");
+									a.href = `/api/download?path=${encodeURIComponent(m.path)}`;
+									a.download = m.name;
+									a.click();
+								})}
+							>
+								Download
+							</MenuItem>
+						)}
+						<MenuSeparator />
+						{!menu.root && (
+							<>
+								<MenuItem role="menuitem" onClick={act(() => setClip({ path: m.path, cut: true }))}>
+									Cut
+								</MenuItem>
+								<MenuItem role="menuitem" onClick={act(() => setClip({ path: m.path, cut: false }))}>
+									Copy
+								</MenuItem>
+							</>
+						)}
+						<MenuItem
+							role="menuitem"
+							disabled={!clip}
+							title={clip ? `Paste ${clip.path.slice(clip.path.lastIndexOf("/") + 1)} into ${relativePath(cwd, dir)}` : undefined}
+							onClick={act(() => paste(dir))}
+						>
+							Paste
+						</MenuItem>
+						<MenuSeparator />
+						<MenuItem role="menuitem" onClick={act(() => navigator.clipboard.writeText(m.path))}>
+							Copy Path
+						</MenuItem>
+						{!menu.root && (
+							<MenuItem
+								role="menuitem"
+								onClick={act(() => navigator.clipboard.writeText(relativePath(cwd, m.path)))}
+							>
+								Copy Relative Path
+							</MenuItem>
+						)}
+						{!menu.root && (
+							<>
+								<MenuSeparator />
+								<MenuItem
+									role="menuitem"
+									onClick={act(() => {
+										guard(m.path);
+										setEdit({ kind: "rename", path: m.path, name: m.name, dir: m.dir });
+									})}
+								>
+									Rename…
+								</MenuItem>
+								<MenuItem role="menuitem" onClick={act(() => trash(m))}>
+									Delete
+								</MenuItem>
+							</>
+						)}
+					</ContextMenu>
+				);
+			})()}
 		</section>
 	);
 }
