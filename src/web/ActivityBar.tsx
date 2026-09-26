@@ -12,13 +12,14 @@
  * the state upstream is a single `Panel` value rather than a boolean each —
  * "two panels open at once" is then not a state that exists to be got wrong.
  *
- * Settings is not a panel and stays a modal: it is a handful of preferences
- * you set and dismiss, not something you work beside.
+ * Only Explorer and Source Control are panels. The terminal toggles a dock
+ * under the editor columns, and Stats, Packages and Settings open as tabs.
  */
 
 import type { ReactNode } from "react";
-import { Code, GitBranch, Gear, SquaresFour, TerminalWindow } from "@phosphor-icons/react";
+import { ChartBar, Code, GitBranch, Gear, SquaresFour, TerminalWindow } from "@phosphor-icons/react";
 import type { Panel } from "./App.js";
+import type { PageId } from "./tabs.js";
 
 /**
  * One rail button.
@@ -83,7 +84,10 @@ export function ActivityBar({
 	panel,
 	onSelect,
 	uncommitted,
-	onSettings,
+	dockOpen,
+	onToggleDock,
+	pages,
+	onPage,
 	version,
 }: {
 	/** The panel showing now, or null when the chat has the whole width. */
@@ -92,10 +96,21 @@ export function ActivityBar({
 	onSelect: (panel: Panel) => void;
 	/** Uncommitted files, for the badge. */
 	uncommitted: number;
-	onSettings: () => void;
+	/** The terminal dock under the editor columns. */
+	dockOpen: boolean;
+	onToggleDock: () => void;
+	/** Pages whose tab is showing in either column. */
+	pages: PageId[];
+	/** Open a page's tab, or focus it. */
+	onPage: (page: PageId) => void;
 	/** Full build string. Displayed short, but kept whole in the tooltip. */
 	version: string;
 }) {
+	const page = (id: PageId, label: string, title: string, icon: ReactNode) => (
+		<RailButton label={label} title={title} active={pages.includes(id)} onClick={() => onPage(id)}>
+			{icon}
+		</RailButton>
+	);
 	return (
 		<nav
 			aria-label="Panels"
@@ -124,36 +139,23 @@ export function ActivityBar({
 				<GitBranch size={20} />
 			</RailButton>
 
+			{/* Set apart from the panels above: it toggles the dock under the
+			    tabs, not the left column. */}
+			<div aria-hidden className="my-1 h-px w-6 bg-neutral-800" />
 			<RailButton
-				label={panel === "terminal" ? "Hide terminal" : "Show terminal"}
-				title={
-					panel === "terminal"
-						? "Hide terminal (Ctrl+`) — the shell keeps running"
-						: "Show terminal (Ctrl+`)"
-				}
-				active={panel === "terminal"}
-				onClick={() => onSelect("terminal")}
+				label={dockOpen ? "Hide terminal" : "Show terminal"}
+				title={dockOpen ? "Hide terminal (Ctrl+`) — the shells keep running" : "Show terminal (Ctrl+`)"}
+				active={dockOpen}
+				onClick={onToggleDock}
 			>
 				<TerminalWindow size={20} />
 			</RailButton>
 
-			<RailButton
-				label={panel === "packages" ? "Hide packages" : "Show packages"}
-				title="Packages installed on this machine"
-				active={panel === "packages"}
-				onClick={() => onSelect("packages")}
-			>
-				<SquaresFour size={20} />
-			</RailButton>
-
-			{/* `mt-auto` on the first of the bottom pair is what pushes both down:
-			    settings is the conventional resting place down there, and the
-			    version under it is what you read out loud when two machines
-			    disagree about what they are running. */}
+			{/* Pages open as tabs. `mt-auto` pushes the group to the bottom. */}
 			<div className="mt-auto flex flex-col items-center">
-				<RailButton label="Settings" title="Settings" onClick={onSettings}>
-					<Gear size={20} />
-				</RailButton>
+				{page("stats", "Stats", "Usage stats: streaks, answer times, every answer", <ChartBar size={20} />)}
+				{page("packages", "Packages", "Packages installed on this machine", <SquaresFour size={20} />)}
+				{page("settings", "Settings", "Settings", <Gear size={20} />)}
 
 			{/*
 			 * Just the release number, because 11px of rail is all there is. The

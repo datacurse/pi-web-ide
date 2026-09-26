@@ -18,6 +18,8 @@ import {
 	withGroup,
 	withoutTab,
 	withTab,
+	pageTab,
+	pageOf,
 } from "./tabs.js";
 import { halfOf } from "./SplitZone.js";
 import { slotFor } from "./SessionTabs.js";
@@ -78,6 +80,12 @@ assert.equal(isSessionTab(session), true);
 assert.equal(isSessionTab(d), false);
 assert.equal(isSessionTab(w), false);
 assert.equal(isSessionTab(t), false);
+// Pages too, including one a newer build wrote and this one does not know.
+assert.equal(isSessionTab(pageTab("stats")), false);
+assert.equal(isSessionTab("page:nope"), false);
+assert.equal(pageOf(pageTab("settings")), "settings");
+assert.equal(pageOf("page:nope"), null);
+assert.equal(tabLabel(pageTab("packages")), "Packages");
 
 // --- pinnedFirst -----------------------------------------------------------
 assert.deepEqual(pinnedFirst(["a", "b", "c", "d"], ["d", "b"]), ["b", "d", "a", "c"]);

@@ -19,6 +19,22 @@
 
 const FILE_PREFIX = "file:";
 const DIFF_PREFIX = "diff:";
+const PAGE_PREFIX = "page:";
+
+/** Whole-pane pages the rail opens as tabs. */
+export type PageId = "stats" | "packages" | "settings";
+const PAGE_TITLE: Record<PageId, string> = { stats: "Stats", packages: "Packages", settings: "Settings" };
+
+export const pageTab = (page: PageId): string => `${PAGE_PREFIX}${page}`;
+
+/** True for any `page:` entry, known or not, so an unknown one is never taken for a session. */
+export const isPageTab = (entry: string): boolean => entry.startsWith(PAGE_PREFIX);
+
+/** The page an entry names, or null for a page this build does not have. */
+export function pageOf(entry: string): PageId | null {
+	const id = entry.slice(PAGE_PREFIX.length);
+	return isPageTab(entry) && id in PAGE_TITLE ? (id as PageId) : null;
+}
 
 /** The tab entry for an open file. */
 export const fileTab = (path: string): string => `${FILE_PREFIX}${path}`;
@@ -48,7 +64,8 @@ export function diffParts(entry: string): { ref: string; path: string } {
 }
 
 /** True when this entry is a chat session: the only kind App attaches to. */
-export const isSessionTab = (entry: string): boolean => !isFileTab(entry) && !isDiffTab(entry);
+export const isSessionTab = (entry: string): boolean =>
+	!isFileTab(entry) && !isDiffTab(entry) && !isPageTab(entry);
 
 /** The absolute path inside a file or diff entry. Meaningless for a session. */
 export const tabPath = (entry: string): string =>
@@ -62,6 +79,10 @@ export const tabPath = (entry: string): string =>
  * identical tabs.
  */
 export const tabLabel = (entry: string): string => {
+	if (isPageTab(entry)) {
+		const page = pageOf(entry);
+		return page ? PAGE_TITLE[page] : entry;
+	}
 	const path = tabPath(entry);
 	const name = path.split("/").pop() || path;
 	if (!isDiffTab(entry)) return name;

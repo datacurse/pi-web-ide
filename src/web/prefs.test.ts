@@ -27,6 +27,17 @@ assert.equal(readPanel(), null);
 store.set("pwi:panel", "nonsense");
 assert.equal(readPanel(), null);
 
+// The terminal left the side panel for the dock: an old stored "terminal"
+// panel closes the panel and opens the dock instead.
+const { readDockOpen, writeDockOpen, readDockHeight } = prefs;
+store.set("pwi:panel", "terminal");
+assert.equal(readPanel(), null);
+assert.equal(readDockOpen(), true);
+writeDockOpen(false);
+assert.equal(readDockOpen(), false);
+store.set("pwi:dockHeight", "2");
+assert.equal(readDockHeight(), 15);
+
 // --- explorer expansion, per project --------------------------------------
 const { readExplorerOpen, writeExplorerOpen } = prefs;
 

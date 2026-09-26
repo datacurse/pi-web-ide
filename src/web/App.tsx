@@ -15,6 +15,7 @@ import type { Hunk } from "../shared/hunks.js";
 import { SessionList } from "./SessionList.js";
 import { ProjectPicker, type Projects } from "./ProjectPicker.js";
 import { ActivityBar } from "./ActivityBar.js";
+import { Stats } from "./Stats.js";
 import { SessionTabs, tabDomId } from "./SessionTabs.js";
 import { Chat } from "./Chat.js";
 import { TerminalPane } from "./Terminal.js";
@@ -33,8 +34,11 @@ import {
 	groupOf,
 	isDiffTab,
 	isFileTab,
+	isPageTab,
 	isSessionTab,
 	moveTab,
+	pageOf,
+	pageTab,
 	pinnedFirst,
 	sideOfTab,
 	tabPath,
@@ -42,13 +46,15 @@ import {
 	withoutTab,
 	withTab,
 } from "./tabs.js";
-import type { Side, TabGroup } from "./tabs.js";
+import type { PageId, Side, TabGroup } from "./tabs.js";
 import { SplitZone } from "./SplitZone.js";
 import { EMPTY_LAYOUT, addTab, reconcile, type TermLayout } from "./termLayout.js";
 import { Settings } from "./Settings.js";
 import { Packages } from "./Packages.js";
 import {
 	applyTheme,
+	readDockHeight,
+	readDockOpen,
 	readNotify,
 	readPanel,
 	readPinnedSessions,
@@ -62,6 +68,8 @@ import {
 	readToolMode,
 	TERMINAL_MAX_PERCENT,
 	TERMINAL_MIN_PERCENT,
+	writeDockHeight,
+	writeDockOpen,
 	writeNotify,
 	writePanel,
 	writePinnedSessions,
@@ -251,6 +259,7 @@ function EditorColumn({
 	onReveal,
 	onTogglePin,
 	onRename,
+	renderPage,
 }: {
 	side: Side;
 	group: TabGroup;
@@ -282,13 +291,16 @@ function EditorColumn({
 	onReveal: (path: string) => void;
 	onTogglePin: (file: string) => void;
 	onRename: (session: PiSessionInfo, name: string) => void;
+	/** A page tab's content; `active` is whether its tab is the one showing. */
+	renderPage: (page: PageId, active: boolean) => React.ReactNode;
 }) {
 	const active = group.active;
 	const activeIndex = active ? group.files.indexOf(active) : -1;
 	const showsFile = active !== undefined && isFileTab(active);
 	const showsDiff = active !== undefined && isDiffTab(active);
-	/** The chat hides under a file OR a diff: both are documents, not the chat. */
-	const showsDoc = showsFile || showsDiff;
+	const showsPage = active !== undefined && isPageTab(active);
+	/** The chat hides under a file, a diff or a page: none of them is the chat. */
+	const showsDoc = showsFile || showsDiff || showsPage;
 
 	return (
 		<div
@@ -372,6 +384,25 @@ function EditorColumn({
 							onChanged={onHunksChanged}
 						/>
 					)}
+					{/* Pages stay mounted while their tab is open, like the chat, so a
+					    half-typed setting or a scrolled list survives a tab switch. */}
+					{group.files.filter(isPageTab).map((entry) => {
+						const page = pageOf(entry);
+						return (
+							<div
+								key={entry}
+								className={`flex min-h-0 min-w-0 flex-1 flex-col ${entry === active ? "" : "hidden"}`}
+							>
+								{page ? (
+									renderPage(page, entry === active)
+								) : (
+									<p className="m-auto px-4 text-center text-ui text-neutral-500">
+										This version of pwi has no such page.
+									</p>
+								)}
+							</div>
+						);
+					})}
 					{/*
 					 * The chat stays MOUNTED under a file tab rather than being swapped
 					 * out: it holds the live EventSource and the transcript's scroll
@@ -1261,7 +1292,6 @@ export default function App() {
 	const [termLayout, setTermLayout] = useState<TermLayout>(EMPTY_LAYOUT);
 	/** The row holding the panel, the chat and the divider between them. */
 	const splitRow = useRef<HTMLDivElement | null>(null);
-	const [settingsOpen, setSettingsOpen] = useState(false);
 	const [theme, setTheme] = useState<ThemeId>(readTheme);
 	const [showThinking, setShowThinking] = useState(readShowThinking);
 	const [toolMode, setToolMode] = useState<ToolMode>(readToolMode);
@@ -1324,14 +1354,72 @@ export default function App() {
 	 * Both preferences are written on change rather than in an effect, so a
 	 * pane closed and a window closed in the same second still agree.
 	 */
-	const showTerminal = useCallback(
-		(open: boolean) => {
-			showPanel((p) => (open ? "terminal" : p === "terminal" ? null : p));
-		},
-		[showPanel],
-	);
-
+	const [dockOpen, setDockOpen] = useState(readDockOpen);
+	const showTerminal = useCallback((open: boolean) => {
+		setDockOpen(open);
+		writeDockOpen(open);
+	}, []);
 	const closeTerminal = useCallback(() => showTerminal(false), [showTerminal]);
+	const toggleTerminal = useCallback(() => {
+		setDockOpen((open) => {
+			writeDockOpen(!open);
+			return !open;
+		});
+	}, []);
+
+	/** The dock's share of the editor area's height, and that area for measuring drags. */
+	const [dockHeight, setDockHeight] = useState(readDockHeight);
+	const editorArea = useRef<HTMLDivElement | null>(null);
+	const resizeDock = useCallback((percent: number, save: boolean) => {
+		const clamped = Math.min(TERMINAL_MAX_PERCENT, Math.max(TERMINAL_MIN_PERCENT, percent));
+		setDockHeight(clamped);
+		if (save) writeDockHeight(clamped);
+	}, []);
+	const startDockDrag = useCallback(
+		(event: React.PointerEvent<HTMLDivElement>) => {
+			if (event.button !== 0) return;
+			const area = editorArea.current?.getBoundingClientRect();
+			if (!area || area.height === 0) return;
+			const divider = event.currentTarget;
+			divider.setPointerCapture(event.pointerId);
+			event.preventDefault();
+			let latest = dockHeight;
+			const move = (moved: PointerEvent) => {
+				// The dock is at the bottom, so it grows up from the area's bottom edge.
+				latest = ((area.bottom - moved.clientY) / area.height) * 100;
+				resizeDock(latest, false);
+			};
+			const end = () => {
+				divider.removeEventListener("pointermove", move);
+				divider.removeEventListener("pointerup", end);
+				divider.removeEventListener("pointercancel", end);
+				resizeDock(latest, true);
+			};
+			divider.addEventListener("pointermove", move);
+			divider.addEventListener("pointerup", end);
+			divider.addEventListener("pointercancel", end);
+		},
+		[resizeDock, dockHeight],
+	);
+	const dockKeys = useCallback(
+		(event: React.KeyboardEvent<HTMLDivElement>) => {
+			const step = event.shiftKey ? 10 : 2;
+			const next =
+				event.key === "ArrowUp"
+					? dockHeight + step
+					: event.key === "ArrowDown"
+						? dockHeight - step
+						: event.key === "Home"
+							? TERMINAL_MIN_PERCENT
+							: event.key === "End"
+								? TERMINAL_MAX_PERCENT
+								: undefined;
+			if (next === undefined) return;
+			event.preventDefault();
+			resizeDock(next, true);
+		},
+		[resizeDock, dockHeight],
+	);
 
 	/**
 	 * The rail's one action: show a panel, or close it if it is already the
@@ -2082,9 +2170,8 @@ export default function App() {
 	 * two tabs, while clicking the same row twice focuses the one that is
 	 * already open.
 	 */
-	const openDiff = useCallback(
-		(ref: string, path: string) => {
-			const entry = diffTab(ref, path);
+	const openInLastSide = useCallback(
+		(entry: string) => {
 			const open = sideOfTab(tabsRef.current, entry);
 			// Already open somewhere: focus it there, wherever that is. A second
 			// copy in the other column would be two merge views over one file.
@@ -2094,6 +2181,21 @@ export default function App() {
 			else selectTab(entry);
 		},
 		[selectTab, selectRight, moveToGroup],
+	);
+	const openDiff = useCallback(
+		(ref: string, path: string) => openInLastSide(diffTab(ref, path)),
+		[openInLastSide],
+	);
+
+	/** Open a page (Stats, Packages, Settings) as a tab, or focus the one it has. */
+	const openPage = useCallback((page: PageId) => openInLastSide(pageTab(page)), [openInLastSide]);
+	const closePage = useCallback(
+		(page: PageId) => {
+			const entry = pageTab(page);
+			if (sideOfTab(tabsRef.current, entry) === "right") closeRight(entry);
+			else closeTab(entry);
+		},
+		[closeTab, closeRight],
 	);
 
 	/**
@@ -2231,11 +2333,11 @@ export default function App() {
 		const onKeyDown = (e: KeyboardEvent) => {
 			if (e.code !== "Backquote" || !e.ctrlKey || e.metaKey || e.altKey) return;
 			e.preventDefault();
-			selectPanel("terminal");
+			toggleTerminal();
 		};
 		window.addEventListener("keydown", onKeyDown);
 		return () => window.removeEventListener("keydown", onKeyDown);
-	}, [selectPanel]);
+	}, [toggleTerminal]);
 
 	/*
 	 * Notice when the server we are talking to is not the one that served this
@@ -2438,6 +2540,39 @@ export default function App() {
 		return () => window.removeEventListener("keydown", onKeyDown);
 	}, [shown, attention, focusSession]);
 
+	/** A page tab's content, whichever column it is in. */
+	const renderPage = (page: PageId, active: boolean) => {
+		const onClose = () => closePage(page);
+		if (page === "stats") return <Stats revision={replies} onClose={onClose} />;
+		if (page === "packages")
+			return (
+				<Packages
+					onChanged={() => {
+						void left.reloadSnapshot();
+						void right.reloadSnapshot();
+					}}
+					cwd={project}
+					onClose={onClose}
+				/>
+			);
+		return (
+			<Settings
+				open={active}
+				theme={theme}
+				onTheme={setTheme}
+				showThinking={showThinking}
+				onShowThinking={changeShowThinking}
+				toolMode={toolMode}
+				onToolMode={changeToolMode}
+				notify={notify}
+				onNotify={(on) => void changeNotify(on)}
+				shortNames={shortNames}
+				onShortNames={changeShortNames}
+				onClose={onClose}
+			/>
+		);
+	};
+
 	/** One column's chat, wired to that column's session. */
 	const chatFor = (s: ReturnType<typeof useSession>, side: Side) => (
 		<Chat
@@ -2484,7 +2619,10 @@ export default function App() {
 				panel={panel}
 				onSelect={selectPanel}
 				uncommitted={uncommitted}
-				onSettings={() => setSettingsOpen(true)}
+				dockOpen={dockOpen}
+				onToggleDock={toggleTerminal}
+				pages={[tabs.active, tabs.right?.active].flatMap((e) => (e && pageOf(e)) || [])}
+				onPage={openPage}
 				version={__APP_VERSION__}
 			/>
 
@@ -2493,9 +2631,7 @@ export default function App() {
 			 * sitting immediately right of the button that opened it.
 			 *
 			 * Each panel states its own requirement rather than the rail hiding
-			 * the button: the editor and the terminal need a project, changes
-			 * needs a SESSION (hunks belong to one, and decisions post against its
-			 * id), and packages needs neither. A button that silently does nothing
+			 * the button: both need a project. A button that silently does nothing
 			 * is worse than one that opens a panel explaining what is missing.
 			 */}
 			{panel !== null && (
@@ -2561,38 +2697,6 @@ export default function App() {
 									Pick a project first — a working tree belongs to a repository.
 								</PanelEmpty>
 							))}
-
-						{/*
-						 * Kept MOUNTED while another panel shows, because the shells
-						 * are live processes and xterm's fit is measured from a visible
-						 * box — unmounting would tear down a terminal you only switched
-						 * away from, and remounting would re-measure at zero width.
-						 */}
-						{panel === "terminal" &&
-							(project ? (
-								<TerminalPane
-									cwd={project}
-									ready={termsReady}
-									layout={termLayout}
-									onLayout={changeTermLayout}
-									onClose={closeTerminal}
-								/>
-							) : (
-								<PanelEmpty title="Terminal" onClose={() => showPanel(null)}>
-									Pick a project first — a shell has to start somewhere.
-								</PanelEmpty>
-							))}
-
-						{panel === "packages" && (
-							<Packages
-								onChanged={() => {
-									void left.reloadSnapshot();
-									void right.reloadSnapshot();
-								}}
-								cwd={project}
-								onClose={() => showPanel(null)}
-							/>
-						)}
 					</div>
 					{/* Hidden on narrow, where the panel IS the view and there is
 					    nothing beside it to resize. */}
@@ -2616,8 +2720,10 @@ export default function App() {
 			{/* On a phone the panel IS the view: two columns there is three words
 			    per line each. Same rule the session list follows. */}
 			<div
-				className={`flex min-h-0 min-w-0 flex-1 ${panel !== null ? "narrow:hidden" : ""}`}
+				ref={editorArea}
+				className={`flex min-h-0 min-w-0 flex-1 flex-col ${panel !== null ? "narrow:hidden" : ""}`}
 			>
+			<div className="flex min-h-0 min-w-0 flex-1">
 				{/*
 				 * The two editor columns, as SIBLINGS.
 				 *
@@ -2654,6 +2760,7 @@ export default function App() {
 					onHunksChanged={() => void leftHunks.reloadSnapshot()}
 					chat={chatFor(left, "left")}
 					focused={!tabs.right || focusedSide === "left"}
+					renderPage={renderPage}
 				/>
 
 				{tabs.right && (
@@ -2685,7 +2792,46 @@ export default function App() {
 						// "drag a tab here" instead of showing an empty conversation.
 						chat={tabs.right.files.some(isSessionTab) ? chatFor(right, "right") : null}
 						focused={focusedSide === "right"}
+						renderPage={renderPage}
 					/>
+				)}
+			</div>
+
+				{/* The terminal dock: under BOTH columns, because the shells belong to
+				    the project, not to a column. */}
+				{dockOpen && (
+					<>
+						<div
+							role="separator"
+							aria-orientation="horizontal"
+							aria-label="Resize terminal"
+							aria-valuenow={Math.round(dockHeight)}
+							aria-valuemin={TERMINAL_MIN_PERCENT}
+							aria-valuemax={TERMINAL_MAX_PERCENT}
+							tabIndex={0}
+							onPointerDown={startDockDrag}
+							onKeyDown={dockKeys}
+							className="relative h-1 shrink-0 cursor-row-resize bg-neutral-800 transition-colors duration-150 ease-out after:absolute after:inset-x-0 after:-top-1 after:-bottom-1 after:content-[''] hover:bg-amber-600 focus-visible:bg-amber-500 focus-visible:outline-none motion-reduce:transition-none"
+						/>
+						<div
+							className="flex min-h-0 min-w-0 flex-col [flex:0_0_var(--dock-h)]"
+							style={{ "--dock-h": `${dockHeight}%` } as React.CSSProperties}
+						>
+							{project ? (
+								<TerminalPane
+									cwd={project}
+									ready={termsReady}
+									layout={termLayout}
+									onLayout={changeTermLayout}
+									onClose={closeTerminal}
+								/>
+							) : (
+								<PanelEmpty title="Terminal" onClose={closeTerminal}>
+									Pick a project first: a shell has to start somewhere.
+								</PanelEmpty>
+							)}
+						</div>
+					</>
 				)}
 			</div>
 
@@ -2721,20 +2867,6 @@ export default function App() {
 				onNew={() =>
 					void (lastSide.current === "right" && tabsRef.current.right ? right : left).attach()
 				}
-			/>
-			<Settings
-				open={settingsOpen}
-				theme={theme}
-				onTheme={setTheme}
-				showThinking={showThinking}
-				onShowThinking={changeShowThinking}
-				toolMode={toolMode}
-				onToolMode={changeToolMode}
-				notify={notify}
-				onNotify={(on) => void changeNotify(on)}
-				shortNames={shortNames}
-				onShortNames={changeShortNames}
-				onClose={() => setSettingsOpen(false)}
 			/>
 		</div>
 	);

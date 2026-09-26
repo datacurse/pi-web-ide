@@ -1,6 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { X } from "@phosphor-icons/react";
-import { Button, IconButton, inputClass, OptionRow, Section } from "./ui.js";
+import { useEffect, useState } from "react";
+import { Button, inputClass, OptionRow, PanelHeader, Section } from "./ui.js";
 import { THEMES, TOOL_MODES, type ThemeId, type ToolMode } from "./prefs.js";
 
 /** What GET/PUT /api/personality answer with. */
@@ -63,14 +62,11 @@ function Swatch({ theme }: { theme: ThemeId }) {
 }
 
 /**
- * The settings dialog: one <fieldset> per setting, all of them
- * browser-local (see prefs.ts).
+ * The Settings page, shown in a tab: one <fieldset> per setting, all but the
+ * personality browser-local (see prefs.ts).
  *
- * A native <dialog> opened with showModal() rather than a hand-rolled
- * overlay: it brings the focus trap, the Escape binding, inertness of the
- * page behind it and the top layer (so no z-index has to be reasoned about
- * against the session drawer) for free, and all four are things a div gets
- * wrong quietly.
+ * Stays mounted while its tab is open, so an unsaved personality edit
+ * survives switching tabs. `open` is "the tab is showing".
  */
 export function Settings({
 	open,
@@ -113,17 +109,6 @@ export function Settings({
 		: Notification.permission === "denied"
 			? "Blocked — allow notifications for this site in your browser."
 			: "Only when the page is in the background. Shows the first line of the answer.";
-
-	const ref = useRef<HTMLDialogElement>(null);
-
-	// showModal() is imperative — the `open` ATTRIBUTE renders a non-modal
-	// dialog, which is a different (and here, wrong) thing.
-	useEffect(() => {
-		const dialog = ref.current;
-		if (!dialog) return;
-		if (open && !dialog.open) dialog.showModal();
-		else if (!open && dialog.open) dialog.close();
-	}, [open]);
 
 	/*
 	 * Personality lives on the server, so unlike every other control here it
@@ -243,32 +228,13 @@ export function Settings({
 	};
 
 	return (
-		<dialog
-			ref={ref}
-			aria-labelledby="settings-title"
-			// Escape and the close button both end up here, so React state and
-			// the element's own open state cannot disagree.
-			onClose={onClose}
-			// Clicking the backdrop targets the dialog itself; a click anywhere
-			// on its contents targets a descendant.
-			onClick={(e) => {
-				if (e.target === ref.current) onClose();
-			}}
-			// max-h + overflow because the dialog outgrew the viewport once the
-			// personality field arrived: a <dialog> does not scroll by default,
-			// so the Save button simply had nowhere to be on a short screen.
-			className="m-auto max-h-[88vh] w-[min(26rem,92vw)] overflow-y-auto rounded-md border border-neutral-800 bg-neutral-950 p-0 text-neutral-100 shadow-2xl backdrop:bg-black/60"
+		<section
+			aria-label="Settings"
+			className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-neutral-950 text-neutral-100"
 		>
-			<div className="flex items-center justify-between border-b border-neutral-800 px-3 py-2">
-				<h2 id="settings-title" className="text-title font-semibold tracking-tight">
-					Settings
-				</h2>
-				<IconButton onClick={onClose} label="Close settings">
-					<X size={13} />
-				</IconButton>
-			</div>
-
-			<div className="p-3">
+			<PanelHeader title="Settings" onClose={onClose} />
+			<div className="min-h-0 flex-1 overflow-y-auto">
+			<div className="mx-auto w-full max-w-xl p-3">
 				<Section title="Usage remaining" className="mb-4">
 					{usageError ? (
 						<p className="px-2 text-meta text-red-400">{usageError}</p>
@@ -474,7 +440,7 @@ export function Settings({
 							) : saveState === "saved" ? (
 								"Saved. Applies to sessions started from now on."
 							) : (
-								"Read from disk each time this dialog opens."
+								"Read from disk each time Settings is shown."
 							)}
 						</span>
 					</div>
@@ -498,6 +464,7 @@ export function Settings({
 					</OptionRow>
 				</Section>
 			</div>
-		</dialog>
+			</div>
+		</section>
 	);
 }

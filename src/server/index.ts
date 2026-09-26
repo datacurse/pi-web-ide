@@ -18,6 +18,7 @@ import { randomUUID } from "node:crypto";
 import { promisify } from "node:util";
 import { listModels, readSettings, setDefaultModel, setDefaultThinkingLevel } from "./models.js";
 import { listSessions, sameProject } from "./sessions.js";
+import { markWeb, stats } from "./stats.js";
 import {
 	addFavorite,
 	addProject,
@@ -256,6 +257,14 @@ app.get("/api/usage", async (_req, res) => {
 		if (r?.ok) return res.json(await r.json());
 	}
 	res.status(502).json({ error: tokens.length ? "usage request failed" : "no unexpired Claude login in auth.json" });
+});
+
+app.get("/api/stats", async (_req, res) => {
+	try {
+		res.json(await stats());
+	} catch (err) {
+		res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+	}
 });
 
 /** Persist "provider/id" as pi's own startup default, for future sessions; `null` clears it. */
@@ -655,6 +664,12 @@ app.post("/api/sessions/:id/prompt", async (req, res) => {
 	if (!text.trim() && images.length === 0)
 		return res.status(400).json({ error: "empty prompt" });
 	if (!registry.get(req.params.id)) return res.status(404).json({ error: "not found" });
+	try {
+		markWeb(req.params.id);
+	} catch (err) {
+		// Stats bookkeeping must never block a prompt.
+		console.error("stats: could not record web session:", err);
+	}
 
 	// Fire and forget. registry.prompt resolves once pi ACCEPTS the prompt,
 	// which is not when the run finishes — the turn plays out over SSE either

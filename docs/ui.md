@@ -162,6 +162,20 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
   refused while a file under the path has unsaved edits; open tabs follow a
   rename and close on delete.
 
+## Rail, panels, pages and the terminal dock
+
+- The left side panel holds only what you work beside: Explorer and Source Control.
+  Clicking the lit icon closes it.
+- The terminal is a dock under BOTH editor columns (the shells belong to the project,
+  not a column). The rail's terminal button, set apart from the panels by a rule, and
+  Ctrl+` toggle it; its height is a resizable share of the editor area.
+- Stats, Packages and Settings are pages: the rail's bottom group opens each as a tab
+  (`page:<id>`) in the last-used column, or focuses it. A page tab shows the rail icon,
+  has only the Close items in its menu, and stays mounted while open, like the chat.
+- Stats filters All / Web UI / Terminal the same way as the Packages tabs
+  (`subtle`/`ghost`, `aria-pressed`). Heatmap cells are square with no radius,
+  `neutral-800` for empty days, then `amber-900/700/500/300`. Bars are `amber-500`.
+
 ## Primitives (`src/web/ui.tsx`)
 
 New UI uses these; convert raw markup when you touch it. Tune styles in
@@ -204,6 +218,6 @@ New UI uses these; convert raw markup when you touch it. Tune styles in
 ## Open questions
 
 - `ChoiceCard`: two uses (chat questions, package search) — one more and extract.
-- Dialog headers (Settings, DirectoryPicker, Packages add) use `text-title`
+- Dialog headers (DirectoryPicker, Packages add) use `text-title`
   and are not `PanelHeader`. Candidate: `Dialog`.
 - Candidates once they repeat: `Badge`, segmented tabs (Packages).

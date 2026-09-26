@@ -1,11 +1,26 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLineRight, Crosshair, GitDiff, Path, PencilSimple, PushPin, X, XCircle } from "@phosphor-icons/react";
+import {
+	ArrowLineRight,
+	ChartBar,
+	Crosshair,
+	Gear,
+	GitDiff,
+	Path,
+	PencilSimple,
+	PushPin,
+	SquaresFour,
+	X,
+	XCircle,
+} from "@phosphor-icons/react";
 import type { KeyboardEvent } from "react";
 import type { PiSessionInfo } from "../shared/types.js";
 import { sessionLabel } from "./sessionName.js";
 import { ATTENTION_UI, type Attention } from "./attention.js";
 import { FileGlyph } from "./fileIcon.js";
-import { diffParts, isDiffTab, isSessionTab, tabLabel, tabPath } from "./tabs.js";
+import { diffParts, isDiffTab, isPageTab, isSessionTab, pageOf, tabLabel, tabPath } from "./tabs.js";
+
+/** The rail's icon for each page, so a page tab and its button match. */
+const PAGE_ICON = { stats: ChartBar, packages: SquaresFour, settings: Gear };
 import { ContextMenu, IconButton, MenuItem, MenuSeparator, tabClass } from "./ui.js";
 
 /**
@@ -304,12 +319,16 @@ export function SessionTabs({
 					// no session to look up and rendered as "New session".
 					const isFile = !isSessionTab(file);
 					const isDiff = isDiffTab(file);
+					const page = isPageTab(file) ? pageOf(file) : null;
+					/** An editable file: not a diff, not a page. */
+					const isEdit = isFile && !isDiff && !isPageTab(file);
+					const PageIcon = page ? PAGE_ICON[page] : null;
 					const info = isFile ? undefined : byFile.get(file);
 					const state = isFile ? null : (attention.get(file) ?? null);
 					const label = isFile ? tabLabel(file) : sessionLabel(info, shortNames);
 					const isActive = file === active;
 					// Only an editable file can be dirty; a diff is read-only.
-					const dirty = isFile && !isDiff && dirtyFiles[tabPath(file)] === true;
+					const dirty = isEdit && dirtyFiles[tabPath(file)] === true;
 					return (
 						// Wrapper because the close control cannot be a <button> inside
 						// the tab's <button>; role="presentation" keeps the tablist's
@@ -419,7 +438,7 @@ export function SessionTabs({
 								// Roving tabindex: Tab reaches the strip once, arrows walk it.
 								// When nothing is selected the first tab is the entry point.
 								tabIndex={isActive || (activeIndex < 0 && i === 0) ? 0 : -1}
-								title={isDiff ? diffTitle(file) : isFile ? tabPath(file) : label}
+								title={isDiff ? diffTitle(file) : isEdit ? tabPath(file) : label}
 								onClick={() => onSelect(file)}
 								onContextMenu={(e) => {
 									e.preventDefault();
@@ -455,8 +474,9 @@ export function SessionTabs({
 									</span>
 								)}
 								{/* Same glyph the tree uses, so a tab and its row match. */}
-								{isFile && !isDiff && <FileGlyph name={label} size={13} />}
-								<span className={`truncate text-ellipsis ${isFile ? "font-mono" : ""}`}>
+								{isEdit && <FileGlyph name={label} size={13} />}
+								{PageIcon && <PageIcon size={13} className="shrink-0 text-neutral-400" />}
+								<span className={`truncate text-ellipsis ${isFile && !page ? "font-mono" : ""}`}>
 									{label}
 								</span>
 								{/* Unsaved. A dot rather than an asterisk in the label, so
@@ -515,6 +535,8 @@ export function SessionTabs({
 				const index = tabs.indexOf(file);
 				const isFile = !isSessionTab(file);
 				const isDiff = isDiffTab(file);
+				/** Diffs and pages: nothing to offer but closing. */
+				const closeOnly = isDiff || isPageTab(file);
 				const info = isFile ? undefined : byFile.get(file);
 				const label = isFile ? tabLabel(file) : sessionLabel(info, shortNames);
 				const act = (fn: () => void) => () => {
@@ -541,12 +563,12 @@ export function SessionTabs({
 								Rename…
 							</MenuItem>
 						)}
-						{isFile && !isDiff && onReveal && (
+						{isFile && !closeOnly && onReveal && (
 							<MenuItem icon={<Crosshair size={16} />} role="menuitem" autoFocus onClick={act(() => onReveal(tabPath(file)))}>
 								Reveal in Explorer
 							</MenuItem>
 						)}
-						{isFile && !isDiff && (
+						{isFile && !closeOnly && (
 							<MenuItem
 								icon={<Path size={16} />}
 								role="menuitem"
@@ -555,8 +577,8 @@ export function SessionTabs({
 								Copy Path
 							</MenuItem>
 						)}
-						{!isDiff && <MenuSeparator />}
-						<MenuItem icon={<X size={16} />} role="menuitem" autoFocus={isDiff} onClick={act(() => onClose(file))}>
+						{!closeOnly && <MenuSeparator />}
+						<MenuItem icon={<X size={16} />} role="menuitem" autoFocus={closeOnly} onClick={act(() => onClose(file))}>
 							Close
 						</MenuItem>
 						<MenuItem

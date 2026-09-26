@@ -160,6 +160,33 @@ export interface PiSessionInfo {
 	needsInput?: boolean;
 }
 
+/** One prompt and everything pi did to answer it, from a session file. */
+export interface StatsTurn {
+	session: string;
+	cwd: string;
+	/** The user message's timestamp, epoch ms. */
+	start: number;
+	/** Until the last message of the turn was written. */
+	ms: number;
+	model: string;
+	prompt: string;
+	/** Tool name \u2192 calls in this turn. */
+	tools: Record<string, number>;
+	outputTokens: number;
+	cost: number;
+	/** The last assistant message's `stopReason`: `stop`, `error`, `aborted`\u2026 */
+	outcome: string;
+	/** The session was prompted from pwi at least once. */
+	web: boolean;
+}
+
+export interface StatsView {
+	turns: StatsTurn[];
+	sessions: number;
+	/** When pwi started recording web-UI sessions (ISO); nothing before it counts as web. */
+	webSince: string;
+}
+
 /** A partially-streamed assistant message, assembled server-side. */
 export interface PiPartial {
 	text: string;

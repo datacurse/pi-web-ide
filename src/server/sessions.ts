@@ -86,16 +86,38 @@ const cache = new Map<string, Parsed>();
 
 /** List persisted sessions for a workspace, newest created first. */
 export async function listSessions(cwd: string): Promise<PiSessionInfo[]> {
-	// Read per call, not captured at import: the tests point PWI_SESSION_ROOT at
-	// a temp dir, and a module-level constant would bake in whatever the env
-	// held when this module first loaded.
-	const root = process.env.PWI_SESSION_ROOT ?? join(homedir(), ".pi", "agent", "sessions");
 	// Symlink resolution is memoized per call, never across calls: a cwd that
 	// gets moved or a symlink that is retargeted must not be answered from a
 	// cache that nothing invalidates.
 	const canon = new Map<string, string>();
 	const want = await canonical(cwd, canon);
+	const files = await sessionFiles();
 
+	const out: PiSessionInfo[] = [];
+	await pooled(files, async (file) => {
+		const parsed = await readParsed(file);
+		// No `cwd` header means we cannot attribute the file to a project. It
+		// belongs to no list rather than to every list.
+		if (!parsed?.cwd) return;
+		if ((await canonical(parsed.cwd, canon)) !== want) return;
+		out.push(project(file, parsed));
+	});
+
+	/*
+	 * Newest created first, which is the order the client's default sort wants
+	 * and a stable one for the other mode to re-sort. Created is the session's
+	 * own header timestamp, so it never moves — unlike mtime, which every
+	 * resume bumps.
+	 */
+	return out.sort((a, b) => b.created.localeCompare(a.created));
+}
+
+/** Every session file in pi's store, across all projects. */
+export async function sessionFiles(): Promise<string[]> {
+	// Read per call, not captured at import: the tests point PWI_SESSION_ROOT at
+	// a temp dir, and a module-level constant would bake in whatever the env
+	// held when this module first loaded.
+	const root = process.env.PWI_SESSION_ROOT ?? join(homedir(), ".pi", "agent", "sessions");
 	let dirs: string[];
 	try {
 		dirs = (await readdir(root, { withFileTypes: true }))
@@ -122,25 +144,7 @@ export async function listSessions(cwd: string): Promise<PiSessionInfo[]> {
 			}
 		}),
 	);
-	const files = perDir.flat();
-
-	const out: PiSessionInfo[] = [];
-	await pooled(files, async (file) => {
-		const parsed = await readParsed(file);
-		// No `cwd` header means we cannot attribute the file to a project. It
-		// belongs to no list rather than to every list.
-		if (!parsed?.cwd) return;
-		if ((await canonical(parsed.cwd, canon)) !== want) return;
-		out.push(project(file, parsed));
-	});
-
-	/*
-	 * Newest created first, which is the order the client's default sort wants
-	 * and a stable one for the other mode to re-sort. Created is the session's
-	 * own header timestamp, so it never moves — unlike mtime, which every
-	 * resume bumps.
-	 */
-	return out.sort((a, b) => b.created.localeCompare(a.created));
+	return perDir.flat();
 }
 
 /**
@@ -281,7 +285,7 @@ async function parse(
  * block an `image`, so we look for the first `text` block rather than assuming
  * index 0.
  */
-function userText(message: unknown): string {
+export function userText(message: unknown): string {
 	if (!message || typeof message !== "object") return "";
 	const m = message as { role?: unknown; content?: unknown };
 	if (m.role !== "user" || !Array.isArray(m.content)) return "";
@@ -364,7 +368,7 @@ export async function sameProject(a: string, b: string): Promise<boolean> {
 }
 
 /** Run `fn` over `items` with at most CONCURRENCY in flight. */
-async function pooled<T>(items: T[], fn: (item: T) => Promise<void>): Promise<void> {
+export async function pooled<T>(items: T[], fn: (item: T) => Promise<void>): Promise<void> {
 	let next = 0;
 	const worker = async (): Promise<void> => {
 		while (next < items.length) await fn(items[next++] as T);

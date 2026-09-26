@@ -291,14 +291,15 @@ export function writeSeenSessions(value: SeenSessions): void {
 
 /**
  * The side panels, which are mutually exclusive: one column, one divider, and
- * the rail switches between them the way an activity bar does.
+ * the rail switches between them the way an activity bar does. Only what you
+ * work beside lives here; pages open as tabs and the terminal is a dock.
  *
  * Lives here rather than in App.tsx because prefs is what persists it, and a
  * type imported the other way round would be a cycle.
  */
-export type Panel = "editor" | "review" | "terminal" | "packages" | null;
+export type Panel = "editor" | "review" | null;
 
-const PANELS: readonly string[] = ["editor", "review", "terminal", "packages"];
+const PANELS: readonly string[] = ["editor", "review"];
 
 const PANEL_KEY = "pwi:panel";
 
@@ -316,6 +317,33 @@ export function readPanel(): Panel {
 
 export function writePanel(panel: Panel): void {
 	writeStored(PANEL_KEY, panel ?? "");
+}
+
+const DOCK_OPEN_KEY = "pwi:dockOpen";
+
+/** Whether the terminal dock is open. Unset: open if the terminal was the side panel. */
+export function readDockOpen(): boolean {
+	const stored = readStored(DOCK_OPEN_KEY);
+	return stored === null ? readStored(PANEL_KEY) === "terminal" : stored === "1";
+}
+
+export function writeDockOpen(open: boolean): void {
+	writeStored(DOCK_OPEN_KEY, open ? "1" : "0");
+}
+
+const DOCK_HEIGHT_KEY = "pwi:dockHeight";
+const DEFAULT_DOCK_PERCENT = 35;
+
+/** The dock's share of the editor area's height, clamped like the panel width. */
+export function readDockHeight(): number {
+	const raw = readStored(DOCK_HEIGHT_KEY);
+	const stored = raw === null ? NaN : Number(raw);
+	if (!Number.isFinite(stored)) return DEFAULT_DOCK_PERCENT;
+	return Math.min(TERMINAL_MAX_PERCENT, Math.max(TERMINAL_MIN_PERCENT, stored));
+}
+
+export function writeDockHeight(percent: number): void {
+	writeStored(DOCK_HEIGHT_KEY, String(Math.round(percent)));
 }
 
 /**
