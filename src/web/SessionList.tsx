@@ -291,14 +291,14 @@ export function SessionList({
 									{/* The session's state, the same colors as its tab π: amber
 									    pulsing while it works, steady amber for a new reply, red
 									    for a question. */}
+									{pins.includes(s.path) && (
+										<PushPin size={12} weight="fill" className="shrink-0 text-amber-400" aria-label="Pinned" />
+									)}
 									{state && (
 										<span
 											className={`size-1.5 shrink-0 rounded-full ${ATTENTION_UI[state].dot}`}
 											title={ATTENTION_UI[state].label}
 										/>
-									)}
-									{pins.includes(s.path) && (
-										<PushPin size={12} weight="fill" className="shrink-0 text-amber-400" aria-label="Pinned" />
 									)}
 									<span className="truncate">
 										{naming === s.path ? "Naming…" : label}
