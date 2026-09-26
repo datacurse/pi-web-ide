@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { CaretUpDown, Plus, X } from "@phosphor-icons/react";
+import { CaretUpDown, Plus, PushPin, X } from "@phosphor-icons/react";
 import type { PiSessionInfo } from "../shared/types.js";
 import { SESSION_SORTS, type SessionSort } from "./prefs.js";
 import { sessionLabel, shortName } from "./sessionName.js";
@@ -7,7 +7,7 @@ import { Button, IconButton, MenuItem, inputClass, sectionLabel } from "./ui.js"
 
 /** The menu's own box, needed before it renders so it can be kept on screen. */
 const MENU_WIDTH_PX = 220;
-const MENU_HEIGHT_PX = 116;
+const MENU_HEIGHT_PX = 148;
 
 /** The timestamp a row shows, which is always the one it is sorted by. */
 function stamp(s: PiSessionInfo, sort: SessionSort): string {
@@ -50,6 +50,8 @@ export function SessionList({
 	openFiles,
 	sort,
 	onSort,
+	pinned: pins,
+	onTogglePin: togglePin,
 	open,
 	onToggle,
 	onSelect,
@@ -66,6 +68,9 @@ export function SessionList({
 	openFiles: string[];
 	sort: SessionSort;
 	onSort: (sort: SessionSort) => void;
+	/** Pinned session paths, shared with the tab strips. */
+	pinned: string[];
+	onTogglePin: (path: string) => void;
 	/** Drawer state. Only observable at <=768px, where this is an overlay. */
 	open: boolean;
 	onToggle: () => void;
@@ -88,9 +93,15 @@ export function SessionList({
 	 * request. Descending in both modes — a session list is read newest-first
 	 * in either question it answers.
 	 */
+	// Pinned sessions first, each group in the chosen order.
 	const ordered = useMemo(
-		() => [...sessions].sort((a, b) => stamp(b, sort).localeCompare(stamp(a, sort))),
-		[sessions, sort],
+		() =>
+			[...sessions].sort(
+				(a, b) =>
+					Number(pins.includes(b.path)) - Number(pins.includes(a.path)) ||
+					stamp(b, sort).localeCompare(stamp(a, sort)),
+			),
+		[sessions, sort, pins],
 	);
 
 	/*
@@ -302,6 +313,9 @@ export function SessionList({
 											title="Working…"
 										/>
 									)}
+									{pins.includes(s.path) && (
+										<PushPin size={12} weight="fill" className="shrink-0 text-amber-400" aria-label="Pinned" />
+									)}
 									<span className="truncate">
 										{naming === s.path ? "Naming…" : label}
 									</span>
@@ -354,6 +368,15 @@ export function SessionList({
 					<MenuItem
 						role="menuitem"
 						autoFocus
+						onClick={() => {
+							togglePin(menuSession.path);
+							setMenu(null);
+						}}
+					>
+						{pins.includes(menuSession.path) ? "Unpin" : "Pin to top"}
+					</MenuItem>
+					<MenuItem
+						role="menuitem"
 						onClick={() => {
 							setDraft(sessionLabel(menuSession, shortNames));
 							setRenaming(menuSession.path);

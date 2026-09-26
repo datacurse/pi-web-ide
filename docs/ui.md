@@ -97,6 +97,13 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
 
 - Session (AI) tabs lead with a bold `π` (the greeting-screen mark) that is also the live signal: `neutral-500` when idle, amber + `animate-pulse` while streaming. No separate dot. File tabs use `FileGlyph`, diff tabs `GitDiff`.
 
+## Session list
+
+- Right-click a row → `Pin to top` / `Unpin`. Pinned rows sort first (in either sort mode)
+  and lead with a 12px filled amber `PushPin`. Pins are per-browser (`localStorage`).
+- The same pins apply to the tab strips: a pinned session's tab moves to the front of
+  its column and shows the same `PushPin` before the `π`.
+
 ## User message bubble
 
 - Text is clamped to 3 lines (`line-clamp-3`, ellipsis). When it overflows, a ghost

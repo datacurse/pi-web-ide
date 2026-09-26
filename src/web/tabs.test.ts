@@ -9,6 +9,7 @@ import {
 	isFileTab,
 	isSessionTab,
 	moveTab,
+	pinnedFirst,
 	tabLabel,
 	tabPath,
 	collapse,
@@ -76,6 +77,10 @@ assert.equal(isSessionTab(session), true);
 assert.equal(isSessionTab(d), false);
 assert.equal(isSessionTab(w), false);
 assert.equal(isSessionTab(t), false);
+
+// --- pinnedFirst -----------------------------------------------------------
+assert.deepEqual(pinnedFirst(["a", "b", "c", "d"], ["d", "b"]), ["b", "d", "a", "c"]);
+assert.deepEqual(pinnedFirst(["a", "b"], ["x"]), ["a", "b"]);
 
 // --- moveTab ---------------------------------------------------------------
 const strip = ["a", "b", "c", "d"];

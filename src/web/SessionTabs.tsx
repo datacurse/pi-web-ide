@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { GitDiff, X } from "@phosphor-icons/react";
+import { GitDiff, PushPin, X } from "@phosphor-icons/react";
 import type { KeyboardEvent } from "react";
 import type { PiSessionInfo } from "../shared/types.js";
 import { sessionLabel } from "./sessionName.js";
@@ -81,6 +81,7 @@ export function SessionTabs({
 	onClose,
 	onToggleList,
 	shortNames,
+	pinned,
 	dirtyFiles,
 	onReorder,
 	onAdopt,
@@ -111,6 +112,8 @@ export function SessionTabs({
 	label?: string;
 	/** Label unnamed sessions by a short name from the first prompt. */
 	shortNames: boolean;
+	/** Pinned session paths; App already sorts them to the front. */
+	pinned: string[];
 	/** Open files with unsaved edits, keyed by absolute path. */
 	dirtyFiles: Record<string, boolean>;
 	/** Move the tab at `from` to index `to`. */
@@ -407,6 +410,9 @@ export function SessionTabs({
 								    a whole strip. The rest is in `tabLabel` and the tooltip. */}
 								{isDiff && (
 									<GitDiff size={13} weight="bold" className="shrink-0 text-neutral-400" />
+								)}
+								{!isFile && pinned.includes(file) && (
+									<PushPin size={12} weight="fill" className="shrink-0 text-amber-400" aria-label="Pinned" />
 								)}
 								{/* Marks an AI session so it never reads as a code tab, and
 								    doubles as its live signal: grey when idle, amber and

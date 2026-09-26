@@ -236,6 +236,24 @@ export function writeSessionSort(sort: SessionSort): void {
 	writeStored(SORT_KEY, sort);
 }
 
+const PINNED_SESSIONS_KEY = "pwi:pinnedSessions";
+
+/** Session file paths pinned to the top of the list, in either sort. */
+export function readPinnedSessions(): string[] {
+	const raw = readStored(PINNED_SESSIONS_KEY);
+	if (!raw) return [];
+	try {
+		const parsed: unknown = JSON.parse(raw);
+		return Array.isArray(parsed) ? parsed.filter((p): p is string => typeof p === "string") : [];
+	} catch {
+		return [];
+	}
+}
+
+export function writePinnedSessions(paths: string[]): void {
+	writeStored(PINNED_SESSIONS_KEY, JSON.stringify(paths));
+}
+
 /**
  * The side panels, which are mutually exclusive: one column, one divider, and
  * the rail switches between them the way an activity bar does.

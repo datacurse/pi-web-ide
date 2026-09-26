@@ -33,6 +33,7 @@ import {
 	isFileTab,
 	isSessionTab,
 	moveTab,
+	pinnedFirst,
 	sideOfTab,
 	tabPath,
 	withGroup,
@@ -48,6 +49,7 @@ import {
 	applyTheme,
 	readNotify,
 	readPanel,
+	readPinnedSessions,
 	readSessionSort,
 	readShortNames,
 	readShowThinking,
@@ -59,6 +61,7 @@ import {
 	TERMINAL_MIN_PERCENT,
 	writeNotify,
 	writePanel,
+	writePinnedSessions,
 	writeSessionSort,
 	writeShortNames,
 	writeShowThinking,
@@ -223,6 +226,7 @@ function EditorColumn({
 	panelId,
 	sessions,
 	shortNames,
+	pinned,
 	dirtyFiles,
 	onSelect,
 	onClose,
@@ -243,6 +247,7 @@ function EditorColumn({
 	panelId: string;
 	sessions: PiSessionInfo[];
 	shortNames: boolean;
+	pinned: string[];
 	dirtyFiles: Record<string, boolean>;
 	onSelect: (entry: string) => void;
 	onClose: (entry: string) => void;
@@ -293,6 +298,7 @@ function EditorColumn({
 				onClose={onClose}
 				onToggleList={onToggleList}
 				shortNames={shortNames}
+				pinned={pinned}
 				dirtyFiles={dirtyFiles}
 				onReorder={onReorder}
 				// A tab dropped on THIS strip belongs in THIS column, at the slot it
@@ -1481,6 +1487,9 @@ export default function App() {
 	}, []);
 
 	const [tabs, setTabs] = useState<Tabs>({ project: "", files: [] });
+	/** Pinned sessions: first in the list and first in each tab strip. */
+	const [pinned, setPinned] = useState(readPinnedSessions);
+	const pinnedRef = useRef(pinned);
 	/**
 	 * Tab edits are computed from the CURRENT tabs and then committed, so they
 	 * read through a ref rather than a setState updater: closing a tab has to
@@ -1493,7 +1502,17 @@ export default function App() {
 	const commitTabs = useCallback((raw: Tabs) => {
 		// An emptied first column takes over the second's tabs; see `collapse`.
 		// Here and not in each caller, because every tab mutation lands here.
-		const next = collapse(raw);
+		const collapsed = collapse(raw);
+		// Pinned sessions lead each strip; applied here so no mutation can undo it.
+		const pins = pinnedRef.current;
+		const next = {
+			...collapsed,
+			files: pinnedFirst(collapsed.files, pins),
+			right: collapsed.right && {
+				...collapsed.right,
+				files: pinnedFirst(collapsed.right.files, pins),
+			},
+		};
 		tabsRef.current = next;
 		setTabs(next);
 		syncRef.current(next);
@@ -1871,6 +1890,20 @@ export default function App() {
 				files: current.files.includes(file) ? current.files : [...current.files, file],
 				active: file,
 			});
+		},
+		[commitTabs],
+	);
+
+	const togglePin = useCallback(
+		(path: string) => {
+			const current = pinnedRef.current;
+			const next = current.includes(path)
+				? current.filter((p) => p !== path)
+				: [...current, path];
+			pinnedRef.current = next;
+			setPinned(next);
+			writePinnedSessions(next);
+			commitTabs(tabsRef.current);
 		},
 		[commitTabs],
 	);
@@ -2364,6 +2397,7 @@ export default function App() {
 					panelId={CHAT_PANEL_ID}
 					sessions={shown}
 					shortNames={shortNames}
+					pinned={pinned}
 					dirtyFiles={dirtyFiles}
 					onSelect={selectTab}
 					onClose={closeTab}
@@ -2389,6 +2423,7 @@ export default function App() {
 						panelId={SPLIT_PANEL_ID}
 						sessions={shown}
 						shortNames={shortNames}
+						pinned={pinned}
 						dirtyFiles={dirtyFiles}
 						onSelect={selectRight}
 						onClose={closeRight}
@@ -2419,6 +2454,8 @@ export default function App() {
 				activeFile={snapshot?.file}
 				openFiles={tabs.files}
 				sort={sessionSort}
+				pinned={pinned}
+				onTogglePin={togglePin}
 				onSort={(next) => {
 					setSessionSort(next);
 					writeSessionSort(next);

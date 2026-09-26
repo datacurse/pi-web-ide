@@ -195,6 +195,12 @@ export function withTab(group: TabGroup, file: string): TabGroup {
 	};
 }
 
+/** The strip with pinned entries moved to the front, each group keeping its order. */
+export function pinnedFirst(files: string[], pinned: readonly string[]): string[] {
+	const front = files.filter((f) => pinned.includes(f));
+	return front.length === 0 ? files : [...front, ...files.filter((f) => !pinned.includes(f))];
+}
+
 /**
  * The strip with the tab at `from` moved to index `to`.
  *
