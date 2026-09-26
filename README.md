@@ -61,8 +61,10 @@ list:
   to answer one on. The blocking questions an extension does raise — `ask`,
   `confirm` — are answered in the browser (see [Questions](#questions)),
   though a session left running with nobody attached will sit on one
-- no image *generation*, no file attachments beyond images, no clipboard
-  history — pasting a screenshot is in scope; a file manager is not
+- no image *generation*, no chat attachments beyond images, no clipboard
+  history — pasting a screenshot into the composer is in scope; attaching
+  arbitrary files to a message is not. (Managing files in the Explorer is a
+  separate thing, and is in scope: see [Files and source control](#files-and-source-control))
 - no central gateway across machines, no merged cross-machine session list,
   and no fleet manager. One pwi per machine, serving its own browser; you
   reach another machine by opening that machine's pwi. See
@@ -1004,6 +1006,20 @@ strip the sessions live in, rendered by CodeMirror (`FileEditor.tsx`), so
 closing the tree does not close your files. The tree skips `node_modules`,
 `.git`, `dist` and other build directories, and remembers which directories
 were open.
+
+**Right-click** a row for its menu: open (or open to the side, or open its
+diff when git reports it changed), add its path to the chat, open a terminal
+there, download it, cut/copy/paste, copy its path, rename, delete. Right-click
+the empty space below the rows for the same menu on the project itself, and a
+file tab for "Reveal in Explorer". New files and renames are typed in place.
+
+**File operations never overwrite.** Create, rename, move and copy refuse an
+existing target (a copy onto a taken name becomes `name copy.ext`), refuse the
+project root itself, and go through the same project check as saves (below).
+Delete moves to the desktop Trash (`~/.local/share/Trash`, the freedesktop
+layout file managers restore from) rather than unlinking, and asks first.
+Open tabs follow a rename and close on delete; both are refused while a file
+under the path has unsaved edits, which the move would otherwise strand.
 
 **Saves never overwrite blindly.** The agent, this editor and your own editor
 can all write one file. The buffer remembers the text it loaded, every save

@@ -6,7 +6,7 @@ import { sessionLabel } from "./sessionName.js";
 import { ATTENTION_UI, type Attention } from "./attention.js";
 import { FileGlyph } from "./fileIcon.js";
 import { diffParts, isDiffTab, isSessionTab, tabLabel, tabPath } from "./tabs.js";
-import { IconButton, tabClass } from "./ui.js";
+import { ContextMenu, IconButton, MenuItem, tabClass } from "./ui.js";
 
 /**
  * A diff tab's tooltip: the long form VS Code puts in the tab itself.
@@ -88,6 +88,7 @@ export function SessionTabs({
 	dirtyFiles,
 	onReorder,
 	onAdopt,
+	onReveal,
 	label = "Open sessions",
 }: {
 	/** Open session files, in strip order. */
@@ -125,8 +126,12 @@ export function SessionTabs({
 	dirtyFiles: Record<string, boolean>;
 	/** Move the tab at `from` to index `to`. */
 	onReorder: (from: number, to: number) => void;
+	/** Show a file tab's file in the Explorer. Enables the file tab menu. */
+	onReveal?: (path: string) => void;
 }) {
 	const buttons = useRef<Array<HTMLButtonElement | null>>([]);
+	/** A file tab's right-click menu: which path, and where the pointer was. */
+	const [menu, setMenu] = useState<{ path: string; x: number; y: number } | null>(null);
 	/*
 	 * Drag state for REORDERING, which is view state and not App's: only the
 	 * committed order matters upstream, and lifting the in-flight index would
@@ -410,6 +415,12 @@ export function SessionTabs({
 								tabIndex={isActive || (activeIndex < 0 && i === 0) ? 0 : -1}
 								title={isDiff ? diffTitle(file) : isFile ? tabPath(file) : label}
 								onClick={() => onSelect(file)}
+								onContextMenu={(e) => {
+									if (!onReveal || !isFile || isDiff) return;
+									e.preventDefault();
+									const box = e.currentTarget.getBoundingClientRect();
+									setMenu({ path: tabPath(file), x: e.clientX || box.left + 16, y: e.clientY || box.bottom });
+								}}
 								onKeyDown={(e) => moveFocus(e, i)}
 								className={`${tabClass(isActive, focused)} pr-7`}
 							>
@@ -491,6 +502,30 @@ export function SessionTabs({
 				<p className="min-w-0 flex-1 self-center truncate px-2 text-meta text-neutral-400">
 					No open sessions. Press + or pick one from the list.
 				</p>
+			)}
+
+			{menu && onReveal && (
+				<ContextMenu x={menu.x} y={menu.y} label={menu.path} onClose={() => setMenu(null)}>
+					<MenuItem
+						role="menuitem"
+						autoFocus
+						onClick={() => {
+							setMenu(null);
+							onReveal(menu.path);
+						}}
+					>
+						Reveal in Explorer
+					</MenuItem>
+					<MenuItem
+						role="menuitem"
+						onClick={() => {
+							setMenu(null);
+							void navigator.clipboard.writeText(menu.path).catch(() => {});
+						}}
+					>
+						Copy Path
+					</MenuItem>
+				</ContextMenu>
 			)}
 
 		</div>

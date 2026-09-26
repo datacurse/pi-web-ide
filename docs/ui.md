@@ -96,6 +96,8 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
 ## Tabs
 
 - Session (AI) tabs lead with a bold `π` (the greeting-screen mark) that is also the live signal (see Attention). File tabs use `FileGlyph`, diff tabs `GitDiff`.
+- Right-click a file tab (not a session or diff tab) → `Reveal in Explorer` (opens the
+  Explorer, expands down to the file, scrolls to and focuses its row), `Copy Path`.
 - In a split, only the focused column (the one last clicked or focused) keeps the amber
   underline; the other column's active tab drops to `neutral-600` (`tabClass(active, focused)`).
 

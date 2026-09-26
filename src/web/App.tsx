@@ -248,6 +248,7 @@ function EditorColumn({
 	onHunksChanged,
 	chat,
 	focused,
+	onReveal,
 }: {
 	side: Side;
 	group: TabGroup;
@@ -275,6 +276,8 @@ function EditorColumn({
 	chat: React.ReactNode;
 	/** In a split, whether this is the column keys and new tabs go to. */
 	focused: boolean;
+	/** Show a file tab's file in the Explorer. */
+	onReveal: (path: string) => void;
 }) {
 	const active = group.active;
 	const activeIndex = active ? group.files.indexOf(active) : -1;
@@ -316,6 +319,7 @@ function EditorColumn({
 				// A tab dropped on THIS strip belongs in THIS column, at the slot it
 				// was aimed at.
 				onAdopt={(entry, index) => onMove(entry, side, index)}
+				onReveal={onReveal}
 			/>
 			<SplitZone
 				/*
@@ -2163,6 +2167,16 @@ export default function App() {
 		);
 	}, []);
 
+	/** A file a tab asked the Explorer to show; cleared once it has been shown. */
+	const [reveal, setReveal] = useState<string | null>(null);
+	const revealFile = useCallback(
+		(path: string) => {
+			setReveal(path);
+			showPanel("editor");
+		},
+		[showPanel],
+	);
+
 	/** The explorer renamed `from` to `to`, or deleted it (null): open file tabs follow. */
 	const onPathChange = useCallback(
 		(from: string, to: string | null) => commitTabs(afterPathChange(tabsRef.current, from, to)),
@@ -2495,6 +2509,8 @@ export default function App() {
 									onOpen={openFile}
 									onOpenSide={openToSide}
 									onPathChange={onPathChange}
+									reveal={reveal}
+									onRevealed={() => setReveal(null)}
 									hasUnsaved={hasUnsaved}
 									onOpenDiff={openDiff}
 									onOpenTerminal={project ? openTerminalAt : undefined}
@@ -2606,6 +2622,7 @@ export default function App() {
 				 */}
 				<EditorColumn
 					side="left"
+					onReveal={revealFile}
 					group={groupOf(tabs, "left")}
 					panelId={CHAT_PANEL_ID}
 					sessions={shown}
@@ -2634,6 +2651,7 @@ export default function App() {
 				{tabs.right && (
 					<EditorColumn
 						side="right"
+						onReveal={revealFile}
 						group={tabs.right}
 						panelId={SPLIT_PANEL_ID}
 						sessions={shown}

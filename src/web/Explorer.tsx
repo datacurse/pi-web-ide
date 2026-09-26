@@ -211,6 +211,7 @@ function TreeDir({
 			) : (
 				<ListRow
 					onClick={() => onToggle(entry.path)}
+					data-path={entry.path}
 					onContextMenu={(e) => onMenu(entry, e)}
 					muted={entry.hidden}
 					size="body"
@@ -275,6 +276,7 @@ function TreeFile({
 	return (
 		<ListRow
 			onClick={() => onOpen(entry.path)}
+			data-path={entry.path}
 			onContextMenu={(e) => onMenu(entry, e)}
 			selected={active}
 			muted={entry.hidden}
@@ -298,6 +300,8 @@ export function Explorer({
 	onAddToChat,
 	onPathChange,
 	hasUnsaved,
+	reveal,
+	onRevealed,
 	onClose,
 	revision,
 	children,
@@ -323,6 +327,9 @@ export function Explorer({
 	onPathChange: (from: string, to: string | null) => void;
 	/** Unsaved edits at or under a path; renaming or deleting it is refused. */
 	hasUnsaved: (path: string) => boolean;
+	/** A file to expand down to and scroll into view; `onRevealed` clears it. */
+	reveal?: string | null;
+	onRevealed?: () => void;
 	onClose: () => void;
 }) {
 	const [roots, setRoots] = useState<PiwFileEntry[]>(() => listings.get(cwd) ?? []);
@@ -391,6 +398,49 @@ export function Explorer({
 		},
 		[cwd],
 	);
+
+	const tree = useRef<HTMLDivElement>(null);
+
+	/*
+	 * Reveal: open every folder between the project and the file, then wait
+	 * for its row. The rows arrive as each folder's listing loads, so this
+	 * watches the tree for the row rather than guessing how long that takes.
+	 */
+	useEffect(() => {
+		const el = tree.current;
+		if (!reveal || !el) return;
+		const done = () => onRevealed?.();
+		if (!reveal.startsWith(`${cwd}/`)) return done();
+		const dirs: string[] = [];
+		for (let p = parentOf(reveal); p.length > cwd.length; p = parentOf(p)) dirs.push(p);
+		setOpenDirs((prev) => {
+			if (dirs.every((d) => prev.has(d))) return prev;
+			const next = new Set([...prev, ...dirs]);
+			writeExplorerOpen(cwd, [...next]);
+			return next;
+		});
+		const find = () => el.querySelector<HTMLElement>(`[data-path="${CSS.escape(reveal)}"]`);
+		const show = (row: HTMLElement) => {
+			row.scrollIntoView({ block: "center" });
+			row.focus({ preventScroll: true });
+			done();
+		};
+		const now = find();
+		if (now) return show(now);
+		const watch = new MutationObserver(() => {
+			const row = find();
+			if (row) show(row);
+		});
+		watch.observe(el, { childList: true, subtree: true });
+		// A file the tree skips (under node_modules, say) never gets a row.
+		const giveUp = setTimeout(done, 5000);
+		return () => {
+			watch.disconnect();
+			clearTimeout(giveUp);
+		};
+		// `onRevealed` is a fresh closure each render; `reveal` is the trigger.
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [reveal, cwd]);
 
 	const refresh = () => setManual((n) => n + 1);
 	const fail = (err: unknown) => setError(err instanceof Error ? err.message : String(err));
@@ -489,6 +539,7 @@ export function Explorer({
 
 			<EditContext.Provider value={{ edit, done: finishEdit }}>
 				<div
+					ref={tree}
 					className="min-h-0 flex-1 overflow-auto py-1"
 					// The empty space below the rows: a menu for the project itself.
 					onContextMenu={(e) => {
