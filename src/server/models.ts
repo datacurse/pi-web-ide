@@ -159,3 +159,15 @@ export async function setDefaultModel(spec: string | null): Promise<void> {
 		defaultModel: spec.slice(slash + 1),
 	});
 }
+
+/** pi's reasoning levels; `defaultThinkingLevel` is read at every session start. */
+const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh"];
+
+/** Persist pi's startup reasoning level; `null` clears it. */
+export function setDefaultThinkingLevel(level: string | null): void {
+	const settings = readSettings();
+	if (level === null) delete settings.defaultThinkingLevel;
+	else if (!THINKING_LEVELS.includes(level)) throw new Error(`unknown thinking level: ${level}`);
+	else settings.defaultThinkingLevel = level;
+	writeSettings(settings);
+}

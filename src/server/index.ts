@@ -16,7 +16,7 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { promisify } from "node:util";
-import { listModels, readSettings, setDefaultModel } from "./models.js";
+import { listModels, readSettings, setDefaultModel, setDefaultThinkingLevel } from "./models.js";
 import { listSessions, sameProject } from "./sessions.js";
 import {
 	addFavorite,
@@ -213,8 +213,12 @@ app.get("/api/health", (_req, res) => {
 
 app.get("/api/models", async (_req, res) => {
 	try {
-		const { defaultProvider: p, defaultModel: m } = readSettings();
-		res.json({ models: await listModels(), default: p && m ? `${p}/${m}` : null });
+		const { defaultProvider: p, defaultModel: m, defaultThinkingLevel: t } = readSettings();
+		res.json({
+			models: await listModels(),
+			default: p && m ? `${p}/${m}` : null,
+			defaultThinking: typeof t === "string" ? t : null,
+		});
 	} catch (err) {
 		res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
 	}
@@ -255,6 +259,21 @@ app.post("/api/default-model", async (req, res) => {
 		// A prewarmed session booted under the OLD default, and handing that to
 		// the next `+ New` would quietly ignore the change the user just made.
 		registry.discardSpares();
+		res.json({ ok: true });
+	} catch (err) {
+		res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
+	}
+});
+
+/** Persist pi's startup reasoning level for future sessions; `null` clears it. */
+app.post("/api/default-thinking", (req, res) => {
+	const level = req.body?.level;
+	if (level !== null && (typeof level !== "string" || !level)) {
+		return res.status(400).json({ error: "level required" });
+	}
+	try {
+		setDefaultThinkingLevel(level);
+		registry.discardSpares(); // same reason as /api/default-model
 		res.json({ ok: true });
 	} catch (err) {
 		res.status(400).json({ error: err instanceof Error ? err.message : String(err) });

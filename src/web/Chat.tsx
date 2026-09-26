@@ -1710,7 +1710,7 @@ export function Chat({
 						</div>
 					</div>
 				</div>
-				<div className="chat-gutter pt-1 pb-3">
+				<div className="chat-gutter pt-1 pb-6">
 					{/* Same column as the prose above it, so the box's edges line up
 					    with the text you are replying to. */}
 					<div className="chat-measure">

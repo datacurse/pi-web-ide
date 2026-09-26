@@ -1,6 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { type SyntheticEvent, useEffect, useMemo, useState } from "react";
 import { Star } from "@phosphor-icons/react";
-import { IconButton } from "./ui.js";
 
 /**
  * Composer controls for the active session's model: one select for the model
@@ -41,7 +40,7 @@ export function ModelSelector({
 	const [models, setModels] = useState<string[]>([]);
 	/** pi's saved startup model, so the star shows the truth after a reload or a switch. */
 	const [defaultModel, setDefaultModel] = useState<string | null>(null);
-	const savedDefault = !!model && model === defaultModel;
+	const [defaultThinking, setDefaultThinking] = useState<string | null>(null);
 
 	useEffect(() => {
 		let cancelled = false;
@@ -51,6 +50,7 @@ export function ModelSelector({
 				if (cancelled) return;
 				setModels(d.models ?? []);
 				setDefaultModel(d.default ?? null);
+				setDefaultThinking(d.defaultThinking ?? null);
 			})
 			.catch(() => {});
 		return () => {
@@ -60,16 +60,15 @@ export function ModelSelector({
 
 	const providers = useMemo(() => [...new Set(models.map((m) => m.split("/")[0]))].sort(), [models]);
 
-	/** Star toggles: set this model as the default, or clear the default if it already is. */
-	const toggleDefault = async () => {
-		if (!model) return;
-		const next = savedDefault ? null : model;
-		const r = await fetch(`/api/default-model`, {
+	/** Star toggles: save the current value as pi's startup default, or clear it if it already is. */
+	const toggleDefault = async (url: string, key: string, current: string | null, value: string, set: (v: string | null) => void) => {
+		const next = current === value ? null : value;
+		const r = await fetch(url, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ model: next }),
+			body: JSON.stringify({ [key]: next }),
 		});
-		if (r.ok) setDefaultModel(next);
+		if (r.ok) set(next);
 		else alert(`Could not save default: ${(await r.json().catch(() => ({}))).error ?? r.status}`);
 	};
 
@@ -98,6 +97,11 @@ export function ModelSelector({
 							.filter((m) => m.startsWith(`${p}/`))
 							.map((m) => (
 								<option key={m} value={m}>
+									<DefaultStar
+										what="model"
+										saved={m === defaultModel}
+										onToggle={() => toggleDefault(`/api/default-model`, "model", defaultModel, m, setDefaultModel)}
+									/>
 									{m.slice(p.length + 1)}
 								</option>
 							))}
@@ -121,25 +125,16 @@ export function ModelSelector({
 					)}
 					{thinkingLevels.map((l) => (
 						<option key={l} value={l}>
+							<DefaultStar
+								what="reasoning level"
+								saved={l === defaultThinking}
+								onToggle={() => toggleDefault(`/api/default-thinking`, "level", defaultThinking, l, setDefaultThinking)}
+							/>
 							{l}
 						</option>
 					))}
 				</select>
 			)}
-
-			<IconButton
-				size="sm"
-				round
-				disabled={!model}
-				onClick={toggleDefault}
-				label={savedDefault ? "Startup default \u2014 click to clear" : "Save this model as the startup default"}
-			>
-				<Star
-					size={13}
-					weight={savedDefault ? "fill" : "regular"}
-					className={savedDefault ? "text-amber-400" : undefined}
-				/>
-			</IconButton>
 
 			{error && (
 				<div className="absolute right-0 top-full mt-1 w-80 rounded-sm border border-red-900 bg-red-950/80 px-2 py-1 text-meta text-red-300">
@@ -147,5 +142,34 @@ export function ModelSelector({
 				</div>
 			)}
 		</div>
+	);
+}
+
+/**
+ * A star inside a pill's popup option: saves or clears that option as pi's
+ * startup default. It must not also pick the option, and Chromium's
+ * customizable select skips its option handling for a prevented event.
+ * Cancelling pointerdown suppresses the mousedown/mouseup that would select;
+ * the click is cancelled where it is handled. Other browsers render options
+ * as plain text, so there the star simply does not appear.
+ */
+function DefaultStar({ what, saved, onToggle }: { what: string; saved: boolean; onToggle: () => void }) {
+	const stop = (e: SyntheticEvent) => {
+		e.preventDefault();
+		e.stopPropagation();
+	};
+	return (
+		<span
+			title={saved ? `Startup default ${what} \u2014 click to clear` : `Make this the startup default ${what}`}
+			onPointerDown={stop}
+			onPointerUp={stop}
+			onClick={(e) => {
+				stop(e);
+				onToggle();
+			}}
+			className={`mr-2 inline-flex align-middle ${saved ? "text-amber-400" : "text-neutral-600 hover:text-neutral-300"}`}
+		>
+			<Star size={13} weight={saved ? "fill" : "regular"} />
+		</span>
 	);
 }

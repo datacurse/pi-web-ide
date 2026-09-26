@@ -101,15 +101,16 @@ export function IconButton({
 export function ListRow({
 	selected = false,
 	muted = false,
+	size = "ui",
 	type = "button",
 	className = "",
 	...rest
-}: ButtonHTMLAttributes<HTMLButtonElement> & { selected?: boolean; muted?: boolean }) {
+}: ButtonHTMLAttributes<HTMLButtonElement> & { selected?: boolean; muted?: boolean; size?: "ui" | "body" }) {
 	const tone = selected ? "bg-neutral-800 text-amber-400" : muted ? "text-neutral-500" : "text-neutral-300";
 	return (
 		<button
 			type={type}
-			className={`flex w-full min-w-0 items-center gap-1.5 py-0.5 pr-3 pl-3 text-left text-ui hover:bg-neutral-800 focus-visible:bg-neutral-800 focus-visible:outline-none ${tone} ${className}`}
+			className={`flex w-full min-w-0 items-center gap-1.5 py-0.5 pr-3 pl-3 text-left ${size === "body" ? "text-body" : "text-ui"} hover:bg-neutral-800 focus-visible:bg-neutral-800 focus-visible:outline-none ${tone} ${className}`}
 			{...rest}
 		/>
 	);

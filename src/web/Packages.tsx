@@ -10,6 +10,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { X } from "@phosphor-icons/react";
+import { stripAnsi } from "fancy-ansi";
 import type {
 	PiwMutation,
 	PiwPackage,
@@ -224,7 +225,7 @@ export function Packages({
 						</Button>
 					</div>
 					<pre className="mt-1 max-h-40 overflow-auto font-mono text-meta whitespace-pre-wrap text-neutral-400">
-						{log.text}
+						{stripAnsi(log.text)}
 					</pre>
 				</div>
 			)}

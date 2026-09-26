@@ -121,13 +121,14 @@ function TreeDir({
 			<ListRow
 				onClick={() => onToggle(entry.path)}
 				muted={entry.hidden}
+				size="body"
 				aria-expanded={open}
 				style={{ paddingLeft: `${depth * 12 + 4}px` }}
 			>
 				{/* A 16px slot, the width of a file's icon, so names line up the way
 				    VS Code's do: Seti has no folder icons, the chevron stands in. */}
 				<span className="flex w-4 shrink-0 justify-center text-neutral-500" aria-hidden>
-					{open ? <CaretDown size={10} /> : <CaretRight size={10} />}
+					{open ? <CaretDown size={14} /> : <CaretRight size={14} />}
 				</span>
 				<span className="truncate">{entry.name}</span>
 			</ListRow>
@@ -173,6 +174,7 @@ function TreeFile({
 			onClick={() => onOpen(entry.path)}
 			selected={active}
 			muted={entry.hidden}
+			size="body"
 			// Same indent as a sibling directory: the icon takes the chevron's slot.
 			style={{ paddingLeft: `${depth * 12 + 4}px` }}
 		>

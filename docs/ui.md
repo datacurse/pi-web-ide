@@ -23,9 +23,10 @@ fits none of the existing ones, and record it here.
 
 - Never go below 11px.
 - Pick by role, not by how much room there is:
-  - The main line of any row or tab is `text-ui`: Explorer and Source Control
+  - The main line of any row or tab is `text-ui`: Source Control
     files, session list titles, session and terminal tabs, directory-picker
-    rows, package names.
+    rows, package names. Exception: Explorer rows are `text-body`
+    (`ListRow size="body"`) with 14px folder chevrons.
   - The line under it, hints, paths, timestamps in a subline, status text:
     `text-meta`.
   - `text-caption` only for badges and tags (`pinned`, `off`, `added`), counts,
@@ -77,6 +78,10 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
 - The `?` button (directly left of Send, so Stop never shifts it) toggles "Ask only":
   a 14px `QuestionMark`, `aria-pressed`. When on it uses the `on` variant (amber disc, dark
   bold icon) so the state reads at a glance. It stays on until switched off.
+- Defaults are starred inside the popups, not in the box: every model and reasoning
+  option starts with a star that saves or clears it as pi's startup default
+  (`defaultProvider`/`defaultModel`, `defaultThinkingLevel`) without picking it.
+  Filled amber for the default, `neutral-600` outline otherwise.
 - One model select, providers as `<optgroup>`s, plus the thinking select. Pills are
   sans `text-meta` with `field-sizing-content` so each fits its current option.
   Their popup is styled like a menu via `.pill-select` (index.css, customizable
@@ -106,7 +111,7 @@ New UI uses these; convert raw markup when you touch it. Tune styles in
 | `OptionRow`     | `selected`, `disabled`                                      | Clickable row wrapping a radio or checkbox. |
 | `sectionLabel`  | class string                                                | Uppercase group heading on any element. |
 | `inputClass.sm/md` | class string                                             | Inputs and textareas (a string so refs pass through). |
-| `ListRow`       | `selected`, `muted`, button props                           | Tree and list rows (Explorer, Source Control, directory picker). 22px; indent with `style.paddingLeft`. |
+| `ListRow`       | `selected`, `muted`, `size`: ui (default) / body, button props                           | Tree and list rows (Explorer, Source Control, directory picker). 22px; indent with `style.paddingLeft`. |
 | `tabClass(active)` | class string; caller adds `pr-7` (with close button) or `pr-3` | Session/editor tabs and terminal tabs: flat, full `bar` height, amber 2px underline when active, no fill. The strip is `h-bar` with a hidden scrollbar (`.tab-strip`). |
 | `PanelHeader`   | `title?`, `onClose?`, `closeLabel?`, children               | Top row of a side panel or editor tab. Children go after the title. |
 
