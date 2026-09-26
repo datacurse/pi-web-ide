@@ -9,11 +9,11 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
-import { CaretDown, CaretRight } from "@phosphor-icons/react";
+import { ArrowClockwise, CaretDown, CaretRight } from "@phosphor-icons/react";
 import type { PiwFileEntry } from "../shared/types.js";
 import { FileGlyph } from "./fileIcon.js";
 import { readExplorerOpen, writeExplorerOpen } from "./prefs.js";
-import { ListRow, PanelHeader } from "./ui.js";
+import { IconButton, ListRow, PanelHeader } from "./ui.js";
 
 async function getJson<T>(url: string): Promise<T> {
 	const r = await fetch(url);
@@ -61,6 +61,7 @@ function TreeDir({
 	onOpen,
 	openDirs,
 	onToggle,
+	rev,
 }: {
 	entry: PiwFileEntry;
 	depth: number;
@@ -69,12 +70,14 @@ function TreeDir({
 	/** Every expanded directory, by absolute path. Owned by Explorer. */
 	openDirs: Set<string>;
 	onToggle: (path: string) => void;
+	/** Changes when the tree should be re-read from disk. */
+	rev: string;
 }) {
 	const [children, setChildren] = useState<PiwFileEntry[] | null>(
 		() => listings.get(entry.path) ?? null,
 	);
-	/** Revalidated once per mount, even when the cache already had it. */
-	const [fetched, setFetched] = useState(false);
+	/** The `rev` last fetched at: revalidated once per mount and per refresh. */
+	const [fetched, setFetched] = useState<string | null>(null);
 	/*
 	 * Expansion is the PANEL's state, not this node's.
 	 *
@@ -97,7 +100,7 @@ function TreeDir({
 	 * per click for a listing that has almost certainly not changed.
 	 */
 	useEffect(() => {
-		if (!open || fetched) return;
+		if (!open || fetched === rev) return;
 		let live = true;
 		void listDir(entry.path)
 			.then((entries) => {
@@ -109,12 +112,12 @@ function TreeDir({
 				if (live) setChildren((c) => c ?? []);
 			})
 			.finally(() => {
-				if (live) setFetched(true);
+				if (live) setFetched(rev);
 			});
 		return () => {
 			live = false;
 		};
-	}, [open, fetched, entry.path]);
+	}, [open, fetched, rev, entry.path]);
 
 	return (
 		<>
@@ -143,6 +146,7 @@ function TreeDir({
 							onOpen={onOpen}
 							openDirs={openDirs}
 							onToggle={onToggle}
+							rev={rev}
 						/>
 					) : (
 						<TreeFile
@@ -189,9 +193,12 @@ export function Explorer({
 	openPath,
 	onOpen,
 	onClose,
+	revision,
 	children,
 }: {
 	cwd: string;
+	/** Changes when something may have touched the tree; re-reads it. */
+	revision: number;
 	/** Rendered under the header: the project picker. */
 	children?: React.ReactNode;
 	/** The file showing in the active tab, highlighted in the tree. */
@@ -202,6 +209,9 @@ export function Explorer({
 }) {
 	const [roots, setRoots] = useState<PiwFileEntry[]>(() => listings.get(cwd) ?? []);
 	const [error, setError] = useState<string | null>(null);
+	/** Bumped by the refresh button. */
+	const [manual, setManual] = useState(0);
+	const rev = `${revision}:${manual}`;
 	/*
 	 * The expanded directories, restored per project. App keys this panel on
 	 * `cwd`, so a project switch remounts it and the lazy initialisers (this,
@@ -247,14 +257,18 @@ export function Explorer({
 		return () => {
 			live = false;
 		};
-	}, [cwd]);
+	}, [cwd, rev]);
 
 	return (
 		<section
 			aria-label="Explorer"
 			className="flex min-h-0 min-w-0 flex-1 flex-col bg-neutral-950"
 		>
-			<PanelHeader title="Explorer" onClose={onClose} />
+			<PanelHeader title="Explorer" onClose={onClose}>
+				<IconButton size="sm" className="ml-auto" onClick={() => setManual((n) => n + 1)} label="Refresh explorer">
+					<ArrowClockwise size={16} />
+				</IconButton>
+			</PanelHeader>
 			{children}
 
 			{error && (
@@ -274,6 +288,7 @@ export function Explorer({
 							onOpen={onOpen}
 							openDirs={openDirs}
 							onToggle={toggleDir}
+							rev={rev}
 						/>
 					) : (
 						<TreeFile

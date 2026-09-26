@@ -1720,6 +1720,11 @@ export default function App() {
 	/** The session app-wide chrome follows: the explorer's cwd, the git badge. */
 	const snapshot = left.snapshot ?? right.snapshot;
 	const busy = left.busy || right.busy;
+	/** Bumped whenever the agent goes idle: a finished reply may have touched files. */
+	const [replies, setReplies] = useState(0);
+	useEffect(() => {
+		if (!busy) setReplies((n) => n + 1);
+	}, [busy]);
 	/** Whose hunks a column's diff tabs decide on: its own session, else the other's. */
 	const leftHunks = left.snapshot ? left : right;
 	const rightHunks = right.snapshot ? right : left;
@@ -2249,6 +2254,7 @@ export default function App() {
 									}
 									onOpen={openFile}
 									onClose={() => showPanel(null)}
+									revision={replies}
 								>
 									<ProjectPicker
 										projects={projects}

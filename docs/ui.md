@@ -97,6 +97,12 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
 
 - Session (AI) tabs lead with a bold `π` (the greeting-screen mark) that is also the live signal: `neutral-500` when idle, amber + `animate-pulse` while streaming. No separate dot. File tabs use `FileGlyph`, diff tabs `GitDiff`.
 
+## Explorer
+
+- The header has a refresh `IconButton` (`ArrowClockwise`, `sm`) left of the close ✕.
+  It re-reads the root and every expanded folder. The tree also re-reads each time
+  the agent finishes a reply.
+
 ## Primitives (`src/web/ui.tsx`)
 
 New UI uses these; convert raw markup when you touch it. Tune styles in
