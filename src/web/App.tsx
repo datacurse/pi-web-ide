@@ -19,6 +19,7 @@ import { SessionTabs, tabDomId } from "./SessionTabs.js";
 import { Chat } from "./Chat.js";
 import { TerminalPane } from "./Terminal.js";
 import { SourceControl } from "./SourceControl.js";
+import { GIT_CHANGED } from "./GitActions.js";
 import { DiffView } from "./DiffView.js";
 import { Explorer } from "./Explorer.js";
 import { FileEditor } from "./FileEditor.js";
@@ -936,7 +937,13 @@ function useSession({
 
 	attachRef.current = attach;
 
-	useEffect(() => () => esRef.current?.close(), []);
+	useEffect(() => {
+		// Fast Refresh re-runs effects: an edit to this file ran the cleanup below
+		// and left the tab deaf to its session. Reopen the stream it closed.
+		const file = snapshotRef.current?.file;
+		if (esRef.current?.readyState === EventSource.CLOSED && file) void attachRef.current(file);
+		return () => esRef.current?.close();
+	}, []);
 
 	// The spinner stops on its own: `/model` and friends change the session
 	// without printing anything, so no answer is ever coming for them and
@@ -2109,12 +2116,20 @@ export default function App() {
 	useEffect(() => {
 		if (!gitCwd) return setUncommitted(0);
 		let live = true;
-		fetch(`/api/git/changes?cwd=${encodeURIComponent(gitCwd)}`)
-			.then((r) => r.json() as Promise<{ files?: unknown[] }>)
-			.then((b) => live && setUncommitted(b.files?.length ?? 0))
-			.catch(() => {});
+		const read = () =>
+			fetch(`/api/git/changes?cwd=${encodeURIComponent(gitCwd)}`)
+				.then((r) => r.json() as Promise<{ files?: unknown[] }>)
+				.then((b) => live && setUncommitted(b.files?.length ?? 0))
+				.catch(() => {});
+		void read();
+		// A commit from the chat's button: the panel may be closed, so re-read here.
+		const on = (e: Event) => {
+			if ((e as CustomEvent<string>).detail === gitCwd) void read();
+		};
+		window.addEventListener(GIT_CHANGED, on);
 		return () => {
 			live = false;
+			window.removeEventListener(GIT_CHANGED, on);
 		};
 	}, [gitCwd, snapshot?.hunks]);
 	useEffect(() => {

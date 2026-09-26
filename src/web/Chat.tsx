@@ -593,7 +593,11 @@ function TurnStatus({ since }: { since: number | undefined }) {
 					{spinner}
 				</span>
 				<span>{verb}…</span>
-				{secs > 0 && <span className="tabular-nums">{secs}s</span>}
+				{secs > 0 && (
+					<span className="tabular-nums">
+						{secs < 60 ? `${secs}s` : `${Math.floor(secs / 60)}m ${secs % 60}s`}
+					</span>
+				)}
 			</div>
 		</div>
 	);
