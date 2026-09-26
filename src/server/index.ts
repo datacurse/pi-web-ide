@@ -19,6 +19,7 @@ import { randomUUID } from "node:crypto";
 import { promisify } from "node:util";
 import { listModels, readSettings, setDefaultModel, setDefaultThinkingLevel } from "./models.js";
 import { listSessions, sameProject } from "./sessions.js";
+import { searchSessions } from "./search.js";
 import { markWeb, stats } from "./stats.js";
 import {
 	addFavorite,
@@ -427,6 +428,17 @@ app.get("/api/sessions", async (req, res) => {
 				needsInput: askingIds.has(s.id),
 			})),
 		});
+	} catch (err) {
+		res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+	}
+});
+
+/** Full-text search over one project's sessions. Before `/api/sessions/:id`, which would swallow it. */
+app.get("/api/sessions/search", async (req, res) => {
+	try {
+		const cwd = typeof req.query.cwd === "string" && req.query.cwd ? req.query.cwd : CWD;
+		const q = typeof req.query.q === "string" ? req.query.q : "";
+		res.json({ hits: await searchSessions(cwd, q) });
 	} catch (err) {
 		res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
 	}

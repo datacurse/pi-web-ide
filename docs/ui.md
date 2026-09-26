@@ -131,6 +131,20 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
 - The same pins apply to the tab strips: a pinned session's tab moves to the front of
   its column and shows the same `PushPin` before the `π`.
 
+## Session search
+
+- One search surface: a modal popup (`SessionSearch`), opened by Ctrl+O from anywhere
+  (captured before the terminal and editors) or by the field-looking button under
+  `New session`. The button only opens the popup; the list itself never filters.
+- Popup: top-anchored `<dialog>`, `rounded-md`, backdrop `bg-black/50` + `backdrop-blur-sm`.
+  It is a large centered surface, so it sits one type step above the side-panel rows:
+  query `text-title`, row title `text-body`, excerpt and `timeAgo` stamp `text-ui neutral-500`,
+  18px icons.
+  Matches are bold `neutral-100`. Arrows move, Enter opens, Escape or backdrop closes.
+- Empty query lists the most recently active sessions, so it is also a switcher.
+- Scope is the open project. Matches user and assistant text and tool-call arguments;
+  title matches rank first, then content, then fuzzy (subsequence) title matches.
+
 ## User message bubble
 
 - Text is clamped to 3 lines (`line-clamp-3`, ellipsis). When it overflows, a ghost
@@ -215,7 +229,8 @@ New UI uses these; convert raw markup when you touch it. Tune styles in
   `composer pill` (model selects, git split button), `composer`, `choice card`
   (chat question options, package search hits), `session card`, `transcript
   disclosure`, `context meter`, `image thumbnail`, `thumbnail remove badge`,
-  `pinned-folder chip`, `activity bar item`.
+  `pinned-folder chip`, `activity bar item`, `search trigger`, `search field`,
+  `search result`.
 - xterm reads `--text-body` at mount (Terminal.tsx); it cannot take a class.
 - Buttons default to `type="button"`; pass `type="submit"` explicitly.
 - No focus outlines. `index.css` sets `:focus-visible { outline: none }`; never add

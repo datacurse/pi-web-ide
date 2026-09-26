@@ -13,6 +13,7 @@ import type {
 } from "../shared/types.js";
 import type { Hunk } from "../shared/hunks.js";
 import { SessionList } from "./SessionList.js";
+import { SessionSearch } from "./SessionSearch.js";
 import { ProjectPicker, type Projects } from "./ProjectPicker.js";
 import { ActivityBar } from "./ActivityBar.js";
 import { Stats } from "./Stats.js";
@@ -1256,6 +1257,7 @@ export default function App() {
 	/** Why the last session listing failed, shown in place of an empty list. */
 	const [listError, setListError] = useState<string | null>(null);
 	const [listOpen, setListOpen] = useState(false);
+	const [searchOpen, setSearchOpen] = useState(false);
 	/**
 	 * Which side panel is showing, if any — one value, because they are
 	 * mutually exclusive the way VS Code's activity bar is: one column, one
@@ -2341,6 +2343,21 @@ export default function App() {
 		return () => window.removeEventListener("keydown", onKeyDown);
 	}, [toggleTerminal]);
 
+	/**
+	 * Ctrl+O opens session search. Captured on window before anything else, so
+	 * neither the browser's Open File nor a focused terminal or editor gets it.
+	 */
+	useEffect(() => {
+		const onKeyDown = (e: KeyboardEvent) => {
+			if (e.code !== "KeyO" || !e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
+			e.preventDefault();
+			e.stopPropagation();
+			setSearchOpen(true);
+		};
+		window.addEventListener("keydown", onKeyDown, true);
+		return () => window.removeEventListener("keydown", onKeyDown, true);
+	}, []);
+
 	/*
 	 * Notice when the server we are talking to is not the one that served this
 	 * page.
@@ -2876,6 +2893,19 @@ export default function App() {
 				onNew={() =>
 					void (lastSide.current === "right" && tabsRef.current.right ? right : left).attach()
 				}
+				onSearch={() => setSearchOpen(true)}
+			/>
+
+			<SessionSearch
+				open={searchOpen}
+				project={project}
+				sessions={shown}
+				shortNames={shortNames}
+				onSelect={(s) => {
+					focusSession(s.path);
+					setListOpen(false);
+				}}
+				onClose={() => setSearchOpen(false)}
 			/>
 		</div>
 	);

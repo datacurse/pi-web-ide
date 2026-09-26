@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { CaretUpDown, Plus, PushPin, X } from "@phosphor-icons/react";
+import { CaretUpDown, MagnifyingGlass, Plus, PushPin, X } from "@phosphor-icons/react";
 import type { PiSessionInfo } from "../shared/types.js";
 import { SESSION_SORTS, type SessionSort } from "./prefs.js";
 import { sessionLabel, shortName } from "./sessionName.js";
@@ -11,7 +11,7 @@ function stamp(s: PiSessionInfo, sort: SessionSort): string {
 	return sort === "created" ? s.created : s.lastActive;
 }
 
-function timeAgo(iso: string): string {
+export function timeAgo(iso: string): string {
 	const s = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
 	if (s < 60) return "just now";
 	const m = Math.floor(s / 60);
@@ -57,6 +57,7 @@ export function SessionList({
 	onAutoName,
 	shortNames,
 	onNew,
+	onSearch,
 }: {
 	sessions: PiSessionInfo[];
 	/** Each session's working / ready / needs state, keyed by file. */
@@ -86,6 +87,8 @@ export function SessionList({
 	/** Label unnamed sessions by a short name from the first prompt. */
 	shortNames: boolean;
 	onNew: () => void;
+	/** Open the search popup (also Ctrl+O). */
+	onSearch: () => void;
 }) {
 	/*
 	 * Sorted here rather than on the server: both timestamps are already on
@@ -175,6 +178,19 @@ export function SessionList({
 					>
 						<X size={13} />
 					</IconButton>
+				</div>
+
+				{/* Looks like a field, but only opens the popup: one search surface, not two. */}
+				<div className="border-b border-neutral-800 px-2 py-1.5">
+					<button
+						data-custom="search trigger"
+						onClick={onSearch}
+						className="flex h-control-sm w-full items-center gap-1.5 rounded-sm border border-neutral-800 px-2 text-meta text-neutral-500 transition-colors duration-150 ease-out hover:border-neutral-700 hover:text-neutral-300 motion-reduce:transition-none"
+					>
+						<MagnifyingGlass size={12} />
+						Search sessions
+						<kbd className="ml-auto font-sans text-caption text-neutral-600">Ctrl O</kbd>
+					</button>
 				</div>
 
 				<div className="flex items-center justify-between border-b border-neutral-800 px-2 py-1">

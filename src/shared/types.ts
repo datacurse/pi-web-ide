@@ -160,6 +160,12 @@ export interface PiSessionInfo {
 	needsInput?: boolean;
 }
 
+/** A session search result: the session and a one-line excerpt around the match. */
+export interface PiSessionHit {
+	session: PiSessionInfo;
+	snippet: string;
+}
+
 /** One prompt and everything pi did to answer it, from a session file. */
 export interface StatsTurn {
 	session: string;
