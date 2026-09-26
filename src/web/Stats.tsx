@@ -53,8 +53,10 @@ export function Stats({ revision, onClose }: { revision?: unknown; onClose: () =
 	const [view, setView] = useState<StatsView | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [source, setSource] = useState<Source>("all");
+	const [reload, setReload] = useState(0);
 
 	const load = useCallback(async () => {
+		setReload((n) => n + 1);
 		try {
 			const r = await fetch("/api/stats");
 			if (!r.ok) throw new Error(((await r.json()) as { error?: string }).error ?? r.statusText);
@@ -101,6 +103,9 @@ export function Stats({ revision, onClose }: { revision?: unknown; onClose: () =
 			</PanelHeader>
 
 			<div className="min-h-0 flex-1 overflow-y-auto p-3">
+				<div className="mb-6">
+					<Usage reload={reload} />
+				</div>
 				{error && <p className="mb-3 text-meta text-red-400">{error}</p>}
 				{!view && !error && <p className="text-meta text-neutral-500">Reading sessions…</p>}
 				{view && (
@@ -133,6 +138,88 @@ export function Stats({ revision, onClose }: { revision?: unknown; onClose: () =
 				)}
 			</div>
 		</section>
+	);
+}
+
+/** The subset of /api/usage (Anthropic's oauth/usage) this panel reads. */
+interface UsageLimit {
+	kind: string;
+	percent: number;
+	resets_at: string | null;
+	scope: { model?: { display_name?: string | null } } | null;
+}
+
+function limitLabel(l: UsageLimit): string {
+	if (l.kind === "session") return "Current session";
+	if (l.kind === "weekly_all") return "This week";
+	const model = l.scope?.model?.display_name;
+	return model ? `${model} this week` : l.kind.replace(/_/g, " ");
+}
+
+function resetLabel(iso: string | null): string {
+	if (!iso) return "";
+	const d = new Date(iso);
+	const time = d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+	return d.getTime() - Date.now() < 86_400_000
+		? `Resets at ${time}`
+		: `Resets ${d.toLocaleDateString([], { weekday: "long" })} ${time}`;
+}
+
+function Usage({ reload }: { reload: number }) {
+	const [limits, setLimits] = useState<UsageLimit[] | null>(null);
+	const [usageError, setUsageError] = useState<string | null>(null);
+	useEffect(() => {
+		void (async () => {
+			const r = await fetch("/api/usage").catch(() => null);
+			const body = (await r?.json().catch(() => null)) as {
+				limits?: UsageLimit[];
+				error?: string;
+			} | null;
+			if (r?.ok && Array.isArray(body?.limits)) {
+				setLimits(body.limits);
+				setUsageError(null);
+			} else setUsageError(body?.error ?? "could not load usage");
+		})();
+	}, [reload]);
+	return (
+		<div>
+			<h3 className={`mb-2 ${sectionLabel}`}>Usage remaining</h3>
+			{usageError ? (
+				<p className="text-meta text-red-400">{usageError}</p>
+			) : !limits ? (
+				<p className="text-meta text-neutral-500">loading…</p>
+			) : (
+				<div className="flex flex-col gap-3">
+					{limits.map((l) => {
+						const left = Math.max(0, Math.min(100, 100 - l.percent));
+						return (
+							<div key={`${l.kind}-${limitLabel(l)}`} className="text-ui">
+								<div className="flex items-baseline justify-between gap-2">
+									<span>{limitLabel(l)}</span>
+									<span className="text-meta text-neutral-300">{left}% left</span>
+								</div>
+								<div
+									role="meter"
+									aria-label={`${limitLabel(l)} remaining`}
+									aria-valuenow={left}
+									aria-valuemin={0}
+									aria-valuemax={100}
+									className="mt-1 h-1.5 overflow-hidden rounded-full bg-neutral-800"
+								>
+									<div
+										className="h-full rounded-full bg-green-400"
+										style={{ width: `${left}%` }}
+									/>
+								</div>
+								<span className="mt-0.5 block text-meta text-neutral-500">
+									{resetLabel(l.resets_at)}
+								</span>
+							</div>
+						);
+					})}
+				</div>
+			)}
+		</div>
 	);
 }
 

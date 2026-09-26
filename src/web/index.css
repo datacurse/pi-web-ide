@@ -705,12 +705,13 @@ body {
  * Unfocused selection stays visible but dimmer, the way VS Code's does:
  * clicking the tree and back should not make you lose what you had selected.
  */
-.cm-editor-host .cm-selectionBackground,
+/* Specific enough to beat CodeMirror's light base theme (#d7d4f0 when focused). */
+.cm-editor-host .cm-editor.cm-focused .cm-scroller .cm-selectionLayer .cm-selectionBackground,
 .cm-editor-host .cm-content ::selection {
 	background: #264f78;
 }
 
-.cm-editor-host .cm-editor:not(.cm-focused) .cm-selectionBackground {
+.cm-editor-host .cm-editor .cm-selectionLayer .cm-selectionBackground {
 	background: #3a3d41;
 }
 

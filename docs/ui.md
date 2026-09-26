@@ -112,9 +112,10 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
 | ------- | ---------------------------------------- | ------------------ | ----------------------- |
 | idle    | nothing new                              | `neutral-500`      | none                    |
 | working | streaming                                | amber, pulsing     | list only, pulsing amber |
-| ready   | new activity since this browser saw it   | amber, steady      | amber                   |
+| ready   | new activity since this browser saw it   | `neutral-500`      | amber                   |
 | needs   | blocked on a question (`ask`)            | `red-400`, steady  | red                     |
 
+- An amber `π` only ever means working: a finished turn must not look like one still running.
 - "Seen" means on screen in either column while the window is visible and focused.
   Per-browser (`localStorage`), synced across pwi windows.
 - Window title: `N ● pwi` — N = ready + needs (omitted at 0), `●` while anything works. No brackets.

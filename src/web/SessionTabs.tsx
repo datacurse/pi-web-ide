@@ -460,7 +460,7 @@ export function SessionTabs({
 								)}
 								{/* Marks an AI session so it never reads as a code tab, and
 								    doubles as its live signal: grey when idle, amber and
-								    pulsing while it works, steady amber for a new reply, red
+								    pulsing while it works, grey plus the dot for a new reply, red
 								    for a question. Color alone still carries it under reduced
 								    motion. */}
 								{!isFile && (
