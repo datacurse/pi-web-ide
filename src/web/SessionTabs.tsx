@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Crosshair, GitDiff, Path, PushPin, X } from "@phosphor-icons/react";
+import { ArrowLineRight, Crosshair, GitDiff, Path, PencilSimple, PushPin, X, XCircle } from "@phosphor-icons/react";
 import type { KeyboardEvent } from "react";
 import type { PiSessionInfo } from "../shared/types.js";
 import { sessionLabel } from "./sessionName.js";
 import { ATTENTION_UI, type Attention } from "./attention.js";
 import { FileGlyph } from "./fileIcon.js";
 import { diffParts, isDiffTab, isSessionTab, tabLabel, tabPath } from "./tabs.js";
-import { ContextMenu, IconButton, MenuItem, tabClass } from "./ui.js";
+import { ContextMenu, IconButton, MenuItem, MenuSeparator, tabClass } from "./ui.js";
 
 /**
  * A diff tab's tooltip: the long form VS Code puts in the tab itself.
@@ -89,6 +89,8 @@ export function SessionTabs({
 	onReorder,
 	onAdopt,
 	onReveal,
+	onTogglePin,
+	onRename,
 	label = "Open sessions",
 }: {
 	/** Open session files, in strip order. */
@@ -128,10 +130,14 @@ export function SessionTabs({
 	onReorder: (from: number, to: number) => void;
 	/** Show a file tab's file in the Explorer. Enables the file tab menu. */
 	onReveal?: (path: string) => void;
+	/** Pin or unpin a session tab. Enables Pin in the session tab menu. */
+	onTogglePin?: (file: string) => void;
+	/** Rename a session. Enables Rename in the session tab menu. */
+	onRename?: (session: PiSessionInfo, name: string) => void;
 }) {
 	const buttons = useRef<Array<HTMLButtonElement | null>>([]);
-	/** A file tab's right-click menu: which path, and where the pointer was. */
-	const [menu, setMenu] = useState<{ path: string; x: number; y: number } | null>(null);
+	/** A tab's right-click menu: which tab entry, and where the pointer was. */
+	const [menu, setMenu] = useState<{ file: string; x: number; y: number } | null>(null);
 	/*
 	 * Drag state for REORDERING, which is view state and not App's: only the
 	 * committed order matters upstream, and lifting the in-flight index would
@@ -416,11 +422,11 @@ export function SessionTabs({
 								title={isDiff ? diffTitle(file) : isFile ? tabPath(file) : label}
 								onClick={() => onSelect(file)}
 								onContextMenu={(e) => {
-									if (!onReveal || !isFile || isDiff) return;
 									e.preventDefault();
 									const box = e.currentTarget.getBoundingClientRect();
-									setMenu({ path: tabPath(file), x: e.clientX || box.left + 16, y: e.clientY || box.bottom });
+									setMenu({ file, x: e.clientX || box.left + 16, y: e.clientY || box.bottom });
 								}}
+								aria-haspopup="menu"
 								onKeyDown={(e) => moveFocus(e, i)}
 								className={`${tabClass(isActive, focused)} pr-7`}
 							>
@@ -504,29 +510,78 @@ export function SessionTabs({
 				</p>
 			)}
 
-			{menu && onReveal && (
-				<ContextMenu x={menu.x} y={menu.y} label={menu.path} onClose={() => setMenu(null)}>
-					<MenuItem icon={<Crosshair size={16} />}
-						role="menuitem"
-						autoFocus
-						onClick={() => {
-							setMenu(null);
-							onReveal(menu.path);
-						}}
-					>
-						Reveal in Explorer
-					</MenuItem>
-					<MenuItem icon={<Path size={16} />}
-						role="menuitem"
-						onClick={() => {
-							setMenu(null);
-							void navigator.clipboard.writeText(menu.path).catch(() => {});
-						}}
-					>
-						Copy Path
-					</MenuItem>
-				</ContextMenu>
-			)}
+			{menu && (() => {
+				const file = menu.file;
+				const index = tabs.indexOf(file);
+				const isFile = !isSessionTab(file);
+				const isDiff = isDiffTab(file);
+				const info = isFile ? undefined : byFile.get(file);
+				const label = isFile ? tabLabel(file) : sessionLabel(info, shortNames);
+				const act = (fn: () => void) => () => {
+					setMenu(null);
+					fn();
+				};
+				return (
+					<ContextMenu x={menu.x} y={menu.y} label={`Tab ${label}`} onClose={() => setMenu(null)}>
+						{!isFile && onTogglePin && (
+							<MenuItem icon={<PushPin size={16} />} role="menuitem" autoFocus onClick={act(() => onTogglePin(file))}>
+								{pinned.includes(file) ? "Unpin Tab" : "Pin Tab"}
+							</MenuItem>
+						)}
+						{!isFile && onRename && (
+							<MenuItem
+								icon={<PencilSimple size={16} />}
+								role="menuitem"
+								disabled={!info}
+								onClick={act(() => {
+									const next = window.prompt("Rename session", label)?.trim();
+									if (info && next && next !== info.name) onRename(info, next);
+								})}
+							>
+								Rename…
+							</MenuItem>
+						)}
+						{isFile && !isDiff && onReveal && (
+							<MenuItem icon={<Crosshair size={16} />} role="menuitem" autoFocus onClick={act(() => onReveal(tabPath(file)))}>
+								Reveal in Explorer
+							</MenuItem>
+						)}
+						{isFile && !isDiff && (
+							<MenuItem
+								icon={<Path size={16} />}
+								role="menuitem"
+								onClick={act(() => void navigator.clipboard.writeText(tabPath(file)).catch(() => {}))}
+							>
+								Copy Path
+							</MenuItem>
+						)}
+						{!isDiff && <MenuSeparator />}
+						<MenuItem icon={<X size={16} />} role="menuitem" autoFocus={isDiff} onClick={act(() => onClose(file))}>
+							Close
+						</MenuItem>
+						<MenuItem
+							icon={<XCircle size={16} />}
+							role="menuitem"
+							disabled={tabs.length < 2}
+							onClick={act(() => {
+								for (const f of tabs) if (f !== file) onClose(f);
+							})}
+						>
+							Close Others
+						</MenuItem>
+						<MenuItem
+							icon={<ArrowLineRight size={16} />}
+							role="menuitem"
+							disabled={index < 0 || index === tabs.length - 1}
+							onClick={act(() => {
+								for (const f of tabs.slice(index + 1)) onClose(f);
+							})}
+						>
+							Close to the Right
+						</MenuItem>
+					</ContextMenu>
+				);
+			})()}
 
 		</div>
 	);

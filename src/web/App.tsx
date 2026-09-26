@@ -249,6 +249,8 @@ function EditorColumn({
 	chat,
 	focused,
 	onReveal,
+	onTogglePin,
+	onRename,
 }: {
 	side: Side;
 	group: TabGroup;
@@ -278,6 +280,8 @@ function EditorColumn({
 	focused: boolean;
 	/** Show a file tab's file in the Explorer. */
 	onReveal: (path: string) => void;
+	onTogglePin: (file: string) => void;
+	onRename: (session: PiSessionInfo, name: string) => void;
 }) {
 	const active = group.active;
 	const activeIndex = active ? group.files.indexOf(active) : -1;
@@ -320,6 +324,8 @@ function EditorColumn({
 				// was aimed at.
 				onAdopt={(entry, index) => onMove(entry, side, index)}
 				onReveal={onReveal}
+				onTogglePin={onTogglePin}
+				onRename={onRename}
 			/>
 			<SplitZone
 				/*
@@ -2623,6 +2629,8 @@ export default function App() {
 				<EditorColumn
 					side="left"
 					onReveal={revealFile}
+					onTogglePin={togglePin}
+					onRename={(s, name) => void renameSession(s, name)}
 					group={groupOf(tabs, "left")}
 					panelId={CHAT_PANEL_ID}
 					sessions={shown}
@@ -2652,6 +2660,8 @@ export default function App() {
 					<EditorColumn
 						side="right"
 						onReveal={revealFile}
+						onTogglePin={togglePin}
+						onRename={(s, name) => void renameSession(s, name)}
 						group={tabs.right}
 						panelId={SPLIT_PANEL_ID}
 						sessions={shown}
