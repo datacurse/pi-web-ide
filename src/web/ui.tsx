@@ -114,14 +114,31 @@ export function ListRow({
 	);
 }
 
-/* A row in a dropdown or context menu. The parent sets `role="menu"`. */
-export function MenuItem({ type = "button", className = "", ...rest }: ButtonHTMLAttributes<HTMLButtonElement>) {
+/*
+ * A row in a dropdown or context menu. The parent sets `role="menu"`.
+ * `icon` is a 16px Phosphor icon in a fixed slot before the label, so the
+ * labels of a menu line up; it greys out with the row.
+ */
+export function MenuItem({
+	type = "button",
+	className = "",
+	icon,
+	children,
+	...rest
+}: ButtonHTMLAttributes<HTMLButtonElement> & { icon?: ReactNode }) {
 	return (
 		<button
 			type={type}
-			className={`block w-full px-3 py-1.5 text-left text-ui text-neutral-200 hover:bg-neutral-800 focus-visible:bg-neutral-800 focus-visible:outline-none disabled:text-neutral-600 disabled:hover:bg-transparent ${EASE} ${className}`}
+			className={`${icon ? "group flex items-center gap-2" : "block"} w-full px-3 py-1.5 text-left text-ui text-neutral-200 hover:bg-neutral-800 focus-visible:bg-neutral-800 focus-visible:outline-none disabled:text-neutral-600 disabled:hover:bg-transparent ${EASE} ${className}`}
 			{...rest}
-		/>
+		>
+			{icon && (
+				<span className="flex w-4 shrink-0 justify-center text-neutral-400 group-disabled:text-neutral-600" aria-hidden>
+					{icon}
+				</span>
+			)}
+			{children}
+		</button>
 	);
 }
 

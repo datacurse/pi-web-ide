@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { GitDiff, PushPin, X } from "@phosphor-icons/react";
+import { Crosshair, GitDiff, Path, PushPin, X } from "@phosphor-icons/react";
 import type { KeyboardEvent } from "react";
 import type { PiSessionInfo } from "../shared/types.js";
 import { sessionLabel } from "./sessionName.js";
@@ -506,7 +506,7 @@ export function SessionTabs({
 
 			{menu && onReveal && (
 				<ContextMenu x={menu.x} y={menu.y} label={menu.path} onClose={() => setMenu(null)}>
-					<MenuItem
+					<MenuItem icon={<Crosshair size={16} />}
 						role="menuitem"
 						autoFocus
 						onClick={() => {
@@ -516,7 +516,7 @@ export function SessionTabs({
 					>
 						Reveal in Explorer
 					</MenuItem>
-					<MenuItem
+					<MenuItem icon={<Path size={16} />}
 						role="menuitem"
 						onClick={() => {
 							setMenu(null);

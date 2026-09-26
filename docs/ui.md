@@ -143,10 +143,12 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
   2. `Add to Chat` (appends the project-relative path to the open session's
      composer, disabled with no session), `Open in Terminal` (a new terminal tab in
      the folder, or the file's folder), `Download` (files only).
-  3. `Cut`, `Copy`, `Paste` (into the folder, or the file's folder; a cut is used
+  3. `Copy Path`, `Copy Relative Path`.
+  4. `Cut`, `Copy`, `Paste` (into the folder, or the file's folder; a cut is used
      up by one paste, a copy of a taken name becomes `name copy.ext`).
-  4. `Copy Path`, `Copy Relative Path`.
   5. `Rename…`, `Delete`.
+  Everything that changes files (4 and 5) sits together at the bottom, with
+  `Delete` last; path copying is read-only and stays above it.
 - Right-click the empty space below the rows → the same menu for the project root,
   without the entries that would change or name the root itself.
 - New File/Folder and Rename type into an inline field in the row's place:
@@ -166,7 +168,7 @@ New UI uses these; convert raw markup when you touch it. Tune styles in
 | --------------- | ----------------------------------------------------------- | --- |
 | `Button`        | `variant`: primary / secondary (default) / subtle / ghost / warning (inside amber notices); `size`: sm (12px) / md (13px) | Text buttons. One `primary` per dialog or panel. Cancel is `secondary`. |
 | `IconButton`    | `label` (required; aria-label + tooltip), `variant`: ghost / outline / solid, `size`: sm 24px / md 28px, `round` | Icon-only buttons. `round` only in the composer toolbar. |
-| `MenuItem`      | button props                                                | Rows in dropdown and context menus. |
+| `MenuItem`      | button props, `icon?` (16px Phosphor, fixed slot, greys with the row) | Rows in dropdown and context menus. Context-menu items carry an icon; give every item in one menu an icon or none. |
 | `MenuSeparator` | —                                                           | Rule between groups of `MenuItem`s. |
 | `ContextMenu`   | `x`, `y`, `label`, `width` (220), `onClose`                 | Right-click menu at the pointer: fixed, clamped on screen, closes on outside click, Escape, scroll, resize. Items call `onClose` after acting. |
 | `Section`       | `title`                                                     | Settings group (fieldset + uppercase legend). |

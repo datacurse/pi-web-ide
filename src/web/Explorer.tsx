@@ -9,7 +9,26 @@
  */
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type MouseEvent } from "react";
-import { ArrowClockwise, CaretDown, CaretRight } from "@phosphor-icons/react";
+import {
+	ArrowClockwise,
+	ArrowElbowDownRight,
+	CaretDown,
+	CaretRight,
+	ChatText,
+	Clipboard,
+	Copy,
+	DownloadSimple,
+	File as FileIcon,
+	FilePlus,
+	FolderPlus,
+	GitDiff,
+	Path,
+	PencilSimple,
+	Scissors,
+	SquareSplitHorizontal,
+	TerminalWindow,
+	Trash,
+} from "@phosphor-icons/react";
 import type { PiwFileEntry } from "../shared/types.js";
 import { FileGlyph } from "./fileIcon.js";
 import { readExplorerOpen, writeExplorerOpen } from "./prefs.js";
@@ -586,23 +605,23 @@ export function Explorer({
 					<ContextMenu x={menu.x} y={menu.y} label={m.name} onClose={() => setMenu(null)}>
 						{m.dir ? (
 							<>
-								<MenuItem role="menuitem" autoFocus onClick={act(() => startNew("file", m.path))}>
+								<MenuItem icon={<FilePlus size={16} />} role="menuitem" autoFocus onClick={act(() => startNew("file", m.path))}>
 									New File…
 								</MenuItem>
-								<MenuItem role="menuitem" onClick={act(() => startNew("folder", m.path))}>
+								<MenuItem icon={<FolderPlus size={16} />} role="menuitem" onClick={act(() => startNew("folder", m.path))}>
 									New Folder…
 								</MenuItem>
 							</>
 						) : (
 							<>
-								<MenuItem role="menuitem" autoFocus onClick={act(() => onOpen(m.path))}>
+								<MenuItem icon={<FileIcon size={16} />} role="menuitem" autoFocus onClick={act(() => onOpen(m.path))}>
 									Open
 								</MenuItem>
-								<MenuItem role="menuitem" onClick={act(() => onOpenSide(m.path))}>
+								<MenuItem icon={<SquareSplitHorizontal size={16} />} role="menuitem" onClick={act(() => onOpenSide(m.path))}>
 									Open to the Side
 								</MenuItem>
 								{changed.has(relativePath(cwd, m.path)) && (
-									<MenuItem role="menuitem" onClick={act(() => onOpenDiff("", relativePath(cwd, m.path)))}>
+									<MenuItem icon={<GitDiff size={16} />} role="menuitem" onClick={act(() => onOpenDiff("", relativePath(cwd, m.path)))}>
 										Open Changes
 									</MenuItem>
 								)}
@@ -610,7 +629,7 @@ export function Explorer({
 						)}
 						<MenuSeparator />
 						{!menu.root && (
-							<MenuItem
+							<MenuItem icon={<ChatText size={16} />}
 								role="menuitem"
 								disabled={!onAddToChat}
 								title={onAddToChat ? undefined : "Open a session first"}
@@ -619,11 +638,11 @@ export function Explorer({
 								Add to Chat
 							</MenuItem>
 						)}
-						<MenuItem role="menuitem" disabled={!onOpenTerminal} onClick={act(() => onOpenTerminal?.(dir))}>
+						<MenuItem icon={<TerminalWindow size={16} />} role="menuitem" disabled={!onOpenTerminal} onClick={act(() => onOpenTerminal?.(dir))}>
 							Open in Terminal
 						</MenuItem>
 						{!m.dir && (
-							<MenuItem
+							<MenuItem icon={<DownloadSimple size={16} />}
 								role="menuitem"
 								onClick={act(() => {
 									const a = document.createElement("a");
@@ -636,17 +655,29 @@ export function Explorer({
 							</MenuItem>
 						)}
 						<MenuSeparator />
+						<MenuItem icon={<Path size={16} />} role="menuitem" onClick={act(() => navigator.clipboard.writeText(m.path))}>
+							Copy Path
+						</MenuItem>
+						{!menu.root && (
+							<MenuItem icon={<ArrowElbowDownRight size={16} />}
+								role="menuitem"
+								onClick={act(() => navigator.clipboard.writeText(relativePath(cwd, m.path)))}
+							>
+								Copy Relative Path
+							</MenuItem>
+						)}
+						<MenuSeparator />
 						{!menu.root && (
 							<>
-								<MenuItem role="menuitem" onClick={act(() => setClip({ path: m.path, cut: true }))}>
+								<MenuItem icon={<Scissors size={16} />} role="menuitem" onClick={act(() => setClip({ path: m.path, cut: true }))}>
 									Cut
 								</MenuItem>
-								<MenuItem role="menuitem" onClick={act(() => setClip({ path: m.path, cut: false }))}>
+								<MenuItem icon={<Copy size={16} />} role="menuitem" onClick={act(() => setClip({ path: m.path, cut: false }))}>
 									Copy
 								</MenuItem>
 							</>
 						)}
-						<MenuItem
+						<MenuItem icon={<Clipboard size={16} />}
 							role="menuitem"
 							disabled={!clip}
 							title={clip ? `Paste ${clip.path.slice(clip.path.lastIndexOf("/") + 1)} into ${relativePath(cwd, dir)}` : undefined}
@@ -654,22 +685,10 @@ export function Explorer({
 						>
 							Paste
 						</MenuItem>
-						<MenuSeparator />
-						<MenuItem role="menuitem" onClick={act(() => navigator.clipboard.writeText(m.path))}>
-							Copy Path
-						</MenuItem>
-						{!menu.root && (
-							<MenuItem
-								role="menuitem"
-								onClick={act(() => navigator.clipboard.writeText(relativePath(cwd, m.path)))}
-							>
-								Copy Relative Path
-							</MenuItem>
-						)}
 						{!menu.root && (
 							<>
 								<MenuSeparator />
-								<MenuItem
+								<MenuItem icon={<PencilSimple size={16} />}
 									role="menuitem"
 									onClick={act(() => {
 										guard(m.path);
@@ -678,7 +697,7 @@ export function Explorer({
 								>
 									Rename…
 								</MenuItem>
-								<MenuItem role="menuitem" onClick={act(() => trash(m))}>
+								<MenuItem icon={<Trash size={16} />} role="menuitem" onClick={act(() => trash(m))}>
 									Delete
 								</MenuItem>
 							</>
