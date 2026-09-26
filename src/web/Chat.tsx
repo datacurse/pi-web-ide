@@ -1069,6 +1069,7 @@ export function Chat({
 	onCompact,
 	onRestart,
 	draftRev = 0,
+	focus,
 }: {
 	snapshot: Snapshot | null;
 	partial: PiPartial;
@@ -1106,6 +1107,8 @@ export function Chat({
 	 * re-read it and put the caret at its end.
 	 */
 	draftRev?: number;
+	/** Bumped when the session list picked `entry`: focus the composer once it shows. */
+	focus?: { entry: string; n: number };
 }) {
 	const [text, setText] = useState("");
 	// Sticky until switched off or the session changes: a run of questions is the usual case.
@@ -1187,6 +1190,14 @@ export function Chat({
 		setAttachError(null);
 		setAskOnly(false);
 	}, [draftKey, draftRev]);
+
+	const seenFocus = useRef(focus?.n);
+	useEffect(() => {
+		if (!focus || !snapshot || focus.n === seenFocus.current) return;
+		if (focus.entry !== snapshot.file && focus.entry !== snapshot.id) return;
+		seenFocus.current = focus.n;
+		composer.current?.focus();
+	}, [focus, snapshot]);
 
 	/*
 	 * The picker's contents, derived from the text rather than held in state:

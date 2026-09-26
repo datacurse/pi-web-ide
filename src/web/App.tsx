@@ -2510,15 +2510,21 @@ export default function App() {
 	}, [title]);
 	useEffect(() => setFavicon(working, badge), [working, badge]);
 
-	/** Focus a session where it is open, or open it on the left. */
+	/** Which column's composer the last `focusSession` should focus, and for which session. */
+	const [sessionFocus, setSessionFocus] = useState({ side: "left" as Side, entry: "", n: 0 });
+
+	/** Focus a session where it is open, or open it on the left, and focus its composer. */
 	const focusSession = useCallback(
 		(path: string) => {
 			// Adding it to the left while it is open on the right would put one
 			// session in both columns.
-			if (sideOfTab(tabsRef.current, path) === "right") selectRight(path);
+			const side: Side = sideOfTab(tabsRef.current, path) === "right" ? "right" : "left";
+			if (side === "right") selectRight(path);
 			else selectTab(path);
+			markSide(side);
+			setSessionFocus((f) => ({ side, entry: path, n: f.n + 1 }));
 		},
-		[selectTab, selectRight],
+		[selectTab, selectRight, markSide],
 	);
 
 	/**
@@ -2578,6 +2584,7 @@ export default function App() {
 		<Chat
 			snapshot={s.snapshot}
 			draftRev={inserted.side === side ? inserted.n : 0}
+			focus={sessionFocus.side === side ? sessionFocus : undefined}
 			partial={s.partial}
 			busy={s.busy}
 			opening={s.opening}
