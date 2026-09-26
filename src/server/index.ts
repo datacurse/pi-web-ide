@@ -11,8 +11,9 @@ import express from "express";
 import { createServer, type IncomingMessage } from "node:http";
 import { fileURLToPath } from "node:url";
 import { WebSocketServer } from "ws";
-import { dirname, resolve } from "node:path";
-import { existsSync, readFileSync, statSync } from "node:fs";
+import { basename, dirname, join, resolve } from "node:path";
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { promisify } from "node:util";
@@ -787,6 +788,25 @@ app.put("/api/file", (req, res) => {
 		// path is the client's bug. Different statuses so the UI can tell them
 		// apart without parsing the message.
 		res.status(message.includes("changed on disk") ? 409 : 400).json({ error: message });
+	}
+});
+
+/**
+ * A file picked in the browser, which may be on another machine than pi.
+ * Saved under the temp dir so the agent can read it by path; each upload gets
+ * its own folder so the original name is kept without collisions.
+ */
+app.post("/api/upload", express.raw({ type: () => true, limit: "64mb" }), (req, res) => {
+	const name = basename(typeof req.query.name === "string" ? req.query.name : "");
+	if (!name || name === "." || name === "..") return res.status(400).json({ error: "name required" });
+	try {
+		const dir = join(tmpdir(), "pwi-uploads", randomUUID());
+		mkdirSync(dir, { recursive: true });
+		const path = join(dir, name);
+		writeFileSync(path, Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0));
+		res.json({ path });
+	} catch (err) {
+		res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
 	}
 });
 

@@ -46,7 +46,6 @@ const SUPPORTED_IMAGE_MIME = [
 	"image/jpeg",
 	"image/gif",
 	"image/webp",
-	"image/bmp",
 ];
 
 /**
@@ -68,6 +67,20 @@ function readImage(file: File): Promise<PiImage> {
 		};
 		reader.readAsDataURL(file);
 	});
+}
+
+/** Copy a picked file to the pwi machine, which may not be this one, and return its path there. */
+async function uploadFile(file: File): Promise<string> {
+	const r = await fetch(`/api/upload?name=${encodeURIComponent(file.name || "file")}`, {
+		method: "POST",
+		headers: { "Content-Type": "application/octet-stream" },
+		body: file,
+	});
+	const body = (await r.json().catch(() => ({}))) as { path?: unknown; error?: unknown };
+	if (!r.ok || typeof body.path !== "string") {
+		throw new Error(typeof body.error === "string" ? body.error : `could not upload ${file.name}`);
+	}
+	return body.path;
 }
 
 /**
@@ -1476,26 +1489,30 @@ export function Chat({
 	};
 
 	/**
-	 * Ingest images from a paste or a file picker.
+	 * Ingest files from a paste, a drop or the file picker.
 	 *
-	 * Screenshot paste is the motivating case: the clipboard carries one
-	 * `image/png` item and no filename. Non-image items are ignored rather than
-	 * rejected, because pasting text that happens to travel alongside an image
-	 * flavor must keep behaving like an ordinary paste.
+	 * Supported images are staged as attachments. Anything else is uploaded to
+	 * the pwi machine and its path goes into the message, because the browser
+	 * may be on another machine than pi and a local path would mean nothing.
 	 */
 	const addFiles = async (files: File[]) => {
-		const picked = files.filter((f) => f.type.startsWith("image/"));
-		if (picked.length === 0) return false;
-
-		if (!canAttach) {
+		if (files.length === 0) return;
+		const isImage = (f: File) => SUPPORTED_IMAGE_MIME.includes(f.type);
+		if (!canAttach && files.some(isImage)) {
 			setAttachError("This model does not accept images. Switch models to attach one.");
-			return true;
+			return;
 		}
 
-		const rejected = picked.filter((f) => !SUPPORTED_IMAGE_MIME.includes(f.type));
-		const accepted = picked.filter((f) => SUPPORTED_IMAGE_MIME.includes(f.type));
+		const accepted = files.filter(isImage);
+		const others = files.filter((f) => !isImage(f));
 
 		try {
+			const paths = await Promise.all(others.map(uploadFile));
+			if (paths.length > 0) {
+				const current = composer.current?.value ?? text;
+				const sep = current && !current.endsWith("\n") ? "\n" : "";
+				changeText(current + sep + paths.join("\n"));
+			}
 			const read = await Promise.all(accepted.map(readImage));
 			const kept = read.length === 0 || changeImages([...staged.current, ...read]);
 			/*
@@ -1504,17 +1521,10 @@ export function Chat({
 			 * and still send — they just will not come back after a reload, which
 			 * is better said than silently promised.
 			 */
-			const problems = [
-				rejected.length > 0
-					? `Unsupported image type: ${[...new Set(rejected.map((f) => f.type))].join(", ")}`
-					: null,
-				kept ? null : "Attached, but too large to keep if the page reloads.",
-			].filter((p): p is string => p !== null);
-			setAttachError(problems.length > 0 ? problems.join(" ") : null);
+			setAttachError(kept ? null : "Attached, but too large to keep if the page reloads.");
 		} catch (err) {
 			setAttachError(err instanceof Error ? err.message : String(err));
 		}
-		return true;
 	};
 
 	const submit = () => {
@@ -1814,19 +1824,19 @@ export function Chat({
 								 * listen for paste, which also covers Cmd+V, middle-click paste and
 								 * the context menu for free.
 								 *
-								 * preventDefault ONLY when an image was actually consumed, so a
+								 * preventDefault ONLY when a file was actually consumed, so a
 								 * normal text paste is left completely untouched.
 								 */
 								onPaste={(e) => {
 									const files = Array.from(e.clipboardData.files);
-									if (!files.some((f) => f.type.startsWith("image/"))) return;
+									if (files.length === 0) return;
 									e.preventDefault();
 									void addFiles(files);
 								}}
 								onDragOver={(e) => e.preventDefault()}
 								onDrop={(e) => {
 									const files = Array.from(e.dataTransfer.files);
-									if (!files.some((f) => f.type.startsWith("image/"))) return;
+									if (files.length === 0) return;
 									e.preventDefault();
 									void addFiles(files);
 								}}
@@ -1893,29 +1903,25 @@ export function Chat({
 							{/* Attach and the model on the left, send on the right. */}
 							<div className="mt-1 flex items-center justify-between gap-2">
 								<div className="flex min-w-0 items-center gap-1.5">
-									{canAttach && (
-										<>
-											<IconButton
-												onClick={() => fileInput.current?.click()}
-												label="Attach an image"
-												round
-											>
-												<Plus size={14} />
-											</IconButton>
-											<input
-												ref={fileInput}
-												type="file"
-												accept={SUPPORTED_IMAGE_MIME.join(",")}
-												multiple
-												className="hidden"
-												onChange={(e) => {
-													void addFiles(Array.from(e.target.files ?? []));
-													// Reset so picking the SAME file twice still fires onChange.
-													e.target.value = "";
-												}}
-											/>
-										</>
-									)}
+									<IconButton
+										onClick={() => fileInput.current?.click()}
+										label="Attach a file"
+										round
+									>
+										<Plus size={14} />
+									</IconButton>
+									<input
+										ref={fileInput}
+										type="file"
+										multiple
+										className="hidden"
+										onChange={(e) => {
+											const files = Array.from(e.target.files ?? []);
+											// Reset so picking the SAME file twice still fires onChange.
+											e.target.value = "";
+											void addFiles(files);
+										}}
+									/>
 									<ModelSelector
 										model={snapshot.model}
 										disabled={busy}
