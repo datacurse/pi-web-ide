@@ -2209,8 +2209,18 @@ export default function App() {
 		const extra = pending.filter(
 			(p) => open.has(p.path) && !sessions.some((s) => s.path === p.path),
 		);
-		return extra.length ? [...extra, ...sessions] : sessions;
-	}, [sessions, pending, tabs.files, tabs.right]);
+		const all = extra.length ? [...extra, ...sessions] : sessions;
+		// An attached session's live stream beats the 5s poll, so the tab's π
+		// lights the moment a prompt is sent and dims the moment it ends.
+		const live = new Map<string, boolean>();
+		for (const c of [left, right]) if (c.snapshot?.file) live.set(c.snapshot.file, c.busy);
+		if (!live.size) return all;
+		return all.map((s) =>
+			live.has(s.path) && live.get(s.path) !== s.isStreaming
+				? { ...s, isStreaming: live.get(s.path) }
+				: s,
+		);
+	}, [sessions, pending, tabs.files, tabs.right, left.snapshot?.file, left.busy, right.snapshot?.file, right.busy]);
 
 	/** One column's chat, wired to that column's session. */
 	const chatFor = (s: ReturnType<typeof useSession>) => (
