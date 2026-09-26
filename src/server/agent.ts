@@ -576,8 +576,10 @@ class RpcChild {
 				stdio: [rw, out, err],
 				detached: true,
 				// Inherit the environment: pi resolves credentials, settings, and the
-				// model catalog from it.
-				env: process.env,
+				// model catalog from it. Except `node --watch`'s marker (dev server):
+				// it makes pi's worker threads post `watch:import` messages, which pi's
+				// image-resize worker takes as its reply, dropping every pasted image.
+				env: { ...process.env, WATCH_REPORT_DEPENDENCIES: undefined },
 			});
 		} finally {
 			closeSync(out);
@@ -695,6 +697,11 @@ class RpcChild {
 	onFrame(listener: (frame: Record<string, unknown>) => void): () => void {
 		this.frameListeners.add(listener);
 		return () => this.frameListeners.delete(listener);
+	}
+
+	onExited(listener: (message: string) => void): () => void {
+		this.exitListeners.add(listener);
+		return () => this.exitListeners.delete(listener);
 	}
 
 	/**
@@ -1244,6 +1251,15 @@ async function wrap(child: RpcChild, cwd: string): Promise<PiSession> {
 		emit({ type: "ask", ask: null });
 	};
 
+	// pi dying mid-turn sends no `agent_settled`: without this the session
+	// reports streaming forever and the UI spins on a turn nobody is running.
+	const unsubscribeExit = child.onExited((message) => {
+		disarmLocal();
+		clearAsk();
+		streaming = false;
+		emit({ type: "error", message });
+	});
+
 	/*
 	 * Frames drive two separate things, and they are kept separate: `toEvents`
 	 * turns a frame into what the browser sees, and this switch does what the
@@ -1550,6 +1566,7 @@ async function wrap(child: RpcChild, cwd: string): Promise<PiSession> {
 		},
 		dispose() {
 			unsubscribe();
+			unsubscribeExit();
 			listeners.clear();
 			disarmLocal();
 			clearTimeout(askTimer);
@@ -1557,6 +1574,7 @@ async function wrap(child: RpcChild, cwd: string): Promise<PiSession> {
 		},
 		detach() {
 			unsubscribe();
+			unsubscribeExit();
 			listeners.clear();
 			disarmLocal();
 			clearTimeout(askTimer);

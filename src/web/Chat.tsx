@@ -553,14 +553,32 @@ const VERB_MS = 4000;
 const randomVerb = () => VERBS[Math.floor(Math.random() * VERBS.length)];
 
 /**
+ * When the running turn was asked: the first user message after the last
+ * assistant message that ended a turn (one with no tool calls). Undefined when
+ * that message is not in the transcript yet, e.g. a slash command that became
+ * a turn.
+ */
+function turnStart(messages: PiMessage[]): number | undefined {
+	let start: number | undefined;
+	for (let i = messages.length - 1; i >= 0; i--) {
+		const m = messages[i];
+		if (m.role === "assistant" && !m.blocks.some((b) => b.kind === "tool")) break;
+		if (m.role === "user") start = m.timestamp;
+	}
+	return start;
+}
+
+/**
  * The live turn, as the last line of the transcript: a verb that changes
- * every few seconds and the elapsed time. Mounted only while busy, so mount IS turn start.
+ * every few seconds and the elapsed time. Timed from the question, not from
+ * mount, so a reload mid-turn does not restart the clock.
  * The folded tool line above it already names what is running.
  */
-function TurnStatus() {
+function TurnStatus({ since }: { since: number | undefined }) {
 	const spinner = useSpinner(true, STAR_FRAMES, 120);
-	const [start] = useState(Date.now);
-	const [now, setNow] = useState(start);
+	const [mounted] = useState(Date.now);
+	const start = Math.min(since ?? mounted, mounted);
+	const [now, setNow] = useState(mounted);
 	useEffect(() => {
 		const id = setInterval(() => setNow(Date.now()), 1000);
 		return () => clearInterval(id);
@@ -1156,6 +1174,33 @@ export function Chat({
 	}, [snapshot?.messages.length, partial.text, partial.thinking]);
 
 	/**
+	 * A call settles into the transcript with the message that made it, then
+	 * shows up in `partial.tools` once it starts running. Rendering both drew
+	 * the call twice and bumped the fold's count by one until its result
+	 * settled. So a live call's output goes onto its settled row, and only
+	 * calls not yet in the transcript stay in the partial.
+	 */
+	const { messages, liveTools } = useMemo(() => {
+		const settled = snapshot?.messages ?? [];
+		if (partial.tools.length === 0) return { messages: settled, liveTools: partial.tools };
+		const live = new Map(partial.tools.map((t) => [t.id, t]));
+		const seen = new Set<string>();
+		const merged = settled.map((m) => {
+			let changed = false;
+			const blocks = m.blocks.map((b) => {
+				if (b.kind !== "tool") return b;
+				seen.add(b.id);
+				const t = live.get(b.id);
+				if (!t || b.result !== undefined) return b;
+				changed = true;
+				return { ...b, result: t.result, isError: t.isError };
+			});
+			return changed ? { ...m, blocks } : m;
+		});
+		return { messages: merged, liveTools: partial.tools.filter((t) => !seen.has(t.id)) };
+	}, [snapshot?.messages, partial.tools]);
+
+	/**
 	 * The transcript as it is actually rendered.
 	 *
 	 * Two passes in one: blocks the settings suppress are dropped — a filter
@@ -1239,7 +1284,7 @@ export function Chat({
 				});
 		};
 
-		for (const m of snapshot?.messages ?? []) {
+		for (const m of messages) {
 			const blocks = m.blocks.filter(
 				(b) =>
 					(showThinking || b.kind !== "thinking") &&
@@ -1308,7 +1353,7 @@ export function Chat({
 		flushGroup();
 		flushTurn(busy);
 		return out;
-	}, [snapshot?.messages, showThinking, toolMode, busy]);
+	}, [messages, showThinking, toolMode, busy]);
 
 	if (!snapshot) {
 		return (
@@ -1437,7 +1482,7 @@ export function Chat({
 	const hasPartial =
 		partial.text ||
 		(showThinking && partial.thinking) ||
-		(showTools && partial.tools.length > 0);
+		(showTools && liveTools.length > 0);
 	/**
 	 * The streaming fold's blocks, in the order they happened: the thought that
 	 * opened the turn, then the calls. One `thinking` block, not one per delta
@@ -1453,7 +1498,7 @@ export function Chat({
 					...(toolMode === "answer" && partial.text
 						? [{ kind: "text", text: partial.text } as PiBlock]
 						: []),
-					...partial.tools.map((t) => ({ kind: "tool", ...t }) as PiBlock),
+					...liveTools.map((t) => ({ kind: "tool", ...t }) as PiBlock),
 				]
 			: [];
 
@@ -1554,7 +1599,7 @@ export function Chat({
 							)}
 							{showTools &&
 								!folds &&
-								partial.tools.map((t) => (
+								liveTools.map((t) => (
 									<Tool
 										key={t.id}
 										name={t.name}
@@ -1573,7 +1618,7 @@ export function Chat({
 						</TranscriptRow>
 					)}
 
-					{busy && <TurnStatus />}
+					{busy && <TurnStatus since={turnStart(snapshot.messages)} />}
 
 					{/* Below the transcript: a local command answers after the last
 				    message, and before the next prompt clears it. */}
