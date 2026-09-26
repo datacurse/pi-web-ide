@@ -131,6 +131,8 @@ New UI uses these; convert raw markup when you touch it. Tune styles in
   `pinned-folder chip`, `activity bar item`.
 - xterm reads `--text-body` at mount (Terminal.tsx); it cannot take a class.
 - Buttons default to `type="button"`; pass `type="submit"` explicitly.
+- No focus outlines. `index.css` sets `:focus-visible { outline: none }`; never add
+  `focus-visible:outline-*` classes.
 
 ## Open questions
 

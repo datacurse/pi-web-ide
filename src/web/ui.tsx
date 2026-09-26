@@ -7,8 +7,6 @@ import type { ButtonHTMLAttributes, ReactNode } from "react";
 import { X } from "@phosphor-icons/react";
 
 const EASE = "transition-colors duration-150 ease-out motion-reduce:transition-none";
-const FOCUS =
-	"focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400";
 
 const BUTTON_VARIANT = {
 	/* The one main action of a dialog or panel. */
@@ -46,7 +44,7 @@ export function Button({
 	return (
 		<button
 			type={type}
-			className={`inline-flex shrink-0 items-center justify-center rounded-sm ${BUTTON_SIZE[size]} ${BUTTON_VARIANT[variant]} ${EASE} ${FOCUS} ${className}`}
+			className={`inline-flex shrink-0 items-center justify-center rounded-sm ${BUTTON_SIZE[size]} ${BUTTON_VARIANT[variant]} ${EASE} ${className}`}
 			{...rest}
 		/>
 	);
@@ -87,7 +85,7 @@ export function IconButton({
 			type={type}
 			aria-label={label}
 			title={label}
-			className={`flex shrink-0 items-center justify-center ${ICON_SIZE[size]} ${round ? "rounded-full" : "rounded-sm"} ${ICON_VARIANT[variant]} ${EASE} ${FOCUS} ${className}`}
+			className={`flex shrink-0 items-center justify-center ${ICON_SIZE[size]} ${round ? "rounded-full" : "rounded-sm"} ${ICON_VARIANT[variant]} ${EASE} ${className}`}
 			{...rest}
 		/>
 	);
@@ -144,7 +142,7 @@ export const inputClass = {
  * adds right padding: `pr-7` when a close button overlays the tab, else `pr-3`.
  */
 export const tabClass = (active: boolean) =>
-	`flex h-bar max-w-52 shrink-0 items-center gap-1.5 border-b-2 pl-3 text-ui ${EASE} ${FOCUS} ${
+	`flex h-bar max-w-52 shrink-0 items-center gap-1.5 border-b-2 pl-3 text-ui ${EASE} ${
 		active
 			? "border-amber-400 text-neutral-50"
 			: "border-transparent text-neutral-400 hover:bg-neutral-900 hover:text-neutral-100"
@@ -183,7 +181,7 @@ export function OptionRow({
 			: "cursor-pointer hover:bg-neutral-900";
 	return (
 		<label
-			className={`flex items-center gap-3 rounded-sm px-2 py-2 text-ui has-[:focus-visible]:outline-2 has-[:focus-visible]:-outline-offset-2 has-[:focus-visible]:outline-neutral-400 ${state} ${EASE} ${className}`}
+			className={`flex items-center gap-3 rounded-sm px-2 py-2 text-ui ${state} ${EASE} ${className}`}
 		>
 			{children}
 		</label>

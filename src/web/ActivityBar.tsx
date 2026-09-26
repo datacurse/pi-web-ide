@@ -53,7 +53,7 @@ function RailButton({
 			// modal and would otherwise announce a state it does not have.
 			aria-pressed={active}
 			title={title}
-			className={`relative flex size-11 shrink-0 items-center justify-center transition-colors duration-150 ease-out hover:text-neutral-50 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 motion-reduce:transition-none ${
+			className={`relative flex size-11 shrink-0 items-center justify-center transition-colors duration-150 ease-out hover:text-neutral-50 motion-reduce:transition-none ${
 				active ? "text-neutral-50" : "text-neutral-500"
 			}`}
 		>

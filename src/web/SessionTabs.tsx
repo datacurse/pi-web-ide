@@ -446,7 +446,7 @@ export function SessionTabs({
 											: "Close tab"
 										: "Close tab (the session keeps running)"
 								}
-								className={`tab-close absolute top-1/2 right-1.5 flex size-6 -translate-y-1/2 items-center justify-center rounded-sm text-ui leading-none text-neutral-400 transition-opacity duration-150 ease-out after:absolute after:-inset-1 after:content-[''] hover:bg-neutral-800 hover:text-neutral-50 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-neutral-400 motion-reduce:transition-none ${
+								className={`tab-close absolute top-1/2 right-1.5 flex size-6 -translate-y-1/2 items-center justify-center rounded-sm text-ui leading-none text-neutral-400 transition-opacity duration-150 ease-out after:absolute after:-inset-1 after:content-[''] hover:bg-neutral-800 hover:text-neutral-50 focus-visible:opacity-100 motion-reduce:transition-none ${
 									isActive
 										? "opacity-100"
 										: "opacity-0 group-focus-within:opacity-100 group-hover:opacity-100"

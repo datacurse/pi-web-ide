@@ -283,7 +283,7 @@ export function SessionList({
 								aria-current={s.path === activeFile ? "true" : undefined}
 								aria-haspopup="menu"
 								title={s.name || s.firstMessage || s.path}
-								className={`block w-full border-b border-neutral-900 px-3 py-2 text-left transition-colors duration-150 ease-out hover:bg-neutral-900 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 motion-reduce:transition-none ${
+								className={`block w-full border-b border-neutral-900 px-3 py-2 text-left transition-colors duration-150 ease-out hover:bg-neutral-900 motion-reduce:transition-none ${
 									// Three states worth telling apart: selected, open in a
 									// background tab, and not open at all.
 									s.path === activeFile

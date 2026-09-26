@@ -29,6 +29,12 @@
 @custom-variant narrow (@media (width <= 768px));
 @custom-variant wide (@media (width > 768px));
 
+@layer base {
+	:focus-visible {
+		outline: none;
+	}
+}
+
 /*
  * DESIGN TOKENS — the only sizes and radii that exist. Rules: docs/ui.md.
  * `initial` deletes Tailwind's defaults, so `text-sm`/`rounded-xl` generate

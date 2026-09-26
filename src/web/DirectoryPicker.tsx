@@ -313,7 +313,7 @@ export function DirectoryPicker({
 								data-custom="pinned-folder chip"
 								onClick={() => void go(path)}
 								title={path}
-								className={`max-w-40 truncate rounded-l-sm px-1.5 py-0.5 transition-colors duration-150 ease-out hover:bg-neutral-800 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 motion-reduce:transition-none ${
+								className={`max-w-40 truncate rounded-l-sm px-1.5 py-0.5 transition-colors duration-150 ease-out hover:bg-neutral-800 motion-reduce:transition-none ${
 									path === current ? "text-amber-400" : "text-neutral-300"
 								}`}
 							>
@@ -324,7 +324,7 @@ export function DirectoryPicker({
 								onClick={() => void togglePin(path, true)}
 								aria-label={`Unpin ${path}`}
 								title="Unpin"
-								className="rounded-r-sm px-1 py-0.5 text-neutral-600 transition-colors duration-150 ease-out hover:bg-neutral-800 hover:text-neutral-200 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 motion-reduce:transition-none"
+								className="rounded-r-sm px-1 py-0.5 text-neutral-600 transition-colors duration-150 ease-out hover:bg-neutral-800 hover:text-neutral-200 motion-reduce:transition-none"
 							>
 								<X size={9} />
 							</button>

@@ -516,7 +516,7 @@ function ContextMeter({
 					? `${tokens.toLocaleString()} of ${limit.toLocaleString()} context tokens used — finish the turn to compact`
 					: `${tokens.toLocaleString()} of ${limit.toLocaleString()} context tokens used. Click to compact the conversation into a summary.`
 			}
-			className={`flex shrink-0 items-center gap-1.5 rounded-sm px-1 text-meta tabular-nums transition-colors duration-150 ease-out enabled:hover:text-neutral-200 disabled:cursor-default focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-400 motion-reduce:transition-none ${tone}`}
+			className={`flex shrink-0 items-center gap-1.5 rounded-sm px-1 text-meta tabular-nums transition-colors duration-150 ease-out enabled:hover:text-neutral-200 disabled:cursor-default motion-reduce:transition-none ${tone}`}
 		>
 			<span aria-hidden className="h-1 w-10 overflow-hidden rounded-full bg-neutral-800">
 				<span className="block h-full bg-current" style={{ width: `${percent}%` }} />
@@ -857,7 +857,7 @@ function AskPanel({
 								data-custom="choice card"
 								key={o.label}
 								onClick={() => onAnswer(ask.id, { value: o.label })}
-								className="block w-full rounded-sm border border-neutral-800 bg-neutral-900/60 px-3 py-2 text-left text-body transition-colors duration-150 ease-out hover:border-amber-800 hover:bg-neutral-900 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-amber-400 motion-reduce:transition-none"
+								className="block w-full rounded-sm border border-neutral-800 bg-neutral-900/60 px-3 py-2 text-left text-body transition-colors duration-150 ease-out hover:border-amber-800 hover:bg-neutral-900 motion-reduce:transition-none"
 							>
 								<span className="text-neutral-100">{o.label}</span>
 							</button>
