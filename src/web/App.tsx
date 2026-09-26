@@ -20,7 +20,7 @@ import { SessionTabs, tabDomId } from "./SessionTabs.js";
 import { Chat } from "./Chat.js";
 import { TerminalPane } from "./Terminal.js";
 import { SourceControl } from "./SourceControl.js";
-import { GIT_CHANGED } from "./GitActions.js";
+import { GIT_CHANGED, gitChanged } from "./GitActions.js";
 import { DiffView } from "./DiffView.js";
 import { Explorer } from "./Explorer.js";
 import { readDraft, writeDraftText } from "./drafts.js";
@@ -933,6 +933,8 @@ function useSession({
 								t.id === e.id ? { ...t, result: e.result, isError: e.isError } : t,
 							),
 						}));
+						// Any tool may have touched the tree; re-read the changed-file count now.
+						gitChanged(snap.cwd || project);
 						break;
 					case "message_done":
 						// Refetch rather than appending: the server already settled this
