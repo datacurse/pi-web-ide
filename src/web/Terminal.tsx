@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useRef, useState } from "react";
-import { Columns, Plus, Rows, X } from "@phosphor-icons/react";
+import { ArrowsLeftRight, Columns, Plus, Rows, X } from "@phosphor-icons/react";
 import type { Terminal as XTerm } from "@xterm/xterm";
 import type { FitAddon } from "@xterm/addon-fit";
 
@@ -14,7 +14,8 @@ import {
 	toggleDirection,
 	type TermLayout,
 } from "./termLayout.js";
-import { Button, IconButton, tabClass } from "./ui.js";
+import { readTermTabsSide, writeTermTabsSide, type TermTabsSide } from "./prefs.js";
+import { Button, IconButton, tabClassVertical } from "./ui.js";
 
 /**
  * xterm.js, loaded on demand.
@@ -329,6 +330,12 @@ export function TerminalPane({
 	onClose: () => void;
 }) {
 	const [error, setError] = useState<string | null>(null);
+	const [side, setSide] = useState<TermTabsSide>(readTermTabsSide);
+	const swapSide = () => {
+		const next = side === "right" ? "left" : "right";
+		setSide(next);
+		writeTermTabsSide(next);
+	};
 	/** The splits row, measured while dragging one of its dividers. */
 	const splits = useRef<HTMLDivElement | null>(null);
 	/** Guards the auto-start against React's double-invoked effects. */
@@ -426,19 +433,92 @@ export function TerminalPane({
 	};
 
 	return (
-		<div className="flex min-h-0 min-w-0 flex-1 flex-col border-l border-neutral-800">
-			<div className="flex h-bar shrink-0 items-stretch gap-1 border-b border-neutral-800 bg-neutral-950 px-1">
+		<div
+			className={`flex min-h-0 min-w-0 flex-1 border-l border-neutral-800 ${side === "left" ? "flex-row-reverse" : "flex-row"}`}
+		>
+			<div className="flex min-h-0 min-w-0 flex-1 flex-col">
+				{error && (
+					<div className="border-b border-red-900 bg-red-950/40 px-3 py-2 text-meta text-red-300">
+						{error}
+					</div>
+				)}
+
+				{!tab ? (
+					<div className="flex flex-1 items-center justify-center p-4 text-center text-meta text-neutral-500">
+						No shell yet.
+						<Button variant="subtle" size="sm" className="ml-2" onClick={() => void spawn(addTab)}>
+							Start one
+						</Button>
+					</div>
+				) : (
+					<div
+						ref={splits}
+						className={`flex min-h-0 min-w-0 flex-1 ${tab.direction === "column" ? "flex-col" : "flex-row"}`}
+					>
+						{tab.terminals.map((id, i) => (
+							<Fragment key={id}>
+								{i > 0 && (
+									<div
+										role="separator"
+										aria-orientation={tab.direction === "column" ? "horizontal" : "vertical"}
+										aria-label="Resize split"
+										onPointerDown={startDrag(i - 1)}
+										className={`relative shrink-0 bg-neutral-800 hover:bg-amber-600 ${
+											tab.direction === "column"
+												? "h-1 cursor-row-resize after:absolute after:inset-x-0 after:-top-1 after:-bottom-1 after:content-['']"
+												: "w-1 cursor-col-resize after:absolute after:inset-y-0 after:-left-1 after:-right-1 after:content-['']"
+										}`}
+									/>
+								)}
+								{/* The share goes through a custom property so one rule
+								    covers both directions: `flex-basis` is along the
+								    main axis whichever way the row is pointing. */}
+								<div
+									className={`relative flex min-h-0 min-w-0 flex-col [flex:0_0_var(--split)] ${
+										tab.focus === id && tab.terminals.length > 1
+											? "ring-1 ring-amber-700/60 ring-inset"
+											: ""
+									}`}
+									style={{ "--split": `${tab.sizes[i] ?? 100 / tab.terminals.length}%` } as React.CSSProperties}
+								>
+									<Terminal
+										id={id}
+										focused={tab.focus === id}
+										onFocus={() => onLayout(focusTerminal(layout, id))}
+									/>
+									{/* On the pane, not in the strip: with four splits open
+									    a single close button in the header would be
+									    ambiguous about which shell it ends. */}
+									<IconButton
+										size="sm"
+										className="absolute top-1 right-2 opacity-0 focus-visible:opacity-100 group-hover:opacity-100 [div:hover>&]:opacity-100"
+										onClick={() => closeTerm(id)}
+										label="Close this shell"
+										title="Close this shell (SIGHUP)"
+									>
+										<X size={13} />
+									</IconButton>
+								</div>
+							</Fragment>
+						))}
+					</div>
+				)}
+			</div>
+
+			<div
+				className={`flex w-12 shrink-0 flex-col gap-1 border-neutral-800 bg-neutral-950 pb-1 ${side === "left" ? "border-r" : "border-l"}`}
+			>
 				{/* Tabs are numbered, not named: a shell has no title until it is
 				    running something, and `bash` on all of them is noise. The
 				    number is the position, which is what a hand reaches for. */}
-				<div className="tab-strip -mb-px flex min-w-0 flex-1 items-stretch overflow-x-auto">
+				<div className="tab-strip flex min-h-0 flex-1 flex-col overflow-y-auto">
 					{layout.tabs.map((t, i) => (
 						<button
 							key={i}
 							onClick={() => onLayout(selectTab(layout, i))}
 							aria-current={i === layout.active}
 							title={`Terminal tab ${i + 1}${t.terminals.length > 1 ? ` (${t.terminals.length} splits)` : ""}`}
-							className={`${tabClass(i === layout.active)} pr-3 font-mono`}
+							className={`${tabClassVertical(i === layout.active)} font-mono`}
 						>
 							{i + 1}
 							{t.terminals.length > 1 && (
@@ -448,7 +528,7 @@ export function TerminalPane({
 					))}
 					<IconButton
 						size="sm"
-						className="self-center"
+						className="mt-1 shrink-0 self-center"
 						onClick={() => void spawn(addTab)}
 						label="New terminal tab"
 					>
@@ -484,6 +564,14 @@ export function TerminalPane({
 				<IconButton
 					size="sm"
 					className="self-center"
+					onClick={swapSide}
+					label={side === "right" ? "Move tabs to the left" : "Move tabs to the right"}
+				>
+					<ArrowsLeftRight size={14} />
+				</IconButton>
+				<IconButton
+					size="sm"
+					className="self-center"
 					onClick={onClose}
 					label="Hide terminal"
 					title="Hide (every shell keeps running)"
@@ -491,73 +579,6 @@ export function TerminalPane({
 					<X size={13} />
 				</IconButton>
 			</div>
-
-			{error && (
-				<div className="border-b border-red-900 bg-red-950/40 px-3 py-2 text-meta text-red-300">
-					{error}
-				</div>
-			)}
-
-			{!tab ? (
-				<div className="flex flex-1 items-center justify-center p-4 text-center text-meta text-neutral-500">
-					No shell yet.
-					<Button variant="subtle" size="sm" className="ml-2" onClick={() => void spawn(addTab)}>
-						Start one
-					</Button>
-				</div>
-			) : (
-				<div
-					ref={splits}
-					className={`flex min-h-0 min-w-0 flex-1 ${tab.direction === "column" ? "flex-col" : "flex-row"}`}
-				>
-					{tab.terminals.map((id, i) => (
-						<Fragment key={id}>
-							{i > 0 && (
-								<div
-									role="separator"
-									aria-orientation={tab.direction === "column" ? "horizontal" : "vertical"}
-									aria-label="Resize split"
-									onPointerDown={startDrag(i - 1)}
-									className={`relative shrink-0 bg-neutral-800 hover:bg-amber-600 ${
-										tab.direction === "column"
-											? "h-1 cursor-row-resize after:absolute after:inset-x-0 after:-top-1 after:-bottom-1 after:content-['']"
-											: "w-1 cursor-col-resize after:absolute after:inset-y-0 after:-left-1 after:-right-1 after:content-['']"
-									}`}
-								/>
-							)}
-							{/* The share goes through a custom property so one rule
-							    covers both directions: `flex-basis` is along the
-							    main axis whichever way the row is pointing. */}
-							<div
-								className={`relative flex min-h-0 min-w-0 flex-col [flex:0_0_var(--split)] ${
-									tab.focus === id && tab.terminals.length > 1
-										? "ring-1 ring-amber-700/60 ring-inset"
-										: ""
-								}`}
-								style={{ "--split": `${tab.sizes[i] ?? 100 / tab.terminals.length}%` } as React.CSSProperties}
-							>
-								<Terminal
-									id={id}
-									focused={tab.focus === id}
-									onFocus={() => onLayout(focusTerminal(layout, id))}
-								/>
-								{/* On the pane, not in the strip: with four splits open
-								    a single close button in the header would be
-								    ambiguous about which shell it ends. */}
-								<IconButton
-									size="sm"
-									className="absolute top-1 right-2 opacity-0 focus-visible:opacity-100 group-hover:opacity-100 [div:hover>&]:opacity-100"
-									onClick={() => closeTerm(id)}
-									label="Close this shell"
-									title="Close this shell (SIGHUP)"
-								>
-									<X size={13} />
-								</IconButton>
-							</div>
-						</Fragment>
-					))}
-				</div>
-			)}
 		</div>
 	);
 }

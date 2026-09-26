@@ -170,6 +170,10 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
 - The terminal is a dock under BOTH editor columns (the shells belong to the project,
   not a column). The rail's terminal button, set apart from the panels by a rule, and
   Ctrl+` toggle it; its height is a resizable share of the editor area.
+- The dock's tabs are a vertical list in a `w-12` side column (`tabClassVertical`), with `+`
+  under them and split, split direction, swap side (`ArrowsLeftRight`) and hide stacked
+  below. The column sits on the right by default; swap moves it to the left
+  (`pwi:termTabsSide`, per browser).
 - Stats, Packages and Settings are pages: the rail's bottom group opens each as a tab
   (`page:<id>`) in the last-used column, or focuses it. A page tab shows the rail icon,
   has only the Close items in its menu, and stays mounted while open, like the chat.
@@ -195,6 +199,7 @@ New UI uses these; convert raw markup when you touch it. Tune styles in
 | `inputClass.sm/md` | class string                                             | Inputs and textareas (a string so refs pass through). |
 | `ListRow`       | `selected`, `muted`, `size`: ui (default) / body, button props                           | Tree and list rows (Explorer, Source Control, directory picker). 22px; indent with `style.paddingLeft`. |
 | `tabClass(active)` | class string; caller adds `pr-7` (with close button) or `pr-3` | Session/editor tabs and terminal tabs: flat, full `bar` height, amber 2px underline when active, no fill. The strip is `h-bar` with a hidden scrollbar (`.tab-strip`). |
+| `tabClassVertical(active)` | class string | Tabs in a vertical list (terminal dock): full width, `control-md` tall, amber 2px left edge when active. |
 | `PanelHeader`   | `title?`, `onClose?`, `closeLabel?`, children               | Top row of a side panel or editor tab. Children go after the title. |
 
 - Body text defaults to `text-ui`; set a size only when it differs.

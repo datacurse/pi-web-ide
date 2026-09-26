@@ -382,6 +382,18 @@ export function writeTerminalWidth(percent: number): void {
 	writeStored(TERM_WIDTH_KEY, String(Math.round(percent)));
 }
 
+const TERM_TABS_SIDE_KEY = "pwi:termTabsSide";
+
+/** Which side of the terminal dock its tab list sits on. */
+export type TermTabsSide = "left" | "right";
+
+export function readTermTabsSide(): TermTabsSide {
+	return readStored(TERM_TABS_SIDE_KEY) === "left" ? "left" : "right";
+}
+
+export function writeTermTabsSide(side: TermTabsSide): void {
+	writeStored(TERM_TABS_SIDE_KEY, side);
+}
 
 /**
  * Where each project's terminals are drawn: its tabs, splits and their

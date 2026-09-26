@@ -240,6 +240,14 @@ export const tabClass = (active: boolean, focused = true) =>
 			: "border-transparent text-neutral-400 hover:bg-neutral-900 hover:text-neutral-100"
 	}`;
 
+/* A tab in a vertical list (the terminal dock): full width, amber left edge when active. */
+export const tabClassVertical = (active: boolean) =>
+	`flex h-control-md w-full shrink-0 items-center justify-center border-l-2 px-1 text-ui ${EASE} ${
+		active
+			? "border-amber-400 bg-neutral-900 text-neutral-50"
+			: "border-transparent text-neutral-400 hover:bg-neutral-900 hover:text-neutral-100"
+	}`;
+
 /* A labelled group of settings rows. */
 export function Section({ title, className = "", children }: { title: string; className?: string; children: ReactNode }) {
 	return (
