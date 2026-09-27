@@ -20,7 +20,8 @@ import { promisify } from "node:util";
 import { listModels, readSettings, setDefaultModel, setDefaultThinkingLevel } from "./models.js";
 import { listSessions, sameProject } from "./sessions.js";
 import { searchSessions } from "./search.js";
-import { markWeb, stats } from "./stats.js";
+import { stats } from "./stats.js";
+import { syncMachines } from "./machines.js";
 import {
 	addFavorite,
 	addProject,
@@ -261,8 +262,10 @@ app.get("/api/usage", async (_req, res) => {
 	res.status(502).json({ error: tokens.length ? "usage request failed" : "no unexpired Claude login in auth.json" });
 });
 
-app.get("/api/stats", async (_req, res) => {
+/** `?sync=1` first brings other machines' mirrors up to date (throttled); `?sync=force` always does. */
+app.get("/api/stats", async (req, res) => {
 	try {
+		if (req.query.sync) await syncMachines(req.query.sync === "force");
 		res.json(await stats());
 	} catch (err) {
 		res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
@@ -677,12 +680,6 @@ app.post("/api/sessions/:id/prompt", async (req, res) => {
 	if (!text.trim() && images.length === 0)
 		return res.status(400).json({ error: "empty prompt" });
 	if (!registry.get(req.params.id)) return res.status(404).json({ error: "not found" });
-	try {
-		markWeb(req.params.id);
-	} catch (err) {
-		// Stats bookkeeping must never block a prompt.
-		console.error("stats: could not record web session:", err);
-	}
 
 	// Fire and forget. registry.prompt resolves once pi ACCEPTS the prompt,
 	// which is not when the run finishes — the turn plays out over SSE either

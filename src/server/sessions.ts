@@ -112,12 +112,13 @@ export async function listSessions(cwd: string): Promise<PiSessionInfo[]> {
 	return out.sort((a, b) => b.created.localeCompare(a.created));
 }
 
-/** Every session file in pi's store, across all projects. */
-export async function sessionFiles(): Promise<string[]> {
+/** Every session file in pi's store (or a mirror of another machine's), across all projects. */
+export async function sessionFiles(
 	// Read per call, not captured at import: the tests point PWI_SESSION_ROOT at
 	// a temp dir, and a module-level constant would bake in whatever the env
 	// held when this module first loaded.
-	const root = process.env.PWI_SESSION_ROOT ?? join(homedir(), ".pi", "agent", "sessions");
+	root = process.env.PWI_SESSION_ROOT ?? join(homedir(), ".pi", "agent", "sessions"),
+): Promise<string[]> {
 	let dirs: string[];
 	try {
 		dirs = (await readdir(root, { withFileTypes: true }))

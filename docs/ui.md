@@ -209,11 +209,16 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
   A page stays mounted once opened, so unsaved edits survive closing. The rail buttons
   have no lit state. Escape in a popup inside a page (Packages add) closes only that popup.
 - Stats uses the dialog's width: usage beside the summary tiles (1/3 + 2/3), a 52-week
-  heatmap full width, answer time beside by-hour, Models / Projects / Tools in three
-  columns, then every answer (50 at a time, more as the end scrolls into view). The
-  grids stack below `md`.
-- Stats filters All / Web UI / Terminal the same way as the Packages tabs
-  (`subtle`/`ghost`, `aria-pressed`). Heatmap cells are square with no radius,
+  heatmap full width, answer time beside by-hour, Machines (when there are others) /
+  Models / Projects / Tools in columns, then every answer (50 at a time, more as the end
+  scrolls into view). The grids stack below `md`.
+- Stats covers other machines too: every concrete `Host` in `~/.ssh/config` with pi
+  sessions is mirrored over rsync (`server/machines.ts`), no config of its own. The
+  header filters All / This PC / one button per machine (ssh alias), the same way as
+  the Packages tabs (`subtle`/`ghost`, `aria-pressed`); a machine's tooltip says when it
+  synced or why it is unreachable. Shown only once another machine exists. Stats shows
+  what is on disk first, then `Syncing machines…` beside Refresh until the sync lands.
+  Remote projects read `alias:project`; remote answers carry the alias. Heatmap cells are square with no radius,
   `neutral-800` for empty days, then `green-900/700/500/300`. Bars are `amber-500`.
 - The heatmap is a canvas, so cells and ~2px gaps are whole device pixels at any
   display scaling. It reads its colors from the legend swatches.

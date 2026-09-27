@@ -2637,7 +2637,7 @@ export default function App() {
 	/** A page's content inside the page dialog. */
 	const renderPage = (page: PageId, active: boolean) => {
 		const onClose = () => setPage(null);
-		if (page === "stats") return <Stats revision={replies} onClose={onClose} />;
+		if (page === "stats") return <Stats open={active} revision={replies} onClose={onClose} />;
 		if (page === "packages")
 			return (
 				<Packages

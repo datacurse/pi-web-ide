@@ -1,76 +1,44 @@
 /**
- * stats.ts — usage stats, one row per answered prompt, across every project.
+ * stats.ts — usage stats, one row per answered prompt, across every project,
+ * on this machine and on every machine machines.ts mirrors.
  *
- * Read from pi's session files, so terminal pi counts too. Whether a session
- * was driven from pwi is not in those files, so pwi records the ids it sends
- * prompts to (`web-sessions.json`), from `since` onwards.
+ * Read from pi's session files, so terminal pi counts too.
  */
 
 import { createReadStream, type Stats } from "node:fs";
 import { stat } from "node:fs/promises";
 import { createInterface } from "node:readline";
 import type { StatsTurn, StatsView } from "../shared/types.js";
+import { machines } from "./machines.js";
 import { pooled, sessionFiles, userText } from "./sessions.js";
-import { readStateFile, statePath, writeStateFile } from "./state.js";
-
-const WEB = "web-sessions.json";
-
-interface WebLog {
-	since: string;
-	ids: string[];
-}
-
-let web: WebLog | undefined;
-
-function webLog(): WebLog {
-	if (web) return web;
-	try {
-		const raw = JSON.parse(readStateFile(statePath(WEB)) ?? "") as Partial<WebLog>;
-		if (typeof raw.since === "string" && Array.isArray(raw.ids)) {
-			web = { since: raw.since, ids: raw.ids.filter((i) => typeof i === "string") };
-			return web;
-		}
-	} catch {
-		// Absent or corrupt: start recording now.
-	}
-	web = { since: new Date().toISOString(), ids: [] };
-	writeStateFile(statePath(WEB), JSON.stringify(web));
-	return web;
-}
-
-/** Remember that pwi prompted this session. */
-export function markWeb(id: string): void {
-	const log = webLog();
-	if (log.ids.includes(id)) return;
-	log.ids.push(id);
-	writeStateFile(statePath(WEB), JSON.stringify(log));
-}
 
 interface Parsed {
 	size: number;
 	mtimeMs: number;
 	id: string;
 	cwd: string;
-	turns: Omit<StatsTurn, "web">[];
+	turns: Omit<StatsTurn, "machine">[];
 }
 
 /** Same versioning as sessions.ts: pi only appends, so size + mtime is the version. */
 const cache = new Map<string, Parsed>();
 
 export async function stats(): Promise<StatsView> {
-	const files = await sessionFiles();
-	const ids = new Set(webLog().ids);
+	const remote = machines();
+	const sources = await Promise.all([
+		sessionFiles().then((files) => files.map((file) => ({ file, machine: "" }))),
+		...remote.map((m) => sessionFiles(m.root).then((files) => files.map((file) => ({ file, machine: m.name })))),
+	]);
 	const turns: StatsTurn[] = [];
 	let sessions = 0;
-	await pooled(files, async (file) => {
+	await pooled(sources.flat(), async ({ file, machine }) => {
 		const p = await read(file);
 		if (!p || p.turns.length === 0) return;
 		sessions++;
-		const isWeb = ids.has(p.id);
-		for (const t of p.turns) turns.push({ ...t, web: isWeb });
+		for (const t of p.turns) turns.push({ ...t, machine });
 	});
 	turns.sort((a, b) => b.start - a.start);
-	return { turns, sessions, webSince: webLog().since };
+	return { turns, sessions, machines: remote.map(({ name, synced, error }) => ({ name, synced, error })) };
 }
 
 async function read(file: string): Promise<Parsed | undefined> {
@@ -93,7 +61,7 @@ export async function parseLines(
 	lines: AsyncIterable<string> | Iterable<string>,
 ): Promise<Omit<Parsed, "size" | "mtimeMs">> {
 	const out: Omit<Parsed, "size" | "mtimeMs"> = { id: "", cwd: "", turns: [] };
-	let turn: Omit<StatsTurn, "web"> | undefined;
+	let turn: Omit<StatsTurn, "machine"> | undefined;
 	let end = 0;
 	const close = () => {
 		if (turn && end > turn.start && turn.outcome) out.turns.push({ ...turn, ms: end - turn.start });

@@ -1,5 +1,6 @@
 /**
- * Stats.tsx — usage across every pi session on this machine: the streak
+ * Stats.tsx — usage across every pi session on this machine and the ones
+ * mirrored from other machines over ssh (see server/machines.ts): the streak
  * heatmap, how long answers take, when and with what you work, and every
  * answered prompt.
  */
@@ -9,13 +10,6 @@ import { ArrowClockwise } from "@phosphor-icons/react";
 import type { StatsTurn, StatsView } from "../shared/types.js";
 import { Button, IconButton, PanelHeader, sectionLabel, useBatches } from "./ui.js";
 import { dayKey, duration, heatmapWeeks, percentile, streaks } from "./stats.js";
-
-type Source = "all" | "web" | "terminal";
-const SOURCES: [Source, string][] = [
-	["all", "All"],
-	["web", "Web UI"],
-	["terminal", "Terminal"],
-];
 
 const WEEKS = 52;
 const HEAT = ["bg-neutral-800", "bg-green-900", "bg-green-700", "bg-green-500", "bg-green-300"];
@@ -39,6 +33,9 @@ const num = new Intl.NumberFormat(undefined, { notation: "compact", maximumFract
 const usd = new Intl.NumberFormat(undefined, { style: "currency", currency: "USD", maximumFractionDigits: 2 });
 
 const projectName = (cwd: string) => cwd.split("/").filter(Boolean).pop() ?? cwd;
+/** Remote projects carry their machine: `~/code/foo` on two machines is two projects. */
+const projectOf = (t: StatsTurn) => (t.machine ? `${t.machine}:${projectName(t.cwd)}` : projectName(t.cwd));
+const THIS_PC = "This PC";
 
 function top(counts: Map<string, number>, n = 6): [string, number][] {
 	return [...counts].sort((a, b) => b[1] - a[1]).slice(0, n);
@@ -53,16 +50,17 @@ function tally<T>(items: T[], key: (t: T) => string | undefined, by: (t: T) => n
 	return m;
 }
 
-export function Stats({ revision, onClose }: { revision?: unknown; onClose: () => void }) {
+export function Stats({ open, revision, onClose }: { open: boolean; revision?: unknown; onClose: () => void }) {
 	const [view, setView] = useState<StatsView | null>(null);
 	const [error, setError] = useState<string | null>(null);
-	const [source, setSource] = useState<Source>("all");
+	/** null for all machines, "" for this one, else an ssh alias. */
+	const [machine, setMachine] = useState<string | null>(null);
+	const [syncing, setSyncing] = useState(false);
 	const [reload, setReload] = useState(0);
 
-	const load = useCallback(async () => {
-		setReload((n) => n + 1);
+	const get = useCallback(async (sync?: "1" | "force") => {
 		try {
-			const r = await fetch("/api/stats");
+			const r = await fetch(`/api/stats${sync ? `?sync=${sync}` : ""}`);
 			if (!r.ok) throw new Error(((await r.json()) as { error?: string }).error ?? r.statusText);
 			setView((await r.json()) as StatsView);
 			setError(null);
@@ -71,16 +69,42 @@ export function Stats({ revision, onClose }: { revision?: unknown; onClose: () =
 		}
 	}, []);
 
-	// Re-read after every reply: a finished answer is a new row.
+	// What is on disk first, then again once the other machines have synced.
+	const load = useCallback(
+		async (force = false) => {
+			setReload((n) => n + 1);
+			await get();
+			setSyncing(true);
+			await get(force ? "force" : "1");
+			setSyncing(false);
+		},
+		[get],
+	);
+
+	// Re-read after every reply (a finished answer is a new row), but only while
+	// showing: the page stays mounted after the dialog closes.
 	useEffect(() => {
-		void load();
-	}, [load, revision]);
+		if (open) void load();
+	}, [load, revision, open]);
 
 	const turns = useMemo(
-		() =>
-			(view?.turns ?? []).filter((t) => source === "all" || (source === "web") === t.web),
-		[view, source],
+		() => (view?.turns ?? []).filter((t) => machine === null || t.machine === machine),
+		[view, machine],
 	);
+	const remote = view?.machines ?? [];
+	const filters: [string | null, string, string | undefined][] = [
+		[null, "All", undefined],
+		["", THIS_PC, undefined],
+		...remote.map(
+			(m): [string, string, string] => [
+				m.name,
+				m.name,
+				m.error
+					? `Unreachable: ${m.error}. Last synced ${stampFmt.format(new Date(m.synced))}`
+					: `Synced ${stampFmt.format(new Date(m.synced))}`,
+			],
+		),
+	];
 
 	return (
 		<section
@@ -88,22 +112,27 @@ export function Stats({ revision, onClose }: { revision?: unknown; onClose: () =
 			className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-neutral-950 text-neutral-100"
 		>
 			<PanelHeader title="Stats" onClose={onClose}>
-				<div className="flex gap-1">
-					{SOURCES.map(([s, label]) => (
-						<Button
-							key={s}
-							variant={source === s ? "subtle" : "ghost"}
-							size="sm"
-							onClick={() => setSource(s)}
-							aria-pressed={source === s}
-						>
-							{label}
-						</Button>
-					))}
-				</div>
-				<IconButton size="sm" label="Refresh" onClick={() => void load()}>
+				{/* Only once there is another machine: until then All and This PC are the same. */}
+				{remote.length > 0 && (
+					<div className="flex gap-1">
+						{filters.map(([m, label, title]) => (
+							<Button
+								key={label}
+								variant={machine === m ? "subtle" : "ghost"}
+								size="sm"
+								onClick={() => setMachine(m)}
+								aria-pressed={machine === m}
+								title={title}
+							>
+								{label}
+							</Button>
+						))}
+					</div>
+				)}
+				<IconButton size="sm" label="Refresh" onClick={() => void load(true)}>
 					<ArrowClockwise size={14} />
 				</IconButton>
+				{syncing && <span className="text-meta text-neutral-500">Syncing machines…</span>}
 			</PanelHeader>
 
 			{/* Laid out for the page dialog's width; the grids stack on a narrow window. */}
@@ -117,12 +146,6 @@ export function Stats({ revision, onClose }: { revision?: unknown; onClose: () =
 						) : (
 							!error && <p className="text-meta text-neutral-500">Reading sessions…</p>
 						)}
-						{view && source !== "terminal" && (
-							<p className="mt-2 text-meta text-neutral-500">
-								Web UI sessions are counted from {stampFmt.format(new Date(view.webSince))}; older
-								ones show as terminal.
-							</p>
-						)}
 					</div>
 				</div>
 				{view && (
@@ -132,9 +155,12 @@ export function Stats({ revision, onClose }: { revision?: unknown; onClose: () =
 							<AnswerTimes turns={turns} />
 							<Hours turns={turns} />
 						</div>
-						<div className="grid gap-6 md:grid-cols-3">
+						<div className={`grid gap-6 ${remote.length > 0 ? "md:grid-cols-4" : "md:grid-cols-3"}`}>
+							{remote.length > 0 && (
+								<Bars title="Machines" rows={top(tally(turns, (t) => t.machine || THIS_PC))} />
+							)}
 							<Bars title="Models" rows={top(tally(turns, (t) => t.model))} />
-							<Bars title="Projects" rows={top(tally(turns, (t) => projectName(t.cwd)))} />
+							<Bars title="Projects" rows={top(tally(turns, projectOf))} />
 							<Bars
 								title="Tools"
 								rows={top(
@@ -584,7 +610,7 @@ function Answers({ turns }: { turns: StatsTurn[] }) {
 										{t.outcome}
 									</span>
 								)}
-								{t.web && <span className="shrink-0 text-caption text-amber-400">web</span>}
+								{t.machine && <span className="shrink-0 text-caption text-neutral-400">{t.machine}</span>}
 								<span className="shrink-0 text-caption text-neutral-400 tabular-nums">{duration(t.ms)}</span>
 							</div>
 							<div className="truncate text-meta text-neutral-500">

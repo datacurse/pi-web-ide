@@ -182,15 +182,23 @@ export interface StatsTurn {
 	cost: number;
 	/** The last assistant message's `stopReason`: `stop`, `error`, `aborted`\u2026 */
 	outcome: string;
-	/** The session was prompted from pwi at least once. */
-	web: boolean;
+	/** The ssh alias of the machine it ran on; "" for this one. */
+	machine: string;
+}
+
+/** Another machine whose sessions Stats mirrors over ssh. */
+export interface StatsMachine {
+	name: string;
+	/** Last successful sync, ISO. */
+	synced: string;
+	/** Why the last sync did not reach it. */
+	error?: string;
 }
 
 export interface StatsView {
 	turns: StatsTurn[];
 	sessions: number;
-	/** When pwi started recording web-UI sessions (ISO); nothing before it counts as web. */
-	webSince: string;
+	machines: StatsMachine[];
 }
 
 /** A partially-streamed assistant message, assembled server-side. */
