@@ -1,9 +1,10 @@
 import { useMemo, useState } from "react";
-import { CaretUpDown, MagnifyingGlass, Plus, PushPin, X } from "@phosphor-icons/react";
+import { ArrowsOut, CaretUpDown, Plus, PushPin, X } from "@phosphor-icons/react";
 import type { PiSessionInfo } from "../shared/types.js";
 import { SESSION_SORTS, type SessionSort } from "./prefs.js";
 import { sessionLabel, shortName } from "./sessionName.js";
 import { ATTENTION_UI, attentionRank, type Attention } from "./attention.js";
+import { highlight, useSessionSearch } from "./searchHits.js";
 import { Button, ContextMenu, IconButton, MenuItem, inputClass, sectionLabel } from "./ui.js";
 
 /** The timestamp a row shows, which is always the one it is sorted by. */
@@ -58,6 +59,7 @@ export function SessionList({
 	shortNames,
 	onNew,
 	onSearch,
+	project,
 }: {
 	sessions: PiSessionInfo[];
 	/** Each session's working / ready / needs state, keyed by file. */
@@ -89,6 +91,8 @@ export function SessionList({
 	onNew: () => void;
 	/** Open the search popup (also Ctrl+O). */
 	onSearch: () => void;
+	/** The project whose sessions the search box searches. */
+	project: string;
 }) {
 	/*
 	 * Sorted here rather than on the server: both timestamps are already on
@@ -108,6 +112,19 @@ export function SessionList({
 			),
 		[sessions, sort, pins, attention],
 	);
+
+	/*
+	 * The search box filters this list in place, in the server's relevance
+	 * order, with each row's subline showing the matched excerpt. Rows are the
+	 * live session objects, so pins and state dots stay current.
+	 */
+	const [query, setQuery] = useState("");
+	const { hits, terms, pending, error: searchError } = useSessionSearch(project, query);
+	const searching = terms.length > 0;
+	const snippets = new Map(hits.map((h) => [h.session.path, h.snippet]));
+	const rows = searching
+		? hits.map((h) => sessions.find((s) => s.path === h.session.path) ?? h.session)
+		: ordered;
 
 	/*
 	 * Which row is being renamed, and the text in it. Local, like the picker:
@@ -180,22 +197,30 @@ export function SessionList({
 					</IconButton>
 				</div>
 
-				{/* Looks like a field, but only opens the popup: one search surface, not two. */}
-				<div className="border-b border-neutral-800 px-2 py-1.5">
-					<button
-						data-custom="search trigger"
-						onClick={onSearch}
-						className="flex h-control-sm w-full items-center gap-1.5 rounded-sm border border-neutral-800 px-2 text-meta text-neutral-500 transition-colors duration-150 ease-out hover:border-neutral-700 hover:text-neutral-300 motion-reduce:transition-none"
-					>
-						<MagnifyingGlass size={12} />
-						Search sessions
-						<kbd className="ml-auto font-sans text-caption text-neutral-600">Ctrl O</kbd>
-					</button>
+				<div className="flex items-center gap-1 border-b border-neutral-800 px-2 py-1.5">
+					<input
+						type="search"
+						value={query}
+						onChange={(e) => setQuery(e.target.value)}
+						onKeyDown={(e) => {
+							if (e.key === "Escape") setQuery("");
+						}}
+						placeholder="Search sessions"
+						aria-label="Search sessions"
+						className={`min-w-0 flex-1 ${inputClass.sm}`}
+					/>
+					<IconButton size="sm" onClick={onSearch} label="Open search window (Ctrl+O)">
+						<ArrowsOut size={13} />
+					</IconButton>
 				</div>
 
 				<div className="flex items-center justify-between border-b border-neutral-800 px-2 py-1">
 					<span className={sectionLabel}>
-						{sessions.length} {sessions.length === 1 ? "session" : "sessions"}
+						{pending
+							? "Searching…"
+							: searching
+								? `${rows.length} ${rows.length === 1 ? "match" : "matches"}`
+								: `${sessions.length} ${sessions.length === 1 ? "session" : "sessions"}`}
 					</span>
 					{/* Bordered, with an up/down caret: unstyled text on a row that
 					    reads as a table header looks like a column title, not a
@@ -215,16 +240,19 @@ export function SessionList({
 				    panel past the viewport and scroll the whole page instead of
 				    itself. */}
 				<div className="min-h-0 flex-1 overflow-y-auto">
-					{listError ? (
+					{listError || searchError ? (
 						<p className="px-3 py-4 text-meta text-red-400" role="alert">
-							{listError}
+							{listError ?? searchError}
 						</p>
 					) : (
-						sessions.length === 0 && (
-							<p className="px-3 py-4 text-meta text-neutral-400">No sessions yet.</p>
+						rows.length === 0 && (
+							<p className="px-3 py-4 text-meta text-neutral-400">
+								{searching ? "No sessions match." : "No sessions yet."}
+							</p>
 						)
 					)}
-					{ordered.map((s) => {
+					{rows.map((s) => {
+						const snippet = searching ? snippets.get(s.path) : undefined;
 						const isOpen = openFiles.includes(s.path);
 						const label = sessionLabel(s, shortNames);
 						const state = attention.get(s.path) ?? null;
@@ -317,7 +345,7 @@ export function SessionList({
 										/>
 									)}
 									<span className="truncate">
-										{naming === s.path ? "Naming…" : label}
+										{naming === s.path ? "Naming…" : highlight(label, terms)}
 									</span>
 								</div>
 								{/*
@@ -327,6 +355,11 @@ export function SessionList({
 								  touched an hour ago" is exactly the question the other
 								  sort mode exists to answer.
 								*/}
+								{snippet ? (
+									<div className="mt-0.5 truncate text-meta text-neutral-500">
+										{highlight(snippet, terms)}
+									</div>
+								) : (
 								<div
 									className="mt-0.5 text-meta text-neutral-400"
 									title={`Created ${dateFmt.format(new Date(s.created))}, ${timeAgo(
@@ -336,6 +369,7 @@ export function SessionList({
 									{dateFmt.format(new Date(stamp(s, sort)))}, {timeAgo(stamp(s, sort))} ·{" "}
 									{s.messageCount} msg
 								</div>
+								)}
 							</button>
 						);
 					})}

@@ -1,27 +1,12 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ChatCircle, CircleNotch, MagnifyingGlass, X } from "@phosphor-icons/react";
 import type { PiSessionHit, PiSessionInfo } from "../shared/types.js";
 import { sessionLabel } from "./sessionName.js";
 import { timeAgo } from "./SessionList.js";
+import { highlight, useSessionSearch } from "./searchHits.js";
 import { IconButton } from "./ui.js";
 
 const RECENT = 50;
-
-/** Wrap every occurrence of any term in a bold mark. */
-function highlight(text: string, terms: string[]): ReactNode {
-	if (!terms.length) return text;
-	const re = new RegExp(`(${terms.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})`, "gi");
-	// split with a capture group puts the matches at the odd indexes.
-	return text.split(re).map((part, i) =>
-		i % 2 ? (
-			<mark key={i} className="bg-transparent font-semibold text-neutral-100">
-				{part}
-			</mark>
-		) : (
-			part
-		),
-	);
-}
 
 /**
  * Ctrl+O popup: full-text search over the open project's sessions. With no
@@ -45,53 +30,23 @@ export function SessionSearch({
 	const ref = useRef<HTMLDialogElement>(null);
 	const list = useRef<HTMLDivElement>(null);
 	const [query, setQuery] = useState("");
-	/** The last answered query and its hits. Kept on screen until the next answer lands, so typing never flashes an empty list. */
-	const [result, setResult] = useState<{ query: string; hits: PiSessionHit[] }>({ query: "", hits: [] });
-	const [error, setError] = useState<string | null>(null);
+	const { hits, terms, pending, error } = useSessionSearch(project, query);
 	const [active, setActive] = useState(0);
-	/** Only the newest query may write results; responses can land out of order. */
-	const seq = useRef(0);
 
 	useEffect(() => {
 		const dialog = ref.current;
 		if (!dialog) return;
 		if (open && !dialog.open) {
 			setQuery("");
-			setResult({ query: "", hits: [] });
 			setActive(0);
 			dialog.showModal();
 		} else if (!open && dialog.open) dialog.close();
 	}, [open]);
 
-	useEffect(() => {
-		const q = query.trim();
-		const ticket = ++seq.current;
-		if (!q) {
-			setResult({ query: "", hits: [] });
-			setError(null);
-			return;
-		}
-		const timer = setTimeout(async () => {
-			const r = await fetch(
-				`/api/sessions/search?cwd=${encodeURIComponent(project)}&q=${encodeURIComponent(q)}`,
-			).catch(() => null);
-			const body = (await r?.json().catch(() => null)) as { hits?: PiSessionHit[]; error?: string } | null;
-			if (ticket !== seq.current) return;
-			if (!r?.ok || !body?.hits) {
-				setError(body?.error ?? "Search failed");
-				return;
-			}
-			setError(null);
-			setResult({ query: q, hits: body.hits });
-			setActive(0);
-		}, 150);
-		return () => clearTimeout(timer);
-	}, [query, project]);
+	useEffect(() => setActive(0), [hits]);
 
-	const pending = query.trim() !== result.query && !error;
-	const terms = result.query.split(/\s+/).filter(Boolean);
 	const rows: PiSessionHit[] = terms.length
-		? result.hits
+		? hits
 		: [...sessions]
 				.sort((a, b) => b.lastActive.localeCompare(a.lastActive))
 				.slice(0, RECENT)

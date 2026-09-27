@@ -107,7 +107,6 @@ export function SessionTabs({
 	onReveal,
 	onTogglePin,
 	onRename,
-	onToDock,
 	label = "Open sessions",
 }: {
 	/** Open session files, in strip order. */
@@ -151,8 +150,6 @@ export function SessionTabs({
 	onTogglePin?: (file: string) => void;
 	/** Rename a session. Enables Rename in the session tab menu. */
 	onRename?: (session: PiSessionInfo, name: string) => void;
-	/** Move a terminal tab's shell back into the dock. */
-	onToDock?: (entry: string) => void;
 }) {
 	const buttons = useRef<Array<HTMLButtonElement | null>>([]);
 	/** A tab's right-click menu: which tab entry, and where the pointer was. */
@@ -542,10 +539,9 @@ export function SessionTabs({
 				const index = tabs.indexOf(file);
 				const isFile = !isSessionTab(file);
 				const isDiff = isDiffTab(file);
-				const isTerm = isTermTab(file);
-				/** Diffs and pages: nothing to offer but closing. */
-				const closeOnly = isDiff || isPageTab(file);
-				const isEdit = isFile && !closeOnly && !isTerm;
+				/** Diffs, pages and terminals: nothing to offer but closing. */
+				const closeOnly = isDiff || isPageTab(file) || isTermTab(file);
+				const isEdit = isFile && !closeOnly;
 				const info = isFile ? undefined : byFile.get(file);
 				const label = isFile ? tabLabel(file) : sessionLabel(info, shortNames);
 				const act = (fn: () => void) => () => {
@@ -570,11 +566,6 @@ export function SessionTabs({
 								})}
 							>
 								Rename…
-							</MenuItem>
-						)}
-						{isTerm && onToDock && (
-							<MenuItem icon={<TerminalWindow size={16} />} role="menuitem" autoFocus onClick={act(() => onToDock(file))}>
-								Move to Terminal Dock
 							</MenuItem>
 						)}
 						{isEdit && onReveal && (

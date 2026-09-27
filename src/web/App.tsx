@@ -57,7 +57,6 @@ import {
 	addTab,
 	allTerminals,
 	reconcile,
-	removeTerminal,
 	type TermLayout,
 } from "./termLayout.js";
 import { Settings } from "./Settings.js";
@@ -271,7 +270,6 @@ function EditorColumn({
 	onTogglePin,
 	onRename,
 	renderPage,
-	onToDock,
 	onNewSession,
 	onNewTerminal,
 }: {
@@ -307,8 +305,6 @@ function EditorColumn({
 	onRename: (session: PiSessionInfo, name: string) => void;
 	/** A page tab's content; `active` is whether its tab is the one showing. */
 	renderPage: (page: PageId, active: boolean) => React.ReactNode;
-	/** Move a terminal tab's shell back into the dock. */
-	onToDock: (entry: string) => void;
 	/** For the chat's right-click menu; both open in this column. */
 	onNewSession: () => void;
 	/** Absent without a project: a shell has to start somewhere. */
@@ -360,7 +356,6 @@ function EditorColumn({
 				onReveal={onReveal}
 				onTogglePin={onTogglePin}
 				onRename={onRename}
-				onToDock={onToDock}
 			/>
 			<SplitZone
 				/*
@@ -1529,10 +1524,7 @@ export default function App() {
 			const ids = (body.terminals ?? [])
 				.map((t) => t.id)
 				.filter((id): id is string => typeof id === "string");
-			// A shell open as an editor tab is that tab's, not the dock's to adopt.
-			const t = tabsRef.current;
-			const inTabs = new Set([...t.files, ...(t.right?.files ?? [])].filter(isTermTab).map(termId));
-			setTermLayout((current) => reconcile(current, ids.filter((id) => !inTabs.has(id))));
+			setTermLayout((current) => reconcile(current, ids));
 			// Gates the pane's "start the first shell" — spawning before the
 			// server has been asked would mint a second shell next to the one
 			// the stored layout was already pointing at.
@@ -2259,23 +2251,17 @@ export default function App() {
 	);
 
 	/**
-	 * A shell lives in one place at a time: the dock or one editor tab. Moving
-	 * never restarts it; only closing a terminal tab ends it.
+	 * The dock lists every shell; an editor tab is just another view of one.
+	 * Closing the tab leaves the shell running in the dock, and a shell that
+	 * leaves the dock (killed there) takes its editor tabs with it.
 	 */
-	const termToEditor = useCallback(
-		(id: string) => {
-			const next = removeTerminal(termLayout, id);
-			changeTermLayout(next);
-			// An emptied dock would start a fresh shell by itself; close it instead.
-			if (next.tabs.length === 0) showTerminal(false);
-			openInLastSide(termTab(id));
-		},
-		[termLayout, changeTermLayout, showTerminal, openInLastSide],
-	);
-	/** A new shell as an editor tab in one column. */
+	const termToEditor = useCallback((id: string) => openInLastSide(termTab(id)), [openInLastSide]);
+	/** A new shell as an editor tab in one column, listed in the dock too. */
 	const newTerminalTab = async (side: Side) => {
 		try {
-			const entry = termTab(await startShell(project));
+			const id = await startShell(project);
+			dockShell(id);
+			const entry = termTab(id);
 			if (side === "right") selectRight(entry);
 			else selectTab(entry);
 		} catch (err) {
@@ -2283,7 +2269,7 @@ export default function App() {
 		}
 	};
 
-	/** Put a shell back in the dock. An updater, so "Close Others" docks every one. */
+	/** List a shell in the dock. An updater, so it composes with other layout changes. */
 	const dockShell = useCallback(
 		(id: string) => {
 			setTermLayout((current) => {
@@ -2295,22 +2281,15 @@ export default function App() {
 		},
 		[project, scope],
 	);
-	const termToDock = useCallback(
-		(entry: string) => {
-			if (sideOfTab(tabsRef.current, entry) === "right") closeRight(entry);
-			else closeTab(entry);
-			dockShell(termId(entry));
-			showTerminal(true);
-		},
-		[closeTab, closeRight, dockShell, showTerminal],
-	);
-	/**
-	 * Closing a terminal tab never kills its shell: it goes back to the dock
-	 * (without opening it), and only the dock's close button ends a shell.
-	 */
-	const keepShell = (entry: string) => {
-		if (isTermTab(entry)) dockShell(termId(entry));
-	};
+	// Only once the dock is reconciled with the server: before that an empty
+	// layout means "not loaded", not "no shells".
+	useEffect(() => {
+		if (!termsReady) return;
+		const live = new Set(allTerminals(termLayout));
+		const t = tabsRef.current;
+		for (const e of t.files) if (isTermTab(e) && !live.has(termId(e))) closeTab(e);
+		for (const e of t.right?.files ?? []) if (isTermTab(e) && !live.has(termId(e))) closeRight(e);
+	}, [termsReady, termLayout, closeTab, closeRight]);
 
 	/** Open a page (Stats, Packages, Settings) as a tab, or focus the one it has. */
 	const openPage = useCallback((page: PageId) => openInLastSide(pageTab(page)), [openInLastSide]);
@@ -2892,11 +2871,7 @@ export default function App() {
 					pinned={pinned}
 					dirtyFiles={dirtyFiles}
 					onSelect={selectTab}
-					onClose={(entry) => {
-						keepShell(entry);
-						closeTab(entry);
-					}}
-					onToDock={termToDock}
+					onClose={closeTab}
 					onNewSession={() => void left.attach()}
 					onNewTerminal={project ? () => void newTerminalTab("left") : undefined}
 					onReorder={reorderTabs}
@@ -2930,11 +2905,7 @@ export default function App() {
 						pinned={pinned}
 						dirtyFiles={dirtyFiles}
 						onSelect={selectRight}
-						onClose={(entry) => {
-							keepShell(entry);
-							closeRight(entry);
-						}}
-						onToDock={termToDock}
+						onClose={closeRight}
 						onNewSession={() => void right.attach()}
 						onNewTerminal={project ? () => void newTerminalTab("right") : undefined}
 						onReorder={reorderRight}
@@ -3028,6 +2999,7 @@ export default function App() {
 					void (lastSide.current === "right" && tabsRef.current.right ? right : left).attach()
 				}
 				onSearch={() => setSearchOpen(true)}
+				project={project}
 			/>
 
 			<SessionSearch

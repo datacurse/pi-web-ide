@@ -133,9 +133,13 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
 
 ## Session search
 
-- One search surface: a modal popup (`SessionSearch`), opened by Ctrl+O from anywhere
-  (captured before the terminal and editors) or by the field-looking button under
-  `New session`. The button only opens the popup; the list itself never filters.
+- Two surfaces, one search (`useSessionSearch` in `searchHits.tsx`):
+  - The session list's search field (`inputClass.sm`, under `New session`) filters the
+    list in place, in relevance order; each hit's subline shows the matched excerpt
+    instead of the date. The count label reads `Searching…` / `N matches`. Escape clears.
+  - The `ArrowsOut` `IconButton` beside it, or Ctrl+O from anywhere (captured before
+    the terminal and editors), opens the modal popup (`SessionSearch`).
+- While a query is in flight the previous results stay on screen (no empty flash).
 - Popup: top-anchored `<dialog>`, `rounded-md`, backdrop `bg-black/50` + `backdrop-blur-sm`.
   It is a large centered surface, so it sits one type step above the side-panel rows:
   query `text-title`, row title `text-body`, excerpt and `timeAgo` stamp `text-ui neutral-500`,
@@ -188,13 +192,13 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
   under them and split, split direction, swap side (`ArrowsLeftRight`) and hide stacked
   below. The column sits on the right by default; swap moves it to the left
   (`pwi:termTabsSide`, per browser).
-- A shell can also be an editor tab (`term:<id>`, `TerminalWindow` icon, label
-  "Terminal"). It lives in one place at a time and moving never restarts it: a dock
-  tab's right-click "Move to Editor Tab" moves its focused shell to the last-used
-  column, the dock's `AppWindow` button moves the shell you are looking at, and the editor tab's
-  menu has "Move to Terminal Dock". Closing a terminal tab never kills the shell: it
-  goes back into the dock without opening it. Only the dock's per-shell close ends a
-  shell. Moving the dock's last shell out closes the dock.
+- The dock lists every shell of the project. An editor tab (`term:<id>`,
+  `TerminalWindow` icon, label "Terminal") is only another view of one of them:
+  a dock tab's right-click "Open in Editor Tab" or the dock's `AppWindow` button opens
+  the focused shell in the last-used column, and "New Terminal Tab" in a column also
+  lists the new shell in the dock. Closing the editor tab only closes that view (its
+  menu is Close items only). Only the dock's per-shell close ends a shell, and that
+  closes its editor tabs too. The PTY has one size: whichever view last took focus sets it.
 - Right-clicking the chat (or an empty column) opens `New AI Session` / `New Terminal
   Tab`, both in that column. The browser keeps its own menu over selected text, links,
   images, the composer, and on Shift+right-click.
@@ -239,8 +243,7 @@ New UI uses these; convert raw markup when you touch it. Tune styles in
   `composer pill` (model selects, git split button), `composer`, `choice card`
   (chat question options, package search hits), `session card`, `transcript
   disclosure`, `context meter`, `image thumbnail`, `thumbnail remove badge`,
-  `pinned-folder chip`, `activity bar item`, `search trigger`, `search field`,
-  `search result`.
+  `pinned-folder chip`, `activity bar item`, `search field`, `search result`.
 - xterm reads `--text-body` at mount (Terminal.tsx); it cannot take a class.
 - Buttons default to `type="button"`; pass `type="submit"` explicitly.
 - No focus outlines. `index.css` sets `:focus-visible { outline: none }`; never add

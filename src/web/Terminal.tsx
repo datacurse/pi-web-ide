@@ -244,13 +244,19 @@ export function Terminal({
 			 * listener, because the pane is resized by dragging the divider,
 			 * which is not a window resize.
 			 */
+			const sendSize = () => {
+				if (term && socket?.readyState === WebSocket.OPEN)
+					socket.send(JSON.stringify({ type: "resize", cols: term.cols, rows: term.rows }));
+			};
 			observer = new ResizeObserver(() => {
 				if (!live || !term) return;
 				fit.fit();
-				if (socket?.readyState === WebSocket.OPEN)
-					socket.send(JSON.stringify({ type: "resize", cols: term.cols, rows: term.rows }));
+				sendSize();
 			});
 			observer.observe(node);
+			// One shell can show in the dock and an editor tab at once, and the
+			// PTY has one size: the view you focus claims it, like tmux.
+			term.textarea?.addEventListener("focus", sendSize);
 		});
 
 		return () => {
@@ -329,7 +335,7 @@ export function TerminalPane({
 	layout: TermLayout;
 	onLayout: (next: TermLayout) => void;
 	onClose: () => void;
-	/** Show this shell as an editor tab; App takes it out of the dock. */
+	/** Also show this shell as an editor tab; it stays in the dock. */
 	onToEditor: (id: string) => void;
 }) {
 	const [error, setError] = useState<string | null>(null);
@@ -563,7 +569,7 @@ export function TerminalPane({
 					className="self-center"
 					disabled={!tab}
 					onClick={() => tab && onToEditor(tab.focus)}
-					label="Move this shell to an editor tab"
+					label="Open this shell in an editor tab"
 				>
 					<AppWindow size={14} />
 				</IconButton>
@@ -608,7 +614,7 @@ export function TerminalPane({
 					label={`Terminal tab ${menu.index + 1}`}
 					onClose={() => setMenu(null)}
 				>
-					{/* Moves the tab's focused shell; its other splits stay here. */}
+					{/* Opens the tab's focused shell. */}
 					<MenuItem
 						icon={<AppWindow size={16} />}
 						role="menuitem"
@@ -619,7 +625,7 @@ export function TerminalPane({
 							if (id) onToEditor(id);
 						}}
 					>
-						Move to Editor Tab
+						Open in Editor Tab
 					</MenuItem>
 				</ContextMenu>
 			)}
