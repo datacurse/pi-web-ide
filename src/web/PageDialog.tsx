@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 /** The rail's bottom group: places you visit, not work beside, so a popup rather than a tab. */
-export type PageId = "stats" | "packages" | "settings";
-const TITLE: Record<PageId, string> = { stats: "Stats", packages: "Packages", settings: "Settings" };
+export type PageId = "fleet" | "stats" | "packages" | "settings";
+const TITLE: Record<PageId, string> = { fleet: "Fleet", stats: "Stats", packages: "Packages", settings: "Settings" };
 
 /**
  * One large modal for whichever page is open. A page stays mounted once opened,

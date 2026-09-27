@@ -3,7 +3,15 @@
  * Tune a control here, not at its call sites. `className` is for layout
  * (margins, flex, width) only; restyling through it fights these classes.
  */
-import { useEffect, useLayoutEffect, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from "react";
+import {
+	useEffect,
+	useLayoutEffect,
+	useRef,
+	useState,
+	type AnchorHTMLAttributes,
+	type ButtonHTMLAttributes,
+	type ReactNode,
+} from "react";
 import { X } from "@phosphor-icons/react";
 
 const EASE = "transition-colors duration-150 ease-out motion-reduce:transition-none";
@@ -109,6 +117,26 @@ export function IconButton({
 			aria-label={label}
 			title={label}
 			className={`flex shrink-0 items-center justify-center ${ICON_SIZE[size]} ${round ? "rounded-full" : "rounded-sm"} ${ICON_VARIANT[variant]} ${EASE} ${className}`}
+			{...rest}
+		/>
+	);
+}
+
+/* An `IconButton` that is a link: same look, opens `href` in a new tab. */
+export function IconLink({
+	label,
+	variant = "ghost",
+	size = "md",
+	className = "",
+	...rest
+}: AnchorHTMLAttributes<HTMLAnchorElement> & { label: string; variant?: keyof typeof ICON_VARIANT; size?: keyof typeof ICON_SIZE }) {
+	return (
+		<a
+			target="_blank"
+			rel="noreferrer"
+			aria-label={label}
+			title={label}
+			className={`flex shrink-0 items-center justify-center rounded-sm ${ICON_SIZE[size]} ${ICON_VARIANT[variant]} ${EASE} ${className}`}
 			{...rest}
 		/>
 	);

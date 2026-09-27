@@ -13,7 +13,7 @@ import { fileURLToPath } from "node:url";
 import { WebSocketServer } from "ws";
 import { basename, dirname, join, resolve } from "node:path";
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { promisify } from "node:util";
@@ -22,6 +22,7 @@ import { listSessions, sameProject } from "./sessions.js";
 import { searchSessions } from "./search.js";
 import { stats } from "./stats.js";
 import { syncMachines } from "./machines.js";
+import { fleet, startPwi, validTarget } from "./fleet.js";
 import {
 	addFavorite,
 	addProject,
@@ -288,6 +289,27 @@ app.get("/api/stats", async (req, res) => {
 		res.json(await stats());
 	} catch (err) {
 		res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+	}
+});
+
+/** Every tailnet machine with its pwi link and state (server/fleet.ts). */
+app.get("/api/fleet", async (_req, res) => {
+	try {
+		res.json({ machines: await fleet() });
+	} catch (err) {
+		res.status(502).json({ error: err instanceof Error ? err.message : String(err) });
+	}
+});
+
+/** Start pwi on another machine over ssh and serve it on the tailnet. */
+app.post("/api/fleet/start", async (req, res) => {
+	const target = req.body?.ssh;
+	if (!validTarget(target)) return res.status(400).json({ error: "bad ssh target" });
+	try {
+		await startPwi(target);
+		res.json({ ok: true });
+	} catch (err) {
+		res.status(502).json({ error: err instanceof Error ? err.message : String(err) });
 	}
 });
 
@@ -1144,7 +1166,7 @@ app.get("/api/packages/project", (req, res) => {
  */
 app.get("/api/terminals", (req, res) => {
 	const cwd = typeof req.query.cwd === "string" ? req.query.cwd : undefined;
-	res.json({ terminals: terminals.list(cwd) });
+	res.json({ terminals: terminals.list(cwd, req.query.fleet === "1") });
 });
 
 app.post("/api/terminals", (req, res) => {
@@ -1152,8 +1174,14 @@ app.post("/api/terminals", (req, res) => {
 	const cols = Number(req.body?.cols) || 80;
 	const rows = Number(req.body?.rows) || 24;
 	const dir = typeof req.body?.dir === "string" && req.body.dir ? req.body.dir : cwd;
+	// A Fleet page shell, in the home dir; with `ssh` it starts by ssh-ing there.
+	const ssh = req.body?.ssh;
+	if (ssh !== undefined && !validTarget(ssh)) return res.status(400).json({ error: "bad ssh target" });
+	const fleet = req.body?.fleet === true ? { run: ssh && `ssh ${ssh}` } : undefined;
 	try {
-		const term = terminals.create(cwd, cols, rows, dir);
+		const term = fleet
+			? terminals.create(homedir(), cols, rows, homedir(), fleet)
+			: terminals.create(cwd, cols, rows, dir);
 		res.json({ id: term.id, cwd: term.cwd, running: true });
 	} catch (err) {
 		res.status(400).json({ error: err instanceof Error ? err.message : String(err) });

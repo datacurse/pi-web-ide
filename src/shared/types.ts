@@ -201,6 +201,34 @@ export interface StatsView {
 	machines: StatsMachine[];
 }
 
+/**
+ * pwi on a tailnet machine, as its tailnet link answers: `running` is a pwi,
+ * `dev` redirects to a Vite port only that machine can reach, `stopped` is
+ * `tailscale serve` with nothing behind it, `unserved` is no answer at all.
+ */
+export type FleetPwi = "running" | "dev" | "stopped" | "unserved";
+
+/** One machine on the tailnet, for the Fleet page. */
+export interface FleetMachine {
+	/** The MagicDNS label, e.g. `orangepi`. */
+	name: string;
+	/** Full MagicDNS name, without the trailing dot. */
+	dns: string;
+	ip: string;
+	os: string;
+	online: boolean;
+	/** The machine this pwi runs on. */
+	self: boolean;
+	/** Last seen, ISO; only for an offline machine. */
+	lastSeen?: string;
+	/** What `ssh` is given: the matching ~/.ssh/config alias, else the MagicDNS name. */
+	ssh: string;
+	/** `http://<dns>:8890/`. */
+	url: string;
+	/** Only probed while online. */
+	pwi?: FleetPwi;
+}
+
 /** A partially-streamed assistant message, assembled server-side. */
 export interface PiPartial {
 	text: string;

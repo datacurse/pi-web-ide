@@ -17,6 +17,7 @@ import { SessionSearch } from "./SessionSearch.js";
 import { ProjectPicker, type Projects } from "./ProjectPicker.js";
 import { ActivityBar } from "./ActivityBar.js";
 import { Stats } from "./Stats.js";
+import { Fleet } from "./Fleet.js";
 import { SessionTabs, tabDomId } from "./SessionTabs.js";
 import { Chat } from "./Chat.js";
 import { Terminal, TerminalPane } from "./Terminal.js";
@@ -2638,6 +2639,7 @@ export default function App() {
 	const renderPage = (page: PageId, active: boolean) => {
 		const onClose = () => setPage(null);
 		if (page === "stats") return <Stats open={active} revision={replies} onClose={onClose} />;
+		if (page === "fleet") return <Fleet open={active} onClose={onClose} />;
 		if (page === "packages")
 			return (
 				<Packages

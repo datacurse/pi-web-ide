@@ -52,7 +52,7 @@ export function parseSshHosts(text: string): string[] {
 	return out;
 }
 
-function sshHosts(): string[] {
+export function sshHosts(): string[] {
 	try {
 		return parseSshHosts(readFileSync(join(homedir(), ".ssh", "config"), "utf8"));
 	} catch {

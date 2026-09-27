@@ -17,7 +17,7 @@
  */
 
 import type { ReactNode } from "react";
-import { ChartBar, Code, GitBranch, Gear, SquaresFour, TerminalWindow } from "@phosphor-icons/react";
+import { ChartBar, Code, GitBranch, Gear, Network, SquaresFour, TerminalWindow } from "@phosphor-icons/react";
 import type { Panel } from "./App.js";
 import type { PageId } from "./PageDialog.js";
 
@@ -150,6 +150,7 @@ export function ActivityBar({
 
 			{/* Pages open in a modal. `mt-auto` pushes the group to the bottom. */}
 			<div className="mt-auto flex flex-col items-center">
+				{page("fleet", "Fleet", "Your tailnet machines: pwi links, terminals, Start", <Network size={20} />)}
 				{page("stats", "Stats", "Usage stats: streaks, answer times, every answer", <ChartBar size={20} />)}
 				{page("packages", "Packages", "Packages installed on this machine", <SquaresFour size={20} />)}
 				{page("settings", "Settings", "Settings", <Gear size={20} />)}

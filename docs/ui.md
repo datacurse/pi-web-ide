@@ -202,7 +202,7 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
 - Right-clicking the chat (or an empty column) opens `New AI Session` / `New Terminal
   Tab`, both in that column. The browser keeps its own menu over selected text, links,
   images, the composer, and on Shift+right-click.
-- Stats, Packages and Settings are pages, not tabs (tabs are for work: chats, files,
+- Fleet, Stats, Packages and Settings are pages, not tabs (tabs are for work: chats, files,
   terminals). The rail's bottom group opens each in one large centered modal
   (`PageDialog`): `<dialog>`, `h-[85vh] w-[min(64rem,94vw)]`, `rounded-md`, backdrop
   `bg-black/50` + `backdrop-blur-sm`. Escape, the header ✕ or the backdrop closes it.
@@ -218,6 +218,21 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
   (3+ chars, e.g. `shthk`). Matched words, or a fuzzy hit's letters in the name, get an
   amber-tinted background (`::highlight(settings-search)` in index.css). Escape clears the query before it closes the dialog;
   clicking a category clears it too.
+- Fleet (`Network` rail icon, first in the bottom group) lists every tailnet machine from
+  `tailscale status` (`server/fleet.ts`), this PC first: a green/`neutral-700` online dot,
+  name, `os · ip · ssh <alias>` subline, pwi state as `text-meta` (running `green-400`,
+  dev mode `amber-400`, stopped, not on the tailnet), then `Start pwi` (`Button sm`, only
+  when online and not running), a terminal `IconButton` and the Tailscale mark as an `IconLink` to
+  `http://<magicdns>:8890/`. Links are tailnet only, no ssh forwards. The ssh alias is the
+  `~/.ssh/config` host named like the machine or pointing at one of its addresses, else
+  the MagicDNS name.
+- Fleet's terminal lives in the page, under the list (list capped at `max-h-1/2`): one
+  shell per machine, a login shell in `~` that types `ssh <alias>` (a local shell for this
+  PC), kept on the server and remembered per browser (`pwi:fleetShells`), so reopening
+  the page lands back in it. The terminal button shows that machine's shell (`outline`,
+  `aria-pressed`, row `neutral-900` while shown); a `PanelHeader` with the machine name
+  and ✕ (kills the shell) sits over it. Fleet shells never appear in a project's dock.
+  Escape inside it goes to the shell, not the dialog.
 - Stats uses the dialog's width: usage beside the summary tiles (1/3 + 2/3), a 52-week
   heatmap full width, answer time beside by-hour, Machines (when there are others) /
   Models / Projects / Tools in columns, then every answer (50 at a time, more as the end
@@ -258,6 +273,7 @@ New UI uses these; convert raw markup when you touch it. Tune styles in
 | `OptionRow`     | `selected`, `disabled`                                      | Clickable row wrapping a radio or checkbox. |
 | `sectionLabel`  | class string                                                | Uppercase group heading on any element. |
 | `inputClass.sm/md` | class string                                             | Inputs and textareas (a string so refs pass through). |
+| `IconLink`      | `label`, `href`, `variant`, `size` (as `IconButton`)       | An `IconButton` that is a link, opening in a new tab (Fleet's Tailscale links). |
 | `ListRow`       | `selected`, `muted`, `size`: ui (default) / body, button props                           | Tree and list rows (Explorer, Source Control, directory picker). 22px; indent with `style.paddingLeft`. |
 | `tabClass(active)` | class string; caller adds `pr-7` (with close button) or `pr-3` | Session/editor tabs and terminal tabs: flat, full `bar` height, amber 2px underline when active, no fill. The strip is `h-bar` with a hidden scrollbar (`.tab-strip`). |
 | `tabClassVertical(active)` | class string | Tabs in a vertical list (terminal dock): full width, `control-md` tall, amber 2px left edge when active. |

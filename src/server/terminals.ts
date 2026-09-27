@@ -63,6 +63,8 @@ export interface Term {
 	/** Set once the shell exits. An exited terminal is kept until closed. */
 	exit: { code: number; signal?: number } | null;
 	listeners: Set<(e: TermEvent) => void>;
+	/** A Fleet page shell: listed only there, never in a project's dock. */
+	fleet: boolean;
 }
 
 export type TermEvent =
@@ -97,7 +99,7 @@ export class Terminals {
 	 * client owns. Nothing here knows about tabs or panes, which is why one
 	 * shell can be moved between them without touching its process.
 	 */
-	create(cwd: string, cols = 80, rows = 24, dir = cwd): Term {
+	create(cwd: string, cols = 80, rows = 24, dir = cwd, fleet?: { run?: string }): Term {
 		// `cwd` is the project the shell is listed under; `dir` is where it
 		// starts, so "Open in Terminal" on a subfolder stays in its project.
 		for (const d of [cwd, dir])
@@ -129,6 +131,7 @@ export class Terminals {
 			rows,
 			exit: null,
 			listeners: new Set(),
+			fleet: !!fleet,
 		};
 
 		term.pty.onData((data) => {
@@ -158,6 +161,9 @@ export class Terminals {
 			}
 		});
 
+		// Typed into the shell rather than run instead of it, so leaving the
+		// command (an ssh session) lands in a local shell, not a dead tab.
+		if (fleet?.run) term.pty.write(`${fleet.run}\r`);
 		this.terms.set(term.id, term);
 		return term;
 	}
@@ -177,9 +183,9 @@ export class Terminals {
 	 * this says which of them are still real. Without it a restored layout
 	 * would render panes attached to shells that no longer exist.
 	 */
-	list(cwd?: string): TermInfo[] {
+	list(cwd?: string, fleet = false): TermInfo[] {
 		return [...this.terms.values()]
-			.filter((t) => !cwd || t.cwd === cwd)
+			.filter((t) => t.fleet === fleet && (!cwd || t.cwd === cwd))
 			.map((t) => ({ id: t.id, cwd: t.cwd, running: !t.exit }));
 	}
 
