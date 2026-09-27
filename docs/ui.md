@@ -208,6 +208,16 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
   `bg-black/50` + `backdrop-blur-sm`. Escape, the header ✕ or the backdrop closes it.
   A page stays mounted once opened, so unsaved edits survive closing. The rail buttons
   have no lit state. Escape in a popup inside a page (Packages add) closes only that popup.
+- Settings has a `w-48` category nav on the left (`NavItem`s: Appearance, Transcript,
+  Sessions, Notifications, Personality), like Obsidian; the right side shows only the
+  chosen category, `max-w-xl p-6`. Opens on Appearance.
+- A `Search settings` field (`inputClass.sm`) tops the nav. A query shows every matching
+  setting from all categories, grouped under their category's `Section`; categories
+  without a hit fade to `opacity-50`. A setting matches when every word is in its
+  name, hint or keywords (accents ignored), or the query is a subsequence of its name
+  (3+ chars, e.g. `shthk`). Matched words, or a fuzzy hit's letters in the name, get an
+  amber-tinted background (`::highlight(settings-search)` in index.css). Escape clears the query before it closes the dialog;
+  clicking a category clears it too.
 - Stats uses the dialog's width: usage beside the summary tiles (1/3 + 2/3), a 52-week
   heatmap full width, answer time beside by-hour, Machines (when there are others) /
   Models / Projects / Tools in columns, then every answer (50 at a time, more as the end
@@ -243,6 +253,7 @@ New UI uses these; convert raw markup when you touch it. Tune styles in
 | `MenuItem`      | button props, `icon?` (16px Phosphor, fixed slot, greys with the row) | Rows in dropdown and context menus. Context-menu items carry an icon; give every item in one menu an icon or none. |
 | `MenuSeparator` | —                                                           | Rule between groups of `MenuItem`s. |
 | `ContextMenu`   | `x`, `y`, `label`, `width` (220), `onClose`                 | Right-click menu at the pointer: fixed, clamped on screen, closes on outside click, Escape, scroll, resize. Items call `onClose` after acting. |
+| `NavItem`       | `icon` (16px Phosphor), `selected`, button props            | Category row in a page's left nav (Settings): `control-md`, `rounded-sm`, `neutral-800` fill when current. |
 | `Section`       | `title`                                                     | Settings group (fieldset + uppercase legend). |
 | `OptionRow`     | `selected`, `disabled`                                      | Clickable row wrapping a radio or checkbox. |
 | `sectionLabel`  | class string                                                | Uppercase group heading on any element. |

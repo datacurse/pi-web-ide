@@ -271,6 +271,34 @@ export const tabClassVertical = (active: boolean) =>
 			: "border-transparent text-neutral-400 hover:bg-neutral-900 hover:text-neutral-100"
 	}`;
 
+/* A category in a page's left nav (Settings): 16px icon + label, filled when current. */
+export function NavItem({
+	selected = false,
+	icon,
+	type = "button",
+	className = "",
+	children,
+	...rest
+}: ButtonHTMLAttributes<HTMLButtonElement> & { selected?: boolean; icon: ReactNode }) {
+	return (
+		<button
+			type={type}
+			aria-current={selected ? "page" : undefined}
+			className={`flex h-control-md w-full items-center gap-2 rounded-sm px-2 text-left text-ui ${EASE} ${
+				selected
+					? "bg-neutral-800 text-neutral-50"
+					: "text-neutral-400 hover:bg-neutral-900 hover:text-neutral-100"
+			} ${className}`}
+			{...rest}
+		>
+			<span className="flex w-4 shrink-0 justify-center" aria-hidden>
+				{icon}
+			</span>
+			{children}
+		</button>
+	);
+}
+
 /* A labelled group of settings rows. */
 export function Section({ title, className = "", children }: { title: string; className?: string; children: ReactNode }) {
 	return (

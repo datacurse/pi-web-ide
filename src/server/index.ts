@@ -243,8 +243,15 @@ app.get("/api/models", async (_req, res) => {
  * page reads. Borrows pi's OAuth access token from auth.json, newest first.
  * No token refresh — pi refreshes on use, and rotating the refresh
  * token here could log pi out. An idle pi means "expired" until its next turn.
+ *
+ * Anthropic rate-limits this endpoint hard (a second call within a minute gets
+ * 429), and Stats asks on every open and reply. So a good answer is reused for
+ * a minute, and served instead of an error when a later call fails.
  */
+let usageCache: { at: number; body: unknown } | undefined;
+const USAGE_TTL_MS = 60_000;
 app.get("/api/usage", async (_req, res) => {
+	if (usageCache && Date.now() - usageCache.at < USAGE_TTL_MS) return res.json(usageCache.body);
 	const dir = process.env.PI_CODING_AGENT_DIR ?? resolve(process.env.HOME ?? "", ".pi/agent");
 	let auth: Record<string, { type?: string; access?: string; expires?: number }> = {};
 	try {
@@ -253,13 +260,25 @@ app.get("/api/usage", async (_req, res) => {
 	const tokens = Object.values(auth)
 		.filter((c) => c.type === "oauth" && c.access && (c.expires ?? 0) > Date.now())
 		.sort((a, b) => (b.expires ?? 0) - (a.expires ?? 0));
+	let status = 0;
 	for (const c of tokens) {
 		const r = await fetch("https://api.anthropic.com/api/oauth/usage", {
 			headers: { authorization: `Bearer ${c.access}`, "anthropic-beta": "oauth-2025-04-20" },
 		}).catch(() => null);
-		if (r?.ok) return res.json(await r.json());
+		if (r?.ok) {
+			usageCache = { at: Date.now(), body: await r.json() };
+			return res.json(usageCache.body);
+		}
+		status = r?.status ?? 0;
 	}
-	res.status(502).json({ error: tokens.length ? "usage request failed" : "no unexpired Claude login in auth.json" });
+	if (usageCache) return res.json(usageCache.body);
+	res.status(502).json({
+		error: !tokens.length
+			? "no unexpired Claude login in auth.json"
+			: status === 429
+				? "Anthropic is rate-limiting the usage check; try again in a minute"
+				: `usage request failed (${status ? `HTTP ${status}` : "network error"})`,
+	});
 });
 
 /** `?sync=1` first brings other machines' mirrors up to date (throttled); `?sync=force` always does. */

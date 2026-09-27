@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
-import { Button, inputClass, OptionRow, PanelHeader, Section } from "./ui.js";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { Bell, ChatText, ListBullets, Palette, UserCircle } from "@phosphor-icons/react";
+import { Button, inputClass, NavItem, OptionRow, PanelHeader, Section } from "./ui.js";
 import { THEMES, TOOL_MODES, type ThemeId, type ToolMode } from "./prefs.js";
 
 /** What GET/PUT /api/personality answer with. */
@@ -11,6 +12,15 @@ interface Personality {
 }
 
 type SaveState = "idle" | "saving" | "saved";
+
+const CATEGORIES = [
+	{ id: "appearance", label: "Appearance", icon: <Palette size={16} /> },
+	{ id: "transcript", label: "Transcript", icon: <ChatText size={16} /> },
+	{ id: "sessions", label: "Sessions", icon: <ListBullets size={16} /> },
+	{ id: "notifications", label: "Notifications", icon: <Bell size={16} /> },
+	{ id: "personality", label: "Personality", icon: <UserCircle size={16} /> },
+] as const;
+type Category = (typeof CATEGORIES)[number]["id"];
 
 /**
  * Four squares of a palette's actual colors: backdrop, border, body text,
@@ -105,6 +115,9 @@ export function Settings({
 	const dirty = draft !== null && draft !== personality?.content;
 
 	const [loadError, setLoadError] = useState<string | null>(null);
+	const [category, setCategory] = useState<Category>("appearance");
+	const [query, setQuery] = useState("");
+	const results = useRef<HTMLDivElement>(null);
 
 	useEffect(() => {
 		if (!open || dirty) return;
@@ -186,133 +199,150 @@ export function Settings({
 		setSaveState("saved");
 	};
 
-	return (
-		<section
-			aria-label="Settings"
-			className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-neutral-950 text-neutral-100"
-		>
-			<PanelHeader title="Settings" onClose={onClose} />
-			<div className="min-h-0 flex-1 overflow-y-auto">
-			<div className="mx-auto w-full max-w-xl p-3">
-				{/*
-				  Real radios, visually hidden: the group gets arrow-key
-				  navigation, roving focus and the right screen reader
-				  announcement without a line of JavaScript.
-				*/}
-				<Section title="Theme">
-					<div className="flex flex-col gap-0.5">
-						{THEMES.map((t) => (
-							<OptionRow key={t.id} selected={t.id === theme}>
-								<input
-									type="radio"
-									name="theme"
-									value={t.id}
-									checked={t.id === theme}
-									onChange={() => onTheme(t.id)}
-									className="sr-only"
-								/>
-								<Swatch theme={t.id} />
-								<span className="flex-1">{t.label}</span>
-								<span
-									aria-hidden
-									className={t.id === theme ? "text-amber-400" : "invisible"}
-								>
-									{"\u2713"}
-								</span>
-							</OptionRow>
-						))}
-					</div>
-				</Section>
-
-				<Section title="Transcript" className="mt-4">
-					{/* A real checkbox, visible rather than sr-only: unlike the
-					    theme rows there is no swatch to carry the state, so the
-					    box itself is the affordance. */}
-					<OptionRow>
-						<input
-							type="checkbox"
-							checked={showThinking}
-							onChange={(e) => onShowThinking(e.target.checked)}
-							className="size-4 shrink-0 accent-amber-400"
-						/>
-						<span className="flex-1">
-							Show thinking
-							<span className="block text-meta text-neutral-500">
-								Reasoning blocks in assistant messages, as they stream and in history.
+	/*
+	 * Every setting as one searchable item: `label` is its name (fuzzy-matched),
+	 * `text` everything else a search should find it by. Items render in
+	 * category order, so a search result reads like the pages it came from.
+	 */
+	const items: { category: Category; label: string; text: string; node: ReactNode }[] = [
+		{
+			category: "appearance",
+			label: "Theme",
+			text: `color colour palette dark light ${THEMES.map((t) => t.label).join(" ")}`,
+			node: (
+				// Real radios, visually hidden: the group gets arrow-key navigation,
+				// roving focus and the right screen reader announcement for free.
+				<div role="radiogroup" aria-label="Theme" className="flex flex-col gap-0.5">
+					{THEMES.map((t) => (
+						<OptionRow key={t.id} selected={t.id === theme}>
+							<input
+								type="radio"
+								name="theme"
+								value={t.id}
+								checked={t.id === theme}
+								onChange={() => onTheme(t.id)}
+								className="sr-only"
+							/>
+							<Swatch theme={t.id} />
+							<span className="flex-1">{t.label}</span>
+							<span aria-hidden className={t.id === theme ? "text-amber-400" : "invisible"}>
+								{"\u2713"}
 							</span>
+						</OptionRow>
+					))}
+				</div>
+			),
+		},
+		{
+			category: "transcript",
+			label: "Show thinking",
+			text: "Reasoning blocks in assistant messages, as they stream and in history.",
+			node: (
+				// A real checkbox, visible rather than sr-only: there is no swatch
+				// to carry the state, so the box itself is the affordance.
+				<OptionRow>
+					<input
+						type="checkbox"
+						checked={showThinking}
+						onChange={(e) => onShowThinking(e.target.checked)}
+						className="size-4 shrink-0 accent-amber-400"
+					/>
+					<span className="flex-1">
+						Show thinking
+						<span className="block text-meta text-neutral-500">
+							Reasoning blocks in assistant messages, as they stream and in history.
 						</span>
-					</OptionRow>
-
-					{/* Radios, not a second checkbox: "collapsed" and "hidden" are
-					    different answers to one question, and a group of two
-					    checkboxes would let you tick both. */}
-					<div role="group" aria-labelledby="tool-mode-label" className="mt-2">
-						<div id="tool-mode-label" className="px-2 pt-1 pb-1 text-ui text-neutral-300">
-							Tool calls
-						</div>
-						{TOOL_MODES.map((m) => (
-							<OptionRow key={m.id} selected={m.id === toolMode}>
-								<input
-									type="radio"
-									name="toolMode"
-									value={m.id}
-									checked={m.id === toolMode}
-									onChange={() => onToolMode(m.id)}
-									className="size-3.5 shrink-0 accent-amber-400"
-								/>
-								<span className="flex-1">
-									{m.label}
-									<span className="block text-meta text-neutral-500">{m.hint}</span>
-								</span>
-							</OptionRow>
-						))}
+					</span>
+				</OptionRow>
+			),
+		},
+		{
+			category: "transcript",
+			label: "Tool calls",
+			text: `tools collapse expand ${TOOL_MODES.map((m) => `${m.label} ${m.hint}`).join(" ")}`,
+			node: (
+				// Radios, not a second checkbox: "collapsed" and "hidden" are
+				// different answers to one question.
+				<div role="radiogroup" aria-labelledby="tool-mode-label">
+					<div id="tool-mode-label" className="px-2 pt-1 pb-1 text-ui text-neutral-300">
+						Tool calls
 					</div>
-				</Section>
-
-				<Section title="Sessions" className="mt-4">
-					<OptionRow>
-						<input
-							type="checkbox"
-							checked={shortNames}
-							onChange={(e) => onShortNames(e.target.checked)}
-							className="size-4 shrink-0 accent-amber-400"
-						/>
-						<span className="flex-1">
-							Short names from the first prompt
-							<span className="block text-meta text-neutral-500">
-								Names an unnamed session by the opening words of your first message
-								instead of showing the whole line. A name you set with the pencil in the
-								session list always wins.
+					{TOOL_MODES.map((m) => (
+						<OptionRow key={m.id} selected={m.id === toolMode}>
+							<input
+								type="radio"
+								name="toolMode"
+								value={m.id}
+								checked={m.id === toolMode}
+								onChange={() => onToolMode(m.id)}
+								className="size-3.5 shrink-0 accent-amber-400"
+							/>
+							<span className="flex-1">
+								{m.label}
+								<span className="block text-meta text-neutral-500">{m.hint}</span>
 							</span>
+						</OptionRow>
+					))}
+				</div>
+			),
+		},
+		{
+			category: "sessions",
+			label: "Short names from the first prompt",
+			text: "title rename Names an unnamed session by the opening words of your first message instead of showing the whole line.",
+			node: (
+				<OptionRow>
+					<input
+						type="checkbox"
+						checked={shortNames}
+						onChange={(e) => onShortNames(e.target.checked)}
+						className="size-4 shrink-0 accent-amber-400"
+					/>
+					<span className="flex-1">
+						Short names from the first prompt
+						<span className="block text-meta text-neutral-500">
+							Names an unnamed session by the opening words of your first message instead
+							of showing the whole line. A name you set with the pencil in the session list
+							always wins.
 						</span>
-					</OptionRow>
-				</Section>
-
-				<Section title="Notifications" className="mt-4">
-					<OptionRow disabled={notifyBlocked}>
-						<input
-							type="checkbox"
-							checked={notify}
-							disabled={notifyBlocked}
-							onChange={(e) => onNotify(e.target.checked)}
-							className="size-4 shrink-0 accent-amber-400"
-						/>
-						<span className="flex-1">
-							Notify when a run finishes
-							<span className="block text-meta text-neutral-500">{notifyHint}</span>
-						</span>
-					</OptionRow>
-				</Section>
-
-				{/*
-				  The one control here that is not browser-local: it edits this
-				  server's own personality.md, in the state directory. The path is
-				  shown because a field that silently writes a file somewhere is
-				  worse than no field, and the hint says when the change lands —
-				  the file is handed to each child as `--append-system-prompt` at
-				  spawn, so a running session keeps the prompt it started with.
-				*/}
-				<Section title="Personality" className="mt-4">
+					</span>
+				</OptionRow>
+			),
+		},
+		{
+			category: "notifications",
+			label: "Notify when a run finishes",
+			text: `alert desktop done ${notifyHint}`,
+			node: (
+				<OptionRow disabled={notifyBlocked}>
+					<input
+						type="checkbox"
+						checked={notify}
+						disabled={notifyBlocked}
+						onChange={(e) => onNotify(e.target.checked)}
+						className="size-4 shrink-0 accent-amber-400"
+					/>
+					<span className="flex-1">
+						Notify when a run finishes
+						<span className="block text-meta text-neutral-500">{notifyHint}</span>
+					</span>
+				</OptionRow>
+			),
+		},
+		{
+			category: "personality",
+			label: "Personality",
+			text: "system prompt instructions Appended to every new session's system prompt",
+			/*
+			  The one control here that is not browser-local: it edits this
+			  server's own personality.md, in the state directory. The path is
+			  shown because a field that silently writes a file somewhere is
+			  worse than no field, and the hint says when the change lands —
+			  the file is handed to each child as `--append-system-prompt` at
+			  spawn, so a running session keeps the prompt it started with.
+			*/
+			node: (
+				<>
 					<label className="block px-2">
 						<span className="text-ui text-neutral-300">
 							Appended to every new session's system prompt
@@ -336,11 +366,7 @@ export function Settings({
 							disabled={draft === null}
 							rows={10}
 							spellCheck={false}
-							placeholder={
-								loadError
-									? "Unavailable."
-									: "Empty means nothing is appended."
-							}
+							placeholder={loadError ? "Unavailable." : "Empty means nothing is appended."}
 							className={`mt-2 block w-full resize-y font-mono ${inputClass.sm}`}
 						/>
 					</label>
@@ -365,27 +391,186 @@ export function Settings({
 							)}
 						</span>
 					</div>
-					<OptionRow className="mt-2">
-						<input
-							type="checkbox"
-							checked={personality?.remind ?? false}
-							disabled={!personality}
-							onChange={(e) => void saveRemind(e.target.checked)}
-							className="size-4 shrink-0 accent-amber-400"
-						/>
-						<span className="flex-1">
-							Repeat before every reply
-							<span className="block text-meta text-neutral-500">
-								Also adds the text to the end of each of your messages on every model
-								request, so long sessions do not drift from it. Costs its length in
-								tokens per message, mostly at the cache-read rate. Applies to sessions
-								started from now on.
-							</span>
+				</>
+			),
+		},
+		{
+			category: "personality",
+			label: "Repeat before every reply",
+			text: "remind tokens drift Also adds the text to the end of each of your messages on every model request",
+			node: (
+				<OptionRow>
+					<input
+						type="checkbox"
+						checked={personality?.remind ?? false}
+						disabled={!personality}
+						onChange={(e) => void saveRemind(e.target.checked)}
+						className="size-4 shrink-0 accent-amber-400"
+					/>
+					<span className="flex-1">
+						Repeat before every reply
+						<span className="block text-meta text-neutral-500">
+							Also adds the text to the end of each of your messages on every model request,
+							so long sessions do not drift from it. Costs its length in tokens per message,
+							mostly at the cache-read rate. Applies to sessions started from now on.
 						</span>
-					</OptionRow>
-				</Section>
-			</div>
+					</span>
+				</OptionRow>
+			),
+		},
+	];
+
+	const searching = query.trim() !== "";
+	const shown = items
+		.map((i) => ({
+			...i,
+			hit: searching
+				? matches(query, i.label, `${CATEGORIES.find((c) => c.id === i.category)?.label} ${i.text}`)
+				: i.category === category && ("none" as const),
+		}))
+		.filter((i) => i.hit);
+	const hitCategories = new Set(shown.map((i) => i.category));
+
+	// Paint matches with the CSS Custom Highlight API (see `::highlight(settings-search)`
+	// in index.css): ranges over the rendered text, so no setting's markup has to know
+	// about search.
+	useLayoutEffect(() => {
+		const root = results.current;
+		if (!root || typeof Highlight === "undefined") return;
+		const ranges = highlightRanges(root, query);
+		if (!ranges.length) return;
+		CSS.highlights.set("settings-search", new Highlight(...ranges));
+		return () => void CSS.highlights.delete("settings-search");
+	});
+
+	return (
+		<section
+			aria-label="Settings"
+			className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-neutral-950 text-neutral-100"
+		>
+			<PanelHeader title="Settings" onClose={onClose} />
+			<div className="flex min-h-0 flex-1">
+				<nav
+					aria-label="Settings categories"
+					className="flex w-48 shrink-0 flex-col gap-0.5 overflow-y-auto border-r border-neutral-800 p-2"
+				>
+					<input
+						type="search"
+						value={query}
+						onChange={(e) => setQuery(e.target.value)}
+						onKeyDown={(e) => {
+							// Escape clears a query first; a cancelled keydown fires no
+							// close request on the page <dialog>.
+							if (e.key !== "Escape" || !query) return;
+							e.preventDefault();
+							e.stopPropagation();
+							setQuery("");
+						}}
+						placeholder="Search settings"
+						aria-label="Search settings"
+						className={`mb-2 w-full ${inputClass.sm}`}
+					/>
+					{CATEGORIES.map((c) => (
+						<NavItem
+							key={c.id}
+							icon={c.icon}
+							selected={!searching && c.id === category}
+							// While searching, categories without a hit fade, so the list
+							// doubles as a map of where the matches are.
+							className={searching && !hitCategories.has(c.id) ? "opacity-50" : ""}
+							onClick={() => {
+								setQuery("");
+								setCategory(c.id);
+							}}
+						>
+							{c.label}
+						</NavItem>
+					))}
+				</nav>
+				<div className="min-h-0 min-w-0 flex-1 overflow-y-auto">
+					<div ref={results} className="mx-auto w-full max-w-xl p-6">
+						{searching && !shown.length && (
+							<p className="px-2 text-ui text-neutral-500">No settings match “{query.trim()}”.</p>
+						)}
+						{CATEGORIES.filter((c) => hitCategories.has(c.id)).map((c, n) => (
+							<Section key={c.id} title={c.label} className={n ? "mt-6" : ""}>
+								<div className="flex flex-col gap-2">
+									{shown
+										.filter((i) => i.category === c.id)
+										.map((i) => (
+											<div key={i.label} data-hit={i.hit} data-label={i.label}>
+												{i.node}
+											</div>
+										))}
+								</div>
+							</Section>
+						))}
+					</div>
+				</div>
 			</div>
 		</section>
 	);
+}
+
+/** Lowercase without accents, so "frappe" finds "Frappé". */
+const fold = (s: string) => s.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
+
+/**
+ * Every word of the query somewhere in the label or text, or — for typos and
+ * abbreviations like "shthk" — the whole query as a subsequence of the label.
+ * Fuzzy only on the label: over a paragraph of hint text nearly anything
+ * would be a subsequence.
+ */
+function matches(query: string, label: string, text: string): "words" | "fuzzy" | null {
+	const terms = fold(query).split(/\s+/).filter(Boolean);
+	const all = fold(`${label} ${text}`);
+	if (terms.every((t) => all.includes(t))) return "words";
+	const needle = terms.join("");
+	if (needle.length < 3) return null;
+	let i = 0;
+	for (const c of fold(label)) if (c === needle[i] && ++i === needle.length) return "fuzzy";
+	return null;
+}
+
+/**
+ * Ranges to highlight under `root`: every query word in the visible text, except
+ * in a fuzzy hit, where it is the subsequence's letters in the setting's name.
+ */
+function highlightRanges(root: HTMLElement, query: string): Range[] {
+	const terms = fold(query).split(/\s+/).filter(Boolean);
+	if (!terms.length) return [];
+	const needle = terms.join("");
+	const ranges: Range[] = [];
+	const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+	for (let node = walker.nextNode() as Text | null; node; node = walker.nextNode() as Text | null) {
+		// Folded char by char, keeping each folded char's index in the raw text,
+		// so a match in "frappe" lands on "Frappé".
+		const map: number[] = [];
+		let folded = "";
+		for (let i = 0; i < node.data.length; i++) {
+			const f = fold(node.data[i]);
+			folded += f;
+			for (let k = 0; k < f.length; k++) map.push(i);
+		}
+		const add = (from: number, to: number) => {
+			const r = new Range();
+			r.setStart(node, map[from]);
+			r.setEnd(node, map[to - 1] + 1);
+			ranges.push(r);
+		};
+		const item = node.parentElement?.closest<HTMLElement>("[data-hit]");
+		if (item?.dataset.hit === "fuzzy") {
+			if (folded.trim() !== fold(item.dataset.label ?? "")) continue;
+			let i = 0;
+			for (let at = 0; at < folded.length && i < needle.length; at++)
+				if (folded[at] === needle[i]) {
+					add(at, at + 1);
+					i++;
+				}
+			continue;
+		}
+		for (const t of terms)
+			for (let at = folded.indexOf(t); at >= 0; at = folded.indexOf(t, at + t.length)) add(at, at + t.length);
+	}
+	return ranges;
 }
