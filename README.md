@@ -48,8 +48,9 @@ list:
   was "no second place to look", and a field that reads and writes that file
   in place keeps it: there is no second copy of it anywhere. Everything else
   that changes how the agent runs still belongs in pi's own config
-- no session **tree** — the list is flat and read-only; forking a session is
-  the TUI's job
+- no session **tree** — the list is flat and read-only. Forking (the fork
+  icon under an answer) makes a new, separate session that starts with the
+  conversation up to that answer; it does not branch the original
 - no tab reordering and no drag-drop. Tabs are ordered by when you opened
   them, which is information; a hand-sorted strip is another piece of state to
   persist, reconcile and debug for no gain

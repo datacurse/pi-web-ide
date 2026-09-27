@@ -53,7 +53,13 @@ export interface PiMessage {
 	 */
 	role: "user" | "assistant" | "toolResult" | "compaction" | "other";
 	blocks: PiBlock[];
+	/** When the message STARTED (pi's `message.timestamp`). */
 	timestamp: number;
+	/**
+	 * Assistant only: when it finished, i.e. when pi appended its entry. pi's
+	 * message carries no end time; see `ends` in agent.ts.
+	 */
+	endedAt?: number;
 }
 
 /**

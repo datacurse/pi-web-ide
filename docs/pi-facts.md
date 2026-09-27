@@ -405,3 +405,24 @@ each child a FIFO it opens read-write itself (it is its own writer, so EOF never
 comes) and plain files for stdout and stderr; see README "Sessions survive a
 server restart". pi reads a FIFO stdin and writes a regular-file stdout without
 complaint; nothing in RPC mode checks for a pipe or a TTY.
+
+## Forking over RPC (pi 0.87.1)
+
+Probed against a copy of a real session. What pwi's fork (agent.ts
+`forkSession`) is built on:
+
+- RPC `fork {entryId}` needs a USER message and gives a session ending just
+  before it. `clone` is the same with the leaf and `position: "at"`. There is no
+  RPC fork at an arbitrary entry, so "after answer N" is `fork` at the next user
+  message on the branch, or `clone` when none follows.
+- Both MOVE the child to the new file, and first abort its running turn
+  (`teardownCurrent`). Never send them to an open session's child.
+- `--fork <absolute path>` copies every entry (ids kept, all branches) into a
+  new file for the spawn's cwd and only reads the source. A path never gets the
+  interactive "different project" prompt that an id can.
+- The branched file is written at once when it holds an assistant message, so
+  `get_state.sessionFile` exists on disk right after `fork`. The `--fork` copy
+  stays behind and is pwi's to delete.
+- Messages carry only a start time; an entry's `timestamp` is when it was
+  appended, i.e. when an assistant message ended. `get_entries {since}` reads
+  only entries after that id.

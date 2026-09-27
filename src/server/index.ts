@@ -742,6 +742,22 @@ app.post("/api/sessions/:id/compact", async (req, res) => {
 });
 
 /**
+ * Fork the session after one of its answers (`at`: the answer's start
+ * timestamp). Answers with the new session's file; the client opens it like
+ * any other.
+ */
+app.post("/api/sessions/:id/fork", async (req, res) => {
+	const at = req.body?.at;
+	if (typeof at !== "number") return res.status(400).json({ error: "at must be a message timestamp" });
+	try {
+		const entry = await registry.fork(req.params.id, at);
+		res.json({ file: entry.session.file });
+	} catch (err) {
+		res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
+	}
+});
+
+/**
  * Restart this session's pi child, so it picks up packages installed since
  * it started. The conversation is on disk and the id comes from the file, so
  * the session survives; only the process is replaced.

@@ -15,6 +15,8 @@ import {
 	CaretRight,
 	CaretUp,
 	Check,
+	Copy,
+	GitFork,
 	Plus,
 	QuestionMark,
 	Square,
@@ -39,6 +41,7 @@ import { MarkdownText } from "./Markdown.js";
 import type { ToolMode } from "./prefs.js";
 import { clearDraft, readDraft, writeDraftImages, writeDraftText } from "./drafts.js";
 import { completionOptions, parseCompletion, type CommandOption } from "./commands.js";
+import { timeAgo } from "./SessionList.js";
 
 /** Mirrors the server's allowlist; see SUPPORTED_IMAGE_MIME in agent.ts. */
 const SUPPORTED_IMAGE_MIME = [
@@ -646,12 +649,73 @@ function TurnStatus({ since }: { since: number | undefined }) {
 					{spinner}
 				</span>
 				<span>{verb}…</span>
-				{secs > 0 && (
-					<span className="tabular-nums">
-						{secs < 60 ? `${secs}s` : `${Math.floor(secs / 60)}m ${secs % 60}s`}
-					</span>
-				)}
+				{secs > 0 && <span className="tabular-nums">{elapsed(now - start)}</span>}
 			</div>
+		</div>
+	);
+}
+
+/** 75000 -> "1m 15s". */
+function elapsed(ms: number): string {
+	const secs = Math.floor(ms / 1000);
+	return secs < 60 ? `${secs}s` : `${Math.floor(secs / 60)}m ${secs % 60}s`;
+}
+
+/** What the bar under a turn's answer needs; see `rows` in Chat. */
+interface Footer {
+	/** The answer's start timestamp: how the server finds it to fork. */
+	at: number;
+	endedAt?: number;
+	/** When the question was asked: the turn's duration runs from here. */
+	asked?: number;
+}
+
+/**
+ * Under the answer that ends a turn: copy it, fork a new session from it,
+ * when it was answered (exact time on hover) and how long the turn took.
+ */
+function AnswerFooter({
+	footer,
+	text,
+	onFork,
+}: {
+	footer: Footer;
+	text: string;
+	onFork: (at: number) => Promise<void>;
+}) {
+	const [copied, setCopied] = useState(false);
+	const [forking, setForking] = useState(false);
+	const copy = async () => {
+		try {
+			await navigator.clipboard.writeText(text);
+			setCopied(true);
+			setTimeout(() => setCopied(false), 1200);
+		} catch {
+			// Clipboard API can be denied/unavailable; failing silently beats a crash.
+		}
+	};
+	const end = footer.endedAt ?? footer.at;
+	const took = footer.endedAt && footer.asked ? footer.endedAt - footer.asked : 0;
+	return (
+		<div className="chat-measure mt-1 flex items-center gap-1 text-meta text-neutral-500">
+			<IconButton size="sm" label={copied ? "Copied" : "Copy"} onClick={() => void copy()}>
+				{copied ? <Check size={14} /> : <Copy size={14} />}
+			</IconButton>
+			<IconButton
+				size="sm"
+				label={forking ? "Forking…" : "Fork from here"}
+				disabled={forking}
+				onClick={() => {
+					setForking(true);
+					void onFork(footer.at).finally(() => setForking(false));
+				}}
+			>
+				<GitFork size={14} />
+			</IconButton>
+			<span className="ml-1" title={new Date(end).toLocaleString()}>
+				{timeAgo(end)}
+			</span>
+			{took >= 1000 && <span className="tabular-nums">· {elapsed(took)}</span>}
 		</div>
 	);
 }
@@ -708,17 +772,21 @@ function TranscriptRow({
 	);
 }
 
-/** One message row. See `rows` in Chat for where `labelled` comes from. */
+/** One message row. See `rows` in Chat for where `labelled` and `footer` come from. */
 function Message({
 	role,
 	blocks,
 	labelled,
 	autoOpenTools,
+	footer,
+	onFork,
 }: {
 	role: PiMessage["role"];
 	blocks: PiBlock[];
 	labelled: boolean;
 	autoOpenTools: boolean;
+	footer?: Footer;
+	onFork: (at: number) => Promise<void>;
 }) {
 	const isUser = role === "user";
 	/*
@@ -743,6 +811,16 @@ function Message({
 			{rest.map((b, i) => (
 				<Block key={i} block={b} isUser={isUser} autoOpenTools={autoOpenTools} />
 			))}
+			{footer && (
+				<AnswerFooter
+					footer={footer}
+					text={blocks
+						.map((b) => (b.kind === "text" ? b.text : ""))
+						.filter(Boolean)
+						.join("\n\n")}
+					onFork={onFork}
+				/>
+			)}
 		</TranscriptRow>
 	);
 }
@@ -1048,6 +1126,7 @@ type Row =
 			role: PiMessage["role"];
 			blocks: PiBlock[];
 			labelled: boolean;
+			footer?: Footer;
 	  }
 	| { kind: "tools"; blocks: PiBlock[]; labelled: boolean };
 
@@ -1067,6 +1146,7 @@ export function Chat({
 	onThinkingChange,
 	onCommandMenu,
 	onCompact,
+	onFork,
 	onRestart,
 	draftRev = 0,
 	focus,
@@ -1100,6 +1180,8 @@ export function Chat({
 	onCommandMenu: () => void;
 	/** Fold the conversation into a summary. Refused while a turn is running. */
 	onCompact: () => void;
+	/** Open a new session that continues from the answer that started at `at`. */
+	onFork: (at: number) => Promise<void>;
 	/** Replace this session's pi child so it sees newly installed packages. */
 	onRestart: () => void;
 	/**
@@ -1322,6 +1404,19 @@ export function Chat({
 		let pending: PiBlock[] = [];
 		/** The turn being accumulated. Never non-empty outside "answer" mode. */
 		let turn: PiBlock[] = [];
+		/** The last question's timestamp, for the footer's duration. */
+		let asked: number | undefined;
+		/** The accumulated turn's footer, set by its last assistant message. */
+		let turnFooter: Footer | undefined;
+		/**
+		 * The footer goes under the message that ENDED a turn: an assistant
+		 * message with no tool calls, the same rule as `turnStart`. Intermediate
+		 * steps get none, so there is one per question.
+		 */
+		const footerFor = (m: PiMessage): Footer | undefined =>
+			m.role === "assistant" && !m.blocks.some((b) => b.kind === "tool")
+				? { at: m.timestamp, endedAt: m.endedAt, asked }
+				: undefined;
 
 		const lastRole = (): PiMessage["role"] | undefined => {
 			const last = out.at(-1);
@@ -1356,7 +1451,9 @@ export function Chat({
 				cut--;
 			const work = turn.slice(0, cut);
 			const answer = turn.slice(cut);
+			const footer = turnFooter;
 			turn = [];
+			turnFooter = undefined;
 			if (work.length > 0)
 				out.push({
 					kind: "tools",
@@ -1369,10 +1466,13 @@ export function Chat({
 					role: "assistant",
 					blocks: answer,
 					labelled: lastRole() !== "assistant",
+					footer,
 				});
 		};
 
 		for (const m of messages) {
+			if (m.role === "user") asked = m.timestamp;
+			const before = out.length;
 			const blocks = m.blocks.filter(
 				(b) =>
 					(showThinking || b.kind !== "thinking") &&
@@ -1385,6 +1485,7 @@ export function Chat({
 				// flushTurn below for where the answer is split back out.
 				if (m.role === "assistant") {
 					turn.push(...blocks);
+					turnFooter = footerFor(m);
 					continue;
 				}
 				flushTurn();
@@ -1403,6 +1504,7 @@ export function Chat({
 					role: m.role,
 					blocks,
 					labelled: lastRole() !== m.role,
+					footer: footerFor(m),
 				});
 				continue;
 			}
@@ -1437,6 +1539,9 @@ export function Chat({
 				}
 			}
 			flushRun();
+			// Under the prose this message ended on, if it produced any.
+			const last = out.at(-1);
+			if (out.length > before && last?.kind === "message") last.footer = footerFor(m);
 		}
 		flushGroup();
 		flushTurn(busy);
@@ -1662,6 +1767,8 @@ export function Chat({
 								blocks={r.blocks}
 								labelled={r.labelled}
 								autoOpenTools={toolMode === "live"}
+								footer={r.footer}
+								onFork={onFork}
 							/>
 						),
 					)}

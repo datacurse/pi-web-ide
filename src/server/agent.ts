@@ -1016,6 +1016,8 @@ const REMIND_EXTENSION = fileURLToPath(new URL("./remind-extension.ts", import.m
 
 export function spawnArgs(opts: {
 	file?: string;
+	/** Start on a full copy of this session file instead (`--fork`); see forkSession. */
+	fork?: string;
 	model?: string;
 	personality?: string;
 	remind?: boolean;
@@ -1028,6 +1030,7 @@ export function spawnArgs(opts: {
 	// decided to run its code.
 	args.push("--approve");
 	if (opts.file) args.push("--session", opts.file);
+	else if (opts.fork) args.push("--fork", opts.fork);
 	if (opts.model) args.push("--model", opts.model);
 	// `--append-system-prompt` accepts a path and reads the file. Applied at
 	// spawn, so an edit reaches children started after the save — which is what
@@ -1086,20 +1089,74 @@ export async function openSession(opts: OpenOptions): Promise<PiSession> {
 		cwd = (await sessionHeaderCwd(opts.file)) ?? opts.cwd;
 	}
 
-	// An empty personality file means the user cleared the box, which is how
-	// the override is turned off; passing it anyway would append a blank line
-	// to every system prompt.
-	let personality: string | undefined;
-	try {
-		personality = statSync(personalityPath()).size > 0 ? personalityPath() : undefined;
-	} catch {
-		// No file: nothing to append.
-	}
-
 	const child = await RpcChild.start(
-		spawnArgs({ file: opts.file, model: opts.model, personality, remind: readRemind() }),
+		spawnArgs({ file: opts.file, model: opts.model, personality: personalityFile(), remind: readRemind() }),
 		cwd,
 	);
+	return wrap(child, cwd);
+}
+
+/**
+ * The personality file to append, if any. An empty file means the user
+ * cleared the box, which is how the override is turned off; passing it anyway
+ * would append a blank line to every system prompt.
+ */
+function personalityFile(): string | undefined {
+	try {
+		return statSync(personalityPath()).size > 0 ? personalityPath() : undefined;
+	} catch {
+		return undefined; // No file: nothing to append.
+	}
+}
+
+/**
+ * A new session holding `file`'s conversation up to and including the
+ * assistant message that started at `at`.
+ *
+ * Never done by the open session's own child: pi's `fork` MOVES a child to
+ * the new file, aborting its running turn on the way, and the open tab would
+ * silently become the fork. So a second child starts on a throwaway full copy
+ * (`--fork`, which only reads the source), cuts it with `fork` before the next
+ * user message (or `clone` when nothing follows the answer), and the copy is
+ * deleted. That child is then the fork's own.
+ */
+export async function forkSession(file: string, at: number, cwd: string): Promise<PiSession> {
+	if (!existsSync(file)) throw new Error(`session file not found: ${file}`);
+	const child = await RpcChild.start(
+		spawnArgs({ fork: file, personality: personalityFile(), remind: readRemind() }),
+		cwd,
+	);
+	let copy: string | undefined;
+	try {
+		copy = (await fetchState(child)).sessionFile;
+		const data = await child.send<unknown>("get_entries");
+		const entries = isRecord(data) ? records(data.entries) : [];
+		const byId = new Map(entries.map((e) => [e.id, e]));
+		// The active branch, root first: the file also holds abandoned ones.
+		const branch: Record<string, unknown>[] = [];
+		for (
+			let e = isRecord(data) ? byId.get(data.leafId) : undefined;
+			e && branch.length < entries.length;
+			e = byId.get(e.parentId)
+		)
+			branch.unshift(e);
+		const role = (e: Record<string, unknown>) => (isRecord(e.message) ? e.message.role : undefined);
+		const i = branch.findIndex(
+			(e) => role(e) === "assistant" && isRecord(e.message) && e.message.timestamp === at,
+		);
+		if (i < 0) throw new Error("that answer is not in the session file");
+		const next = branch.slice(i + 1).find((e) => role(e) === "user");
+		const result = next
+			? await child.send<unknown>("fork", { entryId: next.id })
+			: await child.send<unknown>("clone");
+		if (isRecord(result) && result.cancelled === true) throw new Error("an extension cancelled the fork");
+	} catch (err) {
+		child.close();
+		throw err;
+	} finally {
+		// Never the source: that is somebody's conversation.
+		if (copy && copy !== file) rmSync(copy, { force: true });
+	}
 	return wrap(child, cwd);
 }
 
@@ -1124,6 +1181,37 @@ export async function adoptSessions(fallbackCwd: string): Promise<PiSession[]> {
 async function wrap(child: RpcChild, cwd: string): Promise<PiSession> {
 	const state = await fetchState(child);
 	let messages = healDanglingToolCalls(await fetchMessages(child));
+
+	/**
+	 * When each assistant message finished, keyed by its start timestamp. pi's
+	 * messages carry only the start; the end is when the entry was appended,
+	 * which only `get_entries` reports. Entries are append-only, so the last id
+	 * read is a cursor and each resync reads only what is new.
+	 */
+	const ends = new Map<number, number>();
+	let lastEntry: string | undefined;
+	const fetchEnds = (): Promise<void> =>
+		child
+			.send<unknown>("get_entries", lastEntry ? { since: lastEntry } : {})
+			.then((data) => {
+				const entries = isRecord(data) ? records(data.entries) : [];
+				for (const e of entries) {
+					const m = e.message;
+					if (!isRecord(m) || m.role !== "assistant" || typeof m.timestamp !== "number") continue;
+					const end = Date.parse(String(e.timestamp));
+					if (!Number.isNaN(end)) ends.set(m.timestamp, end);
+				}
+				const last = entries.at(-1)?.id;
+				if (typeof last === "string") lastEntry = last;
+			})
+			.catch(() => {
+				// No end times: answers show without a duration.
+			});
+	await fetchEnds();
+	const withEnd = (p: PiMessage): PiMessage => {
+		const end = p.role === "assistant" ? ends.get(p.timestamp) : undefined;
+		return end ? { ...p, endedAt: end } : p;
+	};
 	/**
 	 * Bumped on every appended message. A resync that started before an append
 	 * must not overwrite the newer list — pi accepts a follow-up prompt the
@@ -1179,8 +1267,8 @@ async function wrap(child: RpcChild, cwd: string): Promise<PiSession> {
 	 */
 	const resyncMessages = (): Promise<void> => {
 		const at = generation;
-		return fetchMessages(child)
-			.then((fresh) => {
+		return Promise.all([fetchMessages(child), fetchEnds()])
+			.then(([fresh]) => {
 				if (generation !== at || fresh.length === 0) return;
 				messages = healDanglingToolCalls(fresh);
 			})
@@ -1346,6 +1434,12 @@ async function wrap(child: RpcChild, cwd: string): Promise<PiSession> {
 					// `message_done` must not read a transcript without it.
 					messages = [...messages, frame.message];
 					generation++;
+					// Live, arrival is the end. The next resync reads the entry's own
+					// time, which also corrects a frame replayed after adoption.
+					const ts = frame.message.timestamp;
+					if (frame.message.role === "assistant" && typeof ts === "number" && !ends.has(ts)) {
+						ends.set(ts, Date.now());
+					}
 					if (isRecord(frame.message.usage) && typeof frame.message.usage.totalTokens === "number") {
 						contextTokens = frame.message.usage.totalTokens;
 					}
@@ -1458,7 +1552,7 @@ async function wrap(child: RpcChild, cwd: string): Promise<PiSession> {
 			return true;
 		},
 		messages() {
-			return stitch(messages.filter(isConversation).map(toPiMessage));
+			return stitch(messages.filter(isConversation).map((m) => withEnd(toPiMessage(m))));
 		},
 		async prompt(text: string, images?: PiImage[]) {
 			// Convert BEFORE sending: a bad attachment should surface as a rejected

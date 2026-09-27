@@ -1129,6 +1129,26 @@ function useSession({
 		setSnapshot((s) => (s ? { ...s, error: body.error ?? "could not compact" } : s));
 	}, [snapshot]);
 
+	/** Fork this session after one of its answers, and open the fork in this column. */
+	const fork = useCallback(
+		async (at: number) => {
+			if (!snapshot) return;
+			const r = await fetch(`/api/sessions/${snapshot.id}/fork`, {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ at }),
+			}).catch(() => null);
+			const body = (await r?.json().catch(() => null)) as { file?: unknown; error?: unknown } | null;
+			if (r?.ok && typeof body?.file === "string") {
+				void attach(body.file);
+				return;
+			}
+			const reason = typeof body?.error === "string" ? body.error : "could not fork this session";
+			setSnapshot((s) => (s ? { ...s, error: reason } : s));
+		},
+		[snapshot, attach],
+	);
+
 	/**
 	 * Replace this session's pi child so it picks up a newly installed
 	 * package. The transcript comes back from the server's fresh snapshot —
@@ -1271,6 +1291,7 @@ function useSession({
 		send,
 		abort,
 		compact,
+		fork,
 		restart,
 		reloadSnapshot,
 		refreshCommands,
@@ -2689,6 +2710,7 @@ export default function App() {
 			onThinkingChange={s.changeThinking}
 			onCommandMenu={s.refreshCommands}
 			onCompact={s.compact}
+			onFork={s.fork}
 			onRestart={s.restart}
 		/>
 	);

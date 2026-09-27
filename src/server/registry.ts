@@ -18,7 +18,14 @@
  * minutes of idleness that triggers eviction.
  */
 
-import { adoptSessions, emptyPartial, openSession, type AskAnswer, type PiSession } from "./agent.js";
+import {
+	adoptSessions,
+	emptyPartial,
+	forkSession,
+	openSession,
+	type AskAnswer,
+	type PiSession,
+} from "./agent.js";
 import { currentEpoch } from "./packages.js";
 import { lastMessageAt } from "./sessions.js";
 import type { Hunk } from "../shared/hunks.js";
@@ -431,6 +438,20 @@ export class Registry {
 		const fresh = await this.acquire(undefined, file);
 		for (const s of subscribers) fresh.subscribers.add(s);
 		return fresh;
+	}
+
+	/**
+	 * A new session that continues from one of this session's answers, identified
+	 * by the answer's start timestamp. Reads the file, never this session's child,
+	 * so this session keeps running untouched (see forkSession).
+	 */
+	async fork(id: string, at: number): Promise<Entry & { id: string }> {
+		const entry = this.entries.get(id);
+		if (!entry) throw new Error(`unknown session: ${id}`);
+		const file = entry.session.file;
+		if (!file) throw new Error("this session has no file yet");
+		entry.lastActivity = Date.now();
+		return this.install(await forkSession(file, at, entry.session.cwd), null);
 	}
 
 	/**

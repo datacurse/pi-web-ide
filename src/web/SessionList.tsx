@@ -12,7 +12,7 @@ function stamp(s: PiSessionInfo, sort: SessionSort): string {
 	return sort === "created" ? s.created : s.lastActive;
 }
 
-export function timeAgo(iso: string): string {
+export function timeAgo(iso: string | number): string {
 	const s = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
 	if (s < 60) return "just now";
 	const m = Math.floor(s / 60);

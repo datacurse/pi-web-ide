@@ -154,6 +154,15 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
 - Text is clamped to 3 lines (`line-clamp-3`, ellipsis). When it overflows, a ghost
   `Button size="sm"` below it toggles `Show more` / `Show less` with a 12px caret.
 
+## Answer footer
+
+- Under the message that ends a turn (an assistant message with no tool calls),
+  never under intermediate steps: `Copy` and `GitFork` ghost `IconButton size="sm"`
+  with 14px icons, then `timeAgo` of when it finished (exact time in `title`) and
+  `· 1m 15s`, question to answer. `text-meta neutral-500`, in `chat-measure`.
+- Copy swaps to `Check` for 1.2s. Fork is disabled with the label `Forking…` while
+  the new session spawns, then opens it as a tab in the same column.
+
 ## Explorer
 
 - The header has a refresh `IconButton` (`ArrowClockwise`, `sm`) left of the close ✕.
