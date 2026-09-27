@@ -18,8 +18,6 @@ import {
 	withGroup,
 	withoutTab,
 	withTab,
-	pageTab,
-	pageOf,
 	termTab,
 	termId,
 } from "./tabs.js";
@@ -82,12 +80,8 @@ assert.equal(isSessionTab(session), true);
 assert.equal(isSessionTab(d), false);
 assert.equal(isSessionTab(w), false);
 assert.equal(isSessionTab(t), false);
-// Pages too, including one a newer build wrote and this one does not know.
-assert.equal(isSessionTab(pageTab("stats")), false);
-assert.equal(isSessionTab("page:nope"), false);
-assert.equal(pageOf(pageTab("settings")), "settings");
-assert.equal(pageOf("page:nope"), null);
-assert.equal(tabLabel(pageTab("packages")), "Packages");
+// A page tab stored before pages became a dialog is not a session either.
+assert.equal(isSessionTab("page:stats"), false);
 // A terminal tab holds a server shell id and is never attached as a session.
 assert.equal(isSessionTab(termTab("abc")), false);
 assert.equal(termId(termTab("abc")), "abc");

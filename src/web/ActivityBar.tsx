@@ -19,7 +19,7 @@
 import type { ReactNode } from "react";
 import { ChartBar, Code, GitBranch, Gear, SquaresFour, TerminalWindow } from "@phosphor-icons/react";
 import type { Panel } from "./App.js";
-import type { PageId } from "./tabs.js";
+import type { PageId } from "./PageDialog.js";
 
 /**
  * One rail button.
@@ -86,7 +86,6 @@ export function ActivityBar({
 	uncommitted,
 	dockOpen,
 	onToggleDock,
-	pages,
 	onPage,
 	version,
 }: {
@@ -99,15 +98,13 @@ export function ActivityBar({
 	/** The terminal dock under the editor columns. */
 	dockOpen: boolean;
 	onToggleDock: () => void;
-	/** Pages whose tab is showing in either column. */
-	pages: PageId[];
-	/** Open a page's tab, or focus it. */
+	/** Open a page in the page dialog. */
 	onPage: (page: PageId) => void;
 	/** Full build string. Displayed short, but kept whole in the tooltip. */
 	version: string;
 }) {
 	const page = (id: PageId, label: string, title: string, icon: ReactNode) => (
-		<RailButton label={label} title={title} active={pages.includes(id)} onClick={() => onPage(id)}>
+		<RailButton label={label} title={title} onClick={() => onPage(id)}>
 			{icon}
 		</RailButton>
 	);
@@ -151,7 +148,7 @@ export function ActivityBar({
 				<TerminalWindow size={20} />
 			</RailButton>
 
-			{/* Pages open as tabs. `mt-auto` pushes the group to the bottom. */}
+			{/* Pages open in a modal. `mt-auto` pushes the group to the bottom. */}
 			<div className="mt-auto flex flex-col items-center">
 				{page("stats", "Stats", "Usage stats: streaks, answer times, every answer", <ChartBar size={20} />)}
 				{page("packages", "Packages", "Packages installed on this machine", <SquaresFour size={20} />)}

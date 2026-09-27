@@ -4,10 +4,10 @@
  * answered prompt.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowClockwise } from "@phosphor-icons/react";
 import type { StatsTurn, StatsView } from "../shared/types.js";
-import { Button, IconButton, PanelHeader, sectionLabel } from "./ui.js";
+import { Button, IconButton, PanelHeader, sectionLabel, useBatches } from "./ui.js";
 import { dayKey, duration, heatmapWeeks, percentile, streaks } from "./stats.js";
 
 type Source = "all" | "web" | "terminal";
@@ -17,8 +17,10 @@ const SOURCES: [Source, string][] = [
 	["terminal", "Terminal"],
 ];
 
-const WEEKS = 26;
-const HEAT = ["bg-neutral-800", "bg-amber-900", "bg-amber-700", "bg-amber-500", "bg-amber-300"];
+const WEEKS = 52;
+const HEAT = ["bg-neutral-800", "bg-green-900", "bg-green-700", "bg-green-500", "bg-green-300"];
+/** Rough `text-caption` glyph width, only to tell whether two month labels would touch. */
+const CAPTION_CHAR = 6.5;
 const BUCKETS: [number, string][] = [
 	[10_000, "< 10s"],
 	[30_000, "10–30s"],
@@ -30,6 +32,8 @@ const BUCKETS: [number, string][] = [
 ];
 
 const dayFmt = new Intl.DateTimeFormat(undefined, { weekday: "short", day: "numeric", month: "short", year: "numeric" });
+const monthFmt = new Intl.DateTimeFormat(undefined, { month: "short" });
+const weekdayFmt = new Intl.DateTimeFormat(undefined, { weekday: "short" });
 const stampFmt = new Intl.DateTimeFormat(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 const num = new Intl.NumberFormat(undefined, { notation: "compact", maximumFractionDigits: 1 });
 const usd = new Intl.NumberFormat(undefined, { style: "currency", currency: "USD", maximumFractionDigits: 2 });
@@ -102,39 +106,49 @@ export function Stats({ revision, onClose }: { revision?: unknown; onClose: () =
 				</IconButton>
 			</PanelHeader>
 
-			<div className="min-h-0 flex-1 overflow-y-auto p-3">
-				<div className="mb-6">
+			{/* Laid out for the page dialog's width; the grids stack on a narrow window. */}
+			<div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto p-4">
+				{error && <p className="text-meta text-red-400">{error}</p>}
+				<div className="grid gap-6 md:grid-cols-3">
 					<Usage reload={reload} />
-				</div>
-				{error && <p className="mb-3 text-meta text-red-400">{error}</p>}
-				{!view && !error && <p className="text-meta text-neutral-500">Reading sessions…</p>}
-				{view && (
-					<div className="flex flex-col gap-6">
-						{source !== "terminal" && (
-							<p className="text-meta text-neutral-500">
+					<div className="md:col-span-2">
+						{view ? (
+							<Summary turns={turns} />
+						) : (
+							!error && <p className="text-meta text-neutral-500">Reading sessions…</p>
+						)}
+						{view && source !== "terminal" && (
+							<p className="mt-2 text-meta text-neutral-500">
 								Web UI sessions are counted from {stampFmt.format(new Date(view.webSince))}; older
 								ones show as terminal.
 							</p>
 						)}
-						<Summary turns={turns} />
-						<Heatmap turns={turns} />
-						<AnswerTimes turns={turns} />
-						<Hours turns={turns} />
-						<Bars title="Models" rows={top(tally(turns, (t) => t.model))} />
-						<Bars title="Projects" rows={top(tally(turns, (t) => projectName(t.cwd)))} />
-						<Bars
-							title="Tools"
-							rows={top(
-								tally(
-									turns.flatMap((t) => Object.entries(t.tools)),
-									([k]) => k,
-									([, n]) => n,
-								),
-								8,
-							)}
-						/>
-						<Answers turns={turns} />
 					</div>
+				</div>
+				{view && (
+					<>
+						<Heatmap turns={turns} />
+						<div className="grid gap-6 md:grid-cols-2">
+							<AnswerTimes turns={turns} />
+							<Hours turns={turns} />
+						</div>
+						<div className="grid gap-6 md:grid-cols-3">
+							<Bars title="Models" rows={top(tally(turns, (t) => t.model))} />
+							<Bars title="Projects" rows={top(tally(turns, (t) => projectName(t.cwd)))} />
+							<Bars
+								title="Tools"
+								rows={top(
+									tally(
+										turns.flatMap((t) => Object.entries(t.tools)),
+										([k]) => k,
+										([, n]) => n,
+									),
+									8,
+								)}
+							/>
+						</div>
+						<Answers turns={turns} />
+					</>
 				)}
 			</div>
 		</section>
@@ -250,37 +264,150 @@ function Summary({ turns }: { turns: StatsTurn[] }) {
 	);
 }
 
+/**
+ * The charts are canvases so every bar, cell and gap is a whole number of
+ * DEVICE pixels: fractional flex and grid tracks, snapped under Windows display
+ * scaling, gave gaps of visibly different widths. This is the CSS width they
+ * divide up; it is 0 while hidden, and changes on reshow, so they redraw then.
+ */
+function useWidth(ref: React.RefObject<HTMLElement | null>): number {
+	const [width, setWidth] = useState(0);
+	useEffect(() => {
+		const el = ref.current;
+		if (!el) return;
+		const observer = new ResizeObserver(([entry]) => setWidth(entry?.contentRect.width ?? 0));
+		observer.observe(el);
+		return () => observer.disconnect();
+	}, [ref]);
+	return width;
+}
+
+/** A `bg-*` class's color right now, resolved: themes define them with var() and color-mix. */
+function bgColor(parent: Element, className: string): string {
+	const probe = document.createElement("span");
+	probe.className = className;
+	parent.append(probe);
+	const color = getComputedStyle(probe).backgroundColor;
+	probe.remove();
+	return color;
+}
+
 function Heatmap({ turns }: { turns: StatsTurn[] }) {
-	const counts = tally(turns, (t) => dayKey(t.start));
-	const max = Math.max(1, ...counts.values());
-	const level = (n: number) => (n === 0 ? 0 : Math.min(4, Math.ceil((n / max) * 4)));
+	const counts = useMemo(() => tally(turns, (t) => dayKey(t.start)), [turns]);
+	const weeks = useMemo(() => heatmapWeeks(WEEKS), [turns]);
+	const box = useRef<HTMLDivElement>(null);
+	const canvas = useRef<HTMLCanvasElement>(null);
+	const legend = useRef<HTMLDivElement>(null);
+	const width = useWidth(box);
+
+	const dpr = window.devicePixelRatio || 1;
+	const gap = Math.max(1, Math.round(2 * dpr));
+	const cell = Math.max(1, Math.floor((Math.floor(width * dpr) - gap * (WEEKS - 1)) / WEEKS));
+	const step = cell + gap;
+	const w = WEEKS * step - gap;
+	const h = 7 * step - gap;
+
+	useEffect(() => {
+		const ctx = canvas.current?.getContext("2d");
+		if (!ctx || !width || !legend.current) return;
+		// The legend swatches carry the theme's colors; the canvas copies them.
+		const colors = [...legend.current.querySelectorAll("span")].map((s) => getComputedStyle(s).backgroundColor);
+		const max = Math.max(1, ...counts.values());
+		ctx.canvas.width = w;
+		ctx.canvas.height = h;
+		weeks.forEach((week, x) =>
+			week.forEach((day, y) => {
+				if (!day) return;
+				const n = counts.get(dayKey(day)) ?? 0;
+				ctx.fillStyle = colors[n === 0 ? 0 : Math.min(4, Math.ceil((n / max) * 4))] ?? "";
+				ctx.fillRect(x * step, y * step, cell, cell);
+			}),
+		);
+	}, [counts, weeks, width, w, h, step, cell]);
+
+	/** The hovered day's count, as the canvas tooltip. */
+	const hover = (e: React.MouseEvent<HTMLCanvasElement>) => {
+		const day = weeks[Math.floor((e.nativeEvent.offsetX * dpr) / step)]?.[
+			Math.floor((e.nativeEvent.offsetY * dpr) / step)
+		];
+		const n = day ? (counts.get(dayKey(day)) ?? 0) : 0;
+		e.currentTarget.title = day ? `${dayFmt.format(day)}: ${n} prompt${n === 1 ? "" : "s"}` : "";
+	};
+
+	/*
+	 * Month labels start exactly over the column holding the month's 1st (the
+	 * first column is labelled too, for its partial month). January and the
+	 * first label carry the year. Walking right to left, a label that would run
+	 * into the next one is dropped, so the partial month gives way, not a whole one.
+	 */
+	const months: { x: number; text: string }[] = [];
+	weeks.forEach((week, x) => {
+		const first = week.find((d) => d?.getDate() === 1) ?? (x === 0 ? week[0] : undefined);
+		if (!first) return;
+		const year = x === 0 || first.getMonth() === 0 ? ` ${first.getFullYear()}` : "";
+		months.push({ x, text: monthFmt.format(first) + year });
+	});
+	const labels: typeof months = [];
+	let limit = Infinity;
+	for (const m of months.reverse()) {
+		const left = (m.x * step) / dpr;
+		if (left + m.text.length * CAPTION_CHAR + 6 > limit) continue;
+		labels.unshift(m);
+		limit = left;
+	}
+
 	return (
 		<div>
 			<h3 className={`mb-2 ${sectionLabel}`}>Last {WEEKS} weeks</h3>
-			<div
-				className="grid grid-flow-col grid-rows-7 gap-0.5"
-				style={{ gridTemplateColumns: `repeat(${WEEKS}, minmax(0, 1fr))` }}
-			>
-				{heatmapWeeks(WEEKS).flatMap((week, w) =>
-					week.map((day, d) => {
-						if (!day) return <div key={`${w}-${d}`} />;
-						const n = counts.get(dayKey(day)) ?? 0;
-						return (
-							<div
-								key={`${w}-${d}`}
-								title={`${dayFmt.format(day)}: ${n} prompt${n === 1 ? "" : "s"}`}
-								className={`aspect-square ${HEAT[level(n)]}`}
-							/>
-						);
-					}),
-				)}
-			</div>
-			<div className="mt-1.5 flex items-center justify-end gap-1 text-caption text-neutral-500">
-				Less
-				{HEAT.map((c) => (
-					<span key={c} className={`size-2.5 ${c}`} />
-				))}
-				More
+			<div className="flex gap-2 text-caption text-neutral-500">
+				{/* Every weekday, each centred on its row. */}
+				<div className="w-8 shrink-0">
+					<div className="mb-1 h-4" />
+					<div className="relative" style={{ height: h / dpr }}>
+						{[0, 1, 2, 3, 4, 5, 6].map((d) => (
+							<span
+								key={d}
+								className="absolute right-0 -translate-y-1/2 leading-none"
+								style={{ top: (d * step + cell / 2) / dpr }}
+							>
+								{weeks[0]?.[d] && weekdayFmt.format(weeks[0][d])}
+							</span>
+						))}
+					</div>
+				</div>
+				<div ref={box} className="min-w-0 flex-1">
+					<div style={{ width: w / dpr }}>
+						<div className="relative mb-1 h-4">
+							{labels.map((m) => (
+								<span
+									key={m.x}
+									className="absolute bottom-0 whitespace-nowrap leading-none"
+									style={{ left: (m.x * step) / dpr }}
+								>
+									{m.text}
+								</span>
+							))}
+						</div>
+						<canvas
+							ref={canvas}
+							role="img"
+							aria-label={`Prompts per day, last ${WEEKS} weeks`}
+							onMouseMove={hover}
+							className="block"
+							style={{ width: w / dpr, height: h / dpr }}
+						/>
+						<div
+							ref={legend}
+							className="mt-1.5 flex items-center justify-end gap-1 text-caption text-neutral-500"
+						>
+							Less
+							{HEAT.map((c) => (
+								<span key={c} className={`size-2.5 ${c}`} />
+							))}
+							More
+						</div>
+					</div>
+				</div>
 			</div>
 		</div>
 	);
@@ -318,28 +445,93 @@ function AnswerTimes({ turns }: { turns: StatsTurn[] }) {
 }
 
 function Hours({ turns }: { turns: StatsTurn[] }) {
-	const hours = Array.from({ length: 24 }, () => 0);
-	for (const t of turns) hours[new Date(t.start).getHours()]! += 1;
-	const max = Math.max(1, ...hours);
+	const hours = useMemo(() => {
+		const out = Array.from({ length: 24 }, () => 0);
+		for (const t of turns) out[new Date(t.start).getHours()]! += 1;
+		return out;
+	}, [turns]);
+	// A round unit (1, 2 or 5 times a power of 10) giving at most four gridlines
+	// above zero; the bars scale to the top gridline, not to the tallest bar.
+	const raw = Math.max(1, ...hours) / 4;
+	const mag = 10 ** Math.floor(Math.log10(raw));
+	const unit = Math.max(1, ([1, 2, 5, 10].find((s) => s * mag >= raw) ?? 10) * mag);
+	const top = Math.ceil(Math.max(1, ...hours) / unit) * unit;
+	const ticks = Array.from({ length: top / unit + 1 }, (_, i) => i * unit);
+
+	const box = useRef<HTMLDivElement>(null);
+	const canvas = useRef<HTMLCanvasElement>(null);
+	const width = useWidth(box);
+	// Device pixels throughout; divided by dpr only where CSS positions a label.
+	const dpr = window.devicePixelRatio || 1;
+	const gap = Math.max(1, Math.round(2 * dpr));
+	const bar = Math.max(1, Math.floor((Math.floor(width * dpr) - gap * 23) / 24));
+	const step = bar + gap;
+	const w = 24 * step - gap;
+	const h = Math.round(128 * dpr);
+	const line = Math.max(1, Math.round(dpr));
+	/** Height above the baseline, in device pixels. */
+	const y = (v: number) => Math.round((v / top) * h);
+
+	useEffect(() => {
+		const ctx = canvas.current?.getContext("2d");
+		if (!ctx || !width || !box.current) return;
+		ctx.canvas.width = w;
+		ctx.canvas.height = h;
+		ctx.fillStyle = bgColor(box.current, "bg-neutral-800");
+		for (let v = 0; v <= top; v += unit) ctx.fillRect(0, Math.min(h - line, h - y(v)), w, line);
+		ctx.fillStyle = bgColor(box.current, "bg-amber-500");
+		hours.forEach((n, i) => {
+			if (!n) return;
+			const bh = Math.max(y(n), line * 2);
+			ctx.fillRect(i * step, h - bh, bar, bh);
+		});
+	}, [hours, width, w, h, step, bar, line, top, unit]);
+
+	const hover = (e: React.MouseEvent<HTMLCanvasElement>) => {
+		const i = Math.floor((e.nativeEvent.offsetX * dpr) / step);
+		const n = hours[i];
+		e.currentTarget.title = n === undefined ? "" : `${i}:00 – ${n} prompt${n === 1 ? "" : "s"}`;
+	};
+
 	return (
 		<div>
 			<h3 className={`mb-2 ${sectionLabel}`}>By hour</h3>
-			<div className="flex h-16 items-end gap-0.5">
-				{hours.map((n, h) => (
-					<div
-						key={h}
-						title={`${h}:00 – ${n} prompt${n === 1 ? "" : "s"}`}
-						className="flex-1 bg-amber-500"
-						style={{ height: `${(n / max) * 100}%`, minHeight: n ? 2 : 0 }}
+			<div className="flex gap-2 text-caption text-neutral-500 tabular-nums">
+				<div className="relative w-8 shrink-0" style={{ height: h / dpr }}>
+					{ticks.map((v) => (
+						<span
+							key={v}
+							className="absolute right-0 translate-y-1/2 leading-none"
+							style={{ bottom: y(v) / dpr }}
+						>
+							{num.format(v)}
+						</span>
+					))}
+				</div>
+				<div ref={box} className="min-w-0 flex-1">
+					<canvas
+						ref={canvas}
+						role="img"
+						aria-label={`Prompts by hour of day: ${hours.map((n, i) => `${i}h ${n}`).join(", ")}`}
+						onMouseMove={hover}
+						className="block"
+						style={{ width: w / dpr, height: h / dpr }}
 					/>
-				))}
-			</div>
-			<div className="mt-1 flex justify-between text-caption text-neutral-500 tabular-nums">
-				<span>0</span>
-				<span>6</span>
-				<span>12</span>
-				<span>18</span>
-				<span>23</span>
+					{/* Every third hour, centred under its own bar. */}
+					<div className="relative mt-1 h-4" style={{ width: w / dpr }}>
+						{hours.map((_, i) =>
+							i % 3 === 0 ? (
+								<span
+									key={i}
+									className="absolute top-0 -translate-x-1/2 leading-none"
+									style={{ left: (i * step + bar / 2) / dpr }}
+								>
+									{i}
+								</span>
+							) : null,
+						)}
+					</div>
+				</div>
 			</div>
 		</div>
 	);
@@ -371,11 +563,13 @@ function Bars({ title, rows }: { title?: string; rows: [string, number][] }) {
 }
 
 function Answers({ turns }: { turns: StatsTurn[] }) {
+	const { shown, end, more } = useBatches(turns.length);
+
 	return (
 		<div>
 			<h3 className={`mb-2 ${sectionLabel}`}>All answers ({turns.length})</h3>
 			<ul className="flex flex-col">
-				{turns.map((t) => {
+				{turns.slice(0, shown).map((t) => {
 					const tools = Object.values(t.tools).reduce((a, b) => a + b, 0);
 					return (
 						<li key={`${t.session}-${t.start}`} className="border-b border-neutral-900 py-1.5">
@@ -402,6 +596,7 @@ function Answers({ turns }: { turns: StatsTurn[] }) {
 					);
 				})}
 			</ul>
+			{more && <div ref={end} className="h-4" />}
 		</div>
 	);
 }

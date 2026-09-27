@@ -492,7 +492,17 @@ function InstallDialog({
 	const [error, setError] = useState<string | null>(null);
 
 	return (
-		<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+		<div
+			className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+			// Escape closes only this, not the page dialog it sits in: a cancelled
+			// keydown fires no close request on the <dialog>.
+			onKeyDown={(e) => {
+				if (e.key !== "Escape") return;
+				e.preventDefault();
+				e.stopPropagation();
+				onClose();
+			}}
+		>
 			<div className="w-[min(34rem,94vw)] rounded-md border border-neutral-800 bg-neutral-950 p-3 shadow-2xl">
 				<div className="flex items-center justify-between">
 					<h3 className="text-title font-semibold">{known ? `Install ${known.name}` : "Add a package"}</h3>

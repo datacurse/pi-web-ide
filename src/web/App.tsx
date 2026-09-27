@@ -41,8 +41,6 @@ import {
 	termTab,
 	isSessionTab,
 	moveTab,
-	pageOf,
-	pageTab,
 	pinnedFirst,
 	sideOfTab,
 	tabPath,
@@ -50,7 +48,8 @@ import {
 	withoutTab,
 	withTab,
 } from "./tabs.js";
-import type { PageId, Side, TabGroup } from "./tabs.js";
+import type { Side, TabGroup } from "./tabs.js";
+import { PageDialog, type PageId } from "./PageDialog.js";
 import { SplitZone } from "./SplitZone.js";
 import {
 	EMPTY_LAYOUT,
@@ -269,7 +268,6 @@ function EditorColumn({
 	onReveal,
 	onTogglePin,
 	onRename,
-	renderPage,
 	onNewSession,
 	onNewTerminal,
 }: {
@@ -303,8 +301,6 @@ function EditorColumn({
 	onReveal: (path: string) => void;
 	onTogglePin: (file: string) => void;
 	onRename: (session: PiSessionInfo, name: string) => void;
-	/** A page tab's content; `active` is whether its tab is the one showing. */
-	renderPage: (page: PageId, active: boolean) => React.ReactNode;
 	/** For the chat's right-click menu; both open in this column. */
 	onNewSession: () => void;
 	/** Absent without a project: a shell has to start somewhere. */
@@ -315,10 +311,9 @@ function EditorColumn({
 	const activeIndex = active ? group.files.indexOf(active) : -1;
 	const showsFile = active !== undefined && isFileTab(active);
 	const showsDiff = active !== undefined && isDiffTab(active);
-	const showsPage = active !== undefined && isPageTab(active);
 	const showsTerm = active !== undefined && isTermTab(active);
-	/** The chat hides under a file, a diff, a page or a terminal. */
-	const showsDoc = showsFile || showsDiff || showsPage || showsTerm;
+	/** The chat hides under a file, a diff or a terminal. */
+	const showsDoc = showsFile || showsDiff || showsTerm;
 
 	return (
 		<div
@@ -415,25 +410,6 @@ function EditorColumn({
 					{/* Mounted only while showing, like the dock: the server replays the
 					    scrollback on attach, and a hidden xterm cannot measure itself. */}
 					{showsTerm && <Terminal key={active} id={termId(active)} focused />}
-					{/* Pages stay mounted while their tab is open, like the chat, so a
-					    half-typed setting or a scrolled list survives a tab switch. */}
-					{group.files.filter(isPageTab).map((entry) => {
-						const page = pageOf(entry);
-						return (
-							<div
-								key={entry}
-								className={`flex min-h-0 min-w-0 flex-1 flex-col ${entry === active ? "" : "hidden"}`}
-							>
-								{page ? (
-									renderPage(page, entry === active)
-								) : (
-									<p className="m-auto px-4 text-center text-ui text-neutral-500">
-										This version of pwi has no such page.
-									</p>
-								)}
-							</div>
-						);
-					})}
 					{/*
 					 * The chat stays MOUNTED under a file tab rather than being swapped
 					 * out: it holds the live EventSource and the transcript's scroll
@@ -610,7 +586,7 @@ function readTabs(project: string): Tabs {
 		// Storage is user-writable and outlives any format change, so anything
 		// unexpected degrades to "no tabs" instead of throwing during render.
 		const files = Array.isArray(parsed.files)
-			? [...new Set(parsed.files.filter((f): f is string => typeof f === "string"))]
+			? [...new Set(parsed.files.filter((f): f is string => typeof f === "string" && !isPageTab(f)))]
 			: [];
 		const active =
 			typeof parsed.active === "string" && files.includes(parsed.active)
@@ -636,7 +612,9 @@ function parseGroup(raw: unknown, taken: string[]): TabGroup | undefined {
 	if (!Array.isArray(files)) return undefined;
 	const kept = [
 		...new Set(
-			files.filter((f): f is string => typeof f === "string" && !taken.includes(f)),
+			files.filter(
+				(f): f is string => typeof f === "string" && !taken.includes(f) && !isPageTab(f),
+			),
 		),
 	];
 	// An empty second column is no second column: restoring one would show a
@@ -1314,6 +1292,8 @@ export default function App() {
 	const [listError, setListError] = useState<string | null>(null);
 	const [listOpen, setListOpen] = useState(false);
 	const [searchOpen, setSearchOpen] = useState(false);
+	/** Stats, Packages or Settings, shown in a modal over everything. */
+	const [page, setPage] = useState<PageId | null>(null);
 	/**
 	 * Which side panel is showing, if any — one value, because they are
 	 * mutually exclusive the way VS Code's activity bar is: one column, one
@@ -2291,17 +2271,6 @@ export default function App() {
 		for (const e of t.right?.files ?? []) if (isTermTab(e) && !live.has(termId(e))) closeRight(e);
 	}, [termsReady, termLayout, closeTab, closeRight]);
 
-	/** Open a page (Stats, Packages, Settings) as a tab, or focus the one it has. */
-	const openPage = useCallback((page: PageId) => openInLastSide(pageTab(page)), [openInLastSide]);
-	const closePage = useCallback(
-		(page: PageId) => {
-			const entry = pageTab(page);
-			if (sideOfTab(tabsRef.current, entry) === "right") closeRight(entry);
-			else closeTab(entry);
-		},
-		[closeTab, closeRight],
-	);
-
 	/**
 	 * Open a file in the second column, splitting if there is none.
 	 *
@@ -2665,9 +2634,9 @@ export default function App() {
 		return () => window.removeEventListener("keydown", onKeyDown);
 	}, [shown, attention, focusSession]);
 
-	/** A page tab's content, whichever column it is in. */
+	/** A page's content inside the page dialog. */
 	const renderPage = (page: PageId, active: boolean) => {
-		const onClose = () => closePage(page);
+		const onClose = () => setPage(null);
 		if (page === "stats") return <Stats revision={replies} onClose={onClose} />;
 		if (page === "packages")
 			return (
@@ -2747,8 +2716,7 @@ export default function App() {
 				uncommitted={uncommitted}
 				dockOpen={dockOpen}
 				onToggleDock={toggleTerminal}
-				pages={[tabs.active, tabs.right?.active].flatMap((e) => (e && pageOf(e)) || [])}
-				onPage={openPage}
+				onPage={setPage}
 				version={__APP_VERSION__}
 			/>
 
@@ -2888,7 +2856,6 @@ export default function App() {
 					onHunksChanged={() => void leftHunks.reloadSnapshot()}
 					chat={chatFor(left, "left")}
 					focused={!tabs.right || focusedSide === "left"}
-					renderPage={renderPage}
 				/>
 
 				{tabs.right && (
@@ -2922,7 +2889,6 @@ export default function App() {
 						// "drag a tab here" instead of showing an empty conversation.
 						chat={tabs.right.files.some(isSessionTab) ? chatFor(right, "right") : null}
 						focused={focusedSide === "right"}
-						renderPage={renderPage}
 					/>
 				)}
 			</div>
@@ -3013,6 +2979,8 @@ export default function App() {
 				}}
 				onClose={() => setSearchOpen(false)}
 			/>
+
+			<PageDialog page={page} onClose={() => setPage(null)} render={renderPage} />
 		</div>
 	);
 }

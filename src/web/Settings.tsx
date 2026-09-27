@@ -38,11 +38,11 @@ function Swatch({ theme }: { theme: ThemeId }) {
 }
 
 /**
- * The Settings page, shown in a tab: one <fieldset> per setting, all but the
+ * The Settings page, shown in the page dialog: one <fieldset> per setting, all but the
  * personality browser-local (see prefs.ts).
  *
- * Stays mounted while its tab is open, so an unsaved personality edit
- * survives switching tabs. `open` is "the tab is showing".
+ * Stays mounted once opened, so an unsaved personality edit survives
+ * closing the dialog. `open` is "the dialog is showing it".
  */
 export function Settings({
 	open,

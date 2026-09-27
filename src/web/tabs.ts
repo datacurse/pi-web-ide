@@ -27,20 +27,11 @@ export const termTab = (id: string): string => `${TERM_PREFIX}${id}`;
 export const isTermTab = (entry: string): boolean => entry.startsWith(TERM_PREFIX);
 export const termId = (entry: string): string => entry.slice(TERM_PREFIX.length);
 
-/** Whole-pane pages the rail opens as tabs. */
-export type PageId = "stats" | "packages" | "settings";
-const PAGE_TITLE: Record<PageId, string> = { stats: "Stats", packages: "Packages", settings: "Settings" };
-
-export const pageTab = (page: PageId): string => `${PAGE_PREFIX}${page}`;
-
-/** True for any `page:` entry, known or not, so an unknown one is never taken for a session. */
+/**
+ * A `page:` entry stored when Stats, Packages and Settings were tabs. They are a
+ * dialog now; this only keeps a stale one from being taken for a session.
+ */
 export const isPageTab = (entry: string): boolean => entry.startsWith(PAGE_PREFIX);
-
-/** The page an entry names, or null for a page this build does not have. */
-export function pageOf(entry: string): PageId | null {
-	const id = entry.slice(PAGE_PREFIX.length);
-	return isPageTab(entry) && id in PAGE_TITLE ? (id as PageId) : null;
-}
 
 /** The tab entry for an open file. */
 export const fileTab = (path: string): string => `${FILE_PREFIX}${path}`;
@@ -86,10 +77,6 @@ export const tabPath = (entry: string): string =>
  */
 export const tabLabel = (entry: string): string => {
 	if (isTermTab(entry)) return "Terminal";
-	if (isPageTab(entry)) {
-		const page = pageOf(entry);
-		return page ? PAGE_TITLE[page] : entry;
-	}
 	const path = tabPath(entry);
 	const name = path.split("/").pop() || path;
 	if (!isDiffTab(entry)) return name;

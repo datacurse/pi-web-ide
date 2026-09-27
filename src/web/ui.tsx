@@ -8,6 +8,29 @@ import { X } from "@phosphor-icons/react";
 
 const EASE = "transition-colors duration-150 ease-out motion-reduce:transition-none";
 
+/**
+ * Lazy list rendering: how many of `total` rows to render, starting at `batch`
+ * and growing by `batch` each time `end` (an element after the rows, rendered
+ * while `more`) scrolls into view.
+ */
+export function useBatches(total: number, batch = 50) {
+	const [shown, setShown] = useState(batch);
+	const end = useRef<HTMLDivElement>(null);
+	const more = shown < total;
+	// A fresh observer per batch: it reports once on observe, so an end still
+	// in view after a batch mounts (a tall window) loads the next one too.
+	useEffect(() => {
+		const el = end.current;
+		if (!el || !more) return;
+		const observer = new IntersectionObserver(([entry]) => {
+			if (entry?.isIntersecting) setShown((n) => n + batch);
+		});
+		observer.observe(el);
+		return () => observer.disconnect();
+	}, [shown, more, batch]);
+	return { shown, end, more };
+}
+
 const BUTTON_VARIANT = {
 	/* The one main action of a dialog or panel. */
 	primary:

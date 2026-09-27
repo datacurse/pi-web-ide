@@ -5,7 +5,7 @@ import { SESSION_SORTS, type SessionSort } from "./prefs.js";
 import { sessionLabel, shortName } from "./sessionName.js";
 import { ATTENTION_UI, attentionRank, type Attention } from "./attention.js";
 import { highlight, useSessionSearch } from "./searchHits.js";
-import { Button, ContextMenu, IconButton, MenuItem, inputClass, sectionLabel } from "./ui.js";
+import { Button, ContextMenu, IconButton, MenuItem, inputClass, sectionLabel, useBatches } from "./ui.js";
 
 /** The timestamp a row shows, which is always the one it is sorted by. */
 function stamp(s: PiSessionInfo, sort: SessionSort): string {
@@ -125,6 +125,7 @@ export function SessionList({
 	const rows = searching
 		? hits.map((h) => sessions.find((s) => s.path === h.session.path) ?? h.session)
 		: ordered;
+	const { shown, end, more } = useBatches(rows.length);
 
 	/*
 	 * Which row is being renamed, and the text in it. Local, like the picker:
@@ -251,7 +252,7 @@ export function SessionList({
 							</p>
 						)
 					)}
-					{rows.map((s) => {
+					{rows.slice(0, shown).map((s) => {
 						const snippet = searching ? snippets.get(s.path) : undefined;
 						const isOpen = openFiles.includes(s.path);
 						const label = sessionLabel(s, shortNames);
@@ -373,6 +374,7 @@ export function SessionList({
 							</button>
 						);
 					})}
+					{more && <div ref={end} className="h-4" />}
 				</div>
 
 			</aside>

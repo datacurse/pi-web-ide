@@ -202,12 +202,29 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
 - Right-clicking the chat (or an empty column) opens `New AI Session` / `New Terminal
   Tab`, both in that column. The browser keeps its own menu over selected text, links,
   images, the composer, and on Shift+right-click.
-- Stats, Packages and Settings are pages: the rail's bottom group opens each as a tab
-  (`page:<id>`) in the last-used column, or focuses it. A page tab shows the rail icon,
-  has only the Close items in its menu, and stays mounted while open, like the chat.
+- Stats, Packages and Settings are pages, not tabs (tabs are for work: chats, files,
+  terminals). The rail's bottom group opens each in one large centered modal
+  (`PageDialog`): `<dialog>`, `h-[85vh] w-[min(64rem,94vw)]`, `rounded-md`, backdrop
+  `bg-black/50` + `backdrop-blur-sm`. Escape, the header ✕ or the backdrop closes it.
+  A page stays mounted once opened, so unsaved edits survive closing. The rail buttons
+  have no lit state. Escape in a popup inside a page (Packages add) closes only that popup.
+- Stats uses the dialog's width: usage beside the summary tiles (1/3 + 2/3), a 52-week
+  heatmap full width, answer time beside by-hour, Models / Projects / Tools in three
+  columns, then every answer (50 at a time, more as the end scrolls into view). The
+  grids stack below `md`.
 - Stats filters All / Web UI / Terminal the same way as the Packages tabs
   (`subtle`/`ghost`, `aria-pressed`). Heatmap cells are square with no radius,
-  `neutral-800` for empty days, then `amber-900/700/500/300`. Bars are `amber-500`.
+  `neutral-800` for empty days, then `green-900/700/500/300`. Bars are `amber-500`.
+- The heatmap is a canvas, so cells and ~2px gaps are whole device pixels at any
+  display scaling. It reads its colors from the legend swatches.
+- By hour has a y-axis: a round step (1, 2 or 5 times a power of 10, at most four above zero) with
+  `neutral-800` gridlines, bars scaled to the top gridline. Hour labels (every 3h)
+  are centred under their own bar. Like the heatmap it is a canvas snapped to
+  device pixels (`useWidth`, `bgColor` in Stats.tsx); axis labels are HTML.
+- Heatmap labels are `text-caption neutral-500` HTML beside the canvas: every weekday
+  centred on their rows; each month starts over the column holding its 1st, January
+  and the first label carry the year, and a label that would touch the next is dropped
+  (the leftmost partial month gives way first).
 
 ## Primitives (`src/web/ui.tsx`)
 
@@ -228,6 +245,7 @@ New UI uses these; convert raw markup when you touch it. Tune styles in
 | `ListRow`       | `selected`, `muted`, `size`: ui (default) / body, button props                           | Tree and list rows (Explorer, Source Control, directory picker). 22px; indent with `style.paddingLeft`. |
 | `tabClass(active)` | class string; caller adds `pr-7` (with close button) or `pr-3` | Session/editor tabs and terminal tabs: flat, full `bar` height, amber 2px underline when active, no fill. The strip is `h-bar` with a hidden scrollbar (`.tab-strip`). |
 | `tabClassVertical(active)` | class string | Tabs in a vertical list (terminal dock): full width, `control-md` tall, amber 2px left edge when active. |
+| `useBatches(total)` | returns `{ shown, end, more }`                           | Long lists (session list, Stats answers): render `rows.slice(0, shown)`, then `{more && <div ref={end} className="h-4" />}`; 50 more mount when it scrolls into view. |
 | `PanelHeader`   | `title?`, `onClose?`, `closeLabel?`, children               | Top row of a side panel or editor tab. Children go after the title. |
 
 - Body text defaults to `text-ui`; set a size only when it differs.
