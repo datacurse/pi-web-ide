@@ -25,6 +25,7 @@
  */
 
 import { spawn, type IPty } from "@homebridge/node-pty-prebuilt-multiarch";
+import { execFileSync } from "node:child_process";
 import { existsSync, statSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 
@@ -88,8 +89,70 @@ function shellPath(): string {
 	return "/bin/sh";
 }
 
+/**
+ * Server-wide tmux options, set before each session is made. Invisible on
+ * purpose: no status bar, no prefix key to steal Ctrl+B, no Esc delay for vim,
+ * and no alternate screen, so output still lands in xterm's own scrollback.
+ */
+const TMUX_OPTIONS = [
+	["status", "off"],
+	["prefix", "None"],
+	["prefix2", "None"],
+	["escape-time", "0"],
+	["history-limit", "50000"],
+	["terminal-overrides", "*:smcup@:rmcup@"],
+];
+
 export class Terminals {
 	private terms = new Map<string, Term>();
+	/**
+	 * The tmux socket each shell lives on, so a shell outlives this server and
+	 * the next one re-attaches it. Undefined without tmux: shells are then
+	 * plain PTYs that die with the server.
+	 */
+	private socket: string | undefined;
+
+	constructor(socket?: string) {
+		try {
+			if (socket) execFileSync("tmux", ["-V"], { stdio: "ignore" });
+			this.socket = socket;
+		} catch {
+			this.socket = undefined;
+		}
+		this.adopt();
+	}
+
+	private tmux(args: string[]): string {
+		return execFileSync("tmux", ["-L", this.socket ?? "", "-f", "/dev/null", ...args], {
+			encoding: "utf8",
+			stdio: ["ignore", "pipe", "pipe"],
+		});
+	}
+
+	/** Re-attach every shell a previous server left in tmux, with its history. */
+	private adopt(): void {
+		if (!this.socket) return;
+		let out: string;
+		try {
+			out = this.tmux(["list-sessions", "-F", "#{session_name}\t#{@pwi_cwd}\t#{@pwi_fleet}\t#{window_width}\t#{window_height}"]);
+		} catch {
+			return; // no tmux server: nothing survived
+		}
+		for (const line of out.split("\n")) {
+			const [id, cwd, fleet, w, h] = line.split("\t");
+			if (!id || !cwd) continue;
+			const rows = Number(h) || 24;
+			let history = "";
+			try {
+				history = this.tmux(["capture-pane", "-p", "-e", "-J", "-S", "-", "-E", "-1", "-t", `=${id}:`]);
+			} catch {
+				/* no history is still a shell */
+			}
+			const term = this.open(id, cwd, Number(w) || 80, rows, "/", fleet === "1");
+			// Pushed above the screen, which the attach redraws over.
+			term.scrollback = (history.replaceAll("\n", "\r\n") + "\r\n".repeat(rows)).slice(-MAX_SCROLLBACK);
+		}
+	}
 
 	/**
 	 * Start a shell and return it.
@@ -107,31 +170,56 @@ export class Terminals {
 		if (this.live().length >= MAX_TERMINALS)
 			throw new Error(`too many terminals (${MAX_TERMINALS}); close one first`);
 
+		const id = randomUUID();
+		if (this.socket) {
+			const set = TMUX_OPTIONS.flatMap(([k, v]) => [";", "set", "-g", k, v]);
+			this.tmux([
+				"start-server", ...set,
+				";", "new-session", "-d", "-s", id, "-c", dir, "-x", String(cols), "-y", String(rows),
+				"-e", "PWI_TERMINAL=1", shellPath(), "-l",
+				";", "set", "-t", `=${id}:`, "@pwi_cwd", cwd,
+				";", "set", "-t", `=${id}:`, "@pwi_fleet", fleet ? "1" : "0",
+				// Typed into the shell rather than run instead of it, so leaving the
+				// command (an ssh session) lands in a local shell, not a dead tab.
+				...(fleet?.run ? [";", "send-keys", "-t", `=${id}:`, fleet.run, "Enter"] : []),
+			]);
+		}
+		const term = this.open(id, cwd, cols, rows, dir, !!fleet);
+		if (!this.socket && fleet?.run) term.pty.write(`${fleet.run}\r`);
+		return term;
+	}
+
+	/** The PTY: a tmux client on session `id`, or the shell itself without tmux. */
+	private open(id: string, cwd: string, cols: number, rows: number, dir: string, fleet: boolean): Term {
 		const term: Term = {
-			id: randomUUID(),
+			id,
 			cwd,
-			pty: spawn(shellPath(), ["-l"], {
-				cwd: dir,
-				cols,
-				rows,
-				name: "xterm-256color",
-				env: {
-					...(process.env as Record<string, string>),
-					// Claimed by the shell's prompt and by every program that
-					// asks. Lying about it (the inherited "dumb" of a systemd
-					// unit, or nothing at all) is what makes colors and cursor
-					// addressing silently degrade.
-					TERM: "xterm-256color",
-					// So a shell profile, and anything run from it, can tell.
-					PWI_TERMINAL: "1",
+			pty: spawn(
+				this.socket ? "tmux" : shellPath(),
+				this.socket ? ["-L", this.socket, "attach-session", "-t", `=${id}`] : ["-l"],
+				{
+					cwd: dir,
+					cols,
+					rows,
+					name: "xterm-256color",
+					env: {
+						...(process.env as Record<string, string>),
+						// Claimed by the shell's prompt and by every program that
+						// asks. Lying about it (the inherited "dumb" of a systemd
+						// unit, or nothing at all) is what makes colors and cursor
+						// addressing silently degrade.
+						TERM: "xterm-256color",
+						// So a shell profile, and anything run from it, can tell.
+						PWI_TERMINAL: "1",
+					},
 				},
-			}),
+			),
 			scrollback: "",
 			cols,
 			rows,
 			exit: null,
 			listeners: new Set(),
-			fleet: !!fleet,
+			fleet,
 		};
 
 		term.pty.onData((data) => {
@@ -161,9 +249,6 @@ export class Terminals {
 			}
 		});
 
-		// Typed into the shell rather than run instead of it, so leaving the
-		// command (an ssh session) lands in a local shell, not a dead tab.
-		if (fleet?.run) term.pty.write(`${fleet.run}\r`);
 		this.terms.set(term.id, term);
 		return term;
 	}
@@ -241,6 +326,13 @@ export class Terminals {
 		const term = this.terms.get(id);
 		if (!term) return;
 		this.terms.delete(id);
+		if (this.socket) {
+			try {
+				this.tmux(["kill-session", "-t", `=${id}`]);
+			} catch {
+				// Already gone.
+			}
+		}
 		if (!term.exit) {
 			try {
 				term.pty.kill("SIGHUP");
@@ -251,8 +343,23 @@ export class Terminals {
 		term.listeners.clear();
 	}
 
-	/** Shut every shell down. Called on server exit, so none are orphaned. */
+	/**
+	 * Called on server exit. Under tmux this only detaches, so the next server
+	 * adopts the shells; without it every shell is killed, so none are orphaned.
+	 */
 	disposeAll(): void {
-		for (const id of [...this.terms.keys()]) this.close(id);
+		for (const [id, term] of [...this.terms]) {
+			if (!this.socket) {
+				this.close(id);
+				continue;
+			}
+			this.terms.delete(id);
+			term.listeners.clear();
+			try {
+				term.pty.kill("SIGHUP");
+			} catch {
+				/* already gone */
+			}
+		}
 	}
 }

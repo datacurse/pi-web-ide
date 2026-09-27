@@ -100,6 +100,27 @@ const DEV_ORIGINS = new Set(
  * there is no CORS anywhere, and the terminal WebSocket upgrade (which CORS
  * would not have covered anyway) asks this same question itself.
  */
+/**
+ * Whether the Host names this machine: loopback, or its tailnet name or
+ * address as `tailscale serve` passes it through. Without this, a page on
+ * any domain that re-resolves to 127.0.0.1 (DNS rebinding) is same-origin
+ * with us, and the Origin check above passes it.
+ */
+function hostAllowed(req: IncomingMessage): boolean {
+	let name: string;
+	try {
+		name = new URL(`http://${req.headers.host ?? ""}`).hostname.replace(/\.$/, "");
+	} catch {
+		return false;
+	}
+	if (name === "localhost" || name === "127.0.0.1" || name === "[::1]") return true;
+	// A MagicDNS short name has no dot; a rebinding domain always has one.
+	if (!name.includes(".") || name.endsWith(".ts.net")) return true;
+	// Tailscale's CGNAT range, 100.64.0.0/10.
+	const m = /^100\.(\d+)\.\d+\.\d+$/.exec(name);
+	return m !== null && Number(m[1]) >= 64 && Number(m[1]) <= 127;
+}
+
 function originAllowed(req: IncomingMessage): boolean {
 	const origin = req.headers.origin;
 	if (!origin) return true;
@@ -194,13 +215,17 @@ process.on("uncaughtException", (err) => {
 const BOOT = randomUUID();
 
 const registry = new Registry(CWD, MODEL);
-const terminals = new Terminals();
+const terminals = new Terminals(`pwi-${PORT}`);
 const app = express();
 // Generous because a prompt body now carries base64 screenshots, and base64
 // inflates by ~33%. The real per-image ceiling is enforced in agent.ts, where
 // a rejection can be reported to the user; hitting THIS limit yields an
 // opaque 413, so it deliberately sits well above the limit that produces a
 // good error.
+app.use("/api", (req, res, next) => {
+	if (!hostAllowed(req) || !originAllowed(req)) return res.status(403).json({ error: "forbidden" });
+	next();
+});
 app.use(express.json({ limit: "64mb" }));
 
 // `no-store` on every /api answer. Nothing under /api is worth caching — the
@@ -1212,7 +1237,7 @@ server.on("upgrade", (req, socket, head) => {
 	const url = new URL(req.url ?? "/", "http://127.0.0.1");
 	// A foreign page cannot fetch a terminal id without passing CORS, but a
 	// socket to a guessed one would be a shell; refuse at the same boundary.
-	if (url.pathname !== "/api/terminal/socket" || !originAllowed(req)) {
+	if (url.pathname !== "/api/terminal/socket" || !hostAllowed(req) || !originAllowed(req)) {
 		socket.destroy();
 		return;
 	}
@@ -1315,8 +1340,8 @@ for (const sig of ["SIGINT", "SIGTERM"] as const) {
 	process.on(sig, () => {
 		// Mid-turn sessions are detached, not killed: the next server adopts them.
 		registry.shutdown();
-		// SIGHUP to each shell, so a restart does not leave orphaned children
-		// holding the project's files (and, under takeover, its ports).
+		// Shells in tmux are detached for the next server to adopt; without
+		// tmux each gets SIGHUP, so none is orphaned holding the project's ports.
 		terminals.disposeAll();
 		server.close(() => process.exit(0));
 		/*

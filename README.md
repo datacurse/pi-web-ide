@@ -61,13 +61,16 @@ list:
   to answer one on. The blocking questions an extension does raise — `ask`,
   `confirm` — are answered in the browser (see [Questions](#questions)),
   though a session left running with nobody attached will sit on one
-- no image *generation*, no chat attachments beyond images, no clipboard
-  history — pasting a screenshot into the composer is in scope; attaching
-  arbitrary files to a message is not. (Managing files in the Explorer is a
-  separate thing, and is in scope: see [Files and source control](#files-and-source-control))
-- no central gateway across machines, no merged cross-machine session list,
-  and no fleet manager. One pwi per machine, serving its own browser; you
-  reach another machine by opening that machine's pwi. See
+- no image *generation*, no clipboard history, and only images are
+  attachments. Any other file is uploaded to the pwi machine and its *path*
+  goes into the message; see [Image attachments](#image-attachments).
+  (Managing files in the Explorer is a separate thing, and is in scope: see
+  [Files and source control](#files-and-source-control))
+- no central gateway across machines and no merged cross-machine session
+  list. One pwi per machine, serving its own browser; you reach another
+  machine by opening that machine's pwi. The Fleet page only lists machines
+  with a link, a shell and a Start button, and Stats reads other machines'
+  session files from a read-only rsync mirror. See
   [Multiple machines](#multiple-machines)
 
 ## Architecture
@@ -76,6 +79,8 @@ list:
 src/shared/types.ts       wire contract, zero imports — FROZEN
 src/server/agent.ts       THE RPC BOUNDARY — only file that spawns or speaks to pi
 src/server/sessions.ts    session list, parsed from ~/.pi/agent/sessions
+src/server/search.ts      full-text search over one project's sessions
+src/server/projects.ts    the directories pwi knows about, and the picker's listing
 src/server/models.ts      model catalog + startup default, asked of pi over RPC
 src/server/registry.ts    session cache + server-authoritative message state
 src/server/index.ts       SSE for events, POST for commands
@@ -87,6 +92,13 @@ src/server/terminals.ts   one login shell per project, on a real PTY
 src/server/git.ts         branch/commit/push/PR, status, log, show; argv-only, no shell
 src/server/files.ts       list/read/write project files; the path check is a trust boundary
 src/server/repair.ts      heals session files pi can no longer replay
+src/server/packages.ts    pi packages in ~/.pi/agent/settings.json: list, install, update
+src/server/gallery.ts     the npm `pi-package` gallery, asked server-side
+src/server/stats.ts       usage stats, one row per answered prompt
+src/server/usage.ts       Claude subscription limits and their history
+src/server/machines.ts    other machines' sessions mirrored over ssh, for Stats
+src/server/fleet.ts       tailnet machines, their pwi links and Start
+src/server/guards.ts      runtime narrowing helpers for wire data
 src/server/remind-extension.ts  a pi extension, loaded with -e: repeats the personality
 src/shared/hunks.ts       diff hunks the agent made, reviewed in diff tabs
 src/web/ui.tsx            shared UI primitives; rules in docs/ui.md
@@ -209,6 +221,11 @@ An image with no text is a valid prompt ("what is this?" is implied), so a
 prompt is only rejected as empty when text *and* images are both empty.
 Attachment failures are rejected before the prompt is sent, so they surface as
 a failed POST rather than a turn that dies mid-flight.
+
+A file that is not a supported image is not an attachment: it is uploaded to
+`$TMPDIR/pwi-uploads/<uuid>/<name>` on the pwi machine and that path is
+appended to the message, because the browser may be on another machine than
+pi and a local path would mean nothing there.
 
 ## Thinking level and context usage
 
@@ -1189,6 +1206,13 @@ it, and that split is the whole design:
   front of a blank pane. Closing a split or a tab is the only thing that ends
   a shell — SIGHUP, the signal closing a terminal window sends, so the shell
   tells its children the terminal went away.
+- **Restarting the server does not kill anything either**, when `tmux` is
+  installed. Each shell runs in a tmux session on a private socket
+  (`tmux -L pwi-<port>`, `-f /dev/null`, so your own config never applies),
+  with the status bar, prefix key and alternate screen turned off so it looks
+  like a plain shell. Shutdown only detaches; the next server lists the
+  sessions, replays their history and attaches again. Without tmux, shells
+  are plain PTYs and die with the server.
 - **Shells are shared, not owned.** Two windows on the same project attach to
   the same shells and see the same screens, the tmux-attach model.
 - **The size is real, and per shell.** Each PTY is resized from its own pane,
@@ -1481,8 +1505,8 @@ with nothing asked at that point, so nothing is expected.
 Limits: a reboot, or pi itself dying, still ends the turn; the session file
 keeps everything up to it. Hunk review for edits made before the restart is
 lost, as it always was, because the pre-edit text was only in the old
-server's memory. Terminals still die with the server: a PTY needs a process
-holding its master side, which is tmux's job. A pi whose turn ends while no
+server's memory. Terminals survive through tmux, when it is installed (see
+[Terminal](#terminal)). A pi whose turn ends while no
 server is running stays idle until the next server adopts it and the 30-min
 sweep evicts it. Under systemd this needs `KillMode=process`, which the
 shipped unit sets.
@@ -1802,18 +1826,19 @@ it did not achieve. `--dry-run` prints every file it would write and every
 
 pi reads `~/.pi/agent/auth.json` and `~/.pi/agent/provider-keys.json`, so
 provider credentials are in the child processes pwi spawns, on the machine
-pwi runs on. The server binds `127.0.0.1` only. For remote access forward the
-port yourself (`ssh -L`, key auth) or use `tailscale serve`, which gives the
-loopback port a tailnet HTTPS name without changing the bind; never a
-bind-address change. Nothing is proxied between hosts: each machine's pwi is
-reached at its own origin, so the only credentials in play are the ssh key or
-the tailnet identity you already use, and each host's `auth.json` stays on
-that host.
+pwi runs on. The server binds `127.0.0.1` only. For remote access use
+`tailscale serve`, which gives the loopback port a tailnet name without
+changing the bind; never a bind-address change. Nothing is proxied between
+hosts: each machine's pwi is reached at its own origin, so the only
+credential in play is the tailnet identity you already use, and each host's
+`auth.json` stays on that host.
 
 **Same-origin is the whole policy.** pwi answers no cross-origin request —
 there is no CORS in the server and nothing to configure that would add one —
 and the terminal's WebSocket upgrade checks the same rule, since CORS would
-not have covered it anyway. An earlier version had `PWI_HUB_ORIGINS`, which
+not have covered it anyway. Every `/api` request is checked, not just the
+socket: a foreign Origin is a 403, and so is a Host that is not loopback or
+a tailnet name/address, because a DNS-rebound page is otherwise same-origin. An earlier version had `PWI_HUB_ORIGINS`, which
 let a named origin drive this pwi from another machine's page; it was the
 CSRF boundary and it is gone with the feature that needed it.
 
