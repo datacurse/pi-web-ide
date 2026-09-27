@@ -7,9 +7,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowClockwise } from "@phosphor-icons/react";
-import type { StatsTurn, StatsView } from "../shared/types.js";
+import type { StatsTurn, StatsView, UsageSample } from "../shared/types.js";
 import { Button, IconButton, PanelHeader, sectionLabel, useBatches } from "./ui.js";
-import { dayKey, duration, heatmapWeeks, percentile, streaks } from "./stats.js";
+import { dayKey, duration, heatmapWeeks, LIMIT_WINDOW_MS, pace, percentile, span, streaks, type Pace } from "./stats.js";
 
 const WEEKS = 52;
 const HEAT = ["bg-neutral-800", "bg-green-900", "bg-green-700", "bg-green-500", "bg-green-300"];
@@ -86,6 +86,7 @@ export function Stats({ open, revision, onClose }: { open: boolean; revision?: u
 	useEffect(() => {
 		if (open) void load();
 	}, [load, revision, open]);
+	const usage = useUsage(reload);
 
 	const turns = useMemo(
 		() => (view?.turns ?? []).filter((t) => machine === null || t.machine === machine),
@@ -139,7 +140,7 @@ export function Stats({ open, revision, onClose }: { open: boolean; revision?: u
 			<div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto p-4">
 				{error && <p className="text-meta text-red-400">{error}</p>}
 				<div className="grid gap-6 md:grid-cols-3">
-					<Usage reload={reload} />
+					<Usage usage={usage} />
 					<div className="md:col-span-2">
 						{view ? (
 							<Summary turns={turns} />
@@ -148,6 +149,7 @@ export function Stats({ open, revision, onClose }: { open: boolean; revision?: u
 						)}
 					</div>
 				</div>
+				{usage.limits && <Paces limits={usage.limits} history={usage.history} turns={view?.turns ?? []} />}
 				{view && (
 					<>
 						<Heatmap turns={turns} />
@@ -184,6 +186,8 @@ export function Stats({ open, revision, onClose }: { open: boolean; revision?: u
 /** The subset of /api/usage (Anthropic's oauth/usage) this panel reads. */
 interface UsageLimit {
 	kind: string;
+	/** `session` (5 hours) or `weekly`. */
+	group?: string;
 	percent: number;
 	resets_at: string | null;
 	scope: { model?: { display_name?: string | null } } | null;
@@ -205,22 +209,31 @@ function resetLabel(iso: string | null): string {
 		: `Resets ${d.toLocaleDateString([], { weekday: "long" })} ${time}`;
 }
 
-function Usage({ reload }: { reload: number }) {
-	const [limits, setLimits] = useState<UsageLimit[] | null>(null);
-	const [usageError, setUsageError] = useState<string | null>(null);
+interface UsageState {
+	limits: UsageLimit[] | null;
+	history: UsageSample[];
+	error: string | null;
+}
+
+function useUsage(reload: number): UsageState {
+	const [state, setState] = useState<UsageState>({ limits: null, history: [], error: null });
 	useEffect(() => {
 		void (async () => {
 			const r = await fetch("/api/usage").catch(() => null);
 			const body = (await r?.json().catch(() => null)) as {
 				limits?: UsageLimit[];
+				history?: UsageSample[];
 				error?: string;
 			} | null;
 			if (r?.ok && Array.isArray(body?.limits)) {
-				setLimits(body.limits);
-				setUsageError(null);
-			} else setUsageError(body?.error ?? "could not load usage");
+				setState({ limits: body.limits, history: body.history ?? [], error: null });
+			} else setState((s) => ({ ...s, error: body?.error ?? "could not load usage" }));
 		})();
 	}, [reload]);
+	return state;
+}
+
+function Usage({ usage: { limits, error: usageError } }: { usage: UsageState }) {
 	return (
 		<div>
 			<h3 className={`mb-2 ${sectionLabel}`}>Usage remaining</h3>
@@ -259,6 +272,186 @@ function Usage({ reload }: { reload: number }) {
 					})}
 				</div>
 			)}
+		</div>
+	);
+}
+
+const clockFmt = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" });
+const weekClockFmt = new Intl.DateTimeFormat(undefined, { weekday: "short", hour: "numeric", minute: "2-digit" });
+
+/** Every limit with a live window, extrapolated to its reset. */
+function Paces({ limits, history, turns }: { limits: UsageLimit[]; history: UsageSample[]; turns: StatsTurn[] }) {
+	const now = Date.now();
+	const rows = limits.flatMap((l) => {
+		const windowMs = LIMIT_WINDOW_MS[l.group ?? ""];
+		const end = l.resets_at ? Date.parse(l.resets_at) : NaN;
+		const p = windowMs && Number.isFinite(end) ? pace(l.percent, end, windowMs, now) : null;
+		return p ? [{ l, p }] : [];
+	});
+	if (!rows.length) return null;
+	return (
+		<div>
+			<h3 className={`mb-2 ${sectionLabel}`}>Pace</h3>
+			<div className="grid gap-6 md:grid-cols-3">
+				{rows.map(({ l, p }) => (
+					<PaceCard key={`${l.kind}-${limitLabel(l)}`} limit={l} pace={p} history={history} turns={turns} now={now} />
+				))}
+			</div>
+		</div>
+	);
+}
+
+/**
+ * One limit's window as a chart: use so far (solid, from the recorded samples),
+ * the window's average pace carried to the reset (dashed, red when it crosses
+ * 100%), and the even pace that would land exactly on 100% (grey diagonal).
+ */
+function PaceCard({
+	limit,
+	pace: p,
+	history,
+	turns,
+	now,
+}: {
+	limit: UsageLimit;
+	pace: Pace;
+	history: UsageSample[];
+	turns: StatsTurn[];
+	now: number;
+}) {
+	const model = limit.scope?.model?.display_name ?? null;
+	const weekly = limit.group === "weekly";
+	const fmt = weekly ? weekClockFmt : clockFmt;
+	const unitMs = weekly ? 86_400_000 : 3_600_000;
+	const unit = weekly ? "day" : "h";
+	const used = limit.percent;
+
+	// Samples of this very window: the same limit, resetting at the same time.
+	const points = useMemo(() => {
+		const out: [number, number][] = [[p.start, 0]];
+		for (const s of history) {
+			if (s.at <= p.start || s.at >= now) continue;
+			const x = s.limits.find(
+				(x) =>
+					x.kind === limit.kind &&
+					x.model === model &&
+					x.resets_at &&
+					Math.abs(Date.parse(x.resets_at) - p.end) < 600_000,
+			);
+			if (x) out.push([s.at, x.percent]);
+		}
+		out.push([now, used]);
+		return out;
+	}, [history, limit.kind, model, p.start, p.end, now, used]);
+
+	// Prompts in this window, to turn "percent left" into "prompts left".
+	const prompts = turns.filter(
+		(t) =>
+			t.start >= p.start &&
+			(model ? t.model.toLowerCase().includes(model.toLowerCase()) : /claude/i.test(t.model)),
+	).length;
+	const promptsLeft = used >= 1 && prompts >= 3 ? Math.round((prompts * (100 - used)) / used) : null;
+
+	const box = useRef<HTMLDivElement>(null);
+	const canvas = useRef<HTMLCanvasElement>(null);
+	const width = useWidth(box);
+	const dpr = window.devicePixelRatio || 1;
+	const w = Math.floor(width * dpr);
+	const h = Math.round(80 * dpr);
+	const line = Math.max(1, Math.round(dpr));
+	/** Device-pixel position of a percent, 100% one line below the top. */
+	const y = (v: number) => line + (1 - Math.min(v, 100) / 100) * (h - 2 * line);
+
+	useEffect(() => {
+		const ctx = canvas.current?.getContext("2d");
+		if (!ctx || !w || !box.current) return;
+		ctx.canvas.width = w;
+		ctx.canvas.height = h;
+		const x = (t: number) => ((t - p.start) / (p.end - p.start)) * w;
+		const color = (c: string) => bgColor(box.current!, c);
+		const stroke = (style: string, dash: number[], pts: [number, number][]) => {
+			ctx.strokeStyle = style;
+			ctx.lineWidth = 2 * line;
+			ctx.setLineDash(dash.map((d) => d * dpr));
+			ctx.beginPath();
+			pts.forEach(([t, v], i) => (i ? ctx.lineTo(x(t), y(v)) : ctx.moveTo(x(t), y(v))));
+			ctx.stroke();
+		};
+		ctx.fillStyle = color("bg-neutral-800");
+		for (const v of [0, 50, 100]) ctx.fillRect(0, Math.round(y(v) - line / 2), w, line);
+		ctx.fillRect(Math.round(x(now)), 0, line, h);
+		stroke(color("bg-neutral-600"), [3, 3], [
+			[p.start, 0],
+			[p.end, 100],
+		]);
+		const over = color("bg-red-400");
+		stroke(p.runsOut ? over : color("bg-amber-500"), [4, 3], [
+			[now, used],
+			p.runsOut ? [p.runsOut, 100] : [p.end, p.projected],
+		]);
+		stroke(color("bg-amber-500"), [], points);
+		if (p.runsOut) {
+			ctx.fillStyle = over;
+			ctx.beginPath();
+			ctx.arc(x(p.runsOut), y(100), 3 * dpr, 0, 2 * Math.PI);
+			ctx.fill();
+		}
+	}, [points, p, w, h, line, dpr, now, used]);
+
+	const rate = `${(p.rate * unitMs).toFixed(1)}%/${unit}`;
+	const budget = `${((100 - used) / ((p.end - now) / unitMs)).toFixed(1)}%/${unit}`;
+	const [tone, verdict] =
+		used >= 100
+			? (["text-red-400", `Limit reached. Resets in ${span(p.end - now)}.`] as const)
+			: p.early
+				? (["text-neutral-400", "Too early in the window to extrapolate."] as const)
+				: p.runsOut
+					? ([
+							"text-red-400",
+							`Runs out ${fmt.format(p.runsOut)}, ${span(p.end - p.runsOut)} before reset. Slow to ${Math.round(p.room * 100)}% of this pace.`,
+						] as const)
+					: ([
+							"text-green-400",
+							p.room === Infinity
+								? "Nothing used yet."
+								: `On pace for ${Math.round(p.projected)}% at reset. Room for ${p.room.toFixed(1)}\u00d7 this pace.`,
+						] as const);
+
+	return (
+		<div>
+			<div className="mb-1 text-ui">{limitLabel(limit)}</div>
+			<div className="flex gap-2 text-caption text-neutral-500 tabular-nums">
+				<div className="relative w-8 shrink-0" style={{ height: h / dpr }}>
+					{[0, 50, 100].map((v) => (
+						<span
+							key={v}
+							className="absolute right-0 -translate-y-1/2 leading-none"
+							style={{ top: y(v) / dpr }}
+						>
+							{v}%
+						</span>
+					))}
+				</div>
+				<div ref={box} className="min-w-0 flex-1">
+					<canvas
+						ref={canvas}
+						role="img"
+						aria-label={`${limitLabel(limit)}: ${used}% used, ${verdict}`}
+						title="Solid: used so far. Dashed: this pace until the reset. Grey: an even pace to 100%."
+						className="block"
+						style={{ width: w / dpr, height: h / dpr }}
+					/>
+					<div className="mt-1 flex justify-between">
+						<span>{fmt.format(p.start)}</span>
+						<span>{fmt.format(p.end)}</span>
+					</div>
+				</div>
+			</div>
+			<p className={`mt-1 text-meta ${tone}`}>{verdict}</p>
+			<p className="text-meta text-neutral-500">
+				Averaging {rate}, budget {budget}
+				{promptsLeft !== null && ` \u00b7 \u2248 ${num.format(promptsLeft)} more prompts`}
+			</p>
 		</div>
 	);
 }

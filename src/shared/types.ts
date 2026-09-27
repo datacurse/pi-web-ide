@@ -201,6 +201,12 @@ export interface StatsView {
 	machines: StatsMachine[];
 }
 
+/** One reading of every Claude limit, from `/api/usage`'s `history`. */
+export interface UsageSample {
+	at: number;
+	limits: { kind: string; model: string | null; percent: number; resets_at: string | null }[];
+}
+
 /**
  * pwi on a tailnet machine, as its tailnet link answers: `running` is a pwi,
  * `dev` redirects to a Vite port only that machine can reach, `stopped` is

@@ -245,6 +245,14 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
   what is on disk first, then `Syncing machines…` beside Refresh until the sync lands.
   Remote projects read `alias:project`; remote answers carry the alias. Heatmap cells are square with no radius,
   `neutral-800` for empty days, then `green-900/700/500/300`. Bars are `amber-500`.
+- Pace sits full width under usage and the tiles: one card per live limit window
+  (`md:grid-cols-3`), a canvas spanning the window start to reset, 0–100%. Solid
+  `amber-500` is use so far (server samples every 10 min), dashed is the window's
+  average pace carried to the reset (`red-400`, ending in a dot, when it hits 100%
+  first), a dashed `neutral-600` diagonal is the even pace. Under it a verdict
+  (`green-400` on pace, `red-400` runs out, `neutral-400` under 5% of the window gone)
+  and a `neutral-500` line: average rate, budget rate for the rest of the window
+  (%/h for the session, %/day for weekly), and prompts left at the window's average.
 - The heatmap is a canvas, so cells and ~2px gaps are whole device pixels at any
   display scaling. It reads its colors from the legend swatches.
 - By hour has a y-axis: a round step (1, 2 or 5 times a power of 10, at most four above zero) with

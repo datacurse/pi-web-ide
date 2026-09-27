@@ -63,3 +63,49 @@ export function heatmapWeeks(weeks: number, today = new Date()): (Date | null)[]
 	}
 	return out;
 }
+
+/** Claude's limit windows by `group`: the 5-hour session and the week. */
+export const LIMIT_WINDOW_MS: Record<string, number> = { session: 5 * 3_600_000, weekly: 7 * 86_400_000 };
+
+export interface Pace {
+	start: number;
+	end: number;
+	/** Percent per millisecond, averaged over the window so far. */
+	rate: number;
+	/** Percent at reset if that average holds. */
+	projected: number;
+	/** When 100% is reached at that pace, if before the reset. */
+	runsOut: number | null;
+	/** The multiple of the current pace that would land exactly on 100% at reset. */
+	room: number;
+	/** Under 5% of the window gone: the average says little yet. */
+	early: boolean;
+}
+
+/** Extrapolates a limit's use to its reset at the window's average pace; null outside the window. */
+export function pace(percent: number, resetsAt: number, windowMs: number, now = Date.now()): Pace | null {
+	const start = resetsAt - windowMs;
+	const elapsed = now - start;
+	const left = resetsAt - now;
+	if (elapsed <= 0 || left <= 0) return null;
+	const rate = percent / elapsed;
+	const projected = percent + rate * left;
+	return {
+		start,
+		end: resetsAt,
+		rate,
+		projected,
+		runsOut: percent >= 100 ? now : projected > 100 ? now + (100 - percent) / rate : null,
+		room: rate > 0 ? Math.max(0, 100 - percent) / (rate * left) : Infinity,
+		early: elapsed < windowMs * 0.05,
+	};
+}
+
+/** A coarse span: `2d 3h`, `3h 20m`, `45m`. */
+export function span(ms: number): string {
+	const m = Math.max(0, Math.round(ms / 60_000));
+	if (m < 60) return `${m}m`;
+	const h = Math.floor(m / 60);
+	if (h < 24) return `${h}h ${m % 60}m`;
+	return `${Math.floor(h / 24)}d ${h % 24}h`;
+}

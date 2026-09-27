@@ -19,9 +19,9 @@ the first argument). `PWI_MODEL=provider/id` overrides the model,
 `PWI_PI_BIN=/path/to/pi` the binary. To run it as a background service on a
 machine, see [Deployment](#deployment).
 
-Another machine runs its own pwi the same way. Reach it by forwarding its
-port (`ssh -L 8890:localhost:8890 orangepi`) or with `tailscale serve`, and
-open that in a browser tab. See [Multiple machines](#multiple-machines).
+Another machine runs its own pwi the same way, served on the tailnet with
+`tailscale serve`; the Fleet page lists every machine with its link. See
+[Multiple machines](#multiple-machines).
 
 **Restarting takes the port.** Starting pwi while an older pwi holds `:8890`
 kills the old one and binds — restarting is never anything else, and "find
@@ -812,9 +812,12 @@ value falls back rather than rendering something broken.
 
 The dialog also shows how much of each **Claude subscription limit** is left
 and when it resets. `GET /api/usage` asks Anthropic's `oauth/usage` endpoint
-with the OAuth token pi stored in `auth.json`. It never refreshes that token,
-so a machine whose pi has been idle past the token's expiry reports "no
-unexpired Claude login" until pi's next turn refreshes it.
+with the OAuth token pi stored in `auth.json`. An expired token is refreshed
+with `pi auth print-bearer-token`, which rotates it under pi's own lock, so an
+idle pi no longer makes the limits disappear. The server also samples the
+limits every ten minutes into `usage-history.json` (eight days kept), and
+Stats' Pace charts plot each window from them and extrapolate its average pace
+to the reset: whether you will run out first, and how much faster you could go.
 
 **Show thinking** hides reasoning blocks, streaming and historical, and it
 *filters* rather than `display: none`s them: reasoning is routinely the
@@ -1670,16 +1673,42 @@ nothing moves until you come back.
 There is one pwi per machine — `local`, `orangepi`, `tg` — each running its
 own systemd user service, each bound to `127.0.0.1`, each serving its own
 host's projects with that host's own credentials. To work on another machine,
-open that machine's pwi:
+open that machine's pwi on the tailnet:
 
 ```bash
-ssh -L 8890:localhost:8890 orangepi     # then open http://127.0.0.1:8890
+tailscale serve --bg --http=8890 http://127.0.0.1:8890   # once, on that host
+# then open http://orangepi.<tailnet>.ts.net:8890/
 ```
 
-or put it on a tailnet with `tailscale serve --bg 8890` on that host and open
-`https://opi.tail.ts.net`. The remote stays bound to loopback either way; the
-tailnet form also gets you HTTP/2, which matters for a page holding an event
-stream plus a few terminal sockets.
+The remote stays bound to loopback; `tailscale serve` is the only thing that
+puts it on the tailnet. The Fleet page (`server/fleet.ts`) lists every tailnet
+machine with that link, a shell on it, and a Start button that starts the
+unit and sets up the serve.
+
+### Why Tailscale, not SSH
+
+Decided after weighing the alternatives; re-read this before reopening it.
+Tailscale does two separate jobs here:
+
+- **The network.** Every machine is reachable from anywhere, including ones
+  far from home and ones behind a home router (orangepi is only
+  `192.168.3.x` without it). SSH needs this too, so it stays either way.
+- **`tailscale serve`.** It gives each loopback-bound pwi a fixed link that
+  works from any device on the tailnet (phone included), with nothing
+  running on the viewing side.
+
+Rejected:
+
+- **One pwi driving every machine's pi over SSH.** The agent part is easy
+  (pi speaks RPC over stdio, so `agent.ts` could spawn `ssh host pi`), but
+  the explorer, editor, git, sessions, search, stats, terminals and packages
+  all read the local disk. Each would need a remote version: most of the app.
+- **SSH tunnels (`ssh -L`) instead of `tailscale serve`.** Something has to
+  keep each tunnel alive, and the link only works on the computer holding it.
+  pwi already did this once and deleted it (below).
+
+Tunnels still make sense for one case: a machine you can SSH into that is not
+on the tailnet (a work server). Add that for that machine only.
 
 **pwi used to manage this itself** — a machine list, a supervised `ssh -L`
 child per host with a capped backoff ladder, a reachability poll, a pinned
