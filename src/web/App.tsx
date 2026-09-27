@@ -19,7 +19,7 @@ import { ActivityBar } from "./ActivityBar.js";
 import { Stats } from "./Stats.js";
 import { SessionTabs, tabDomId } from "./SessionTabs.js";
 import { Chat } from "./Chat.js";
-import { TerminalPane } from "./Terminal.js";
+import { Terminal, TerminalPane } from "./Terminal.js";
 import { SourceControl } from "./SourceControl.js";
 import { GIT_CHANGED, gitChanged } from "./GitActions.js";
 import { DiffView } from "./DiffView.js";
@@ -36,6 +36,9 @@ import {
 	isDiffTab,
 	isFileTab,
 	isPageTab,
+	isTermTab,
+	termId,
+	termTab,
 	isSessionTab,
 	moveTab,
 	pageOf,
@@ -49,7 +52,14 @@ import {
 } from "./tabs.js";
 import type { PageId, Side, TabGroup } from "./tabs.js";
 import { SplitZone } from "./SplitZone.js";
-import { EMPTY_LAYOUT, addTab, reconcile, type TermLayout } from "./termLayout.js";
+import {
+	EMPTY_LAYOUT,
+	addTab,
+	allTerminals,
+	reconcile,
+	removeTerminal,
+	type TermLayout,
+} from "./termLayout.js";
 import { Settings } from "./Settings.js";
 import { Packages } from "./Packages.js";
 import {
@@ -261,6 +271,7 @@ function EditorColumn({
 	onTogglePin,
 	onRename,
 	renderPage,
+	onToDock,
 }: {
 	side: Side;
 	group: TabGroup;
@@ -294,14 +305,17 @@ function EditorColumn({
 	onRename: (session: PiSessionInfo, name: string) => void;
 	/** A page tab's content; `active` is whether its tab is the one showing. */
 	renderPage: (page: PageId, active: boolean) => React.ReactNode;
+	/** Move a terminal tab's shell back into the dock. */
+	onToDock: (entry: string) => void;
 }) {
 	const active = group.active;
 	const activeIndex = active ? group.files.indexOf(active) : -1;
 	const showsFile = active !== undefined && isFileTab(active);
 	const showsDiff = active !== undefined && isDiffTab(active);
 	const showsPage = active !== undefined && isPageTab(active);
-	/** The chat hides under a file, a diff or a page: none of them is the chat. */
-	const showsDoc = showsFile || showsDiff || showsPage;
+	const showsTerm = active !== undefined && isTermTab(active);
+	/** The chat hides under a file, a diff, a page or a terminal. */
+	const showsDoc = showsFile || showsDiff || showsPage || showsTerm;
 
 	return (
 		<div
@@ -339,6 +353,7 @@ function EditorColumn({
 				onReveal={onReveal}
 				onTogglePin={onTogglePin}
 				onRename={onRename}
+				onToDock={onToDock}
 			/>
 			<SplitZone
 				/*
@@ -385,6 +400,9 @@ function EditorColumn({
 							onChanged={onHunksChanged}
 						/>
 					)}
+					{/* Mounted only while showing, like the dock: the server replays the
+					    scrollback on attach, and a hidden xterm cannot measure itself. */}
+					{showsTerm && <Terminal key={active} id={termId(active)} focused />}
 					{/* Pages stay mounted while their tab is open, like the chat, so a
 					    half-typed setting or a scrolled list survives a tab switch. */}
 					{group.files.filter(isPageTab).map((entry) => {
@@ -1468,7 +1486,10 @@ export default function App() {
 			const ids = (body.terminals ?? [])
 				.map((t) => t.id)
 				.filter((id): id is string => typeof id === "string");
-			setTermLayout((current) => reconcile(current, ids));
+			// A shell open as an editor tab is that tab's, not the dock's to adopt.
+			const t = tabsRef.current;
+			const inTabs = new Set([...t.files, ...(t.right?.files ?? [])].filter(isTermTab).map(termId));
+			setTermLayout((current) => reconcile(current, ids.filter((id) => !inTabs.has(id))));
 			// Gates the pane's "start the first shell" — spawning before the
 			// server has been asked would mint a second shell next to the one
 			// the stored layout was already pointing at.
@@ -2191,6 +2212,49 @@ export default function App() {
 		[openInLastSide],
 	);
 
+	/**
+	 * A shell lives in one place at a time: the dock or one editor tab. Moving
+	 * never restarts it; only closing a terminal tab ends it.
+	 */
+	const termToEditor = useCallback(
+		(id: string) => {
+			const next = removeTerminal(termLayout, id);
+			changeTermLayout(next);
+			// An emptied dock would start a fresh shell by itself; close it instead.
+			if (next.tabs.length === 0) showTerminal(false);
+			openInLastSide(termTab(id));
+		},
+		[termLayout, changeTermLayout, showTerminal, openInLastSide],
+	);
+	/** Put a shell back in the dock. An updater, so "Close Others" docks every one. */
+	const dockShell = useCallback(
+		(id: string) => {
+			setTermLayout((current) => {
+				if (allTerminals(current).includes(id)) return current;
+				const next = addTab(current, id);
+				if (project) writeTerminalLayout(scope, next);
+				return next;
+			});
+		},
+		[project, scope],
+	);
+	const termToDock = useCallback(
+		(entry: string) => {
+			if (sideOfTab(tabsRef.current, entry) === "right") closeRight(entry);
+			else closeTab(entry);
+			dockShell(termId(entry));
+			showTerminal(true);
+		},
+		[closeTab, closeRight, dockShell, showTerminal],
+	);
+	/**
+	 * Closing a terminal tab never kills its shell: it goes back to the dock
+	 * (without opening it), and only the dock's close button ends a shell.
+	 */
+	const keepShell = (entry: string) => {
+		if (isTermTab(entry)) dockShell(termId(entry));
+	};
+
 	/** Open a page (Stats, Packages, Settings) as a tab, or focus the one it has. */
 	const openPage = useCallback((page: PageId) => openInLastSide(pageTab(page)), [openInLastSide]);
 	const closePage = useCallback(
@@ -2771,7 +2835,11 @@ export default function App() {
 					pinned={pinned}
 					dirtyFiles={dirtyFiles}
 					onSelect={selectTab}
-					onClose={closeTab}
+					onClose={(entry) => {
+						keepShell(entry);
+						closeTab(entry);
+					}}
+					onToDock={termToDock}
 					onReorder={reorderTabs}
 					onMove={moveToGroup}
 					onFocus={() => {
@@ -2803,7 +2871,11 @@ export default function App() {
 						pinned={pinned}
 						dirtyFiles={dirtyFiles}
 						onSelect={selectRight}
-						onClose={closeRight}
+						onClose={(entry) => {
+							keepShell(entry);
+							closeRight(entry);
+						}}
+						onToDock={termToDock}
 						onReorder={reorderRight}
 						onMove={moveToGroup}
 						onFocus={() => {
@@ -2850,6 +2922,7 @@ export default function App() {
 									layout={termLayout}
 									onLayout={changeTermLayout}
 									onClose={closeTerminal}
+									onToEditor={termToEditor}
 								/>
 							) : (
 								<PanelEmpty title="Terminal" onClose={closeTerminal}>

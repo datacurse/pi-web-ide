@@ -188,6 +188,13 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
   under them and split, split direction, swap side (`ArrowsLeftRight`) and hide stacked
   below. The column sits on the right by default; swap moves it to the left
   (`pwi:termTabsSide`, per browser).
+- A shell can also be an editor tab (`term:<id>`, `TerminalWindow` icon, label
+  "Terminal"). It lives in one place at a time and moving never restarts it: a dock
+  tab's right-click "Move to Editor Tab" moves its focused shell to the last-used
+  column, the dock's `AppWindow` button moves the shell you are looking at, and the editor tab's
+  menu has "Move to Terminal Dock". Closing a terminal tab never kills the shell: it
+  goes back into the dock without opening it. Only the dock's per-shell close ends a
+  shell. Moving the dock's last shell out closes the dock.
 - Stats, Packages and Settings are pages: the rail's bottom group opens each as a tab
   (`page:<id>`) in the last-used column, or focuses it. A page tab shows the rail icon,
   has only the Close items in its menu, and stays mounted while open, like the chat.

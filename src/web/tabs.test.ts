@@ -20,6 +20,8 @@ import {
 	withTab,
 	pageTab,
 	pageOf,
+	termTab,
+	termId,
 } from "./tabs.js";
 import { halfOf } from "./SplitZone.js";
 import { slotFor } from "./SessionTabs.js";
@@ -86,6 +88,10 @@ assert.equal(isSessionTab("page:nope"), false);
 assert.equal(pageOf(pageTab("settings")), "settings");
 assert.equal(pageOf("page:nope"), null);
 assert.equal(tabLabel(pageTab("packages")), "Packages");
+// A terminal tab holds a server shell id and is never attached as a session.
+assert.equal(isSessionTab(termTab("abc")), false);
+assert.equal(termId(termTab("abc")), "abc");
+assert.equal(tabLabel(termTab("abc")), "Terminal");
 
 // --- pinnedFirst -----------------------------------------------------------
 assert.deepEqual(pinnedFirst(["a", "b", "c", "d"], ["d", "b"]), ["b", "d", "a", "c"]);

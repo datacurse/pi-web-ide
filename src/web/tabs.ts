@@ -20,6 +20,12 @@
 const FILE_PREFIX = "file:";
 const DIFF_PREFIX = "diff:";
 const PAGE_PREFIX = "page:";
+const TERM_PREFIX = "term:";
+
+/** A server shell shown as an editor tab instead of in the dock. */
+export const termTab = (id: string): string => `${TERM_PREFIX}${id}`;
+export const isTermTab = (entry: string): boolean => entry.startsWith(TERM_PREFIX);
+export const termId = (entry: string): string => entry.slice(TERM_PREFIX.length);
 
 /** Whole-pane pages the rail opens as tabs. */
 export type PageId = "stats" | "packages" | "settings";
@@ -65,7 +71,7 @@ export function diffParts(entry: string): { ref: string; path: string } {
 
 /** True when this entry is a chat session: the only kind App attaches to. */
 export const isSessionTab = (entry: string): boolean =>
-	!isFileTab(entry) && !isDiffTab(entry) && !isPageTab(entry);
+	!isFileTab(entry) && !isDiffTab(entry) && !isPageTab(entry) && !isTermTab(entry);
 
 /** The absolute path inside a file or diff entry. Meaningless for a session. */
 export const tabPath = (entry: string): string =>
@@ -79,6 +85,7 @@ export const tabPath = (entry: string): string =>
  * identical tabs.
  */
 export const tabLabel = (entry: string): string => {
+	if (isTermTab(entry)) return "Terminal";
 	if (isPageTab(entry)) {
 		const page = pageOf(entry);
 		return page ? PAGE_TITLE[page] : entry;

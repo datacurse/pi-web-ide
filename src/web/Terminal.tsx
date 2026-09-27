@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useRef, useState } from "react";
-import { ArrowsLeftRight, Columns, Plus, Rows, X } from "@phosphor-icons/react";
+import { AppWindow, ArrowsLeftRight, Columns, Plus, Rows, X } from "@phosphor-icons/react";
 import type { Terminal as XTerm } from "@xterm/xterm";
 import type { FitAddon } from "@xterm/addon-fit";
 
@@ -15,7 +15,7 @@ import {
 	type TermLayout,
 } from "./termLayout.js";
 import { readTermTabsSide, writeTermTabsSide, type TermTabsSide } from "./prefs.js";
-import { Button, IconButton, tabClassVertical } from "./ui.js";
+import { Button, ContextMenu, IconButton, MenuItem, tabClassVertical } from "./ui.js";
 
 /**
  * xterm.js, loaded on demand.
@@ -317,6 +317,7 @@ export function TerminalPane({
 	layout,
 	onLayout,
 	onClose,
+	onToEditor,
 }: {
 	cwd: string;
 	/**
@@ -328,8 +329,12 @@ export function TerminalPane({
 	layout: TermLayout;
 	onLayout: (next: TermLayout) => void;
 	onClose: () => void;
+	/** Show this shell as an editor tab; App takes it out of the dock. */
+	onToEditor: (id: string) => void;
 }) {
 	const [error, setError] = useState<string | null>(null);
+	/** A dock tab's right-click menu. */
+	const [menu, setMenu] = useState<{ index: number; x: number; y: number } | null>(null);
 	const [side, setSide] = useState<TermTabsSide>(readTermTabsSide);
 	const swapSide = () => {
 		const next = side === "right" ? "left" : "right";
@@ -349,7 +354,7 @@ export function TerminalPane({
 	 * process, differing only in where the layout draws it — so `place` is the
 	 * whole difference between them.
 	 */
-	const spawn = async (place: (l: TermLayout, id: string) => TermLayout) => {
+	const spawn = async (place: (id: string) => void) => {
 		setError(null);
 		const r = await fetch(`/api/terminals`, {
 			method: "POST",
@@ -363,8 +368,10 @@ export function TerminalPane({
 			setError(body.error ?? `could not start a shell (${r.status})`);
 			return;
 		}
-		onLayout(place(layout, body.id));
+		place(body.id);
 	};
+	const inDock = (how: (l: TermLayout, id: string) => TermLayout) => (id: string) =>
+		onLayout(how(layout, id));
 
 	/*
 	 * Opening the pane with nothing in it starts one shell. The pane exists to
@@ -375,7 +382,7 @@ export function TerminalPane({
 	useEffect(() => {
 		if (!ready || layout.tabs.length > 0 || starting.current) return;
 		starting.current = true;
-		void spawn(addTab).finally(() => {
+		void spawn(inDock(addTab)).finally(() => {
 			starting.current = false;
 		});
 		// `spawn` closes over the layout, which is exactly the empty one this
@@ -446,7 +453,7 @@ export function TerminalPane({
 				{!tab ? (
 					<div className="flex flex-1 items-center justify-center p-4 text-center text-meta text-neutral-500">
 						No shell yet.
-						<Button variant="subtle" size="sm" className="ml-2" onClick={() => void spawn(addTab)}>
+						<Button variant="subtle" size="sm" className="ml-2" onClick={() => void spawn(inDock(addTab))}>
 							Start one
 						</Button>
 					</div>
@@ -516,6 +523,11 @@ export function TerminalPane({
 						<button
 							key={i}
 							onClick={() => onLayout(selectTab(layout, i))}
+							onContextMenu={(e) => {
+								e.preventDefault();
+								setMenu({ index: i, x: e.clientX, y: e.clientY });
+							}}
+							aria-haspopup="menu"
 							aria-current={i === layout.active}
 							title={`Terminal tab ${i + 1}${t.terminals.length > 1 ? ` (${t.terminals.length} splits)` : ""}`}
 							className={`${tabClassVertical(i === layout.active)} font-mono`}
@@ -529,7 +541,7 @@ export function TerminalPane({
 					<IconButton
 						size="sm"
 						className="mt-1 shrink-0 self-center"
-						onClick={() => void spawn(addTab)}
+						onClick={() => void spawn(inDock(addTab))}
 						label="New terminal tab"
 					>
 						<Plus size={13} />
@@ -539,12 +551,21 @@ export function TerminalPane({
 				<IconButton
 					size="sm"
 					className="self-center"
-					onClick={() => void spawn(splitActive)}
+					onClick={() => void spawn(inDock(splitActive))}
 					label="Split terminal"
 					title="Split: another shell beside this one"
 				>
 					{/* The icon shows the direction the new pane will appear in. */}
 					{tab?.direction === "column" ? <Rows size={14} /> : <Columns size={14} />}
+				</IconButton>
+				<IconButton
+					size="sm"
+					className="self-center"
+					disabled={!tab}
+					onClick={() => tab && onToEditor(tab.focus)}
+					label="Move this shell to an editor tab"
+				>
+					<AppWindow size={14} />
 				</IconButton>
 				{tab && tab.terminals.length > 1 && (
 					<IconButton
@@ -579,6 +600,29 @@ export function TerminalPane({
 					<X size={13} />
 				</IconButton>
 			</div>
+
+			{menu && (
+				<ContextMenu
+					x={menu.x}
+					y={menu.y}
+					label={`Terminal tab ${menu.index + 1}`}
+					onClose={() => setMenu(null)}
+				>
+					{/* Moves the tab's focused shell; its other splits stay here. */}
+					<MenuItem
+						icon={<AppWindow size={16} />}
+						role="menuitem"
+						autoFocus
+						onClick={() => {
+							const id = layout.tabs[menu.index]?.focus;
+							setMenu(null);
+							if (id) onToEditor(id);
+						}}
+					>
+						Move to Editor Tab
+					</MenuItem>
+				</ContextMenu>
+			)}
 		</div>
 	);
 }

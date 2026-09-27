@@ -9,6 +9,7 @@ import {
 	PencilSimple,
 	PushPin,
 	SquaresFour,
+	TerminalWindow,
 	X,
 	XCircle,
 } from "@phosphor-icons/react";
@@ -17,7 +18,7 @@ import type { PiSessionInfo } from "../shared/types.js";
 import { sessionLabel } from "./sessionName.js";
 import { ATTENTION_UI, type Attention } from "./attention.js";
 import { FileGlyph } from "./fileIcon.js";
-import { diffParts, isDiffTab, isPageTab, isSessionTab, pageOf, tabLabel, tabPath } from "./tabs.js";
+import { diffParts, isDiffTab, isPageTab, isSessionTab, isTermTab, pageOf, tabLabel, tabPath } from "./tabs.js";
 
 /** The rail's icon for each page, so a page tab and its button match. */
 const PAGE_ICON = { stats: ChartBar, packages: SquaresFour, settings: Gear };
@@ -106,6 +107,7 @@ export function SessionTabs({
 	onReveal,
 	onTogglePin,
 	onRename,
+	onToDock,
 	label = "Open sessions",
 }: {
 	/** Open session files, in strip order. */
@@ -149,6 +151,8 @@ export function SessionTabs({
 	onTogglePin?: (file: string) => void;
 	/** Rename a session. Enables Rename in the session tab menu. */
 	onRename?: (session: PiSessionInfo, name: string) => void;
+	/** Move a terminal tab's shell back into the dock. */
+	onToDock?: (entry: string) => void;
 }) {
 	const buttons = useRef<Array<HTMLButtonElement | null>>([]);
 	/** A tab's right-click menu: which tab entry, and where the pointer was. */
@@ -320,9 +324,10 @@ export function SessionTabs({
 					const isFile = !isSessionTab(file);
 					const isDiff = isDiffTab(file);
 					const page = isPageTab(file) ? pageOf(file) : null;
-					/** An editable file: not a diff, not a page. */
-					const isEdit = isFile && !isDiff && !isPageTab(file);
-					const PageIcon = page ? PAGE_ICON[page] : null;
+					const isTerm = isTermTab(file);
+					/** An editable file: not a diff, a page or a terminal. */
+					const isEdit = isFile && !isDiff && !isPageTab(file) && !isTerm;
+					const PageIcon = page ? PAGE_ICON[page] : isTerm ? TerminalWindow : null;
 					const info = isFile ? undefined : byFile.get(file);
 					const state = isFile ? null : (attention.get(file) ?? null);
 					const label = isFile ? tabLabel(file) : sessionLabel(info, shortNames);
@@ -476,7 +481,7 @@ export function SessionTabs({
 								{/* Same glyph the tree uses, so a tab and its row match. */}
 								{isEdit && <FileGlyph name={label} size={13} />}
 								{PageIcon && <PageIcon size={13} className="shrink-0 text-neutral-400" />}
-								<span className={`truncate text-ellipsis ${isFile && !page ? "font-mono" : ""}`}>
+								<span className={`truncate text-ellipsis ${isEdit || isDiff ? "font-mono" : ""}`}>
 									{label}
 								</span>
 								{/* Unsaved. A dot rather than an asterisk in the label, so
@@ -496,7 +501,9 @@ export function SessionTabs({
 								onClick={() => onClose(file)}
 								aria-label={`Close tab ${label}`}
 								title={
-									isFile
+									isTerm
+										? "Close tab (the shell keeps running in the terminal dock)"
+										: isFile
 										? dirty
 											? "Close tab — unsaved edits will be lost"
 											: "Close tab"
@@ -535,8 +542,10 @@ export function SessionTabs({
 				const index = tabs.indexOf(file);
 				const isFile = !isSessionTab(file);
 				const isDiff = isDiffTab(file);
+				const isTerm = isTermTab(file);
 				/** Diffs and pages: nothing to offer but closing. */
 				const closeOnly = isDiff || isPageTab(file);
+				const isEdit = isFile && !closeOnly && !isTerm;
 				const info = isFile ? undefined : byFile.get(file);
 				const label = isFile ? tabLabel(file) : sessionLabel(info, shortNames);
 				const act = (fn: () => void) => () => {
@@ -563,12 +572,17 @@ export function SessionTabs({
 								Rename…
 							</MenuItem>
 						)}
-						{isFile && !closeOnly && onReveal && (
+						{isTerm && onToDock && (
+							<MenuItem icon={<TerminalWindow size={16} />} role="menuitem" autoFocus onClick={act(() => onToDock(file))}>
+								Move to Terminal Dock
+							</MenuItem>
+						)}
+						{isEdit && onReveal && (
 							<MenuItem icon={<Crosshair size={16} />} role="menuitem" autoFocus onClick={act(() => onReveal(tabPath(file)))}>
 								Reveal in Explorer
 							</MenuItem>
 						)}
-						{isFile && !closeOnly && (
+						{isEdit && (
 							<MenuItem
 								icon={<Path size={16} />}
 								role="menuitem"
