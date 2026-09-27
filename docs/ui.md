@@ -195,6 +195,9 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
   menu has "Move to Terminal Dock". Closing a terminal tab never kills the shell: it
   goes back into the dock without opening it. Only the dock's per-shell close ends a
   shell. Moving the dock's last shell out closes the dock.
+- Right-clicking the chat (or an empty column) opens `New AI Session` / `New Terminal
+  Tab`, both in that column. The browser keeps its own menu over selected text, links,
+  images, the composer, and on Shift+right-click.
 - Stats, Packages and Settings are pages: the rail's bottom group opens each as a tab
   (`page:<id>`) in the last-used column, or focuses it. A page tab shows the rail icon,
   has only the Close items in its menu, and stays mounted while open, like the chat.

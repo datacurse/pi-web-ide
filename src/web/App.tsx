@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { X } from "@phosphor-icons/react";
+import { Plus, TerminalWindow, X } from "@phosphor-icons/react";
 import { ASK_ONLY } from "../shared/types.js";
 import type {
 	AskAnswer,
@@ -98,7 +98,7 @@ import {
 } from "./prefs.js";
 import { setFavicon } from "./favicon.js";
 import { attentionOf, attentionTitle, nextWaiting, type Attention } from "./attention.js";
-import { Button, IconButton, PanelHeader } from "./ui.js";
+import { Button, ContextMenu, IconButton, MenuItem, PanelHeader } from "./ui.js";
 
 const emptyPartial = (): PiPartial => ({ text: "", thinking: "", tools: [] });
 
@@ -272,6 +272,8 @@ function EditorColumn({
 	onRename,
 	renderPage,
 	onToDock,
+	onNewSession,
+	onNewTerminal,
 }: {
 	side: Side;
 	group: TabGroup;
@@ -307,7 +309,12 @@ function EditorColumn({
 	renderPage: (page: PageId, active: boolean) => React.ReactNode;
 	/** Move a terminal tab's shell back into the dock. */
 	onToDock: (entry: string) => void;
+	/** For the chat's right-click menu; both open in this column. */
+	onNewSession: () => void;
+	/** Absent without a project: a shell has to start somewhere. */
+	onNewTerminal?: () => void;
 }) {
+	const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
 	const active = group.active;
 	const activeIndex = active ? group.files.indexOf(active) : -1;
 	const showsFile = active !== undefined && isFileTab(active);
@@ -373,6 +380,16 @@ function EditorColumn({
 					id={panelId}
 					role="tabpanel"
 					aria-labelledby={activeIndex >= 0 ? tabDomId(activeIndex) : undefined}
+					onContextMenu={(e) => {
+						// Only over the chat or an empty column, and the browser keeps its
+						// own menu wherever it is the useful one: selected text, links,
+						// images, the composer, and Shift+right-click anywhere.
+						if (showsDoc || e.shiftKey) return;
+						if ((e.target as Element).closest("a, img, input, textarea, select, [contenteditable]")) return;
+						if (window.getSelection()?.toString()) return;
+						e.preventDefault();
+						setMenu({ x: e.clientX, y: e.clientY });
+					}}
 					className="flex min-h-0 min-w-0 flex-1 flex-col"
 				>
 					{showsFile && (
@@ -444,6 +461,32 @@ function EditorColumn({
 					)}
 				</div>
 			</SplitZone>
+			{menu && (
+				<ContextMenu x={menu.x} y={menu.y} label="New tab" onClose={() => setMenu(null)}>
+					<MenuItem
+						icon={<Plus size={16} />}
+						role="menuitem"
+						autoFocus
+						onClick={() => {
+							setMenu(null);
+							onNewSession();
+						}}
+					>
+						New AI Session
+					</MenuItem>
+					<MenuItem
+						icon={<TerminalWindow size={16} />}
+						role="menuitem"
+						disabled={!onNewTerminal}
+						onClick={() => {
+							setMenu(null);
+							onNewTerminal?.();
+						}}
+					>
+						New Terminal Tab
+					</MenuItem>
+				</ContextMenu>
+			)}
 		</div>
 	);
 }
@@ -1519,7 +1562,7 @@ export default function App() {
 	 * A new terminal tab whose shell starts in `dir`, then the terminal panel.
 	 * Keyed by the project like every other shell, so it survives a reload.
 	 */
-	const openTerminalAt = async (dir: string) => {
+	const startShell = async (dir: string): Promise<string> => {
 		const r = await fetch("/api/terminals", {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
@@ -1527,7 +1570,10 @@ export default function App() {
 		});
 		const body = (await r.json().catch(() => ({}))) as { id?: string; error?: string };
 		if (!r.ok || !body.id) throw new Error(body.error ?? `could not start a shell (${r.status})`);
-		changeTermLayout(addTab(termLayout, body.id));
+		return body.id;
+	};
+	const openTerminalAt = async (dir: string) => {
+		changeTermLayout(addTab(termLayout, await startShell(dir)));
 		showTerminal(true);
 	};
 
@@ -2226,6 +2272,17 @@ export default function App() {
 		},
 		[termLayout, changeTermLayout, showTerminal, openInLastSide],
 	);
+	/** A new shell as an editor tab in one column. */
+	const newTerminalTab = async (side: Side) => {
+		try {
+			const entry = termTab(await startShell(project));
+			if (side === "right") selectRight(entry);
+			else selectTab(entry);
+		} catch (err) {
+			window.alert(err instanceof Error ? err.message : String(err));
+		}
+	};
+
 	/** Put a shell back in the dock. An updater, so "Close Others" docks every one. */
 	const dockShell = useCallback(
 		(id: string) => {
@@ -2840,6 +2897,8 @@ export default function App() {
 						closeTab(entry);
 					}}
 					onToDock={termToDock}
+					onNewSession={() => void left.attach()}
+					onNewTerminal={project ? () => void newTerminalTab("left") : undefined}
 					onReorder={reorderTabs}
 					onMove={moveToGroup}
 					onFocus={() => {
@@ -2876,6 +2935,8 @@ export default function App() {
 							closeRight(entry);
 						}}
 						onToDock={termToDock}
+						onNewSession={() => void right.attach()}
+						onNewTerminal={project ? () => void newTerminalTab("right") : undefined}
 						onReorder={reorderRight}
 						onMove={moveToGroup}
 						onFocus={() => {
