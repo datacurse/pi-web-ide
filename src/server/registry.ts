@@ -550,13 +550,13 @@ export class Registry {
 	 * running turn, and a button that appears to do nothing for two minutes
 	 * is worse than one that says why it did nothing.
 	 */
-	async compact(id: string): Promise<void> {
+	async compact(id: string, customInstructions?: string): Promise<void> {
 		const entry = this.entries.get(id);
 		if (!entry) throw new Error(`unknown session: ${id}`);
 		if (entry.streaming || entry.session.isStreaming)
 			throw new Error("cannot compact while streaming");
 		entry.lastActivity = Date.now();
-		await entry.session.compact();
+		await entry.session.compact(customInstructions);
 	}
 
 	/**

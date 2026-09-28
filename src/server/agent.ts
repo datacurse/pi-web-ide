@@ -952,7 +952,7 @@ export interface PiSession {
 	 * the threshold — by which point the turn that tripped it has already been
 	 * paid for at full width.
 	 */
-	compact(): Promise<void>;
+	compact(customInstructions?: string): Promise<void>;
 	/** Re-read the slash command catalog. The composer calls this when its menu opens. */
 	refreshCommands(): Promise<PiCommand[]>;
 	/**
@@ -1615,7 +1615,7 @@ async function wrap(child: RpcChild, cwd: string): Promise<PiSession> {
 			disarmLocal();
 			await child.send("abort");
 		},
-		async compact() {
+		async compact(customInstructions?: string) {
 			/*
 			 * The `compaction_end` frame drives the resync and the state refresh,
 			 * so nothing is done with the summary the response carries — reading
@@ -1623,7 +1623,7 @@ async function wrap(child: RpcChild, cwd: string): Promise<PiSession> {
 			 */
 			const before = compactionEnds;
 			try {
-				await child.send("compact");
+				await child.send("compact", { customInstructions });
 			} catch (err) {
 				// Already on screen via `compaction_end`; throwing too shows it twice.
 				if (compactionEnds === before) throw err;

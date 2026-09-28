@@ -1054,14 +1054,45 @@ function useSession({
 		return () => clearTimeout(t);
 	}, [command]);
 
+	/**
+	 * Fold the conversation. The POST lasts the whole compaction and returns
+	 * once the server has re-read the folded transcript, so the refetch after
+	 * it is what moves the transcript and the meter. A refusal (mid-turn) is
+	 * shown where every other session error is.
+	 */
+	const [compacting, setCompacting] = useState(false);
+	const compact = useCallback(async (instructions?: string) => {
+		if (!snapshot) return;
+		setCompacting(true);
+		try {
+			const r = await fetch(`/api/sessions/${snapshot.id}/compact`, {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ customInstructions: instructions || undefined }),
+			});
+			if (r.ok) {
+				const fresh = await fetch(`/api/sessions/${snapshot.id}`);
+				if (fresh.ok) setSnapshot(toSnapshot(await fresh.json()));
+				return;
+			}
+			const body = await r.json().catch(() => ({}) as { error?: string });
+			setSnapshot((s) => (s ? { ...s, error: body.error ?? "could not compact" } : s));
+		} finally {
+			setCompacting(false);
+		}
+	}, [snapshot]);
+
 	const send = useCallback(
 		async (text: string, images?: PiImage[], askOnly = false) => {
 			if (!snapshot) return;
+			const trimmed = text.trim();
+			// pi's `/compact` is TUI-only; over RPC it would reach the model as text.
+			const compactCmd = /^\/compact(?:\s+([\s\S]*))?$/.exec(trimmed);
+			if (compactCmd && !images?.length) return compact(compactCmd[1]?.trim());
 			setBusy(true);
 			// A local command appends no message: this row IS the record that it
 			// was sent. And the ack below is acceptance, not completion — the
 			// answer arrives later as a notice, so it starts out running.
-			const trimmed = text.trim();
 			setCommand(trimmed.startsWith("/") ? { text: trimmed, running: true } : null);
 			// Show the message now, not after pi acks it. Every refetch replaces
 			// `messages` wholesale, so the server's copy supersedes this one. Not
@@ -1107,36 +1138,12 @@ function useSession({
 			const rr = await fetch(`/api/sessions/${snapshot.id}`);
 			if (rr.ok) setSnapshot(toSnapshot(await rr.json()));
 		},
-		[snapshot, busy],
+		[snapshot, busy, compact],
 	);
 
 	const abort = useCallback(async () => {
 		if (!snapshot) return;
 		await fetch(`/api/sessions/${snapshot.id}/abort`, { method: "POST" });
-	}, [snapshot]);
-
-	/**
-	 * Fold the conversation. The POST lasts the whole compaction and returns
-	 * once the server has re-read the folded transcript, so the refetch after
-	 * it is what moves the transcript and the meter. A refusal (mid-turn) is
-	 * shown where every other session error is.
-	 */
-	const [compacting, setCompacting] = useState(false);
-	const compact = useCallback(async () => {
-		if (!snapshot) return;
-		setCompacting(true);
-		try {
-			const r = await fetch(`/api/sessions/${snapshot.id}/compact`, { method: "POST" });
-			if (r.ok) {
-				const fresh = await fetch(`/api/sessions/${snapshot.id}`);
-				if (fresh.ok) setSnapshot(toSnapshot(await fresh.json()));
-				return;
-			}
-			const body = await r.json().catch(() => ({}) as { error?: string });
-			setSnapshot((s) => (s ? { ...s, error: body.error ?? "could not compact" } : s));
-		} finally {
-			setCompacting(false);
-		}
 	}, [snapshot]);
 
 	/** Fork this session after one of its answers, and open the fork in this column. */

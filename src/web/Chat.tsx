@@ -28,6 +28,7 @@ import type {
 	AskAnswer,
 	PiAsk,
 	PiBlock,
+	PiCommand,
 	PiImage,
 	PiMessage,
 	PiNotice,
@@ -41,6 +42,13 @@ import { MarkdownText } from "./Markdown.js";
 import type { ToolMode } from "./prefs.js";
 import { clearDraft, readDraft, writeDraftImages, writeDraftText } from "./drafts.js";
 import { completionOptions, parseCompletion, type CommandOption } from "./commands.js";
+
+/** pi's `get_commands` omits its TUI-only `/compact`; `send` in App.tsx runs it. */
+const COMPACT_COMMAND: PiCommand = {
+	name: "compact",
+	description: "Summarise older messages to free context (optional: focus instructions)",
+	source: "pwi",
+};
 import { timeAgo } from "./SessionList.js";
 
 /** Mirrors the server's allowlist; see SUPPORTED_IMAGE_MIME in agent.ts. */
@@ -542,9 +550,8 @@ function compactTokens(n: number): string {
  * triggers a compaction.
  *
  * Clicking it compacts, because the meter is where you are already looking
- * when you decide to: pi's own `/compact` is a TUI command and is not in the
- * catalog the composer offers, so without this a browser session can only
- * wait for the automatic fold at the threshold.
+ * when you decide to. Typing `/compact [instructions]` does the same: pi's own
+ * `/compact` is TUI-only, so `send` in App.tsx routes it here instead of to pi.
  */
 function ContextMeter({
 	tokens,
@@ -568,7 +575,7 @@ function ContextMeter({
 	return (
 		<button
 			data-custom="context meter"
-			onClick={onCompact}
+			onClick={() => onCompact()}
 			disabled={busy}
 			title={
 				busy
@@ -1206,7 +1213,7 @@ export function Chat({
 	/** The composer's `/` picker just opened; re-read the command catalog. */
 	onCommandMenu: () => void;
 	/** Fold the conversation into a summary. Refused while a turn is running. */
-	onCompact: () => void;
+	onCompact: (instructions?: string) => void;
 	/** A compaction started here is running. */
 	compacting: boolean;
 	/** Open a new session that continues from the answer that started at `at`. */
@@ -1317,7 +1324,8 @@ export function Chat({
 	 */
 	const completion = useMemo(() => parseCompletion(text), [text]);
 	const options = useMemo(
-		() => (completion ? completionOptions(snapshot?.commands ?? [], completion) : []),
+		() =>
+			completion ? completionOptions([COMPACT_COMMAND, ...(snapshot?.commands ?? [])], completion) : [],
 		[completion, snapshot?.commands],
 	);
 	const pickerOpen = options.length > 0 && !dismissed;

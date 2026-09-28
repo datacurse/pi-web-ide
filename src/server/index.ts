@@ -733,8 +733,11 @@ app.post("/api/sessions/:id/abort", async (req, res) => {
  * transcript and the context meter.
  */
 app.post("/api/sessions/:id/compact", async (req, res) => {
+	const instructions = req.body?.customInstructions;
+	if (instructions !== undefined && typeof instructions !== "string")
+		return res.status(400).json({ error: "customInstructions must be a string" });
 	try {
-		await registry.compact(req.params.id);
+		await registry.compact(req.params.id, instructions);
 		res.json({ ok: true });
 	} catch (err) {
 		res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
