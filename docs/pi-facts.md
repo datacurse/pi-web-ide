@@ -402,7 +402,7 @@ npm-12 machine.
 `pi --mode rpc` exits with code 0 about 1.3 s after its stdin reaches EOF. So a
 child whose stdin is a pipe owned by the server dies with the server. pwi gives
 each child a FIFO it opens read-write itself (it is its own writer, so EOF never
-comes) and plain files for stdout and stderr; see README "Sessions survive a
+comes) and plain files for stdout and stderr; see docs/design.md "Sessions survive a
 server restart". pi reads a FIFO stdin and writes a regular-file stdout without
 complaint; nothing in RPC mode checks for a pipe or a TTY.
 

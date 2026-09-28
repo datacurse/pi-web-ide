@@ -1311,8 +1311,8 @@ server.on("upgrade", (req, socket, head) => {
 // Loopback only, and the exposure is worse than credential theft: anyone who
 // reaches this port can start an agent run, and the pi children execute every
 // tool they choose — there are no approval modes to fall back on, and they are
-// spawned with `--approve` so that project-local extensions load. Tunnel it
-// (ssh -L) or put it on a private overlay network; never bind it publicly.
+// spawned with `--approve` so that project-local extensions load. Reach it
+// through `tailscale serve`; never bind it publicly.
 /*
  * Restarting pwi is always a takeover: the port is fixed, and the thing
  * holding it is the pwi you are replacing. Doing it by hand (find the pid,

@@ -27,7 +27,7 @@
  * takeover, an agent started by hand in the same cwd — produces turns no
  * event here ever carries, so `messages()` silently stops growing while the
  * file does not. `registry.refreshIfFileIsAhead` is the correction, and the
- * README section "A session is the file, not the child" records why it
+ * docs/design.md section "A session is the file, not the child" records why it
  * compares timestamps rather than mtimes or counts.
  *
  * Everything arriving from the child is external input and is typed `unknown`,

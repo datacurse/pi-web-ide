@@ -57,7 +57,7 @@ RestartSec=2
 
 # KillMode=process: a restart must NOT take the pi children with it. index.ts
 # detaches sessions that are mid-turn on SIGTERM, and the next server adopts
-# them (README "Sessions survive a server restart"). The default
+# them (docs/design.md "Sessions survive a server restart"). The default
 # control-group mode would SIGKILL them with the server. This is also why
 # ExecStart execs node itself rather than `pnpm start`: the main process must
 # be the server, since only it receives the SIGTERM.
@@ -80,7 +80,7 @@ SyslogIdentifier=pi-web-ide
 #   - No ProtectSystem=/ReadOnlyPaths= either: the agent's job is editing
 #     whatever paths the user names, so a filesystem sandbox here would have to
 #     be widened until it meant nothing.
-# Remote access is a per-machine tunnel (ssh -L) or Tailscale. See README.
+# Remote access is `tailscale serve` on each machine. See README.
 
 [Install]
 WantedBy=default.target
