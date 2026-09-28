@@ -364,11 +364,7 @@ export function TerminalPane({
 	 */
 	const spawn = async (place: (id: string) => void) => {
 		setError(null);
-		const r = await fetch(`/api/terminals`, {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ cwd }),
-		});
+		const r = await api.terminals.$post({ json: { cwd } });
 		const body = (await r.json().catch(() => ({}))) as { id?: string; error?: string };
 		// A refusal (the MAX_TERMINALS cap, a cwd that stopped existing) has to
 		// surface here: there is no shell to print it in.
@@ -408,7 +404,7 @@ export function TerminalPane({
 	 */
 	const closeTerm = (id: string) => {
 		onLayout(removeTerminal(layout, id));
-		void fetch(`/api/terminals/${encodeURIComponent(id)}`, { method: "DELETE" });
+		void api.terminals[":id"].$delete({ param: { id: encodeURIComponent(id) } });
 	};
 
 	/**

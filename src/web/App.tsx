@@ -360,9 +360,7 @@ export default function App() {
 
 		let live = true;
 		void (async () => {
-			const r = await fetch(`/api/terminals?cwd=${encodeURIComponent(project)}`).catch(
-				() => null,
-			);
+			const r = await api.terminals.$get({ query: { cwd: project } }).catch(() => null);
 			if (!r?.ok || !live) return;
 			const body = (await r.json()) as { terminals?: Array<{ id?: unknown }> };
 			const ids = (body.terminals ?? [])
@@ -399,11 +397,7 @@ export default function App() {
 	 * Keyed by the project like every other shell, so it survives a reload.
 	 */
 	const startShell = async (dir: string): Promise<string> => {
-		const r = await fetch("/api/terminals", {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ cwd: project, dir }),
-		});
+		const r = await api.terminals.$post({ json: { cwd: project, dir } });
 		const body = (await r.json().catch(() => ({}))) as { id?: string; error?: string };
 		if (!r.ok || !body.id) throw new Error(body.error ?? `could not start a shell (${r.status})`);
 		return body.id;

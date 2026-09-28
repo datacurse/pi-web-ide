@@ -167,7 +167,7 @@ export function Fleet({ open, onClose }: { open: boolean; onClose: () => void })
 	// Forget shells the server no longer has (it restarted, or they exited).
 	useEffect(() => {
 		void (async () => {
-			const r = await fetch("/api/terminals?fleet=1").catch(() => null);
+			const r = await api.terminals.$get({ query: { fleet: "1" } }).catch(() => null);
 			const body = r?.ok ? ((await r.json()) as { terminals?: { id: string; running: boolean }[] }) : null;
 			const live = new Set((body?.terminals ?? []).filter((t) => t.running).map((t) => t.id));
 			saveShells((s) => Object.fromEntries(Object.entries(s).filter(([, id]) => live.has(id))));
@@ -178,11 +178,7 @@ export function Fleet({ open, onClose }: { open: boolean; onClose: () => void })
 	const openShell = async (m: FleetMachine) => {
 		setError(null);
 		if (!shells[m.dns]) {
-			const r = await fetch("/api/terminals", {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ fleet: true, ssh: m.self ? undefined : m.ssh }),
-			});
+			const r = await api.terminals.$post({ json: { fleet: true, ssh: m.self ? undefined : m.ssh } });
 			const body = (await r.json().catch(() => ({}))) as { id?: string; error?: string };
 			if (!r.ok || !body.id) return setError(body.error ?? `could not start a shell (${r.status})`);
 			const id = body.id;
@@ -196,7 +192,7 @@ export function Fleet({ open, onClose }: { open: boolean; onClose: () => void })
 		[saveShells],
 	);
 	const closeShell = (dns: string, id: string) => {
-		void fetch(`/api/terminals/${id}`, { method: "DELETE" });
+		void api.terminals[":id"].$delete({ param: { id } });
 		forget(dns);
 	};
 

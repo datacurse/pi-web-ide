@@ -30,11 +30,19 @@ const registry = {
 	},
 } as unknown as Registry;
 
+/** Records what the terminal routes asked for; no PTY is ever started. */
+const calls: unknown[][] = [];
+const terminals = {
+	list: (...args: unknown[]) => (calls.push(["list", ...args]), [{ id: "t1", cwd: project, running: true }]),
+	create: (...args: unknown[]) => (calls.push(["create", ...args]), { id: "t1", cwd: args[0] }),
+	close: (...args: unknown[]) => calls.push(["close", ...args]),
+} as unknown as Terminals;
+
 const app = createApp({
 	cwd: project,
 	model: undefined,
 	registry,
-	terminals: {} as Terminals,
+	terminals,
 	piVersion: "0.0.0",
 	pwiVersion: "0.0.0",
 	boot: "boot",
@@ -183,4 +191,19 @@ test("the typed client round-trips system routes: query, JSON body, validation",
 	assert.deepEqual(await unpinned.json(), { favorites: [] });
 	const bad = await api["default-thinking"].$post({ json: { level: "" } });
 	assert.equal(bad.status, 400);
+});
+
+test("the typed client round-trips terminal routes: query, body, path param", async () => {
+	calls.length = 0;
+	const created = await api.terminals.$post({ json: { cwd: project, dir: project, cols: 100 } });
+	assert.deepEqual(await created.json(), { id: "t1", cwd: project, running: true });
+	await api.terminals.$get({ query: { cwd: project, fleet: "1" } });
+	await api.terminals[":id"].$delete({ param: { id: "t1" } });
+	assert.deepEqual(calls, [
+		["create", project, 100, 24, project],
+		["list", project, true],
+		["close", "t1"],
+	]);
+	const refused = await api.terminals.$post({ json: { fleet: true, ssh: "a;b" } });
+	assert.equal(refused.status, 400);
 });
