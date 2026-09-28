@@ -254,6 +254,25 @@ export interface PiPartial {
 	tools: Array<{ id: string; name: string; args: unknown; result?: string; isError?: boolean }>;
 }
 
+/**
+ * What a session's context is made of, by source (context-extension.ts), each
+ * with its pieces: every tool, rule file, skill, and the conversation by kind
+ * and by tool (`tool:<name>`, `count` calls). pi's chars/4 estimates.
+ */
+export interface ContextPart {
+	key: "system" | "tools" | "rules" | "skills" | "personality" | "conversation";
+	tokens: number;
+	items?: ContextItem[];
+}
+
+export interface ContextItem {
+	name: string;
+	tokens: number;
+	count?: number;
+}
+
+export type ContextBreakdown = ContextPart[];
+
 export interface Snapshot {
 	id: string;
 	file: string | undefined;

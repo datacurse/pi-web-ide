@@ -1,9 +1,10 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { CaretDown, CaretRight, CaretUp, Check, Copy, GitFork, PencilSimple, X } from "@phosphor-icons/react";
+import { ArrowsInLineVertical, ArrowsOutLineVertical, CaretDown, CaretRight, CaretUp, Check, Copy, GitFork, PencilSimple, X } from "@phosphor-icons/react";
 import { AnsiHtml } from "fancy-ansi/react";
 import { hasAnsi, stripAnsi } from "fancy-ansi";
-import type { PiBlock, PiImage, PiMessage, PiNotice } from "../shared/types.js";
-import { Button, IconButton, sectionLabel } from "./ui.js";
+import type { ContextBreakdown, ContextItem, ContextPart, PiBlock, PiImage, PiMessage, PiNotice } from "../shared/types.js";
+import { api, unwrap } from "./api.js";
+import { Button, IconButton, ListRow, sectionLabel } from "./ui.js";
 import { MarkdownText } from "./Markdown.js";
 import { timeAgo } from "./SessionList.js";
 import { Thumb } from "./Attachments.js";
@@ -318,66 +319,343 @@ function UserText({ text }: { text: string }) {
 	);
 }
 
-/** 312764 -> "313k". Tokens are never interesting to the digit. */
-function compactTokens(n: number): string {
-	if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(n >= 10_000_000 ? 0 : 1)}M`;
-	if (n >= 1_000) return `${Math.round(n / 1_000)}k`;
+/** 24_200 -> "24.2K". */
+function popupTokens(n: number): string {
+	if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+	if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
 	return String(n);
 }
 
 /**
- * How full the context is, next to the status line — and the only way to
- * compact from here.
+ * How full the context is, as a ring in the composer, drawn empty before the
+ * first turn rather than hidden. Clicking it opens `ContextPanel`.
  *
  * The number is pi's own `contextUsage` from `get_session_stats` (see
  * `fetchState` in src/server/agent.ts), not an estimate: it already counts
- * the system prompt, the tools and the cached prefix, which is exactly the
- * part a token count computed in the browser would miss and be wrong by, and
- * unlike the newest turn's `usage` it follows a compaction back down. It goes
- * amber at 75% and red at 90%, the band where the next long tool result
- * triggers a compaction.
- *
- * Clicking it compacts, because the meter is where you are already looking
- * when you decide to. Typing `/compact [instructions]` does the same: pi's own
- * `/compact` is TUI-only, so `send` in useSession.ts routes it here instead of to pi.
+ * the system prompt, the tools and the cached prefix, and unlike the newest
+ * turn's `usage` it follows a compaction back down. It goes amber at 75% and
+ * red at 90%, the band where the next long tool result triggers a compaction.
  */
 export function ContextMeter({
 	tokens,
 	window: limit,
-	busy,
 	compacting,
-	onCompact,
+	open,
+	onToggle,
 }: {
 	tokens: number;
 	window: number;
-	busy: boolean;
 	compacting: boolean;
-	onCompact: () => void;
+	open: boolean;
+	onToggle: () => void;
 }) {
-	if (limit <= 0 || tokens <= 0) return null;
 	if (compacting) return <Compacting />;
-	const share = Math.min(1, tokens / limit);
-	const percent = Math.round(share * 100);
+	const share = limit > 0 ? Math.min(1, tokens / limit) : 0;
 	const tone =
-		share >= 0.9 ? "text-red-400" : share >= 0.75 ? "text-amber-400" : "text-neutral-500";
+		share >= 0.9 ? "text-red-400" : share >= 0.75 ? "text-amber-400" : "text-neutral-400";
+	const label =
+		limit > 0
+			? `Context: ${Math.round(share * 100)}% full (${tokens.toLocaleString()} of ${limit.toLocaleString()} tokens)`
+			: "Context usage";
 	return (
-		<button
-			data-custom="context meter"
-			onClick={() => onCompact()}
-			disabled={busy}
-			title={
-				busy
-					? `${tokens.toLocaleString()} of ${limit.toLocaleString()} context tokens used — finish the turn to compact`
-					: `${tokens.toLocaleString()} of ${limit.toLocaleString()} context tokens used. Click to compact the conversation into a summary.`
-			}
-			className={`flex shrink-0 items-center gap-1.5 rounded-sm px-1 text-meta tabular-nums transition-colors duration-150 ease-out enabled:hover:text-neutral-200 disabled:cursor-default motion-reduce:transition-none ${tone}`}
+		<IconButton label={label} onClick={onToggle} aria-expanded={open} data-context-meter round>
+			<Ring share={share} className={`size-4 ${tone}`} />
+		</IconButton>
+	);
+}
+
+/** A progress ring, empty at 0. `currentColor` fills it, `neutral-700` is the track. */
+function Ring({ share, className, stroke = 2 }: { share: number; className: string; stroke?: number }) {
+	const r = 7 - stroke / 2;
+	const around = 2 * Math.PI * r;
+	return (
+		<svg aria-hidden viewBox="0 0 16 16" className={`-rotate-90 ${className}`}>
+			<circle cx="8" cy="8" r={r} fill="none" strokeWidth={stroke} className="stroke-neutral-700" />
+			{share > 0 && (
+				<circle
+					cx="8"
+					cy="8"
+					r={r}
+					fill="none"
+					strokeWidth={stroke}
+					stroke="currentColor"
+					strokeLinecap="round"
+					strokeDasharray={`${Math.max(share * around, 0.5)} ${around}`}
+				/>
+			)}
+		</svg>
+	);
+}
+
+const PARTS: Record<ContextPart["key"], { label: string; color: string }> = {
+	system: { label: "System prompt", color: "bg-neutral-400" },
+	tools: { label: "Tool definitions", color: "bg-(--ct-mauve)" },
+	rules: { label: "Rules", color: "bg-green-400" },
+	skills: { label: "Skills", color: "bg-yellow-500" },
+	personality: { label: "Personality", color: "bg-blue-400" },
+	conversation: { label: "Conversation", color: "bg-(--ct-teal)" },
+};
+
+function percentText(share: number): string {
+	return share > 0 && share < 0.01 ? "<1%" : `${Math.round(share * 100)}%`;
+}
+
+/** A conversation item's name and count, as the popup shows them. */
+function itemLabel(key: ContextPart["key"], item: ContextItem): { name: string; detail?: string; mono: boolean } {
+	const tool = key === "conversation" && item.name.startsWith("tool:");
+	const n = item.count ?? 0;
+	const detail = !n ? undefined : tool ? `${n} call${n === 1 ? "" : "s"}` : String(n);
+	return { name: tool ? item.name.slice(5) : item.name, detail, mono: tool || key === "tools" || key === "skills" };
+}
+
+/**
+ * What fills the context, above the composer, like Cursor's. The total is the
+ * meter's (pi's real count); the parts are pi's chars/4 estimates from
+ * context-extension.ts, with the conversation's pieces scaled to fill what
+ * the fixed parts leave of the total. Every part opens into its pieces; the
+ * largest starts open. Compacting lives here now that a click on the meter
+ * opens this.
+ */
+export function ContextPanel({
+	sessionId,
+	tokens,
+	window: limit,
+	busy,
+	onCompact,
+	onClose,
+}: {
+	sessionId: string;
+	tokens: number;
+	window: number;
+	busy: boolean;
+	onCompact: () => void;
+	onClose: () => void;
+}) {
+	const [parts, setParts] = useState<ContextBreakdown | null>(null);
+	const [error, setError] = useState<string | null>(null);
+	const [open, setOpen] = useState<Set<string>>(new Set());
+	const box = useRef<HTMLDivElement>(null);
+
+	useEffect(() => {
+		let live = true;
+		unwrap(api.sessions[":id"].context.$get({ param: { id: sessionId } })).then(
+			(b) => {
+				if (!live) return;
+				setParts(b);
+				const top = b.reduce<ContextPart | undefined>((m, p) => (!m || p.tokens > m.tokens ? p : m), undefined);
+				if (top?.items?.length) setOpen(new Set([top.key]));
+			},
+			(err: unknown) => live && setError(err instanceof Error ? err.message : String(err)),
+		);
+		return () => {
+			live = false;
+		};
+	}, [sessionId]);
+
+	// It floats over the transcript, so it may grow up to the top of the chat.
+	const [room, setRoom] = useState<number>();
+	useLayoutEffect(() => {
+		const fit = () => {
+			const el = box.current;
+			const chat = el?.closest("main");
+			if (el?.parentElement && chat)
+				setRoom(el.parentElement.getBoundingClientRect().top - chat.getBoundingClientRect().top - 16);
+		};
+		fit();
+		window.addEventListener("resize", fit);
+		return () => window.removeEventListener("resize", fit);
+	}, []);
+
+	// Escape or a click anywhere else closes it; the meter's own click toggles.
+	useEffect(() => {
+		const key = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+		const down = (e: PointerEvent) => {
+			const t = e.target as Element;
+			if (!box.current?.contains(t) && !t.closest?.("[data-context-meter]")) onClose();
+		};
+		window.addEventListener("keydown", key);
+		window.addEventListener("pointerdown", down);
+		return () => {
+			window.removeEventListener("keydown", key);
+			window.removeEventListener("pointerdown", down);
+		};
+	}, [onClose]);
+
+	// The conversation is what pi's total leaves after the fixed parts.
+	const fixed = (parts ?? []).filter((p) => p.key !== "conversation").reduce((n, p) => n + p.tokens, 0);
+	const talk = parts?.find((p) => p.key === "conversation");
+	const talkReal = tokens > 0 ? Math.max(0, tokens - fixed) : (talk?.tokens ?? 0);
+	const scale = talk && talk.tokens > 0 ? talkReal / talk.tokens : 0;
+	const rows = (parts ?? [])
+		.map((p) =>
+			p.key === "conversation"
+				? { ...p, tokens: talkReal, items: p.items?.map((i) => ({ ...i, tokens: Math.round(i.tokens * scale) })) }
+				: p,
+		)
+		.filter((p) => p.tokens > 0);
+	const total = parts ? Math.max(tokens, fixed + talkReal) : tokens;
+	const share = limit > 0 ? Math.min(1, total / limit) : 0;
+	const tone = share >= 0.9 ? "text-red-400" : share >= 0.75 ? "text-amber-400" : "text-(--ct-teal)";
+	const largest = rows
+		.flatMap((p) => (p.items?.length ? p.items.map((i) => ({ key: p.key, item: i })) : []))
+		.reduce<{ key: ContextPart["key"]; item: ContextItem } | undefined>(
+			(m, x) => (!m || x.item.tokens > m.item.tokens ? x : m),
+			undefined,
+		);
+
+	const expandable = rows.filter((p) => p.items?.some((i) => i.tokens > 0)).map((p) => p.key);
+	const allOpen = expandable.length > 0 && expandable.every((k) => open.has(k));
+	const toggle = (key: string) =>
+		setOpen((o) => {
+			const n = new Set(o);
+			if (!n.delete(key)) n.add(key);
+			return n;
+		});
+
+	return (
+		<div
+			ref={box}
+			style={{ maxHeight: room }}
+			className="absolute inset-x-0 bottom-full z-10 mb-2 overflow-y-auto rounded-md border border-neutral-800 bg-neutral-900 py-2"
 		>
-			<span aria-hidden className="h-1 w-10 overflow-hidden rounded-full bg-neutral-800">
-				<span className="block h-full bg-current" style={{ width: `${percent}%` }} />
-			</span>
-			{compactTokens(tokens)}/{compactTokens(limit)}
-			<span className="sr-only"> context tokens used; compact the conversation</span>
-		</button>
+			<div className="flex items-center justify-between px-3 text-neutral-300">
+				Context Usage
+				<div className="flex items-center gap-1">
+					{expandable.length > 0 && (
+						<IconButton
+							label={allOpen ? "Collapse all" : "Expand all"}
+							size="sm"
+							onClick={() => setOpen(new Set(allOpen ? [] : expandable))}
+						>
+							{allOpen ? <ArrowsInLineVertical size={14} /> : <ArrowsOutLineVertical size={14} />}
+						</IconButton>
+					)}
+					<IconButton label="Close" size="sm" onClick={onClose}>
+						<X size={14} />
+					</IconButton>
+				</div>
+			</div>
+
+			<div className="mt-1 flex items-center gap-3 px-3">
+				<div className="relative flex shrink-0 items-center justify-center">
+					<Ring share={share} stroke={1.5} className={`size-14 ${tone}`} />
+					<span className="absolute text-meta font-semibold tabular-nums text-neutral-100">
+						{limit > 0 ? percentText(share) : "?"}
+					</span>
+				</div>
+				<div className="min-w-0 tabular-nums">
+					<div>
+						<span className="text-title text-neutral-100">~{popupTokens(total)}</span>
+						<span className="text-neutral-400">
+							{" "}
+							/ {limit > 0 ? popupTokens(limit) : "?"} tokens
+						</span>
+					</div>
+					<div className="text-meta text-neutral-500">
+						{limit > 0 && `${popupTokens(Math.max(0, limit - total))} free`}
+						{largest && total > 0 && (
+							<>
+								{" · largest: "}
+								<span className="text-neutral-300">{itemLabel(largest.key, largest.item).name}</span>
+								{` (${percentText(largest.item.tokens / total)})`}
+							</>
+						)}
+					</div>
+				</div>
+			</div>
+
+			{/* What the used part is made of, full width so small parts still show. */}
+			<div className="mx-3 mt-3 flex h-2 gap-px overflow-hidden rounded-full bg-neutral-800">
+				{total > 0 &&
+					rows.map((p) => (
+						<span
+							key={p.key}
+							title={`${PARTS[p.key].label}: ${popupTokens(p.tokens)}`}
+							className={`min-w-0.5 ${PARTS[p.key].color}`}
+							style={{ width: `${(p.tokens / total) * 100}%` }}
+						/>
+					))}
+			</div>
+
+			{error ? (
+				<div className="mt-2 px-3 text-meta text-red-400">{error}</div>
+			) : !parts ? (
+				<div className="mt-2 px-3 text-meta text-neutral-500">Measuring…</div>
+			) : (
+				<div className="mt-2">
+					{rows.map((p) => {
+						const items = p.items?.filter((i) => i.tokens > 0) ?? [];
+						const expanded = open.has(p.key);
+						return (
+							<div key={p.key}>
+								<ListRow
+									onClick={() => items.length > 0 && toggle(p.key)}
+									aria-expanded={items.length > 0 ? expanded : undefined}
+									className="gap-2"
+								>
+									<span aria-hidden className="w-3 text-neutral-500">
+										{items.length > 0 &&
+											(expanded ? <CaretDown size={12} /> : <CaretRight size={12} />)}
+									</span>
+									<span aria-hidden className={`size-3 shrink-0 rounded-sm ${PARTS[p.key].color}`} />
+									<span className="text-neutral-200">{PARTS[p.key].label}</span>
+									{items.length > 0 && (
+										<span className="text-meta text-neutral-500">{items.length}</span>
+									)}
+									<span className="ml-auto w-10 text-right text-meta tabular-nums text-neutral-500">
+										{percentText(p.tokens / total)}
+									</span>
+									<span className="w-12 text-right tabular-nums text-neutral-300">
+										{popupTokens(p.tokens)}
+									</span>
+								</ListRow>
+								{expanded &&
+									items.map((i) => {
+										const l = itemLabel(p.key, i);
+										return (
+											<div
+												key={i.name}
+												title={i.name}
+												className="flex items-center gap-2 py-0.5 pr-3 pl-12 text-meta text-neutral-400"
+											>
+												<span className={`min-w-0 truncate ${l.mono ? "font-mono" : ""}`}>{l.name}</span>
+												{l.detail && <span className="shrink-0 text-neutral-500">{l.detail}</span>}
+												<span aria-hidden className="ml-auto h-1 w-16 shrink-0 overflow-hidden rounded-full bg-neutral-800">
+													<span
+														className={`block h-full ${PARTS[p.key].color}`}
+														style={{ width: `${(i.tokens / p.tokens) * 100}%` }}
+													/>
+												</span>
+												<span className="w-10 text-right tabular-nums text-neutral-500">
+													{percentText(i.tokens / total)}
+												</span>
+												<span className="w-12 text-right tabular-nums">{popupTokens(i.tokens)}</span>
+											</div>
+										);
+									})}
+							</div>
+						);
+					})}
+				</div>
+			)}
+
+			<div className="mt-2 flex items-center justify-between gap-3 px-3">
+				<span className="text-meta text-neutral-500">
+					The total is pi&apos;s count; parts are estimates (about 4 characters a token).
+				</span>
+				<Button
+					size="sm"
+					disabled={busy || tokens <= 0}
+					title={busy ? "Finish the turn to compact" : "Fold the conversation into a summary"}
+					onClick={() => {
+						onClose();
+						onCompact();
+					}}
+				>
+					Compact
+				</Button>
+			</div>
+		</div>
 	);
 }
 

@@ -29,7 +29,7 @@ import {
 import { currentEpoch } from "./packages.js";
 import { lastMessageAt } from "./sessions.js";
 import type { Hunk } from "../shared/hunks.js";
-import { addNotice, type PiEvent, type PiImage, type PiNotice, type PiPartial, type Snapshot } from "../shared/types.js";
+import { addNotice, type ContextBreakdown, type PiEvent, type PiImage, type PiNotice, type PiPartial, type Snapshot } from "../shared/types.js";
 
 export type { Snapshot };
 
@@ -552,6 +552,12 @@ export class Registry {
 		entry.lastActivity = Date.now();
 		await entry.session.rewind(at);
 		void this.prompt(id, text, images);
+	}
+
+	async contextBreakdown(id: string): Promise<ContextBreakdown> {
+		const entry = this.entries.get(id);
+		if (!entry) throw new Error(`unknown session: ${id}`);
+		return entry.session.contextBreakdown();
 	}
 
 	async abort(id: string): Promise<void> {

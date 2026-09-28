@@ -94,7 +94,26 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
   provider labels as uppercase captions, current option in amber. Other browsers
   show the native popup.
 - The context meter sits in the composer's right group, before Stop. Git stays in
-  the row above the box.
+  the row above the box. It is a 16px ring in a ghost round `IconButton`
+  (`neutral-700` track, `neutral-400` fill, amber from 75%, red from 90%), drawn empty
+  before the first turn instead of hidden.
+- Clicking the ring opens `ContextPanel` above the box (`rounded-md`, like Cursor's):
+  - Header: a 56px ring with the % inside, `~used` in `text-title` over `/ window tokens`,
+    then a `text-meta` line with what is free and the largest single piece.
+  - A full-width `h-2` stacked bar of what the USED part is made of (not scaled to the
+    window, so small parts still show).
+  - One `ListRow` per part: caret, `size-3` swatch, label, piece count, % of used, tokens.
+    Colors: System prompt `neutral-400`, Tool definitions `--ct-mauve`, Rules `green-400`,
+    Skills `yellow-500`, Personality `blue-400`, Conversation `--ct-teal`. Empty parts hide.
+  - A row opens into its pieces (each tool, rule file, skill; the conversation as your
+    messages, replies, thinking, and each tool's calls plus results), `text-meta`, with
+    a `w-16` share bar. The largest part starts open.
+  - Footer: an estimates note and `Compact` (`Button sm`). ✕, Escape or a click
+    outside closes it.
+  - Beside ✕, an `IconButton sm` expands or collapses every part
+    (`ArrowsOutLineVertical` / `ArrowsInLineVertical`).
+  - The panel floats over the transcript (absolute, above the box) and grows with its
+    content up to the top of the chat, then scrolls; it never moves the layout.
 - Placeholder is `Message pi…`; key hints live in the textarea's `title`. The field
   uses `field-sizing-content max-h-60` and grows as you type.
 

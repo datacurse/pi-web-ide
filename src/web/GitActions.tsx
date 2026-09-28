@@ -276,6 +276,8 @@ export function GitActions({
 	if (!state?.repo) return null;
 
 	const dirty = state.changed > 0;
+	const unpushed = state.ahead > 0 || (!state.upstream && state.remote !== "");
+	if (!dirty && !unpushed && !running && !result) return null;
 	const primary = ACTIONS[0];
 
 	return (

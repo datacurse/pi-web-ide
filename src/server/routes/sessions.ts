@@ -327,6 +327,15 @@ export function sessionsRoutes({ cwd: CWD, registry }: Deps) {
 			}
 		})
 
+		/** What the fixed part of the context is made of, for the context popup. */
+		.get("/sessions/:id/context", async (c) => {
+			try {
+				return c.json(await registry.contextBreakdown(c.req.param("id")), 200);
+			} catch (err) {
+				return c.json({ error: err instanceof Error ? err.message : String(err) }, 400);
+			}
+		})
+
 		.post("/sessions/:id/abort", async (c) => {
 			await registry.abort(c.req.param("id"));
 			return c.json({ ok: true }, 200);

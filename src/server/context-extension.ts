@@ -1,0 +1,154 @@
+/**
+ * context-extension.ts — a pi extension, not server code.
+ *
+ * agent.ts loads it into every session child for the context popup. The
+ * command `/pwi-context` measures what the context is made of and hands it
+ * back as a `setStatus` frame keyed by the command name: pi's RPC has no
+ * command for this, and a command's status is the only output that reaches
+ * the host before pi acks the prompt.
+ *
+ * Sizes are pi's own estimate (chars / 4, an image as 4800 chars). The system
+ * prompt is split along the `<section>` tags pi wraps each part in; a forced
+ * prompt has none and counts as system prompt whole.
+ */
+
+type Block = { type: string; text?: string; thinking?: string; name?: string; arguments?: unknown };
+type Message = {
+	role: string;
+	content?: string | Block[];
+	toolName?: string;
+	summary?: string;
+	command?: string;
+	output?: string;
+};
+
+/** The minimum of pi's ExtensionAPI this file uses; pi is not a dependency here. */
+interface Pi {
+	getActiveTools(): string[];
+	getAllTools(): { name: string; description?: string; parameters?: unknown }[];
+	registerCommand(
+		name: string,
+		options: {
+			description?: string;
+			handler: (
+				args: string,
+				ctx: {
+					getSystemPrompt(): string;
+					sessionManager: { buildSessionProjection(): { messages: Message[] } };
+					ui: { setStatus(key: string, text: string | undefined): void };
+				},
+			) => Promise<void>;
+		},
+	): void;
+}
+
+interface Item {
+	name: string;
+	tokens: number;
+	count?: number;
+}
+
+const COMMAND = "pwi-context";
+const tokens = (chars: number) => Math.ceil(chars / 4);
+
+/** `<name>…</name>` in the prompt, "" when absent. */
+function section(prompt: string, name: string): string {
+	const start = prompt.indexOf(`<${name}>\n`);
+	if (start < 0) return "";
+	const close = `\n</${name}>`;
+	const end = prompt.indexOf(close, start);
+	return end < 0 ? "" : prompt.slice(start, end + close.length);
+}
+
+/** One item per `open…close` block, named by `name`'s first group. */
+function blocks(text: string, block: RegExp, name: RegExp): Item[] {
+	const home = process.env.HOME;
+	return [...text.matchAll(block)].map((m) => ({
+		name: (name.exec(m[0])?.[1] ?? "?").replace(home && home !== "/" ? home : "\0", "~"),
+		tokens: tokens(m[0].length),
+	}));
+}
+
+function contentChars(content: Message["content"]): number {
+	if (typeof content === "string") return content.length;
+	let n = 0;
+	for (const b of content ?? []) {
+		if (b.type === "text") n += b.text?.length ?? 0;
+		else if (b.type === "image") n += 4800;
+	}
+	return n;
+}
+
+/** Conversation chars by kind, and tool calls plus their results by tool. */
+function conversation(messages: Message[]): Item[] {
+	const kinds = new Map<string, Item>();
+	const add = (name: string, chars: number, count = 0) => {
+		const k = kinds.get(name) ?? { name, tokens: 0, count: 0 };
+		k.tokens += chars;
+		k.count = (k.count ?? 0) + count;
+		kinds.set(name, k);
+	};
+	for (const m of messages) {
+		if (m.role === "user") add("Your messages", contentChars(m.content), 1);
+		else if (m.role === "assistant" && Array.isArray(m.content)) {
+			for (const b of m.content) {
+				if (b.type === "text") add("Replies", b.text?.length ?? 0);
+				else if (b.type === "thinking") add("Thinking", b.thinking?.length ?? 0);
+				else if (b.type === "toolCall")
+					add(`tool:${b.name}`, (b.name?.length ?? 0) + JSON.stringify(b.arguments ?? {}).length, 1);
+			}
+		} else if (m.role === "toolResult") add(`tool:${m.toolName ?? "?"}`, contentChars(m.content));
+		else if (m.role === "compactionSummary" || m.role === "branchSummary")
+			add("Summaries", m.summary?.length ?? 0, 1);
+		else if (m.role === "bashExecution") add("Shell commands", (m.command?.length ?? 0) + (m.output?.length ?? 0), 1);
+		else add("Other", contentChars(m.content));
+	}
+	return [...kinds.values()]
+		.map((k) => ({ ...k, tokens: tokens(k.tokens) }))
+		.filter((k) => k.tokens > 0)
+		.sort((a, b) => b.tokens - a.tokens);
+}
+
+export default function context(pi: Pi) {
+	pi.registerCommand(COMMAND, {
+		description: "pwi internal: measure the context",
+		handler: async (_args, ctx) => {
+			const prompt = ctx.getSystemPrompt();
+			const rules = section(prompt, "project_context");
+			const skills = section(prompt, "skills");
+			const personality = section(prompt, "addendum");
+			const active = new Set(pi.getActiveTools());
+			const tools = pi
+				.getAllTools()
+				.filter((t) => active.has(t.name))
+				.map((t) => ({
+					name: t.name,
+					tokens: tokens(
+						JSON.stringify({ name: t.name, description: t.description, parameters: t.parameters }).length,
+					),
+				}))
+				.sort((a, b) => b.tokens - a.tokens);
+			const parts = [
+				{ key: "system", tokens: tokens(prompt.length - rules.length - skills.length - personality.length) },
+				{ key: "tools", tokens: tools.reduce((n, t) => n + t.tokens, 0), items: tools },
+				{
+					key: "rules",
+					tokens: tokens(rules.length),
+					items: blocks(rules, /<project_instructions path="[^"]*">[\s\S]*?<\/project_instructions>/g, /path="([^"]*)"/),
+				},
+				{
+					key: "skills",
+					tokens: tokens(skills.length),
+					items: blocks(skills, /<skill>[\s\S]*?<\/skill>/g, /<name>([^<]*)<\/name>/).sort(
+						(a, b) => b.tokens - a.tokens,
+					),
+				},
+				{ key: "personality", tokens: tokens(personality.length) },
+			];
+			const convo = conversation(ctx.sessionManager.buildSessionProjection().messages);
+			parts.push({ key: "conversation", tokens: convo.reduce((n, c) => n + c.tokens, 0), items: convo });
+			ctx.ui.setStatus(COMMAND, JSON.stringify(parts));
+			ctx.ui.setStatus(COMMAND, undefined);
+		},
+	});
+}

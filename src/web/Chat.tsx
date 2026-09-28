@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowDown, ArrowUp, Plus, QuestionMark, Square } from "@phosphor-icons/react";
 import type {
 	AskAnswer,
@@ -29,6 +29,7 @@ import {
 	CommandRow,
 	CompactionRow,
 	ContextMeter,
+	ContextPanel,
 	Footer,
 	Message,
 	Notices,
@@ -207,6 +208,8 @@ export function Chat({
 	const [attachError, setAttachError] = useState<string | null>(null);
 	/** The expanded attachment, as a data URL, or null. See Lightbox. */
 	const [zoomed, setZoomed] = useState<string | null>(null);
+	const [contextOpen, setContextOpen] = useState(false);
+	const closeContext = useCallback(() => setContextOpen(false), []);
 	const viewport = useRef<HTMLDivElement>(null);
 	const fileInput = useRef<HTMLInputElement>(null);
 	/**
@@ -914,7 +917,17 @@ export function Chat({
 				<div className="chat-gutter pt-1 pb-6">
 					{/* Same column as the prose above it, so the box's edges line up
 					    with the text you are replying to. */}
-					<div className="chat-measure">
+					<div className="chat-measure relative">
+						{contextOpen && (
+							<ContextPanel
+								sessionId={snapshot.id}
+								tokens={snapshot.contextTokens}
+								window={snapshot.contextWindow}
+								busy={busy}
+								onCompact={onCompact}
+								onClose={closeContext}
+							/>
+						)}
 						{pickerOpen && (
 							<CommandPicker
 								options={options}
@@ -1067,9 +1080,9 @@ export function Chat({
 									<ContextMeter
 										tokens={snapshot.contextTokens}
 										window={snapshot.contextWindow}
-										busy={busy}
 										compacting={compacting}
-										onCompact={onCompact}
+										open={contextOpen}
+										onToggle={() => setContextOpen((o) => !o)}
 									/>
 									{busy && (
 										<IconButton

@@ -64,7 +64,7 @@ import { personalityPath, readRemind } from "./personality.js";
 import { repairSessionFile } from "./repair.js";
 import { sessionHeaderCwd } from "./sessions.js";
 import { stateDir } from "./state.js";
-import { ASK_ONLY } from "../shared/types.js";
+import { ASK_ONLY, type ContextBreakdown, type ContextPart } from "../shared/types.js";
 import type {
 	AskAnswer,
 	PiAsk,
@@ -288,8 +288,8 @@ export function toCommands(list: unknown): PiCommand[] {
 	const out: PiCommand[] = [];
 	for (const c of records(list)) {
 		const name = typeof c.name === "string" ? c.name : "";
-		// pwi's own plumbing (rewind-extension.ts), not something to type.
-		if (!name || name === REWIND_COMMAND) continue;
+		// pwi's own plumbing (rewind-extension.ts, context-extension.ts), not something to type.
+		if (!name || name === REWIND_COMMAND || name === CONTEXT_COMMAND) continue;
 		out.push({
 			name,
 			...(typeof c.description === "string" ? { description: c.description } : {}),
@@ -948,6 +948,8 @@ export interface PiSession {
 	 * at `at`, in the same file (see rewind-extension.ts). For editing it.
 	 */
 	rewind(at: number): Promise<void>;
+	/** What the fixed part of the context is made of (see context-extension.ts). */
+	contextBreakdown(): Promise<ContextBreakdown>;
 	abort(): Promise<void>;
 	/**
 	 * Fold the conversation into a summary now.
@@ -1022,6 +1024,9 @@ interface SessionState {
 const REMIND_EXTENSION = fileURLToPath(new URL("./remind-extension.ts", import.meta.url));
 const REWIND_EXTENSION = fileURLToPath(new URL("./rewind-extension.ts", import.meta.url));
 const REWIND_COMMAND = "pwi-rewind";
+const CONTEXT_EXTENSION = fileURLToPath(new URL("./context-extension.ts", import.meta.url));
+const CONTEXT_COMMAND = "pwi-context";
+const CONTEXT_KEYS: ContextPart["key"][] = ["system", "tools", "rules", "skills", "personality", "conversation"];
 
 export function spawnArgs(opts: {
 	file?: string;
@@ -1038,7 +1043,7 @@ export function spawnArgs(opts: {
 	// question on, and a browser client that opens a project has already
 	// decided to run its code.
 	args.push("--approve");
-	args.push("-e", REWIND_EXTENSION);
+	args.push("-e", REWIND_EXTENSION, "-e", CONTEXT_EXTENSION);
 	if (opts.file) args.push("--session", opts.file);
 	else if (opts.fork) args.push("--fork", opts.fork);
 	if (opts.model) args.push("--model", opts.model);
@@ -1246,6 +1251,7 @@ async function wrap(child: RpcChild, cwd: string): Promise<PiSession> {
 	// A child adopted from an older server may lack it, and then the command
 	// would reach the model as text.
 	const canRewind = records(rawCommands).some((c) => c.name === REWIND_COMMAND);
+	const canMeasure = records(rawCommands).some((c) => c.name === CONTEXT_COMMAND);
 
 	const listeners = new Set<(e: PiEvent) => void>();
 	const emit = (e: PiEvent) => {
@@ -1618,6 +1624,39 @@ async function wrap(child: RpcChild, cwd: string): Promise<PiSession> {
 			generation++;
 			messages = healDanglingToolCalls(await fetchMessages(child));
 			await refreshState();
+		},
+		async contextBreakdown() {
+			if (!canMeasure) throw new Error("restart this session to see what fills its context");
+			// The command answers with a status frame, delivered before its prompt ack.
+			let reply: unknown;
+			const off = child.onFrame((f) => {
+				if (f.method === "setStatus" && f.statusKey === CONTEXT_COMMAND && typeof f.statusText === "string")
+					reply = f.statusText;
+			});
+			try {
+				await child.send<unknown>("prompt", { message: `/${CONTEXT_COMMAND}` });
+			} finally {
+				off();
+			}
+			let parsed: unknown;
+			try {
+				parsed = typeof reply === "string" ? JSON.parse(reply) : undefined;
+			} catch {
+				parsed = undefined;
+			}
+			if (!Array.isArray(parsed)) throw new Error("pi did not measure the context");
+			const num = (v: unknown) => (typeof v === "number" && v >= 0 ? v : 0);
+			return records(parsed)
+				.filter((p): p is typeof p & { key: ContextPart["key"] } => CONTEXT_KEYS.includes(p.key as ContextPart["key"]))
+				.map((p) => ({
+					key: p.key,
+					tokens: num(p.tokens),
+					items: records(p.items).map((i) => ({
+						name: String(i.name ?? ""),
+						tokens: num(i.tokens),
+						...(typeof i.count === "number" ? { count: i.count } : {}),
+					})),
+				}));
 		},
 		async refreshCommands() {
 			commands = toCommands(await fetchCommands(child));

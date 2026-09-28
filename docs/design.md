@@ -145,9 +145,12 @@ just folded away, so a meter fed from messages reads full until the next turn.
 During a turn the streamed `usage` keeps it live; every settle, compaction and
 model switch re-reads it.
 
-The meter reads `35k/1.0M` with the exact figures in its tooltip, and goes
-amber at 75% and red at 90% — the band where the next big tool result triggers
-a compaction. It is hidden for a model that declares no window.
+The meter is a ring with the exact figures in its tooltip, and goes amber at
+75% and red at 90% — the band where the next big tool result triggers a
+compaction. It shows empty before the first turn. Clicking it opens a breakdown
+(system prompt, tools, rules, skills, personality, conversation): the fixed
+parts are measured by `/pwi-context` (context-extension.ts) with pi's chars/4
+estimate, and the conversation is what the total leaves.
 
 ## Slash commands answer below the transcript
 
