@@ -3,8 +3,6 @@
  * dependencies routes are built from, and body parsing.
  */
 
-import type { Context } from "hono";
-import { HTTPException } from "hono/http-exception";
 import { validator } from "hono/validator";
 import type { HttpBindings } from "@hono/node-server";
 import type { Registry } from "./registry.js";
@@ -88,28 +86,6 @@ export interface Deps {
 	pwiVersion: string;
 	boot: string;
 	degraded: () => boolean;
-}
-
-/**
- * The JSON body as an object, `{}` when there is none.
- *
- * Only `application/json` is parsed, as express.json did: a text/plain or
- * form POST is what a foreign page can send without a preflight, and it
- * stays empty here even before the origin check refuses it.
- */
-export async function readBody(c: Context<Env>): Promise<Record<string, unknown>> {
-	if (!/^application\/json\b/i.test(c.req.header("content-type") ?? "")) return {};
-	const text = await c.req.text();
-	if (!text.trim()) return {};
-	let value: unknown;
-	try {
-		value = JSON.parse(text);
-	} catch {
-		throw new HTTPException(400, { message: "invalid JSON body" });
-	}
-	return value && typeof value === "object" && !Array.isArray(value)
-		? (value as Record<string, unknown>)
-		: {};
 }
 
 /**

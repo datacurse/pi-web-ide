@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { CaretDown, Check, GitBranch, Sparkle } from "@phosphor-icons/react";
 import { readGitAutoName, writeGitAutoName } from "./prefs.js";
 import { Button, MenuItem, inputClass } from "./ui.js";
+import { api } from "./api.js";
 
 /** What `GET /api/git` answers with. See src/server/git.ts. */
 export interface GitState {
@@ -146,9 +147,9 @@ export function GitActions({
 	const root = useRef<HTMLDivElement | null>(null);
 
 	const refresh = async () => {
-		const r = await fetch(`/api/git?cwd=${encodeURIComponent(cwd)}`);
+		const r = await api.git.$get({ query: { cwd } });
 		if (!r.ok) return;
-		setGitState(cwd, (await r.json()) as GitState);
+		setGitState(cwd, await r.json());
 	};
 
 	useEffect(() => {
@@ -197,11 +198,7 @@ export function GitActions({
 		setGitBusy(cwd, "Naming…");
 		setNameError(null);
 		try {
-			const r = await fetch(`/api/git/name`, {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ cwd }),
-			});
+			const r = await api.git.name.$post({ json: { cwd } });
 			const body = (await r.json().catch(() => ({}))) as { message?: string; error?: string };
 			if (!r.ok || !body.message) {
 				setNameError(body.error ?? "could not name this commit");
@@ -253,16 +250,14 @@ export function GitActions({
 	const execute = async (action: Action, fields: { message?: string; branch?: string }) => {
 		setGitBusy(cwd, busyLabel(action));
 		try {
-			const r = await fetch(`/api/git`, {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({
+			const r = await api.git.$post({
+				json: {
 					cwd,
 					branch: action.branch ? fields.branch : undefined,
 					message: action.commit ? fields.message : undefined,
 					push: action.push,
 					pr: action.pr,
-				}),
+				},
 			});
 			const body = (await r.json().catch(() => ({}))) as GitResult & { error?: string };
 			setResult(body.ok === undefined ? { ok: false, steps: [], error: body.error } : body);

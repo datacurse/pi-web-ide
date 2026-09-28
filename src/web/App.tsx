@@ -87,7 +87,7 @@ import {
 import { setFavicon } from "./favicon.js";
 import { attentionOf, attentionTitle, nextWaiting, type Attention } from "./attention.js";
 import { Button, IconButton, PanelHeader } from "./ui.js";
-import { api } from "./api.js";
+import { api, unwrap } from "./api.js";
 
 /**
  * The stand-in for "no session, so no hunks".
@@ -1313,9 +1313,8 @@ export default function App() {
 		if (!gitCwd) return setUncommitted(0);
 		let live = true;
 		const read = () =>
-			fetch(`/api/git/changes?cwd=${encodeURIComponent(gitCwd)}`)
-				.then((r) => r.json() as Promise<{ files?: unknown[] }>)
-				.then((b) => live && setUncommitted(b.files?.length ?? 0))
+			unwrap(api.git.changes.$get({ query: { cwd: gitCwd } }))
+				.then((b) => live && setUncommitted(b.files.length))
 				.catch(() => {});
 		void read();
 		// A commit from the chat's button: the panel may be closed, so re-read here.

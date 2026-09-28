@@ -32,7 +32,6 @@ import {
 import { FileGlyph } from "./fileIcon.js";
 import {
 	GIT_CHANGED,
-	type GitState,
 	busyLabel,
 	gitChanged,
 	setGitBusy,
@@ -42,12 +41,7 @@ import {
 } from "./GitActions.js";
 import { readGitAutoName, readGitNested, writeGitAutoName, writeGitNested } from "./prefs.js";
 import { Button, IconButton, ListRow, PanelHeader, inputClass, sectionLabel } from "./ui.js";
-
-async function getJson<T>(url: string): Promise<T> {
-	const r = await fetch(url);
-	if (!r.ok) throw new Error(((await r.json()) as { error?: string }).error ?? `${r.status}`);
-	return (await r.json()) as T;
-}
+import { api, unwrap } from "./api.js";
 
 /** `/home/me/proj/src/web/App.tsx` → `src/web/App.tsx` when it is under `cwd`. */
 function shortPath(path: string, cwd: string): string {
@@ -165,7 +159,7 @@ function RepoRow({
 
 	useEffect(() => {
 		const load = () =>
-			getJson<GitState>(`/api/git?cwd=${encodeURIComponent(cwd)}`)
+			unwrap(api.git.$get({ query: { cwd } }))
 				.then((s) => setGitState(cwd, s))
 				.catch(() => {});
 		void load();
@@ -222,7 +216,7 @@ export function SourceControl({
 		setCounts({});
 		if (!nested) return;
 		let live = true;
-		getJson<{ repos: string[] }>(`/api/git/repos?cwd=${encodeURIComponent(cwd)}`)
+		unwrap(api.git.repos.$get({ query: { cwd } }))
 			.then((b) => live && setRepos(b.repos))
 			.catch(() => {});
 		return () => {
@@ -334,9 +328,9 @@ function RepoView({
 	const reload = useCallback(async () => {
 		try {
 			const [git, changes, log] = await Promise.all([
-				getJson<GitState>(`/api/git?cwd=${encodeURIComponent(cwd)}`),
-				getJson<{ files: Change[] }>(`/api/git/changes?cwd=${encodeURIComponent(cwd)}`),
-				getJson<{ commits: Commit[] }>(`/api/git/log?cwd=${encodeURIComponent(cwd)}`),
+				unwrap(api.git.$get({ query: { cwd } })),
+				unwrap(api.git.changes.$get({ query: { cwd } })),
+				unwrap(api.git.log.$get({ query: { cwd } })),
 			]);
 			setGitState(cwd, git);
 			setFiles(changes.files);
@@ -372,11 +366,7 @@ function RepoView({
 		setGitBusy(cwd, "Naming…");
 		setError(null);
 		try {
-			const r = await fetch(`/api/git/name`, {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ cwd }),
-			});
+			const r = await api.git.name.$post({ json: { cwd } });
 			const body = (await r.json().catch(() => ({}))) as { message?: string; error?: string };
 			if (!r.ok || !body.message) {
 				setError(body.error ?? "could not name this commit");
@@ -414,16 +404,10 @@ function RepoView({
 		setGitBusy(cwd, busyLabel({ commit: dirty, push: true }));
 		setError(null);
 		try {
-			const r = await fetch(`/api/git`, {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
+			const r = await api.git.$post({
 				// The suggestion is the fallback, as it is in the dialog: an
 				// untouched box means "use it", never "commit nothing".
-				body: JSON.stringify({
-					cwd,
-					message: dirty ? text || state.suggestion : undefined,
-					push: true,
-				}),
+				json: { cwd, message: dirty ? text || state.suggestion : undefined, push: true },
 			});
 			const body = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string };
 			if (!body.ok) setError(body.error ?? "failed");

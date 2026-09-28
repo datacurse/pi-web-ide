@@ -251,3 +251,10 @@ test("the typed client round-trips session routes: path params, bodies, validati
 	});
 	assert.equal(hunk.status, 404);
 });
+
+test("the typed client round-trips git routes to their validation", async () => {
+	const noPath = await api.git.show.$get({ query: { cwd: project } });
+	assert.deepEqual(await noPath.json(), { error: "path required" });
+	const nothing = await api.git.$post({ json: { cwd: project } });
+	assert.deepEqual(await nothing.json(), { error: "nothing to do" });
+});

@@ -35,12 +35,6 @@ import { readExplorerOpen, writeExplorerOpen } from "./prefs.js";
 import { ContextMenu, IconButton, ListRow, MenuItem, MenuSeparator, PanelHeader, inputClass } from "./ui.js";
 import { api, unwrap } from "./api.js";
 
-async function getJson<T>(url: string): Promise<T> {
-	const r = await fetch(url);
-	if (!r.ok) throw new Error(((await r.json()) as { error?: string }).error ?? `${r.status}`);
-	return (await r.json()) as T;
-}
-
 /*
  * Directory listings, kept for the life of the page.
  *
@@ -367,9 +361,7 @@ export function Explorer({
 		e.preventDefault();
 		// Not a repo, or git failed: no "Open Changes", nothing else lost.
 		if (!entry.dir) {
-			void getJson<{ files: Array<{ path: string }> }>(
-				`/api/git/changes?cwd=${encodeURIComponent(cwd)}`,
-			)
+			void unwrap(api.git.changes.$get({ query: { cwd } }))
 				.then((r) => setChanged(new Set(r.files.map((f) => f.path))))
 				.catch(() => setChanged(new Set()));
 		}

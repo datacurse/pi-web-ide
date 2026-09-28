@@ -23,13 +23,7 @@ import type { Hunk, HunkState } from "../shared/hunks.js";
 import { fitHunk } from "../shared/hunks.js";
 import { darkPlus, languageFor, loadCodeMirror } from "./codemirror.js";
 import { Button, PanelHeader } from "./ui.js";
-import { api } from "./api.js";
-
-async function getJson<T>(url: string): Promise<T> {
-	const r = await fetch(url);
-	if (!r.ok) throw new Error(((await r.json()) as { error?: string }).error ?? `${r.status}`);
-	return (await r.json()) as T;
-}
+import { api, unwrap } from "./api.js";
 
 /** `/home/me/proj/src/web/App.tsx` → `src/web/App.tsx` when it is under `cwd`. */
 function shortPath(path: string, cwd: string): string {
@@ -218,9 +212,7 @@ export function DiffView({
 	const reload = useCallback(async () => {
 		try {
 			setFile(
-				await getJson<FileDiff>(
-					`/api/git/show?cwd=${encodeURIComponent(cwd)}&path=${encodeURIComponent(path)}&ref=${encodeURIComponent(refName)}`,
-				),
+				await unwrap(api.git.show.$get({ query: { cwd, path, ref: refName } })),
 			);
 			setError(null);
 		} catch (err) {
