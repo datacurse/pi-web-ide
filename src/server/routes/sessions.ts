@@ -304,6 +304,29 @@ export function sessionsRoutes({ cwd: CWD, registry }: Deps) {
 			return c.json({ ok: true }, 200);
 		})
 
+		/**
+		 * Edit the user message that started at `at`: everything from it on is
+		 * dropped from the conversation and `text` is sent in its place.
+		 */
+		.post("/sessions/:id/edit", json<{ at: number; text: string; images?: PiImage[] }>(), async (c) => {
+			const b = c.req.valid("json");
+			if (typeof b.at !== "number") return c.json({ error: "at must be a message timestamp" }, 400);
+			const text = typeof b.text === "string" ? b.text : "";
+			let images: PiImage[];
+			try {
+				images = parseImages(b.images);
+			} catch (err) {
+				return c.json({ error: err instanceof Error ? err.message : String(err) }, 400);
+			}
+			if (!text.trim() && images.length === 0) return c.json({ error: "empty prompt" }, 400);
+			try {
+				await registry.edit(c.req.param("id"), b.at, text, images);
+				return c.json({ ok: true }, 200);
+			} catch (err) {
+				return c.json({ error: err instanceof Error ? err.message : String(err) }, 400);
+			}
+		})
+
 		.post("/sessions/:id/abort", async (c) => {
 			await registry.abort(c.req.param("id"));
 			return c.json({ ok: true }, 200);

@@ -63,6 +63,7 @@ const TOOL_KEY = "pwi:tools";
 const NOTIFY_KEY = "pwi:notify";
 const SHORT_NAMES_KEY = "pwi:shortNames";
 const GIT_AUTONAME_KEY = "pwi:gitAutoName";
+const GIT_NESTED_KEY = "pwi:gitNested";
 
 export function readTheme(): ThemeId {
 	const stored = readStored(THEME_KEY);
@@ -206,6 +207,15 @@ export function readGitAutoName(): boolean {
 
 export function writeGitAutoName(on: boolean): void {
 	writeStored(GIT_AUTONAME_KEY, on ? "1" : "0");
+}
+
+/** Whether Source Control looks one folder down when the project is not a repository. */
+export function readGitNested(): boolean {
+	return readStored(GIT_NESTED_KEY) === "1";
+}
+
+export function writeGitNested(on: boolean): void {
+	writeStored(GIT_NESTED_KEY, on ? "1" : "0");
 }
 
 /**

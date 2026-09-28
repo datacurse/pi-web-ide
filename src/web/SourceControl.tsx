@@ -20,11 +20,12 @@
  * through the same two endpoints.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useState } from "react";
 import {
 	ArrowsClockwise,
 	CaretDown,
 	CaretRight,
+	FolderSimple,
 	GitCommit,
 	Sparkle,
 } from "@phosphor-icons/react";
@@ -39,7 +40,7 @@ import {
 	useGitBusy,
 	useGitState,
 } from "./GitActions.js";
-import { readGitAutoName, writeGitAutoName } from "./prefs.js";
+import { readGitAutoName, readGitNested, writeGitAutoName, writeGitNested } from "./prefs.js";
 import { Button, IconButton, ListRow, PanelHeader, inputClass, sectionLabel } from "./ui.js";
 
 async function getJson<T>(url: string): Promise<T> {
@@ -129,13 +130,74 @@ function FileRow({
 	);
 }
 
+/** The checkbox that turns on looking one folder down for repositories. */
+function NestedToggle({ on, onChange }: { on: boolean; onChange: (on: boolean) => void }) {
+	return (
+		<label className="flex cursor-pointer items-center gap-2 px-3 pb-2 text-meta text-neutral-500 hover:text-neutral-300">
+			<input
+				type="checkbox"
+				checked={on}
+				onChange={(e) => onChange(e.target.checked)}
+				className="size-3.5 accent-amber-400"
+			/>
+			Find repositories one folder down
+		</label>
+	);
+}
+
+/** One repository in a multi-repo folder: name, branch, uncommitted count. */
+function RepoRow({
+	name,
+	cwd,
+	revision,
+	selected,
+	onSelect,
+	onCount,
+}: {
+	name: string;
+	cwd: string;
+	revision: unknown;
+	selected: boolean;
+	onSelect: () => void;
+	onCount: (name: string, count: number) => void;
+}) {
+	const state = useGitState(cwd);
+
+	useEffect(() => {
+		const load = () =>
+			getJson<GitState>(`/api/git?cwd=${encodeURIComponent(cwd)}`)
+				.then((s) => setGitState(cwd, s))
+				.catch(() => {});
+		void load();
+		const on = (e: Event) => {
+			if ((e as CustomEvent<string>).detail === cwd) void load();
+		};
+		window.addEventListener(GIT_CHANGED, on);
+		return () => window.removeEventListener(GIT_CHANGED, on);
+	}, [cwd, revision]);
+
+	const changed = state?.changed ?? 0;
+	useEffect(() => onCount(name, changed), [name, changed, onCount]);
+
+	return (
+		<ListRow selected={selected} onClick={onSelect} title={cwd}>
+			<FolderSimple size={13} className="shrink-0 text-neutral-500" />
+			<span className="truncate">{name}</span>
+			{state?.branch && (
+				<span className="min-w-0 truncate font-mono text-meta text-neutral-500">{state.branch}</span>
+			)}
+			{changed > 0 && <span className="ml-auto shrink-0 pl-1 text-caption text-neutral-500">{changed}</span>}
+		</ListRow>
+	);
+}
+
 /**
  * The source-control panel.
  *
- * Both lists are re-read on `revision` — App bumps it whenever the agent's
- * hunks change — rather than polled: the tree changes constantly while an
- * agent works, and a poll would be a request per interval forever for a list
- * nobody is looking at.
+ * A project folder that is not a repository but holds several (`~/code`)
+ * can, with the toggle on, list them and show the one picked below. Paths
+ * handed to `onOpenDiff` then carry the repository's folder name, which the
+ * server's `show` resolves into that repository.
  */
 export function SourceControl({
 	cwd,
@@ -145,6 +207,107 @@ export function SourceControl({
 	onChanges,
 }: {
 	cwd: string;
+	revision: unknown;
+	onClose: () => void;
+	onOpenDiff: (ref: string, path: string) => void;
+	onChanges: (count: number) => void;
+}) {
+	const [nested, setNested] = useState(readGitNested);
+	const [repos, setRepos] = useState<string[]>([]);
+	const [pick, setPick] = useState("");
+	const [counts, setCounts] = useState<Record<string, number>>({});
+
+	useEffect(() => {
+		setRepos([]);
+		setCounts({});
+		if (!nested) return;
+		let live = true;
+		getJson<{ repos: string[] }>(`/api/git/repos?cwd=${encodeURIComponent(cwd)}`)
+			.then((b) => live && setRepos(b.repos))
+			.catch(() => {});
+		return () => {
+			live = false;
+		};
+	}, [cwd, nested]);
+
+	const toggle = (on: boolean) => {
+		setNested(on);
+		writeGitNested(on);
+	};
+
+	const onCount = useCallback(
+		(name: string, n: number) => setCounts((c) => (c[name] === n ? c : { ...c, [name]: n })),
+		[],
+	);
+	const multi = nested && repos.length > 0;
+	useEffect(() => {
+		if (multi) onChanges(Object.values(counts).reduce((a, b) => a + b, 0));
+	}, [multi, counts, onChanges]);
+
+	const toggleRow = <NestedToggle on={nested} onChange={toggle} />;
+	if (!multi)
+		return (
+			<RepoView
+				cwd={cwd}
+				revision={revision}
+				onClose={onClose}
+				onOpenDiff={onOpenDiff}
+				onChanges={onChanges}
+				notRepo={toggleRow}
+			/>
+		);
+
+	const name = repos.includes(pick) ? pick : repos[0];
+	const repoCwd = `${cwd.replace(/\/$/, "")}/${name}`;
+	return (
+		<RepoView
+			key={repoCwd}
+			cwd={repoCwd}
+			revision={revision}
+			onClose={onClose}
+			onOpenDiff={(ref, path) => onOpenDiff(ref, `${name}/${path}`)}
+			onChanges={noop}
+			repos={
+				<div className="shrink-0 border-b border-neutral-800">
+					<p className={`px-3 py-1.5 ${sectionLabel}`}>Repositories</p>
+					{repos.map((r) => (
+						<RepoRow
+							key={r}
+							name={r}
+							cwd={`${cwd.replace(/\/$/, "")}/${r}`}
+							revision={revision}
+							selected={r === name}
+							onSelect={() => setPick(r)}
+							onCount={onCount}
+						/>
+					))}
+					<div className="pt-2">{toggleRow}</div>
+				</div>
+			}
+		/>
+	);
+}
+
+const noop = () => {};
+
+/**
+ * One repository's panel.
+ *
+ * Both lists are re-read on `revision` — App bumps it whenever the agent's
+ * hunks change — rather than polled: the tree changes constantly while an
+ * agent works, and a poll would be a request per interval forever for a list
+ * nobody is looking at.
+ */
+function RepoView({
+	cwd,
+	revision,
+	onClose,
+	onOpenDiff,
+	onChanges,
+	repos,
+	notRepo,
+}: {
+	cwd: string;
 	/** Changes when something may have touched the tree; re-reads both lists. */
 	revision: unknown;
 	onClose: () => void;
@@ -152,6 +315,10 @@ export function SourceControl({
 	onOpenDiff: (ref: string, path: string) => void;
 	/** Uncommitted file count after each re-read, so the rail badge follows a sync. */
 	onChanges: (count: number) => void;
+	/** The repository list, above everything else, in a multi-repo folder. */
+	repos?: ReactNode;
+	/** Shown under the "not a git repository" note. */
+	notRepo?: ReactNode;
 }) {
 	const state = useGitState(cwd);
 	const [files, setFiles] = useState<Change[] | null>(null);
@@ -276,6 +443,7 @@ export function SourceControl({
 				<p className="p-4 text-ui text-neutral-500">
 					Not a git repository. `git init` in a terminal and this fills in.
 				</p>
+				{notRepo}
 			</div>
 		);
 	}
@@ -287,6 +455,7 @@ export function SourceControl({
 	return (
 		<div className="flex min-h-0 min-w-0 flex-1 flex-col bg-neutral-950">
 			<Header onClose={onClose} branch={state?.branch ?? ""} />
+			{repos}
 
 			{/* TOP HALF: the working tree, and what to call it. */}
 			<div className="flex min-h-0 shrink-0 flex-col border-b border-neutral-800">

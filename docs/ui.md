@@ -167,6 +167,12 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
 
 - Text is clamped to 3 lines (`line-clamp-3`, ellipsis). When it overflows, a ghost
   `Button size="sm"` below it toggles `Show more` / `Show less` with a 12px caret.
+- On hover, a right-aligned `PencilSimple` ghost `IconButton size="sm"` (`Edit`) sits
+  under the pill; hidden while a turn runs. It swaps the pill for a textarea in the same
+  `rounded-lg` card (plus a `neutral-700` border) with `Cancel` / primary `Send`
+  (`Button sm`). Enter sends, Escape cancels. Sending rewinds the session in place to
+  before that message (pi's `/tree`; the old branch stays in the file) and asks again,
+  attachments unchanged.
 
 ## Answer footer
 
@@ -203,6 +209,15 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
   (`~/.local/share/Trash`), so it can be restored. Rename, move and delete are
   refused while a file under the path has unsaved edits; open tabs follow a
   rename and close on delete.
+
+## Source Control
+
+- When the project folder is not a git repository, a checkbox (same style as
+  `Auto-name commits`) reads `Find repositories one folder down` (`pwi:gitNested`,
+  per browser, off by default). On, a `Repositories` section under the header lists
+  each child folder with a `.git`: `FolderSimple` 13px, name, branch in dim mono,
+  uncommitted count as a `text-caption` right. The selected row shows the usual
+  panel below; the checkbox sits under the list. The rail badge sums all repos.
 
 ## Rail, panels, pages and the terminal dock
 
@@ -268,6 +283,10 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
   what is on disk first, then `Syncing machines…` beside Refresh until the sync lands.
   Remote projects read `alias:project`; remote answers carry the alias. Heatmap cells are square with no radius,
   `neutral-800` for empty days, then `green-900/700/500/300`. Bars are `amber-500`.
+- Under the usage bars, a `text-meta neutral-500` line: `Claude Max renews 22 Oct (in 24 days)`.
+  Anthropic gives no end date, so it is the next monthly anniversary of
+  `subscription_created_at` (oauth/profile), explained in its `title`. A non-active
+  subscription shows its status in `red-400` instead.
 - Pace sits full width under usage and the tiles: one card per live limit window
   (`md:grid-cols-3`), a canvas spanning the window start to reset, 0–100%. Solid
   `amber-500` is use so far (server samples every 10 min), dashed is the window's

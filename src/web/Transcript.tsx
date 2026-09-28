@@ -1,8 +1,8 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { CaretDown, CaretRight, CaretUp, Check, Copy, GitFork, X } from "@phosphor-icons/react";
+import { CaretDown, CaretRight, CaretUp, Check, Copy, GitFork, PencilSimple, X } from "@phosphor-icons/react";
 import { AnsiHtml } from "fancy-ansi/react";
 import { hasAnsi, stripAnsi } from "fancy-ansi";
-import type { PiBlock, PiMessage, PiNotice } from "../shared/types.js";
+import type { PiBlock, PiImage, PiMessage, PiNotice } from "../shared/types.js";
 import { Button, IconButton, sectionLabel } from "./ui.js";
 import { MarkdownText } from "./Markdown.js";
 import { timeAgo } from "./SessionList.js";
@@ -557,17 +557,25 @@ export function TranscriptRow({
 	role,
 	labelled,
 	children,
+	below,
 }: {
 	role: PiMessage["role"];
 	labelled: boolean;
 	children: ReactNode;
+	/** User rows only: actions under the pill, shown on hover. */
+	below?: ReactNode;
 }) {
 	if (role === "user") {
 		return (
-			<div className="chat-gutter py-2">
+			<div className="group chat-gutter py-2">
 				<div className="chat-measure chat-prose rounded-lg bg-neutral-900 px-4 py-3">
 					{children}
 				</div>
+				{below && (
+					<div className="chat-measure mt-1 flex justify-end opacity-0 group-hover:opacity-100 focus-within:opacity-100">
+						{below}
+					</div>
+				)}
 			</div>
 		);
 	}
@@ -601,6 +609,8 @@ export function Message({
 	autoOpenTools,
 	footer,
 	onFork,
+	at,
+	onEdit,
 }: {
 	role: PiMessage["role"];
 	blocks: PiBlock[];
@@ -608,8 +618,13 @@ export function Message({
 	autoOpenTools: boolean;
 	footer?: Footer;
 	onFork: (at: number) => Promise<void>;
+	/** The message's start timestamp: how the server finds a user message to edit. */
+	at?: number;
+	/** Absent while a turn runs: pi cannot rewind under a running turn. */
+	onEdit?: (at: number, text: string, images: PiImage[]) => void;
 }) {
 	const isUser = role === "user";
+	const [editing, setEditing] = useState(false);
 	/*
 	 * In a pill the attachments go ON TOP, as one row of squares, whatever
 	 * order they arrived in: a screenshot is context for the question, so it
@@ -618,8 +633,36 @@ export function Message({
 	 */
 	const images = isUser ? blocks.filter((b) => b.kind === "image") : [];
 	const rest = isUser ? blocks.filter((b) => b.kind !== "image") : blocks;
+	const text = blocks
+		.map((b) => (b.kind === "text" ? b.text : ""))
+		.filter(Boolean)
+		.join("\n\n");
+	if (editing && onEdit && at !== undefined) {
+		const attached = images.flatMap((b) => (b.kind === "image" ? [{ data: b.data, mimeType: b.mimeType }] : []));
+		return (
+			<EditMessage
+				text={text}
+				attached={attached}
+				onCancel={() => setEditing(false)}
+				onSend={(t) => {
+					setEditing(false);
+					onEdit(at, t, attached);
+				}}
+			/>
+		);
+	}
 	return (
-		<TranscriptRow role={role} labelled={labelled}>
+		<TranscriptRow
+			role={role}
+			labelled={labelled}
+			below={
+				isUser && onEdit && at !== undefined ? (
+					<IconButton size="sm" label="Edit" onClick={() => setEditing(true)}>
+						<PencilSimple size={14} />
+					</IconButton>
+				) : undefined
+			}
+		>
 			{images.length > 0 && (
 				<div className="mb-2 flex flex-wrap gap-2">
 					{images.map((b, i) =>
@@ -633,16 +676,65 @@ export function Message({
 				<Block key={i} block={b} isUser={isUser} autoOpenTools={autoOpenTools} />
 			))}
 			{footer && (
-				<AnswerFooter
-					footer={footer}
-					text={blocks
-						.map((b) => (b.kind === "text" ? b.text : ""))
-						.filter(Boolean)
-						.join("\n\n")}
-					onFork={onFork}
-				/>
+				<AnswerFooter footer={footer} text={text} onFork={onFork} />
 			)}
 		</TranscriptRow>
+	);
+}
+
+/**
+ * A user message being edited, in the pill's place. Sending drops everything
+ * after it and asks again; the attachments go along unchanged.
+ */
+function EditMessage({
+	text,
+	attached,
+	onCancel,
+	onSend,
+}: {
+	text: string;
+	attached: PiImage[];
+	onCancel: () => void;
+	onSend: (text: string) => void;
+}) {
+	const [draft, setDraft] = useState(text);
+	const canSend = draft.trim() !== "" || attached.length > 0;
+	return (
+		<div className="chat-gutter py-2">
+			<div className="chat-measure rounded-lg border border-neutral-700 bg-neutral-900 px-4 py-3">
+				{attached.length > 0 && (
+					<div className="mb-2 flex flex-wrap gap-2">
+						{attached.map((image, i) => (
+							<Thumb key={i} image={image} label={`attachment ${i + 1}`} />
+						))}
+					</div>
+				)}
+				<textarea
+					data-custom="composer"
+					autoFocus
+					value={draft}
+					onChange={(e) => setDraft(e.target.value)}
+					onFocus={(e) => e.currentTarget.setSelectionRange(draft.length, draft.length)}
+					onKeyDown={(e) => {
+						if (e.key === "Escape") onCancel();
+						if (e.key === "Enter" && !e.shiftKey) {
+							e.preventDefault();
+							if (canSend) onSend(draft);
+						}
+					}}
+					title="Enter to send, Shift+Enter for newline, Escape to cancel"
+					className="chat-prose field-sizing-content max-h-60 w-full resize-none bg-transparent outline-none"
+				/>
+				<div className="mt-2 flex justify-end gap-2">
+					<Button size="sm" onClick={onCancel}>
+						Cancel
+					</Button>
+					<Button size="sm" variant="primary" disabled={!canSend} onClick={() => onSend(draft)}>
+						Send
+					</Button>
+				</div>
+			</div>
+		</div>
 	);
 }
 

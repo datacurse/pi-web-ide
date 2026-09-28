@@ -1607,6 +1607,7 @@ export default function App() {
 			onCompact={s.compact}
 			compacting={s.compacting}
 			onFork={s.fork}
+			onEdit={s.edit}
 			onRestart={s.restart}
 		/>
 	);

@@ -288,7 +288,8 @@ export function toCommands(list: unknown): PiCommand[] {
 	const out: PiCommand[] = [];
 	for (const c of records(list)) {
 		const name = typeof c.name === "string" ? c.name : "";
-		if (!name) continue;
+		// pwi's own plumbing (rewind-extension.ts), not something to type.
+		if (!name || name === REWIND_COMMAND) continue;
 		out.push({
 			name,
 			...(typeof c.description === "string" ? { description: c.description } : {}),
@@ -942,6 +943,11 @@ export interface PiSession {
 	setHunkState(id: string, state: Hunk["state"]): boolean;
 	messages(): PiMessage[];
 	prompt(text: string, images?: PiImage[]): Promise<void>;
+	/**
+	 * Move the conversation back to just before the user message that started
+	 * at `at`, in the same file (see rewind-extension.ts). For editing it.
+	 */
+	rewind(at: number): Promise<void>;
 	abort(): Promise<void>;
 	/**
 	 * Fold the conversation into a summary now.
@@ -1014,6 +1020,8 @@ interface SessionState {
  */
 /** Loaded by pi (with its own TS loader), never imported here. */
 const REMIND_EXTENSION = fileURLToPath(new URL("./remind-extension.ts", import.meta.url));
+const REWIND_EXTENSION = fileURLToPath(new URL("./rewind-extension.ts", import.meta.url));
+const REWIND_COMMAND = "pwi-rewind";
 
 export function spawnArgs(opts: {
 	file?: string;
@@ -1030,6 +1038,7 @@ export function spawnArgs(opts: {
 	// question on, and a browser client that opens a project has already
 	// decided to run its code.
 	args.push("--approve");
+	args.push("-e", REWIND_EXTENSION);
 	if (opts.file) args.push("--session", opts.file);
 	else if (opts.fork) args.push("--fork", opts.fork);
 	if (opts.model) args.push("--model", opts.model);
@@ -1130,17 +1139,7 @@ export async function forkSession(file: string, at: number, cwd: string): Promis
 	let copy: string | undefined;
 	try {
 		copy = (await fetchState(child)).sessionFile;
-		const data = await child.send<unknown>("get_entries");
-		const entries = isRecord(data) ? records(data.entries) : [];
-		const byId = new Map(entries.map((e) => [e.id, e]));
-		// The active branch, root first: the file also holds abandoned ones.
-		const branch: Record<string, unknown>[] = [];
-		for (
-			let e = isRecord(data) ? byId.get(data.leafId) : undefined;
-			e && branch.length < entries.length;
-			e = byId.get(e.parentId)
-		)
-			branch.unshift(e);
+		const branch = activeBranch(await child.send<unknown>("get_entries"));
 		const role = (e: Record<string, unknown>) => (isRecord(e.message) ? e.message.role : undefined);
 		const i = branch.findIndex(
 			(e) => role(e) === "assistant" && isRecord(e.message) && e.message.timestamp === at,
@@ -1159,6 +1158,20 @@ export async function forkSession(file: string, at: number, cwd: string): Promis
 		if (copy && copy !== file) rmSync(copy, { force: true });
 	}
 	return wrap(child, cwd);
+}
+
+/** A `get_entries` answer's active branch, root first: the file also holds abandoned ones. */
+function activeBranch(data: unknown): Record<string, unknown>[] {
+	const entries = isRecord(data) ? records(data.entries) : [];
+	const byId = new Map(entries.map((e) => [e.id, e]));
+	const branch: Record<string, unknown>[] = [];
+	for (
+		let e = isRecord(data) ? byId.get(data.leafId) : undefined;
+		e && branch.length < entries.length;
+		e = byId.get(e.parentId)
+	)
+		branch.unshift(e);
+	return branch;
 }
 
 /**
@@ -1228,7 +1241,11 @@ async function wrap(child: RpcChild, cwd: string): Promise<PiSession> {
 	let contextTokens = state.contextTokens;
 	let compactionEnds = 0;
 	let compacted = Promise.resolve();
-	let commands = toCommands(await fetchCommands(child));
+	const rawCommands = await fetchCommands(child);
+	let commands = toCommands(rawCommands);
+	// A child adopted from an older server may lack it, and then the command
+	// would reach the model as text.
+	const canRewind = records(rawCommands).some((c) => c.name === REWIND_COMMAND);
 
 	const listeners = new Set<(e: PiEvent) => void>();
 	const emit = (e: PiEvent) => {
@@ -1585,6 +1602,22 @@ async function wrap(child: RpcChild, cwd: string): Promise<PiSession> {
 			// is what the timer waits for.
 			streaming = true;
 			if (!wasStreaming && text.trimStart().startsWith("/")) armLocal();
+		},
+		async rewind(at: number) {
+			if (streaming) throw new Error("wait for the reply to finish before editing");
+			if (!canRewind) throw new Error("restart this session to edit messages");
+			const target = activeBranch(await child.send<unknown>("get_entries")).find(
+				(e) => isRecord(e.message) && e.message.role === "user" && e.message.timestamp === at,
+			);
+			if (!target || typeof target.id !== "string") throw new Error("that message is not in this conversation");
+			await child.send<unknown>("prompt", { message: `/${REWIND_COMMAND} ${target.id}` });
+			// pi swallows a failed command, so check that the leaf really moved.
+			const after = await child.send<unknown>("get_entries", { since: target.id });
+			if (!isRecord(after) || after.leafId !== (target.parentId ?? null))
+				throw new Error("pi could not rewind to that message");
+			generation++;
+			messages = healDanglingToolCalls(await fetchMessages(child));
+			await refreshState();
 		},
 		async refreshCommands() {
 			commands = toCommands(await fetchCommands(child));

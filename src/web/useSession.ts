@@ -620,6 +620,42 @@ export function useSession({
 		await api.sessions[":id"].abort.$post({ param: { id: snapshot.id } });
 	}, [snapshot]);
 
+	/**
+	 * Replace the user message that started at `at` with `text`: everything from
+	 * it on leaves the transcript and the new message is sent in its place.
+	 */
+	const edit = useCallback(
+		async (at: number, text: string, images?: PiImage[]) => {
+			if (!snapshot || busy) return;
+			setBusy(true);
+			setCommand(null);
+			const cut = snapshot.messages.findIndex((m) => m.role === "user" && m.timestamp === at);
+			if (cut >= 0) {
+				const optimistic: PiMessage = {
+					role: "user",
+					blocks: [
+						...(text ? [{ kind: "text" as const, text }] : []),
+						...(images ?? []).map((i) => ({ kind: "image" as const, ...i })),
+					],
+					timestamp: Date.now(),
+				};
+				setSnapshot((s) => (s ? { ...s, messages: [...s.messages.slice(0, cut), optimistic] } : s));
+			}
+			const r = await api.sessions[":id"].edit
+				.$post({ param: { id: snapshot.id }, json: { at, text, images } })
+				.catch(() => null);
+			const body = r?.ok ? null : ((await r?.json().catch(() => null)) as { error?: unknown } | null);
+			if (!r?.ok) setBusy(false);
+			const rr = await api.sessions[":id"].$get({ param: { id: snapshot.id } });
+			if (rr.ok) setSnapshot(toSnapshot(await rr.json()));
+			if (!r?.ok) {
+				const reason = typeof body?.error === "string" ? body.error : "could not edit that message";
+				setSnapshot((s) => (s ? { ...s, error: reason } : s));
+			}
+		},
+		[snapshot, busy],
+	);
+
 	/** Fork this session after one of its answers, and open the fork in this column. */
 	const fork = useCallback(
 		async (at: number) => {
@@ -766,6 +802,7 @@ export function useSession({
 		compact,
 		compacting,
 		fork,
+		edit,
 		restart,
 		reloadSnapshot,
 		refreshCommands,

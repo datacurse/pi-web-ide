@@ -85,11 +85,19 @@ export async function fetchUsage(): Promise<{ body: Record<string, unknown> } | 
 						.then((r) => r.stdout.trim())
 						.catch(() => "");
 		if (!access) continue;
-		const r = await fetch("https://api.anthropic.com/api/oauth/usage", {
-			headers: { authorization: `Bearer ${access}`, "anthropic-beta": "oauth-2025-04-20" },
-		}).catch(() => null);
+		const get = (path: string) =>
+			fetch(`https://api.anthropic.com/api/oauth/${path}`, {
+				headers: { authorization: `Bearer ${access}`, "anthropic-beta": "oauth-2025-04-20" },
+			}).catch(() => null);
+		const [r, p] = await Promise.all([get("usage"), get("profile")]);
 		if (r?.ok) {
-			cache = { at: Date.now(), body: (await r.json()) as Record<string, unknown> };
+			const org = p?.ok ? ((await p.json().catch(() => ({}))) as { organization?: Record<string, unknown> }).organization : undefined;
+			const subscription = org && {
+				plan: org.organization_type ?? null,
+				status: org.subscription_status ?? null,
+				since: org.subscription_created_at ?? null,
+			};
+			cache = { at: Date.now(), body: { ...((await r.json()) as Record<string, unknown>), subscription } };
 			try {
 				record(cache.body, cache.at);
 			} catch (err) {

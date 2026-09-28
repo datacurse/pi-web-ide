@@ -127,6 +127,8 @@ type Row =
 			blocks: PiBlock[];
 			labelled: boolean;
 			footer?: Footer;
+			/** The message's start timestamp; see `at` on Message. */
+			at?: number;
 	  }
 	| { kind: "tools"; blocks: PiBlock[]; labelled: boolean };
 
@@ -148,6 +150,7 @@ export function Chat({
 	onCompact,
 	compacting,
 	onFork,
+	onEdit,
 	onRestart,
 	draftRev = 0,
 	focus,
@@ -185,6 +188,8 @@ export function Chat({
 	compacting: boolean;
 	/** Open a new session that continues from the answer that started at `at`. */
 	onFork: (at: number) => Promise<void>;
+	/** Replace the user message that started at `at` and ask again from there. */
+	onEdit: (at: number, text: string, images: PiImage[]) => void;
 	/** Replace this session's pi child so it sees newly installed packages. */
 	onRestart: () => void;
 	/**
@@ -498,6 +503,7 @@ export function Chat({
 					role: m.role,
 					blocks,
 					labelled: lastRole() !== m.role,
+					at: m.timestamp,
 				});
 				continue;
 			}
@@ -509,6 +515,7 @@ export function Chat({
 					blocks,
 					labelled: lastRole() !== m.role,
 					footer: footerFor(m),
+					at: m.timestamp,
 				});
 				continue;
 			}
@@ -530,6 +537,7 @@ export function Chat({
 					role: m.role,
 					blocks: run,
 					labelled: lastRole() !== m.role,
+					at: m.timestamp,
 				});
 				run = [];
 			};
@@ -772,6 +780,8 @@ export function Chat({
 								autoOpenTools={toolMode === "live"}
 								footer={r.footer}
 								onFork={onFork}
+								at={r.at}
+								onEdit={busy ? undefined : onEdit}
 							/>
 						),
 					)}

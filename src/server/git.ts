@@ -28,7 +28,7 @@
  */
 
 import { execFile } from "node:child_process";
-import { existsSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 /** Long enough for a push over a slow link, short enough to fail visibly. */
@@ -342,6 +342,14 @@ const SHA = /^[0-9a-f]{4,40}$/i;
 export async function show(cwd: string, path: string, ref = ""): Promise<GitFileDiff> {
 	if (ref && !SHA.test(ref)) throw new Error(`not a commit: ${ref}`);
 
+	// A folder holding several repositories (see `repos`) names its files
+	// `repo/path`; those are answered by the repository they live in.
+	const [top, ...rest] = path.split("/");
+	if (rest.length && top !== ".." && existsSync(join(cwd, top, ".git"))) {
+		const inner = await show(join(cwd, top), rest.join("/"), ref);
+		return { ...inner, path };
+	}
+
 	if (ref) {
 		// raw: this is file content, not a git answer. See `run`.
 		const [before, after] = await Promise.all([
@@ -372,6 +380,22 @@ export async function show(cwd: string, path: string, ref = ""): Promise<GitFile
 		// Deleted, or not readable: "" is the honest after-image of a file that
 		// is no longer there.
 		return { path, before, after: "" };
+	}
+}
+
+/**
+ * The git repositories directly inside `cwd`, by folder name, when `cwd`
+ * itself is not one: a `~/code` holding several projects.
+ */
+export async function repos(cwd: string): Promise<string[]> {
+	if ((await status(cwd)).repo) return [];
+	try {
+		return readdirSync(cwd, { withFileTypes: true })
+			.filter((d) => d.isDirectory() && existsSync(join(cwd, d.name, ".git")))
+			.map((d) => d.name)
+			.sort();
+	} catch {
+		return [];
 	}
 }
 

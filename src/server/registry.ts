@@ -538,6 +538,22 @@ export class Registry {
 		}
 	}
 
+	/**
+	 * Replace the user message that started at `at` with a new one: the
+	 * conversation goes back to just before it (the old branch stays in the
+	 * file) and the new text is sent from there. Throws only for the rewind;
+	 * the prompt fails like any other.
+	 */
+	async edit(id: string, at: number, text: string, images?: PiImage[]): Promise<void> {
+		const entry = this.entries.get(id);
+		if (!entry) throw new Error(`unknown session: ${id}`);
+		if (entry.streaming || entry.session.isStreaming)
+			throw new Error("wait for the reply to finish before editing");
+		entry.lastActivity = Date.now();
+		await entry.session.rewind(at);
+		void this.prompt(id, text, images);
+	}
+
 	async abort(id: string): Promise<void> {
 		const entry = this.entries.get(id);
 		if (!entry) return;

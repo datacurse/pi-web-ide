@@ -210,31 +210,74 @@ function resetLabel(iso: string | null): string {
 		: `Resets ${d.toLocaleDateString([], { weekday: "long" })} ${time}`;
 }
 
+/** From Anthropic's oauth/profile; it has no end date, only when the plan started. */
+interface Subscription {
+	plan: string | null;
+	status: string | null;
+	since: string | null;
+}
+
+/** The next monthly anniversary of `since`, assuming monthly billing. */
+function nextRenewal(since: string, now = new Date()): Date | null {
+	const s = new Date(since);
+	if (Number.isNaN(s.getTime())) return null;
+	for (let m = now.getMonth(), y = now.getFullYear(); ; m++) {
+		const last = new Date(y, m + 1, 0).getDate();
+		const d = new Date(y, m, Math.min(s.getDate(), last), s.getHours(), s.getMinutes());
+		if (d > now && d > s) return d;
+	}
+}
+
+function SubscriptionLine({ sub }: { sub: Subscription }) {
+	const plan = (sub.plan ?? "Claude").replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+	if (sub.status && sub.status !== "active") {
+		return <p className="text-meta text-red-400">{plan} subscription {sub.status.replace(/_/g, " ")}</p>;
+	}
+	const next = sub.since ? nextRenewal(sub.since) : null;
+	if (!next) return null;
+	const days = Math.ceil((next.getTime() - Date.now()) / 86_400_000);
+	return (
+		<p
+			className="text-meta text-neutral-500"
+			title={`Estimated from the start date (${new Date(sub.since!).toLocaleDateString()}), assuming monthly billing`}
+		>
+			{`${plan} renews ${next.toLocaleDateString([], { day: "numeric", month: "short" })} (in ${days} day${days === 1 ? "" : "s"})`}
+		</p>
+	);
+}
+
 interface UsageState {
 	limits: UsageLimit[] | null;
+	subscription: Subscription | null;
 	history: UsageSample[];
 	error: string | null;
 }
 
 function useUsage(reload: number): UsageState {
-	const [state, setState] = useState<UsageState>({ limits: null, history: [], error: null });
+	const [state, setState] = useState<UsageState>({ limits: null, subscription: null, history: [], error: null });
 	useEffect(() => {
 		void (async () => {
 			const r = await api.usage.$get().catch(() => null);
 			const body = (await r?.json().catch(() => null)) as {
 				limits?: UsageLimit[];
+				subscription?: Subscription;
 				history?: UsageSample[];
 				error?: string;
 			} | null;
 			if (r?.ok && Array.isArray(body?.limits)) {
-				setState({ limits: body.limits, history: body.history ?? [], error: null });
+				setState({
+					limits: body.limits,
+					subscription: body.subscription ?? null,
+					history: body.history ?? [],
+					error: null,
+				});
 			} else setState((s) => ({ ...s, error: body?.error ?? "could not load usage" }));
 		})();
 	}, [reload]);
 	return state;
 }
 
-function Usage({ usage: { limits, error: usageError } }: { usage: UsageState }) {
+function Usage({ usage: { limits, subscription, error: usageError } }: { usage: UsageState }) {
 	return (
 		<div>
 			<h3 className={`mb-2 ${sectionLabel}`}>Usage remaining</h3>
@@ -271,6 +314,7 @@ function Usage({ usage: { limits, error: usageError } }: { usage: UsageState }) 
 							</div>
 						);
 					})}
+					{subscription && <SubscriptionLine sub={subscription} />}
 				</div>
 			)}
 		</div>
