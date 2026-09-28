@@ -1,5 +1,5 @@
 import { execSync } from "node:child_process";
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import pkg from "./package.json" with { type: "json" };
@@ -35,11 +35,22 @@ function gitVersion(): string {
 	}
 }
 
+// Each Phosphor icon ships all six weights in one Map, so tree-shaking keeps
+// them all. The app uses regular, bold and fill (docs/ui.md, enforced by
+// scripts/check-ui.sh); dropping the other three cuts ~70KB from the bundle.
+const phosphorWeights: Plugin = {
+	name: "phosphor-weights",
+	transform(code, id) {
+		if (!id.includes("@phosphor-icons/react/dist/defs/")) return;
+		return code.replace(/\[\s*"(thin|light|duotone)",[\s\S]*?\n {2}\],?/g, "");
+	},
+};
+
 // Dev: Vite serves the client and proxies /api to the Node server.
 // Prod: `pnpm build` emits dist/, which the Node server serves itself.
 // Either way it is a single origin, so there is no CORS machinery to own.
 export default defineConfig({
-	plugins: [react(), tailwindcss()],
+	plugins: [react(), tailwindcss(), phosphorWeights],
 	define: { __APP_VERSION__: JSON.stringify(gitVersion()) },
 	server: {
 		// Same env var the server reads to build its dev redirect (see index.ts):

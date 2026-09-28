@@ -64,6 +64,11 @@ fits none of the existing ones, and record it here.
 They are spacing keys, so `h-control-sm`, `size-control-md` and `h-bar` all work.
 Text and icon buttons of the same size share a height and line up in a row.
 
+## Icons
+
+- Phosphor weights `regular`, `bold` and `fill` only. The build strips
+  `thin`, `light` and `duotone` (`vite.config.ts`), so those render nothing.
+
 ## Color roles
 
 Themes remap `neutral-*`, so components name the neutral step, never a hex.
