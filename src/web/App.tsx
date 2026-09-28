@@ -14,6 +14,7 @@ import type {
 import type { Hunk } from "../shared/hunks.js";
 import { SessionList } from "./SessionList.js";
 import { SessionSearch } from "./SessionSearch.js";
+import { CommandPalette, type PaletteCommand } from "./CommandPalette.js";
 import { ProjectPicker, type Projects } from "./ProjectPicker.js";
 import { ActivityBar } from "./ActivityBar.js";
 import { Stats } from "./Stats.js";
@@ -90,6 +91,7 @@ import {
 	writeTerminalLayout,
 	writeTerminalWidth,
 	writeToolMode,
+	THEMES,
 	type Panel,
 	type SessionSort,
 	type ThemeId,
@@ -1332,6 +1334,7 @@ export default function App() {
 	const [listError, setListError] = useState<string | null>(null);
 	const [listOpen, setListOpen] = useState(false);
 	const [searchOpen, setSearchOpen] = useState(false);
+	const [paletteOpen, setPaletteOpen] = useState(false);
 	/** Stats, Packages or Settings, shown in a modal over everything. */
 	const [page, setPage] = useState<PageId | null>(null);
 	/**
@@ -2467,6 +2470,19 @@ export default function App() {
 		return () => window.removeEventListener("keydown", onKeyDown, true);
 	}, []);
 
+	/** Ctrl+P opens the command palette, captured like Ctrl+O (over the browser's Print). */
+	useEffect(() => {
+		const onKeyDown = (e: KeyboardEvent) => {
+			if (e.code !== "KeyP" || !e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
+			e.preventDefault();
+			e.stopPropagation();
+			setSearchOpen(false);
+			setPaletteOpen(true);
+		};
+		window.addEventListener("keydown", onKeyDown, true);
+		return () => window.removeEventListener("keydown", onKeyDown, true);
+	}, []);
+
 	/*
 	 * Notice when the server we are talking to is not the one that served this
 	 * page.
@@ -2674,19 +2690,63 @@ export default function App() {
 	 * the reply that has waited longest. Alt for the same reason as Alt+1..9,
 	 * and J because no browser binds Alt+J.
 	 */
+	const jumpToWaiting = useCallback(() => {
+		const t = tabsRef.current;
+		const current = lastSide.current === "right" && t.right ? t.right.active : t.active;
+		const next = nextWaiting(shown, attention, current);
+		if (next) focusSession(next);
+		return !!next;
+	}, [shown, attention, focusSession]);
 	useEffect(() => {
 		const onKeyDown = (e: KeyboardEvent) => {
 			if (e.code !== "KeyJ" || !e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
-			const t = tabsRef.current;
-			const current = lastSide.current === "right" && t.right ? t.right.active : t.active;
-			const next = nextWaiting(shown, attention, current);
-			if (!next) return;
-			e.preventDefault();
-			focusSession(next);
+			if (jumpToWaiting()) e.preventDefault();
 		};
 		window.addEventListener("keydown", onKeyDown);
 		return () => window.removeEventListener("keydown", onKeyDown);
-	}, [shown, attention, focusSession]);
+	}, [jumpToWaiting]);
+
+	/** Everything the Ctrl+P palette can run. */
+	const lastUsedSide = (): Side => (lastSide.current === "right" && tabsRef.current.right ? "right" : "left");
+	const paletteCommands: PaletteCommand[] = [
+		{ id: "session.new", label: "New AI Session", run: () => void (lastUsedSide() === "right" ? right : left).attach() },
+		...(project
+			? [{ id: "terminal.newTab", label: "New Terminal Tab", run: () => void newTerminalTab(lastUsedSide()) }]
+			: []),
+		{ id: "session.search", label: "Search Sessions", keys: "Ctrl+O", run: () => setSearchOpen(true) },
+		{ id: "session.nextWaiting", label: "Go to Next Waiting Session", keys: "Alt+J", run: jumpToWaiting },
+		{
+			id: "view.explorer",
+			label: panel === "editor" ? "Hide Explorer" : "Show Explorer",
+			run: () => selectPanel("editor"),
+		},
+		{
+			id: "view.sourceControl",
+			label: panel === "review" ? "Hide Source Control" : "Show Source Control",
+			run: () => selectPanel("review"),
+		},
+		{
+			id: "view.terminal",
+			label: dockOpen ? "Hide Terminal" : "Show Terminal",
+			keys: "Ctrl+`",
+			run: toggleTerminal,
+		},
+		{
+			id: "view.thinking",
+			label: showThinking ? "Hide Thinking" : "Show Thinking",
+			run: () => changeShowThinking(!showThinking),
+		},
+		{ id: "page.fleet", label: "Open Fleet", run: () => setPage("fleet") },
+		{ id: "page.stats", label: "Open Stats", run: () => setPage("stats") },
+		{ id: "page.packages", label: "Open Packages", run: () => setPage("packages") },
+		{ id: "page.settings", label: "Open Settings", run: () => setPage("settings") },
+		...THEMES.filter((t) => t.id !== theme).map((t) => ({
+			id: `theme.${t.id}`,
+			label: `Theme: ${t.label}`,
+			run: () => setTheme(t.id),
+		})),
+		{ id: "window.reload", label: "Reload Window", run: () => location.reload() },
+	];
 
 	/** A page's content inside the page dialog. */
 	const renderPage = (page: PageId, active: boolean) => {
@@ -3036,6 +3096,8 @@ export default function App() {
 				}}
 				onClose={() => setSearchOpen(false)}
 			/>
+
+			<CommandPalette open={paletteOpen} commands={paletteCommands} onClose={() => setPaletteOpen(false)} />
 
 			<PageDialog page={page} onClose={() => setPage(null)} render={renderPage} />
 		</div>

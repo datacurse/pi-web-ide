@@ -521,7 +521,7 @@ const fold = (s: string) => s.normalize("NFD").replace(/\p{M}/gu, "").toLowerCas
  * Fuzzy only on the label: over a paragraph of hint text nearly anything
  * would be a subsequence.
  */
-function matches(query: string, label: string, text: string): "words" | "fuzzy" | null {
+export function matches(query: string, label: string, text: string): "words" | "fuzzy" | null {
 	const terms = fold(query).split(/\s+/).filter(Boolean);
 	const all = fold(`${label} ${text}`);
 	if (terms.every((t) => all.includes(t))) return "words";

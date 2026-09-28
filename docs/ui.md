@@ -149,6 +149,15 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
 - Scope is the open project. Matches user and assistant text and tool-call arguments;
   title matches rank first, then content, then fuzzy (subsequence) title matches.
 
+## Command palette
+
+- Ctrl+P from anywhere (captured like Ctrl+O, over the browser's Print) opens
+  `CommandPalette`: the same popup shell as session search, a `Command` icon, rows
+  `text-body` with the key binding right-aligned `text-ui neutral-500`.
+- Commands are listed in `App.tsx` (`paletteCommands`). Toggles name what they will
+  do (`Show Terminal` / `Hide Terminal`). Filtering uses Settings' `matches` (words,
+  then fuzzy subsequence). Arrows move, Enter runs, Escape or backdrop closes.
+
 ## User message bubble
 
 - Text is clamped to 3 lines (`line-clamp-3`, ellipsis). When it overflows, a ghost
