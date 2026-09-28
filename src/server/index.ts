@@ -7,12 +7,19 @@
  * framing/reconnect/ack protocol to write and debug.
  */
 
-import express from "express";
-import { createServer, type IncomingMessage } from "node:http";
+import { Hono, type Context } from "hono";
+import { bodyLimit } from "hono/body-limit";
+import { HTTPException } from "hono/http-exception";
+import { getMimeType } from "hono/utils/mime";
+import { getRequestListener, type HttpBindings } from "@hono/node-server";
+import { serveStatic } from "@hono/node-server/serve-static";
+import { RESPONSE_ALREADY_SENT } from "@hono/node-server/utils/response";
+import { createStreamBody } from "@hono/node-server/utils/stream";
+import { createServer } from "node:http";
 import { fileURLToPath } from "node:url";
 import { WebSocketServer } from "ws";
 import { basename, dirname, join, resolve } from "node:path";
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { createReadStream, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
@@ -106,10 +113,13 @@ const DEV_ORIGINS = new Set(
  * any domain that re-resolves to 127.0.0.1 (DNS rebinding) is same-origin
  * with us, and the Origin check above passes it.
  */
-function hostAllowed(req: IncomingMessage): boolean {
+/** One request header by lower-case name; shared by Hono routes and the raw WebSocket upgrade. */
+type Header = (name: string) => string | undefined;
+
+function hostAllowed(header: Header): boolean {
 	let name: string;
 	try {
-		name = new URL(`http://${req.headers.host ?? ""}`).hostname.replace(/\.$/, "");
+		name = new URL(`http://${header("host") ?? ""}`).hostname.replace(/\.$/, "");
 	} catch {
 		return false;
 	}
@@ -121,8 +131,8 @@ function hostAllowed(req: IncomingMessage): boolean {
 	return m !== null && Number(m[1]) >= 64 && Number(m[1]) <= 127;
 }
 
-function originAllowed(req: IncomingMessage): boolean {
-	const origin = req.headers.origin;
+function originAllowed(header: Header): boolean {
+	const origin = header("origin");
 	if (!origin) return true;
 	if (DEV_ORIGINS.has(origin)) return true;
 	let host: string;
@@ -131,7 +141,7 @@ function originAllowed(req: IncomingMessage): boolean {
 	} catch {
 		return false;
 	}
-	return host === req.headers.host || host === req.headers["x-forwarded-host"];
+	return host === header("host") || host === header("x-forwarded-host");
 }
 
 /*
@@ -216,30 +226,71 @@ const BOOT = randomUUID();
 
 const registry = new Registry(CWD, MODEL);
 const terminals = new Terminals(`pwi-${PORT}`);
-const app = express();
+/** `HttpBindings` puts Node's own req/res in `c.env`, for the routes that stream. */
+type Env = { Bindings: HttpBindings };
+const app = new Hono<Env>();
+
+app.use("/api/*", async (c, next) => {
+	const header: Header = (name) => c.req.header(name);
+	if (!hostAllowed(header) || !originAllowed(header)) return c.json({ error: "forbidden" }, 403);
+	await next();
+});
+
 // Generous because a prompt body now carries base64 screenshots, and base64
 // inflates by ~33%. The real per-image ceiling is enforced in agent.ts, where
 // a rejection can be reported to the user; hitting THIS limit yields an
 // opaque 413, so it deliberately sits well above the limit that produces a
-// good error.
-app.use("/api", (req, res, next) => {
-	if (!hostAllowed(req) || !originAllowed(req)) return res.status(403).json({ error: "forbidden" });
-	next();
-});
-app.use(express.json({ limit: "64mb" }));
+// good error. It also bounds /api/upload.
+app.use(
+	"/api/*",
+	bodyLimit({
+		maxSize: 64 * 1024 * 1024,
+		onError: (c) => c.json({ error: "request body too large" }, 413),
+	}),
+);
 
 // `no-store` on every /api answer. Nothing under /api is worth caching — the
-// page polls it — and an Express ETag makes these revalidatable, which is how
-// a stale 304 ends up standing in for a live answer.
-app.use("/api", (_req, res, next) => {
-	res.setHeader("Cache-Control", "no-store");
-	next();
+// page polls it — and a revalidatable answer is how a stale 304 once stood
+// in for a live one.
+app.use("/api/*", async (c, next) => {
+	c.header("Cache-Control", "no-store");
+	await next();
 });
 
-app.get("/api/health", (_req, res) => {
+// A handler that throws answers 500 with its message, instead of escaping to
+// the unhandledRejection backstop and leaving the request hanging.
+app.onError((err, c) => {
+	if (err instanceof HTTPException) return c.json({ error: err.message }, err.status);
+	console.error("[pwi] request failed:", err);
+	return c.json({ error: err.message }, 500);
+});
+
+/**
+ * The JSON body as an object, `{}` when there is none.
+ *
+ * Only `application/json` is parsed, as express.json did: a text/plain or
+ * form POST is what a foreign page can send without a preflight, and it
+ * stays empty here even before the origin check refuses it.
+ */
+async function readBody(c: Context<Env>): Promise<Record<string, unknown>> {
+	if (!/^application\/json\b/i.test(c.req.header("content-type") ?? "")) return {};
+	const text = await c.req.text();
+	if (!text.trim()) return {};
+	let value: unknown;
+	try {
+		value = JSON.parse(text);
+	} catch {
+		throw new HTTPException(400, { message: "invalid JSON body" });
+	}
+	return value && typeof value === "object" && !Array.isArray(value)
+		? (value as Record<string, unknown>)
+		: {};
+}
+
+app.get("/api/health", (c) => {
 	// `pid` is what lets the NEXT pwi take this port without a /proc scan;
 	// see takeover.ts, which also checks `product` before killing anything.
-	res.json({
+	return c.json({
 		ok: true,
 		product: PRODUCT,
 		cwd: CWD,
@@ -252,86 +303,89 @@ app.get("/api/health", (_req, res) => {
 	});
 });
 
-app.get("/api/models", async (_req, res) => {
+app.get("/api/models", async (c) => {
 	try {
 		const { defaultProvider: p, defaultModel: m, defaultThinkingLevel: t } = readSettings();
-		res.json({
+		return c.json({
 			models: await listModels(),
 			default: p && m ? `${p}/${m}` : null,
 			defaultThinking: typeof t === "string" ? t : null,
 		});
 	} catch (err) {
-		res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+		return c.json({ error: err instanceof Error ? err.message : String(err) }, 500);
 	}
 });
 
 /** Claude subscription limits (server/usage.ts), with their recorded history for the pace charts. */
-app.get("/api/usage", async (_req, res) => {
+app.get("/api/usage", async (c) => {
 	const r = await fetchUsage();
-	if ("error" in r) return res.status(502).json({ error: r.error });
-	res.json({ ...r.body, history: readHistory() });
+	if ("error" in r) return c.json({ error: r.error }, 502);
+	return c.json({ ...r.body, history: readHistory() });
 });
 
 /** `?sync=1` first brings other machines' mirrors up to date (throttled); `?sync=force` always does. */
-app.get("/api/stats", async (req, res) => {
+app.get("/api/stats", async (c) => {
 	try {
-		if (req.query.sync) await syncMachines(req.query.sync === "force");
-		res.json(await stats());
+		if (c.req.query("sync")) await syncMachines(c.req.query("sync") === "force");
+		return c.json(await stats());
 	} catch (err) {
-		res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+		return c.json({ error: err instanceof Error ? err.message : String(err) }, 500);
 	}
 });
 
 /** Every tailnet machine with its pwi link and state (server/fleet.ts). */
-app.get("/api/fleet", async (_req, res) => {
+app.get("/api/fleet", async (c) => {
 	try {
-		res.json({ machines: await fleet() });
+		return c.json({ machines: await fleet() });
 	} catch (err) {
-		res.status(502).json({ error: err instanceof Error ? err.message : String(err) });
+		return c.json({ error: err instanceof Error ? err.message : String(err) }, 502);
 	}
 });
 
 /** Start pwi on another machine over ssh and serve it on the tailnet. */
-app.post("/api/fleet/start", async (req, res) => {
-	const target = req.body?.ssh;
-	if (!validTarget(target)) return res.status(400).json({ error: "bad ssh target" });
+app.post("/api/fleet/start", async (c) => {
+	const b = await readBody(c);
+	const target = b.ssh;
+	if (!validTarget(target)) return c.json({ error: "bad ssh target" }, 400);
 	try {
 		await startPwi(target);
-		res.json({ ok: true });
+		return c.json({ ok: true });
 	} catch (err) {
-		res.status(502).json({ error: err instanceof Error ? err.message : String(err) });
+		return c.json({ error: err instanceof Error ? err.message : String(err) }, 502);
 	}
 });
 
 /** Persist "provider/id" as pi's own startup default, for future sessions; `null` clears it. */
-app.post("/api/default-model", async (req, res) => {
-	const model = req.body?.model;
+app.post("/api/default-model", async (c) => {
+	const b = await readBody(c);
+	const model = b.model;
 	if (model !== null && (typeof model !== "string" || !model)) {
-		return res.status(400).json({ error: "model required" });
+		return c.json({ error: "model required" }, 400);
 	}
 	try {
 		await setDefaultModel(model);
 		// A prewarmed session booted under the OLD default, and handing that to
 		// the next `+ New` would quietly ignore the change the user just made.
 		registry.discardSpares();
-		res.json({ ok: true });
+		return c.json({ ok: true });
 	} catch (err) {
-		res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
+		return c.json({ error: err instanceof Error ? err.message : String(err) }, 400);
 	}
 });
 
 /** Persist pi's startup reasoning level for future sessions; `null` clears it. */
-app.post("/api/default-thinking", (req, res) => {
-	const level = req.body?.level;
+app.post("/api/default-thinking", async (c) => {
+	const b = await readBody(c);
+	const level = b.level;
 	if (level !== null && (typeof level !== "string" || !level)) {
-		return res.status(400).json({ error: "level required" });
+		return c.json({ error: "level required" }, 400);
 	}
 	try {
 		setDefaultThinkingLevel(level);
 		registry.discardSpares(); // same reason as /api/default-model
-		res.json({ ok: true });
+		return c.json({ ok: true });
 	} catch (err) {
-		res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
+		return c.json({ error: err instanceof Error ? err.message : String(err) }, 400);
 	}
 });
 
@@ -340,25 +394,27 @@ app.post("/api/default-thinking", (req, res) => {
  * already partitions sessions by working directory, so this list is the only
  * new state in the feature.
  */
-app.get("/api/projects", (_req, res) => {
-	res.json({ projects: listProjects(CWD), active: CWD });
+app.get("/api/projects", (c) => {
+	return c.json({ projects: listProjects(CWD), active: CWD });
 });
 
-app.post("/api/projects", (req, res) => {
-	const path = typeof req.body?.path === "string" ? req.body.path : "";
-	if (!path.trim()) return res.status(400).json({ error: "path required" });
+app.post("/api/projects", async (c) => {
+	const b = await readBody(c);
+	const path = typeof b.path === "string" ? b.path : "";
+	if (!path.trim()) return c.json({ error: "path required" }, 400);
 	try {
 		// addProject validates existence + directory-ness: the path comes from the
 		// browser, and a typo would otherwise mint a session dir for a ghost cwd.
-		res.json({ projects: addProject(CWD, path) });
+		return c.json({ projects: addProject(CWD, path) });
 	} catch (err) {
-		res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
+		return c.json({ error: err instanceof Error ? err.message : String(err) }, 400);
 	}
 });
 
-app.delete("/api/projects", (req, res) => {
-	const path = typeof req.body?.path === "string" ? req.body.path : "";
-	res.json({ projects: removeProject(CWD, path) });
+app.delete("/api/projects", async (c) => {
+	const b = await readBody(c);
+	const path = typeof b.path === "string" ? b.path : "";
+	return c.json({ projects: removeProject(CWD, path) });
 });
 
 /**
@@ -370,12 +426,12 @@ app.delete("/api/projects", (req, res) => {
  * ENOENT) — the picker shows it and stays where it was, which is the only
  * useful answer to "that folder is not yours to read".
  */
-app.get("/api/browse", (req, res) => {
-	const path = typeof req.query.path === "string" ? req.query.path : "";
+app.get("/api/browse", (c) => {
+	const path = c.req.query("path") ?? "";
 	try {
-		res.json(browse(path));
+		return c.json(browse(path));
 	} catch (err) {
-		res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
+		return c.json({ error: err instanceof Error ? err.message : String(err) }, 400);
 	}
 });
 
@@ -386,23 +442,25 @@ app.get("/api/browse", (req, res) => {
  * on the machine pwi runs on — a per-origin copy would follow the browser to
  * a machine where the paths mean nothing.
  */
-app.get("/api/favorites", (_req, res) => {
-	res.json({ favorites: listFavorites() });
+app.get("/api/favorites", (c) => {
+	return c.json({ favorites: listFavorites() });
 });
 
-app.post("/api/favorites", (req, res) => {
-	const path = typeof req.body?.path === "string" ? req.body.path : "";
-	if (!path.trim()) return res.status(400).json({ error: "path required" });
+app.post("/api/favorites", async (c) => {
+	const b = await readBody(c);
+	const path = typeof b.path === "string" ? b.path : "";
+	if (!path.trim()) return c.json({ error: "path required" }, 400);
 	try {
-		res.json({ favorites: addFavorite(path) });
+		return c.json({ favorites: addFavorite(path) });
 	} catch (err) {
-		res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
+		return c.json({ error: err instanceof Error ? err.message : String(err) }, 400);
 	}
 });
 
-app.delete("/api/favorites", (req, res) => {
-	const path = typeof req.body?.path === "string" ? req.body.path : "";
-	res.json({ favorites: removeFavorite(path) });
+app.delete("/api/favorites", async (c) => {
+	const b = await readBody(c);
+	const path = typeof b.path === "string" ? b.path : "";
+	return c.json({ favorites: removeFavorite(path) });
 });
 
 /**
@@ -414,33 +472,35 @@ app.delete("/api/favorites", (req, res) => {
  * session is its own pi child; sessions already running keep the prompt they
  * were started with.
  */
-app.get("/api/personality", (_req, res) => {
-	res.json(readPersonality());
+app.get("/api/personality", (c) => {
+	return c.json(readPersonality());
 });
 
 /** The "Repeat before every reply" toggle. Applies to sessions started after it. */
-app.put("/api/personality/remind", (req, res) => {
-	if (typeof req.body?.remind !== "boolean") {
-		return res.status(400).json({ error: "remind must be a boolean" });
+app.put("/api/personality/remind", async (c) => {
+	const b = await readBody(c);
+	if (typeof b.remind !== "boolean") {
+		return c.json({ error: "remind must be a boolean" }, 400);
 	}
-	res.json(writeRemind(req.body.remind));
+	return c.json(writeRemind(b.remind));
 });
 
-app.put("/api/personality", (req, res) => {
-	if (typeof req.body?.content !== "string") {
-		return res.status(400).json({ error: "content required" });
+app.put("/api/personality", async (c) => {
+	const b = await readBody(c);
+	if (typeof b.content !== "string") {
+		return c.json({ error: "content required" }, 400);
 	}
 	try {
-		res.json(writePersonality(req.body.content));
+		return c.json(writePersonality(b.content));
 	} catch (err) {
-		res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
+		return c.json({ error: err instanceof Error ? err.message : String(err) }, 400);
 	}
 });
 
 /** Flat, read-only session list for one project. No tree — use the TUI for branching. */
-app.get("/api/sessions", async (req, res) => {
+app.get("/api/sessions", async (c) => {
 	try {
-		const cwd = typeof req.query.cwd === "string" && req.query.cwd ? req.query.cwd : CWD;
+		const cwd = c.req.query("cwd") || CWD;
 		const sessions = await listSessions(cwd);
 
 		/*
@@ -455,7 +515,7 @@ app.get("/api/sessions", async (req, res) => {
 		// or attached); everything on disk but not live is implicitly idle.
 		const streamingIds = registry.streamingIds();
 		const askingIds = registry.askingIds();
-		res.json({
+		return c.json({
 			sessions: sessions.map((s) => ({
 				...s,
 				isStreaming: streamingIds.has(s.id),
@@ -463,18 +523,18 @@ app.get("/api/sessions", async (req, res) => {
 			})),
 		});
 	} catch (err) {
-		res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+		return c.json({ error: err instanceof Error ? err.message : String(err) }, 500);
 	}
 });
 
 /** Full-text search over one project's sessions. Before `/api/sessions/:id`, which would swallow it. */
-app.get("/api/sessions/search", async (req, res) => {
+app.get("/api/sessions/search", async (c) => {
 	try {
-		const cwd = typeof req.query.cwd === "string" && req.query.cwd ? req.query.cwd : CWD;
-		const q = typeof req.query.q === "string" ? req.query.q : "";
-		res.json({ hits: await searchSessions(cwd, q) });
+		const cwd = c.req.query("cwd") || CWD;
+		const q = c.req.query("q") ?? "";
+		return c.json({ hits: await searchSessions(cwd, q) });
 	} catch (err) {
-		res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+		return c.json({ error: err instanceof Error ? err.message : String(err) }, 500);
 	}
 });
 
@@ -486,16 +546,17 @@ app.get("/api/sessions/search", async (req, res) => {
  * knows its live id. pi does the write — see PiSession.setName — so the name
  * lands in the JSONL as a `session_info` entry and the TUI shows it too.
  */
-app.post("/api/sessions/rename", async (req, res) => {
-	const file = typeof req.body?.file === "string" ? req.body.file : undefined;
-	const id = typeof req.body?.id === "string" ? req.body.id : undefined;
-	const name = typeof req.body?.name === "string" ? req.body.name.trim() : "";
-	if (!file && !id) return res.status(400).json({ error: "file or id required" });
-	if (!name) return res.status(400).json({ error: "name required" });
+app.post("/api/sessions/rename", async (c) => {
+	const b = await readBody(c);
+	const file = typeof b.file === "string" ? b.file : undefined;
+	const id = typeof b.id === "string" ? b.id : undefined;
+	const name = typeof b.name === "string" ? b.name.trim() : "";
+	if (!file && !id) return c.json({ error: "file or id required" }, 400);
+	if (!name) return c.json({ error: "name required" }, 400);
 	try {
-		res.json({ name: await registry.rename(id, file, name) });
+		return c.json({ name: await registry.rename(id, file, name) });
 	} catch (err) {
-		res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
+		return c.json({ error: err instanceof Error ? err.message : String(err) }, 400);
 	}
 });
 
@@ -507,10 +568,11 @@ app.post("/api/sessions/rename", async (req, res) => {
  * written through `set_session_name`, which is synchronous and needs no
  * polling.
  */
-app.post("/api/sessions/autoname", async (req, res) => {
-	const file = typeof req.body?.file === "string" ? req.body.file : undefined;
-	const id = typeof req.body?.id === "string" ? req.body.id : undefined;
-	if (!file && !id) return res.status(400).json({ error: "file or id required" });
+app.post("/api/sessions/autoname", async (c) => {
+	const b = await readBody(c);
+	const file = typeof b.file === "string" ? b.file : undefined;
+	const id = typeof b.id === "string" ? b.id : undefined;
+	if (!file && !id) return c.json({ error: "file or id required" }, 400);
 	try {
 		const entry = await registry.acquire(id, file);
 		// The FIRST user turn: the request the session was opened to serve.
@@ -523,18 +585,19 @@ app.post("/api/sessions/autoname", async (req, res) => {
 			.map((b) => b.text)
 			.join("\n");
 		if (!opening?.trim()) {
-			return res.status(400).json({ error: "this session has no messages to name yet" });
+			return c.json({ error: "this session has no messages to name yet" }, 400);
 		}
-		res.json({ name: await registry.rename(entry.id, undefined, await nameSession(entry.session.cwd, opening)) });
+		return c.json({ name: await registry.rename(entry.id, undefined, await nameSession(entry.session.cwd, opening)) });
 	} catch (err) {
-		res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
+		return c.json({ error: err instanceof Error ? err.message : String(err) }, 400);
 	}
 });
 
 /** Open an existing session (by file) or create a new one. Returns a full snapshot. */
-app.post("/api/sessions/open", async (req, res) => {
+app.post("/api/sessions/open", async (c) => {
+	const b = await readBody(c);
 	try {
-		const file = typeof req.body?.file === "string" ? req.body.file : undefined;
+		const file = typeof b.file === "string" ? b.file : undefined;
 		/*
 		 * Only used when CREATING (no file): resuming reads cwd from the session
 		 * header.
@@ -548,17 +611,17 @@ app.post("/api/sessions/open", async (req, res) => {
 		 * blank cwd whenever a session is created before /api/projects has
 		 * answered, so this is reachable by clicking `+ New` early.
 		 */
-		const rawCwd = typeof req.body?.cwd === "string" ? req.body.cwd.trim() : "";
-		if (typeof req.body?.cwd === "string" && !rawCwd) {
-			return res.status(400).json({ error: "cwd must not be blank" });
+		const rawCwd = typeof b.cwd === "string" ? b.cwd.trim() : "";
+		if (typeof b.cwd === "string" && !rawCwd) {
+			return c.json({ error: "cwd must not be blank" }, 400);
 		}
 		// Omitting cwd entirely still means "this server's project", which is what
 		// a single-project launch (PWI_CWD) relies on.
 		const cwd = rawCwd || undefined;
 		if (cwd && !file && !(existsSync(cwd) && statSync(cwd).isDirectory())) {
-			return res.status(400).json({ error: `not a directory: ${cwd}` });
+			return c.json({ error: `not a directory: ${cwd}` }, 400);
 		}
-		const model = typeof req.body?.model === "string" ? req.body.model : undefined;
+		const model = typeof b.model === "string" ? b.model : undefined;
 
 		/*
 		 * Opening a nonexistent path CREATES a session there, which is right for
@@ -573,7 +636,7 @@ app.post("/api/sessions/open", async (req, res) => {
 		 * server means live, whatever the disk says.
 		 */
 		if (file && !registry.hasFile(file) && !existsSync(file)) {
-			return res.status(404).json({ error: "session file not found" });
+			return c.json({ error: "session file not found" }, 404);
 		}
 
 		const entry = await registry.acquire(undefined, file, model, cwd);
@@ -593,10 +656,10 @@ app.post("/api/sessions/open", async (req, res) => {
 		 * project's.
 		 */
 		if (cwd && !(await sameProject(entry.session.cwd, cwd))) {
-			return res.status(409).json({
+			return c.json({
 				error: `session belongs to ${entry.session.cwd}`,
 				cwd: entry.session.cwd,
-			});
+			}, 409);
 		}
 
 		/*
@@ -609,9 +672,9 @@ app.post("/api/sessions/open", async (req, res) => {
 		 */
 		await registry.refreshIfFileIsAhead(entry.id);
 		const fresh = registry.get(entry.id) ?? entry;
-		res.json(registry.snapshot(fresh, entry.id));
+		return c.json(registry.snapshot(fresh, entry.id));
 	} catch (err) {
-		res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+		return c.json({ error: err instanceof Error ? err.message : String(err) }, 500);
 	}
 });
 
@@ -619,18 +682,18 @@ app.post("/api/sessions/open", async (req, res) => {
  * Full snapshot. The client calls this on attach and whenever it is in any
  * doubt — refetching the whole thing is always correct and always cheap enough.
  */
-app.get("/api/sessions/:id", async (req, res) => {
-	if (!registry.get(req.params.id)) return res.status(404).json({ error: "not found" });
+app.get("/api/sessions/:id", async (c) => {
+	if (!registry.get(c.req.param("id"))) return c.json({ error: "not found" }, 404);
 	// Asking for the session fresh is how a reload starts, and an error from a
 	// turn that is no longer running has nothing to say about it.
-	registry.clearDeadError(req.params.id);
+	registry.clearDeadError(c.req.param("id"));
 	// A reload is also when "somebody else wrote this session" is worth paying
 	// a file read to notice. May dispose and reopen the entry, so read it back
 	// afterwards rather than answering from the one we were holding.
-	await registry.refreshIfFileIsAhead(req.params.id);
-	const entry = registry.get(req.params.id);
-	if (!entry) return res.status(404).json({ error: "not found" });
-	res.json(registry.snapshot(entry, req.params.id));
+	await registry.refreshIfFileIsAhead(c.req.param("id"));
+	const entry = registry.get(c.req.param("id"));
+	if (!entry) return c.json({ error: "not found" }, 404);
+	return c.json(registry.snapshot(entry, c.req.param("id")));
 });
 
 /**
@@ -642,13 +705,13 @@ app.get("/api/sessions/:id", async (req, res) => {
  * caches the answer briefly; a session's catalog changes on the order of a
  * package install, not a keystroke.
  */
-app.post("/api/sessions/:id/commands", async (req, res) => {
-	const entry = registry.get(req.params.id);
-	if (!entry) return res.status(404).json({ error: "not found" });
+app.post("/api/sessions/:id/commands", async (c) => {
+	const entry = registry.get(c.req.param("id"));
+	if (!entry) return c.json({ error: "not found" }, 404);
 	try {
-		res.json({ commands: await entry.session.refreshCommands() });
+		return c.json({ commands: await entry.session.refreshCommands() });
 	} catch (err) {
-		res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+		return c.json({ error: err instanceof Error ? err.message : String(err) }, 500);
 	}
 });
 
@@ -656,13 +719,16 @@ app.post("/api/sessions/:id/commands", async (req, res) => {
  * Event stream. Disconnecting does NOT abort the run — that is only ever an
  * explicit user action via /abort.
  */
-app.get("/api/sessions/:id/events", (req, res) => {
-	const entry = registry.get(req.params.id);
-	if (!entry) return res.status(404).end();
+app.get("/api/sessions/:id/events", (c) => {
+	const entry = registry.get(c.req.param("id"));
+	if (!entry) return c.body(null, 404);
 	// Same reasoning as the snapshot route: a client attaching a new stream is
 	// not the client that saw the old failure.
-	registry.clearDeadError(req.params.id);
+	registry.clearDeadError(c.req.param("id"));
 
+	// Written to Node's response directly, byte for byte what the client has
+	// always parsed; Hono is told the response is already being sent.
+	const res = c.env.outgoing;
 	res.writeHead(200, {
 		"Content-Type": "text/event-stream",
 		"Cache-Control": "no-cache, no-transform",
@@ -671,16 +737,19 @@ app.get("/api/sessions/:id/events", (req, res) => {
 	});
 	res.write(": connected\n\n");
 
-	const detach = registry.attach(req.params.id, (event) => {
+	const detach = registry.attach(c.req.param("id"), (event) => {
 		res.write(`data: ${JSON.stringify(event)}\n\n`);
 	});
 
 	const keepalive = setInterval(() => res.write(": ping\n\n"), 15_000);
 
-	req.on("close", () => {
+	// The response's close, not the request's: the adapter drains request
+	// bodies, and a request can end long before the client goes away.
+	res.on("close", () => {
 		clearInterval(keepalive);
 		detach();
 	});
+	return RESPONSE_ALREADY_SENT;
 });
 
 /** Shape-check attachments here so malformed input 400s instead of reaching pi. */
@@ -694,35 +763,34 @@ function parseImages(raw: unknown): PiImage[] {
 	});
 }
 
-app.post("/api/sessions/:id/prompt", async (req, res) => {
-	const text = typeof req.body?.text === "string" ? req.body.text : "";
+app.post("/api/sessions/:id/prompt", async (c) => {
+	const b = await readBody(c);
+	const text = typeof b.text === "string" ? b.text : "";
 
 	let images: PiImage[];
 	try {
-		images = parseImages(req.body?.images);
+		images = parseImages(b.images);
 	} catch (err) {
-		return res
-			.status(400)
-			.json({ error: err instanceof Error ? err.message : String(err) });
+		return c.json({ error: err instanceof Error ? err.message : String(err) }, 400);
 	}
 
 	// An image alone is a legitimate prompt ("what is this?" is implied by
 	// pasting a screenshot), so emptiness is only an error when BOTH are empty.
 	if (!text.trim() && images.length === 0)
-		return res.status(400).json({ error: "empty prompt" });
-	if (!registry.get(req.params.id)) return res.status(404).json({ error: "not found" });
+		return c.json({ error: "empty prompt" }, 400);
+	if (!registry.get(c.req.param("id"))) return c.json({ error: "not found" }, 404);
 
 	// Fire and forget. registry.prompt resolves once pi ACCEPTS the prompt,
 	// which is not when the run finishes — the turn plays out over SSE either
 	// way, and scheduling failures are caught inside registry.prompt and
 	// delivered as an error event rather than as an HTTP status.
-	void registry.prompt(req.params.id, text, images);
-	res.json({ ok: true });
+	void registry.prompt(c.req.param("id"), text, images);
+	return c.json({ ok: true });
 });
 
-app.post("/api/sessions/:id/abort", async (req, res) => {
-	await registry.abort(req.params.id);
-	res.json({ ok: true });
+app.post("/api/sessions/:id/abort", async (c) => {
+	await registry.abort(c.req.param("id"));
+	return c.json({ ok: true });
 });
 
 /**
@@ -732,15 +800,16 @@ app.post("/api/sessions/:id/abort", async (req, res) => {
  * `compaction_start` / `compaction_end` over SSE, which is what moves the
  * transcript and the context meter.
  */
-app.post("/api/sessions/:id/compact", async (req, res) => {
-	const instructions = req.body?.customInstructions;
+app.post("/api/sessions/:id/compact", async (c) => {
+	const b = await readBody(c);
+	const instructions = b.customInstructions;
 	if (instructions !== undefined && typeof instructions !== "string")
-		return res.status(400).json({ error: "customInstructions must be a string" });
+		return c.json({ error: "customInstructions must be a string" }, 400);
 	try {
-		await registry.compact(req.params.id, instructions);
-		res.json({ ok: true });
+		await registry.compact(c.req.param("id"), instructions);
+		return c.json({ ok: true });
 	} catch (err) {
-		res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
+		return c.json({ error: err instanceof Error ? err.message : String(err) }, 400);
 	}
 });
 
@@ -749,14 +818,15 @@ app.post("/api/sessions/:id/compact", async (req, res) => {
  * timestamp). Answers with the new session's file; the client opens it like
  * any other.
  */
-app.post("/api/sessions/:id/fork", async (req, res) => {
-	const at = req.body?.at;
-	if (typeof at !== "number") return res.status(400).json({ error: "at must be a message timestamp" });
+app.post("/api/sessions/:id/fork", async (c) => {
+	const b = await readBody(c);
+	const at = b.at;
+	if (typeof at !== "number") return c.json({ error: "at must be a message timestamp" }, 400);
 	try {
-		const entry = await registry.fork(req.params.id, at);
-		res.json({ file: entry.session.file });
+		const entry = await registry.fork(c.req.param("id"), at);
+		return c.json({ file: entry.session.file });
 	} catch (err) {
-		res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
+		return c.json({ error: err instanceof Error ? err.message : String(err) }, 400);
 	}
 });
 
@@ -765,12 +835,12 @@ app.post("/api/sessions/:id/fork", async (req, res) => {
  * it started. The conversation is on disk and the id comes from the file, so
  * the session survives; only the process is replaced.
  */
-app.post("/api/sessions/:id/restart", async (req, res) => {
+app.post("/api/sessions/:id/restart", async (c) => {
 	try {
-		const entry = await registry.restart(req.params.id);
-		res.json(registry.snapshot(entry, entry.id));
+		const entry = await registry.restart(c.req.param("id"));
+		return c.json(registry.snapshot(entry, entry.id));
 	} catch (err) {
-		res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
+		return c.json({ error: err instanceof Error ? err.message : String(err) }, 400);
 	}
 });
 
@@ -782,12 +852,13 @@ app.post("/api/sessions/:id/restart", async (req, res) => {
  * be open. A stale one is a 409, not an error — the page simply has an old
  * panel on screen and its next snapshot will say so.
  */
-app.post("/api/sessions/:id/ask", (req, res) => {
-	const askId = typeof req.body?.askId === "string" ? req.body.askId : "";
-	if (!askId) return res.status(400).json({ error: "askId required" });
-	if (!registry.get(req.params.id)) return res.status(404).json({ error: "not found" });
+app.post("/api/sessions/:id/ask", async (c) => {
+	const b = await readBody(c);
+	const askId = typeof b.askId === "string" ? b.askId : "";
+	if (!askId) return c.json({ error: "askId required" }, 400);
+	if (!registry.get(c.req.param("id"))) return c.json({ error: "not found" }, 404);
 
-	const body = req.body ?? {};
+	const body = b;
 	const answer: AskAnswer | null =
 		typeof body.value === "string"
 			? { value: body.value }
@@ -797,13 +868,11 @@ app.post("/api/sessions/:id/ask", (req, res) => {
 					? { cancelled: true }
 					: null;
 	if (!answer)
-		return res
-			.status(400)
-			.json({ error: "answer needs one of value, confirmed, cancelled" });
+		return c.json({ error: "answer needs one of value, confirmed, cancelled" }, 400);
 
-	if (!registry.answerAsk(req.params.id, askId, answer))
-		return res.status(409).json({ error: "that question is no longer open" });
-	res.json({ ok: true });
+	if (!registry.answerAsk(c.req.param("id"), askId, answer))
+		return c.json({ error: "that question is no longer open" }, 409);
+	return c.json({ ok: true });
 });
 
 /**
@@ -814,12 +883,12 @@ app.post("/api/sessions/:id/ask", (req, res) => {
  * and a review rendered from a stale copy would offer to revert text that is
  * no longer there.
  */
-app.get("/api/file", (req, res) => {
-	const path = typeof req.query.path === "string" ? req.query.path : "";
+app.get("/api/file", (c) => {
+	const path = c.req.query("path") ?? "";
 	try {
-		res.json({ path, content: readReviewFile(CWD, path) });
+		return c.json({ path, content: readReviewFile(CWD, path) });
 	} catch (err) {
-		res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
+		return c.json({ error: err instanceof Error ? err.message : String(err) }, 400);
 	}
 });
 
@@ -831,22 +900,23 @@ app.get("/api/file", (req, res) => {
  * else saved while this tab was open" is the NORMAL case here, not a rare
  * race — and the only safe answer is to refuse and let the UI offer a reload.
  */
-app.put("/api/file", (req, res) => {
-	const path = typeof req.body?.path === "string" ? req.body.path : "";
-	const content = typeof req.body?.content === "string" ? req.body.content : null;
-	const expect = typeof req.body?.expect === "string" ? req.body.expect : null;
+app.put("/api/file", async (c) => {
+	const b = await readBody(c);
+	const path = typeof b.path === "string" ? b.path : "";
+	const content = typeof b.content === "string" ? b.content : null;
+	const expect = typeof b.expect === "string" ? b.expect : null;
 	if (content === null || expect === null) {
-		return res.status(400).json({ error: "path, content and expect are required" });
+		return c.json({ error: "path, content and expect are required" }, 400);
 	}
 	try {
 		writeFile(CWD, path, expect, content);
-		res.json({ ok: true });
+		return c.json({ ok: true });
 	} catch (err) {
 		const message = err instanceof Error ? err.message : String(err);
 		// A stale buffer is a conflict the client can resolve by reloading; a bad
 		// path is the client's bug. Different statuses so the UI can tell them
 		// apart without parsing the message.
-		res.status(message.includes("changed on disk") ? 409 : 400).json({ error: message });
+		return c.json({ error: message }, message.includes("changed on disk") ? 409 : 400);
 	}
 });
 
@@ -855,17 +925,18 @@ app.put("/api/file", (req, res) => {
  * Saved under the temp dir so the agent can read it by path; each upload gets
  * its own folder so the original name is kept without collisions.
  */
-app.post("/api/upload", express.raw({ type: () => true, limit: "64mb" }), (req, res) => {
-	const name = basename(typeof req.query.name === "string" ? req.query.name : "");
-	if (!name || name === "." || name === "..") return res.status(400).json({ error: "name required" });
+app.post("/api/upload", async (c) => {
+	const name = basename(c.req.query("name") ?? "");
+	if (!name || name === "." || name === "..") return c.json({ error: "name required" }, 400);
+	const data = Buffer.from(await c.req.arrayBuffer());
 	try {
 		const dir = join(tmpdir(), "pwi-uploads", randomUUID());
 		mkdirSync(dir, { recursive: true });
 		const path = join(dir, name);
-		writeFileSync(path, Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0));
-		res.json({ path });
+		writeFileSync(path, data);
+		return c.json({ path });
 	} catch (err) {
-		res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+		return c.json({ error: err instanceof Error ? err.message : String(err) }, 500);
 	}
 });
 
@@ -873,13 +944,19 @@ app.post("/api/upload", express.raw({ type: () => true, limit: "64mb" }), (req, 
  * A file as a download, for the explorer's "Download". Raw bytes and no size
  * cap: unlike /api/file it is streamed to disk, never rendered.
  */
-app.get("/api/download", (req, res) => {
+app.get("/api/download", (c) => {
 	try {
-		const full = safePath(CWD, typeof req.query.path === "string" ? req.query.path : "");
-		if (!statSync(full).isFile()) throw new Error(`not a file: ${full}`);
-		res.download(full);
+		const full = safePath(CWD, c.req.query("path") ?? "");
+		const stat = statSync(full);
+		if (!stat.isFile()) throw new Error(`not a file: ${full}`);
+		const name = basename(full);
+		return c.body(createStreamBody(createReadStream(full)), 200, {
+			"Content-Type": getMimeType(name) ?? "application/octet-stream",
+			"Content-Length": String(stat.size),
+			"Content-Disposition": attachment(name),
+		});
 	} catch (err) {
-		res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
+		return c.json({ error: err instanceof Error ? err.message : String(err) }, 400);
 	}
 });
 
@@ -888,12 +965,27 @@ app.get("/api/download", (req, res) => {
  * of them go through files.ts's project check; none overwrites an existing
  * target, and delete moves to the desktop Trash rather than unlinking.
  */
+/**
+ * `Content-Disposition` for a download: an ASCII `filename` every browser
+ * reads, plus RFC 5987 `filename*` carrying the real name when it is not ASCII.
+ */
+function attachment(name: string): string {
+	const ascii = name.replace(/[^\x20-\x7e]/g, "?").replace(/["\\]/g, "\\$&");
+	if (!/[^\x20-\x7e]/.test(name)) return `attachment; filename="${ascii}"`;
+	const encoded = encodeURIComponent(name).replace(
+		/['()*]/g,
+		(ch) => `%${ch.charCodeAt(0).toString(16).toUpperCase()}`,
+	);
+	return `attachment; filename="${ascii}"; filename*=UTF-8''${encoded}`;
+}
+
 const str = (v: unknown) => (typeof v === "string" ? v : "");
-const fileOp = (run: (body: Record<string, unknown>) => unknown) => (req: express.Request, res: express.Response) => {
+const fileOp = (run: (body: Record<string, unknown>) => string | void) => async (c: Context<Env>) => {
+	const b = await readBody(c);
 	try {
-		res.json({ ok: true, path: run((req.body ?? {}) as Record<string, unknown>) ?? null });
+		return c.json({ ok: true, path: run(b) || null });
 	} catch (err) {
-		res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
+		return c.json({ error: err instanceof Error ? err.message : String(err) }, 400);
 	}
 };
 app.post("/api/files/create", fileOp((b) => createEntry(CWD, str(b.path), b.dir === true)));
@@ -902,12 +994,12 @@ app.post("/api/files/copy", fileOp((b) => copyEntry(CWD, str(b.from), str(b.toDi
 app.post("/api/files/trash", fileOp((b) => trashEntry(CWD, str(b.path))));
 
 /** One directory's files and subdirectories, for the editor's tree. */
-app.get("/api/files", (req, res) => {
-	const path = typeof req.query.path === "string" ? req.query.path : "";
+app.get("/api/files", (c) => {
+	const path = c.req.query("path") ?? "";
 	try {
-		res.json({ path, entries: listDir(CWD, path || CWD) });
+		return c.json({ path, entries: listDir(CWD, path || CWD) });
 	} catch (err) {
-		res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
+		return c.json({ error: err instanceof Error ? err.message : String(err) }, 400);
 	}
 });
 
@@ -923,15 +1015,16 @@ app.get("/api/files", (req, res) => {
  * moved, a path outside the project — leave the pane showing a revert that
  * never reached the disk.
  */
-app.post("/api/sessions/:id/hunks/:hunkId", (req, res) => {
-	const state: unknown = req.body?.state;
+app.post("/api/sessions/:id/hunks/:hunkId", async (c) => {
+	const b = await readBody(c);
+	const state: unknown = b.state;
 	if (state !== "accepted" && state !== "rejected" && state !== "pending") {
-		return res.status(400).json({ error: "state must be accepted, rejected or pending" });
+		return c.json({ error: "state must be accepted, rejected or pending" }, 400);
 	}
-	const entry = registry.get(req.params.id);
-	if (!entry) return res.status(404).json({ error: "not found" });
-	const hunk = entry.session.hunks.find((h) => h.id === req.params.hunkId);
-	if (!hunk) return res.status(404).json({ error: "no such hunk" });
+	const entry = registry.get(c.req.param("id"));
+	if (!entry) return c.json({ error: "not found" }, 404);
+	const hunk = entry.session.hunks.find((h) => h.id === c.req.param("hunkId"));
+	if (!hunk) return c.json({ error: "no such hunk" }, 404);
 
 	try {
 		if (state === "rejected") {
@@ -940,21 +1033,22 @@ app.post("/api/sessions/:id/hunks/:hunkId", (req, res) => {
 			// the others would undo changes the user has not ruled on.
 			writeReviewed(CWD, hunk.path, current, resolveHunks(current, [{ ...hunk, state }]));
 		}
-		registry.setHunkState(req.params.id, req.params.hunkId, state);
-		res.json({ ok: true });
+		registry.setHunkState(c.req.param("id"), c.req.param("hunkId"), state);
+		return c.json({ ok: true });
 	} catch (err) {
-		res.status(409).json({ error: err instanceof Error ? err.message : String(err) });
+		return c.json({ error: err instanceof Error ? err.message : String(err) }, 409);
 	}
 });
 
-app.post("/api/sessions/:id/model", async (req, res) => {
-	const model = typeof req.body?.model === "string" ? req.body.model : undefined;
-	if (!model) return res.status(400).json({ error: "model required" });
+app.post("/api/sessions/:id/model", async (c) => {
+	const b = await readBody(c);
+	const model = typeof b.model === "string" ? b.model : undefined;
+	if (!model) return c.json({ error: "model required" }, 400);
 	try {
-		await registry.setModel(req.params.id, model);
-		res.json({ ok: true });
+		await registry.setModel(c.req.param("id"), model);
+		return c.json({ ok: true });
 	} catch (err) {
-		res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
+		return c.json({ error: err instanceof Error ? err.message : String(err) }, 400);
 	}
 });
 
@@ -965,10 +1059,10 @@ app.post("/api/sessions/:id/model", async (req, res) => {
  * session on screen, and a pwi serving several projects would otherwise
  * commit in whichever one it was started in.
  */
-app.get("/api/git", async (req, res) => {
-	const cwd = typeof req.query.cwd === "string" && req.query.cwd ? req.query.cwd : CWD;
+app.get("/api/git", async (c) => {
+	const cwd = c.req.query("cwd") || CWD;
 	const [state, message] = await Promise.all([gitStatus(cwd), suggestMessage(cwd)]);
-	res.json({ ...state, suggestion: message });
+	return c.json({ ...state, suggestion: message });
 });
 
 /**
@@ -981,9 +1075,9 @@ app.get("/api/git", async (req, res) => {
  * all of it. One source for both, and the panel stops disagreeing with the
  * button.
  */
-app.get("/api/git/changes", async (req, res) => {
-	const cwd = typeof req.query.cwd === "string" && req.query.cwd ? req.query.cwd : CWD;
-	res.json({ files: await gitChanges(cwd) });
+app.get("/api/git/changes", async (c) => {
+	const cwd = c.req.query("cwd") || CWD;
+	return c.json({ files: await gitChanges(cwd) });
 });
 
 /**
@@ -993,10 +1087,10 @@ app.get("/api/git/changes", async (req, res) => {
  * at to find the change you just made — scrolling back through a repo's
  * history is what a real git client is for.
  */
-app.get("/api/git/log", async (req, res) => {
-	const cwd = typeof req.query.cwd === "string" && req.query.cwd ? req.query.cwd : CWD;
-	const limit = Number(req.query.limit);
-	res.json({ commits: await gitLog(cwd, Number.isFinite(limit) ? limit : undefined) });
+app.get("/api/git/log", async (c) => {
+	const cwd = c.req.query("cwd") || CWD;
+	const limit = Number(c.req.query("limit"));
+	return c.json({ commits: await gitLog(cwd, Number.isFinite(limit) ? limit : undefined) });
 });
 
 /**
@@ -1006,15 +1100,15 @@ app.get("/api/git/log", async (req, res) => {
  * pays for content. `ref` empty is the working tree; a sha is that commit
  * against its parent.
  */
-app.get("/api/git/show", async (req, res) => {
-	const cwd = typeof req.query.cwd === "string" && req.query.cwd ? req.query.cwd : CWD;
-	const path = typeof req.query.path === "string" ? req.query.path : "";
-	const ref = typeof req.query.ref === "string" ? req.query.ref : "";
-	if (!path) return res.status(400).json({ error: "path required" });
+app.get("/api/git/show", async (c) => {
+	const cwd = c.req.query("cwd") || CWD;
+	const path = c.req.query("path") ?? "";
+	const ref = c.req.query("ref") ?? "";
+	if (!path) return c.json({ error: "path required" }, 400);
 	try {
-		res.json(await gitShow(cwd, path, ref));
+		return c.json(await gitShow(cwd, path, ref));
 	} catch (err) {
-		res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
+		return c.json({ error: err instanceof Error ? err.message : String(err) }, 400);
 	}
 });
 
@@ -1030,43 +1124,46 @@ app.get("/api/git/show", async (req, res) => {
  * 502, not 500: the failure is always the model or its credentials, and the
  * UI offers the file-list suggestion instead.
  */
-app.post("/api/git/name", async (req, res) => {
-	const cwd = typeof req.body?.cwd === "string" && req.body.cwd ? req.body.cwd : CWD;
+app.post("/api/git/name", async (c) => {
+	const b = await readBody(c);
+	const cwd = typeof b.cwd === "string" && b.cwd ? b.cwd : CWD;
 	try {
-		res.json({ message: await nameCommit(cwd) });
+		return c.json({ message: await nameCommit(cwd) });
 	} catch (err) {
-		res.status(502).json({ error: err instanceof Error ? err.message : String(err) });
+		return c.json({ error: err instanceof Error ? err.message : String(err) }, 502);
 	}
 });
 
-app.post("/api/git", async (req, res) => {
-	const cwd = typeof req.body?.cwd === "string" && req.body.cwd ? req.body.cwd : CWD;
+app.post("/api/git", async (c) => {
+	const b = await readBody(c);
+	const cwd = typeof b.cwd === "string" && b.cwd ? b.cwd : CWD;
 	const plan: GitPlan = {
 		branch:
-			typeof req.body?.branch === "string" && req.body.branch
-				? req.body.branch
+			typeof b.branch === "string" && b.branch
+				? b.branch
 				: undefined,
-		message: typeof req.body?.message === "string" ? req.body.message : undefined,
-		push: req.body?.push === true,
-		pr: req.body?.pr === true,
+		message: typeof b.message === "string" ? b.message : undefined,
+		push: b.push === true,
+		pr: b.pr === true,
 	};
 	if (!plan.branch && plan.message === undefined && !plan.push && !plan.pr)
-		return res.status(400).json({ error: "nothing to do" });
+		return c.json({ error: "nothing to do" }, 400);
 
 	const result = await apply(cwd, plan);
 	// 200 either way: a refused commit ("nothing to commit") is an answer the
 	// UI shows verbatim, not a transport failure.
-	res.json(result);
+	return c.json(result);
 });
 
-app.post("/api/sessions/:id/thinking", async (req, res) => {
-	const level = typeof req.body?.level === "string" ? req.body.level : undefined;
-	if (!level) return res.status(400).json({ error: "level required" });
+app.post("/api/sessions/:id/thinking", async (c) => {
+	const b = await readBody(c);
+	const level = typeof b.level === "string" ? b.level : undefined;
+	if (!level) return c.json({ error: "level required" }, 400);
 	try {
-		await registry.setThinkingLevel(req.params.id, level);
-		res.json({ ok: true });
+		await registry.setThinkingLevel(c.req.param("id"), level);
+		return c.json({ ok: true });
 	} catch (err) {
-		res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
+		return c.json({ error: err instanceof Error ? err.message : String(err) }, 400);
 	}
 });
 
@@ -1079,74 +1176,75 @@ app.post("/api/sessions/:id/thinking", async (req, res) => {
  * that boundary and must not widen it: same loopback listener, same origin
  * guard, no new surface.
  */
-app.get("/api/packages", async (_req, res) => {
+app.get("/api/packages", async (c) => {
 	try {
-		res.json({ piVersion: PI_VERSION ?? null, ...(await packages.view()) });
+		return c.json({ piVersion: PI_VERSION ?? null, ...(await packages.view()) });
 	} catch (err) {
-		res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+		return c.json({ error: err instanceof Error ? err.message : String(err) }, 500);
 	}
 });
 
 /** A mutation answers with its own outcome; the log tail is the interesting part. */
-function mutation(
-	res: express.Response,
+async function mutation(
+	c: Context<Env>,
 	work: () => Promise<{ ok: boolean; log: string; reason?: string }>,
-): Promise<void> {
-	return work().then(
-		(result) => {
-			// A prewarmed spare booted under the OLD package set, and handing
-			// that to the next `+ New` would give somebody a session that is
-			// stale before they have typed anything.
-			if (result.ok) registry.discardSpares();
-			// 200 either way: a refused install is an answer the screen shows
-			// verbatim, not a transport failure.
-			res.json(result);
-		},
-		(err: unknown) => {
-			// Only validation lands here, and it is the user's input that is wrong.
-			res.status(400).json({
-				ok: false,
-				log: "",
-				reason: err instanceof Error ? err.message : String(err),
-			});
-		},
-	);
+): Promise<Response> {
+	let result: { ok: boolean; log: string; reason?: string };
+	try {
+		result = await work();
+	} catch (err) {
+		// Only validation lands here, and it is the user's input that is wrong.
+		return c.json(
+			{ ok: false, log: "", reason: err instanceof Error ? err.message : String(err) },
+			400,
+		);
+	}
+	// A prewarmed spare booted under the OLD package set, and handing
+	// that to the next `+ New` would give somebody a session that is
+	// stale before they have typed anything.
+	if (result.ok) registry.discardSpares();
+	// 200 either way: a refused install is an answer the screen shows
+	// verbatim, not a transport failure.
+	return c.json(result);
 }
 
-app.post("/api/packages", async (req, res) => {
-	const source = typeof req.body?.source === "string" ? req.body.source : "";
-	if (!source) return res.status(400).json({ ok: false, log: "", reason: "source required" });
-	await mutation(res, () => packages.install(source));
+app.post("/api/packages", async (c) => {
+	const b = await readBody(c);
+	const source = typeof b.source === "string" ? b.source : "";
+	if (!source) return c.json({ ok: false, log: "", reason: "source required" }, 400);
+	return mutation(c, () => packages.install(source));
 });
 
-app.delete("/api/packages", async (req, res) => {
-	const source = typeof req.body?.source === "string" ? req.body.source : "";
-	if (!source) return res.status(400).json({ ok: false, log: "", reason: "source required" });
-	await mutation(res, () => packages.remove(source));
+app.delete("/api/packages", async (c) => {
+	const b = await readBody(c);
+	const source = typeof b.source === "string" ? b.source : "";
+	if (!source) return c.json({ ok: false, log: "", reason: "source required" }, 400);
+	return mutation(c, () => packages.remove(source));
 });
 
-app.post("/api/packages/update", async (req, res) => {
-	const source = typeof req.body?.source === "string" ? req.body.source : undefined;
-	await mutation(res, () => packages.update(source));
+app.post("/api/packages/update", async (c) => {
+	const b = await readBody(c);
+	const source = typeof b.source === "string" ? b.source : undefined;
+	return mutation(c, () => packages.update(source));
 });
 
 /** Update the pi CLI on this machine. Never automatic. */
-app.post("/api/packages/update-pi", async (_req, res) => {
-	await mutation(res, () => packages.updateSelf());
+app.post("/api/packages/update-pi", (c) => {
+	return mutation(c, () => packages.updateSelf());
 });
 
-app.get("/api/packages/search", async (req, res) => {
-	const q = typeof req.query.q === "string" ? req.query.q : "";
-	res.json(await search(q));
+app.get("/api/packages/search", async (c) => {
+	const q = c.req.query("q") ?? "";
+	return c.json(await search(q));
 });
 
-app.get("/api/packages/info", async (req, res) => {
-	const name = typeof req.query.name === "string" ? req.query.name : "";
-	if (!name) return res.status(400).json({ error: "name required" });
+app.get("/api/packages/info", async (c) => {
+	const name = c.req.query("name") ?? "";
+	if (!name) return c.json({ error: "name required" }, 400);
 	try {
-		res.json(await info(name));
+		return c.json(await info(name));
 	} catch (err) {
-		res.status(502).json({ error: err instanceof Error ? err.message : String(err) });
+		return c.json({ error: err instanceof Error ? err.message : String(err) }, 502);
 	}
 });
 
@@ -1159,9 +1257,9 @@ app.get("/api/packages/info", async (req, res) => {
  * second writer of a file that is in someone's repository is a merge
  * conflict waiting to be blamed on the wrong tool.
  */
-app.get("/api/packages/project", (req, res) => {
-	const cwd = typeof req.query.cwd === "string" && req.query.cwd ? req.query.cwd : CWD;
-	res.json({ cwd, packages: packages.listProject(cwd) });
+app.get("/api/packages/project", (c) => {
+	const cwd = c.req.query("cwd") || CWD;
+	return c.json({ cwd, packages: packages.listProject(cwd) });
 });
 
 /**
@@ -1173,33 +1271,34 @@ app.get("/api/packages/project", (req, res) => {
  * The list is what lets a reloaded client recover: it persists a layout of
  * ids and this says which of them still exist.
  */
-app.get("/api/terminals", (req, res) => {
-	const cwd = typeof req.query.cwd === "string" ? req.query.cwd : undefined;
-	res.json({ terminals: terminals.list(cwd, req.query.fleet === "1") });
+app.get("/api/terminals", (c) => {
+	const cwd = c.req.query("cwd");
+	return c.json({ terminals: terminals.list(cwd, c.req.query("fleet") === "1") });
 });
 
-app.post("/api/terminals", (req, res) => {
-	const cwd = typeof req.body?.cwd === "string" && req.body.cwd ? req.body.cwd : CWD;
-	const cols = Number(req.body?.cols) || 80;
-	const rows = Number(req.body?.rows) || 24;
-	const dir = typeof req.body?.dir === "string" && req.body.dir ? req.body.dir : cwd;
+app.post("/api/terminals", async (c) => {
+	const b = await readBody(c);
+	const cwd = typeof b.cwd === "string" && b.cwd ? b.cwd : CWD;
+	const cols = Number(b.cols) || 80;
+	const rows = Number(b.rows) || 24;
+	const dir = typeof b.dir === "string" && b.dir ? b.dir : cwd;
 	// A Fleet page shell, in the home dir; with `ssh` it starts by ssh-ing there.
-	const ssh = req.body?.ssh;
-	if (ssh !== undefined && !validTarget(ssh)) return res.status(400).json({ error: "bad ssh target" });
-	const fleet = req.body?.fleet === true ? { run: ssh && `ssh ${ssh}` } : undefined;
+	const ssh = b.ssh;
+	if (ssh !== undefined && !validTarget(ssh)) return c.json({ error: "bad ssh target" }, 400);
+	const fleet = b.fleet === true ? { run: ssh && `ssh ${ssh}` } : undefined;
 	try {
 		const term = fleet
 			? terminals.create(homedir(), cols, rows, homedir(), fleet)
 			: terminals.create(cwd, cols, rows, dir);
-		res.json({ id: term.id, cwd: term.cwd, running: true });
+		return c.json({ id: term.id, cwd: term.cwd, running: true });
 	} catch (err) {
-		res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
+		return c.json({ error: err instanceof Error ? err.message : String(err) }, 400);
 	}
 });
 
-app.delete("/api/terminals/:id", (req, res) => {
-	terminals.close(req.params.id);
-	res.json({ ok: true });
+app.delete("/api/terminals/:id", (c) => {
+	terminals.close(c.req.param("id"));
+	return c.json({ ok: true });
 });
 
 /*
@@ -1210,8 +1309,8 @@ app.delete("/api/terminals/:id", (req, res) => {
  * against an older server presents as a control stuck on "loading…" rather
  * than as a version mismatch.
  */
-app.use("/api", (_req, res) => {
-	res.status(404).json({ error: "no such endpoint" });
+app.all("/api/*", (c) => {
+	return c.json({ error: "no such endpoint" }, 404);
 });
 
 /*
@@ -1227,15 +1326,17 @@ app.use("/api", (_req, res) => {
  */
 const dist = resolve(ROOT, "dist");
 if (process.env.PWI_DEV === "1") {
-	app.get("*", (req, res) =>
-		res.redirect(302, `http://127.0.0.1:${VITE_PORT}${req.originalUrl}`),
-	);
+	app.get("*", (c) => {
+		// Path and query exactly as sent: everything after the origin.
+		const url = c.req.url;
+		return c.redirect(`http://127.0.0.1:${VITE_PORT}${url.slice(url.indexOf("/", url.indexOf("//") + 2))}`, 302);
+	});
 } else if (existsSync(dist)) {
-	app.use(express.static(dist));
-	app.get("*", (_req, res) => res.sendFile(resolve(dist, "index.html")));
+	app.use("*", serveStatic({ root: dist }));
+	app.get("*", serveStatic({ path: resolve(dist, "index.html") }));
 }
 
-const server = createServer(app);
+const server = createServer(getRequestListener(app.fetch));
 
 /**
  * The terminal socket: `/api/terminal/socket?id=<terminal>`.
@@ -1256,7 +1357,11 @@ server.on("upgrade", (req, socket, head) => {
 	const url = new URL(req.url ?? "/", "http://127.0.0.1");
 	// A foreign page cannot fetch a terminal id without passing CORS, but a
 	// socket to a guessed one would be a shell; refuse at the same boundary.
-	if (url.pathname !== "/api/terminal/socket" || !hostAllowed(req) || !originAllowed(req)) {
+	const header: Header = (name) => {
+		const value = req.headers[name];
+		return typeof value === "string" ? value : undefined;
+	};
+	if (url.pathname !== "/api/terminal/socket" || !hostAllowed(header) || !originAllowed(header)) {
 		socket.destroy();
 		return;
 	}
