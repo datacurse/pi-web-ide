@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "re
 import { Bell, ChatText, ListBullets, Palette, UserCircle } from "@phosphor-icons/react";
 import { Button, inputClass, NavItem, OptionRow, PanelHeader, Section } from "./ui.js";
 import { THEMES, TOOL_MODES, type ThemeId, type ToolMode } from "./prefs.js";
+import { api } from "./api.js";
 
 /** What GET/PUT /api/personality answer with. */
 interface Personality {
@@ -123,7 +124,7 @@ export function Settings({
 		if (!open || dirty) return;
 		void (async () => {
 			// The personality on screen is the selected host's, not this page's.
-			const r = await fetch(`/api/personality`).catch(() => null);
+			const r = await api.personality.$get().catch(() => null);
 			/*
 			 * Every failure mode ends up as a message, never as a control that
 			 * sits on "loading…" forever. The one that actually happened: a
@@ -156,11 +157,7 @@ export function Settings({
 	// Saved on click like every other checkbox here, independent of the text's
 	// Save button, since it is its own file on the server.
 	const saveRemind = async (remind: boolean) => {
-		const r = await fetch(`/api/personality/remind`, {
-			method: "PUT",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ remind }),
-		}).catch(() => null);
+		const r = await api.personality.remind.$put({ json: { remind } }).catch(() => null);
 		if (!r?.ok) {
 			setSaveError("could not save the reminder setting");
 			return;
@@ -172,11 +169,7 @@ export function Settings({
 		if (draft === null) return;
 		setSaveState("saving");
 		setSaveError(null);
-		const r = await fetch(`/api/personality`, {
-			method: "PUT",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ content: draft }),
-		}).catch(() => null);
+		const r = await api.personality.$put({ json: { content: draft } }).catch(() => null);
 		const body = (await r?.json().catch(() => ({}))) as Partial<Personality> & {
 			error?: string;
 		};

@@ -10,6 +10,7 @@ import { ArrowClockwise } from "@phosphor-icons/react";
 import type { StatsTurn, StatsView, UsageSample } from "../shared/types.js";
 import { Button, IconButton, PanelHeader, sectionLabel, useBatches } from "./ui.js";
 import { dayKey, duration, heatmapWeeks, LIMIT_WINDOW_MS, pace, percentile, span, streaks, type Pace } from "./stats.js";
+import { api } from "./api.js";
 
 const WEEKS = 52;
 const HEAT = ["bg-neutral-800", "bg-green-900", "bg-green-700", "bg-green-500", "bg-green-300"];
@@ -60,7 +61,7 @@ export function Stats({ open, revision, onClose }: { open: boolean; revision?: u
 
 	const get = useCallback(async (sync?: "1" | "force") => {
 		try {
-			const r = await fetch(`/api/stats${sync ? `?sync=${sync}` : ""}`);
+			const r = await api.stats.$get({ query: sync ? { sync } : {} });
 			if (!r.ok) throw new Error(((await r.json()) as { error?: string }).error ?? r.statusText);
 			setView((await r.json()) as StatsView);
 			setError(null);
@@ -219,7 +220,7 @@ function useUsage(reload: number): UsageState {
 	const [state, setState] = useState<UsageState>({ limits: null, history: [], error: null });
 	useEffect(() => {
 		void (async () => {
-			const r = await fetch("/api/usage").catch(() => null);
+			const r = await api.usage.$get().catch(() => null);
 			const body = (await r?.json().catch(() => null)) as {
 				limits?: UsageLimit[];
 				history?: UsageSample[];

@@ -87,6 +87,7 @@ import {
 import { setFavicon } from "./favicon.js";
 import { attentionOf, attentionTitle, nextWaiting, type Attention } from "./attention.js";
 import { Button, IconButton, PanelHeader } from "./ui.js";
+import { api } from "./api.js";
 
 /**
  * The stand-in for "no session, so no hunks".
@@ -575,7 +576,7 @@ export default function App() {
 	 * and the difference is the thing worth showing.
 	 */
 	const loadProjects = useCallback(async (): Promise<void> => {
-		const r = await fetch("/api/projects").catch(() => null);
+		const r = await api.projects.$get().catch(() => null);
 		if (!r?.ok) {
 			setProjects({ projects: [], seed: "", error: r ? `HTTP ${r.status}` : "not answering" });
 			return;
@@ -629,11 +630,7 @@ export default function App() {
 
 	const addProject = useCallback(
 		async (path: string) => {
-			const r = await fetch("/api/projects", {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ path }),
-			}).catch(() => null);
+			const r = await api.projects.$post({ json: { path } }).catch(() => null);
 			const body = (await r?.json().catch(() => ({}))) as {
 				error?: string;
 				projects?: string[];
@@ -659,11 +656,7 @@ export default function App() {
 	 */
 	const removeProject = useCallback(
 		async (path: string) => {
-			const r = await fetch("/api/projects", {
-				method: "DELETE",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ path }),
-			}).catch(() => null);
+			const r = await api.projects.$delete({ json: { path } }).catch(() => null);
 			if (!r?.ok) return;
 			// Same shape as the POST response; typed once, then read.
 			const body = (await r.json().catch(() => ({}))) as { projects?: string[] };
@@ -1349,7 +1342,7 @@ export default function App() {
 		let boot: string | undefined;
 		let live = true;
 		const check = async () => {
-			const r = await fetch("/api/health").catch(() => null);
+			const r = await api.health.$get().catch(() => null);
 			if (!live || !r?.ok) return; // down is not restarted; say nothing yet
 			const body: unknown = await r.json().catch(() => null);
 			const seen =

@@ -1,5 +1,6 @@
 import { type SyntheticEvent, useEffect, useMemo, useState } from "react";
 import { Star } from "@phosphor-icons/react";
+import { api } from "./api.js";
 
 /**
  * Composer controls for the active session's model: one select for the model
@@ -44,15 +45,15 @@ export function ModelSelector({
 
 	useEffect(() => {
 		let cancelled = false;
-		fetch(`/api/models`)
-			.then((r) => r.json())
-			.then((d) => {
-				if (cancelled) return;
-				setModels(d.models ?? []);
-				setDefaultModel(d.default ?? null);
-				setDefaultThinking(d.defaultThinking ?? null);
-			})
-			.catch(() => {});
+		void (async () => {
+			const r = await api.models.$get().catch(() => null);
+			if (!r?.ok) return;
+			const d = await r.json().catch(() => null);
+			if (cancelled || !d) return;
+			setModels(d.models ?? []);
+			setDefaultModel(d.default ?? null);
+			setDefaultThinking(d.defaultThinking ?? null);
+		})();
 		return () => {
 			cancelled = true;
 		};
@@ -61,15 +62,16 @@ export function ModelSelector({
 	const providers = useMemo(() => [...new Set(models.map((m) => m.split("/")[0]))].sort(), [models]);
 
 	/** Star toggles: save the current value as pi's startup default, or clear it if it already is. */
-	const toggleDefault = async (url: string, key: string, current: string | null, value: string, set: (v: string | null) => void) => {
+	const toggleDefault = async (
+		save: (next: string | null) => Promise<{ ok: boolean; status: number; json(): Promise<unknown> }>,
+		current: string | null,
+		value: string,
+		set: (v: string | null) => void,
+	) => {
 		const next = current === value ? null : value;
-		const r = await fetch(url, {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ [key]: next }),
-		});
+		const r = await save(next);
 		if (r.ok) set(next);
-		else alert(`Could not save default: ${(await r.json().catch(() => ({}))).error ?? r.status}`);
+		else alert(`Could not save default: ${((await r.json().catch(() => ({}))) as { error?: string }).error ?? r.status}`);
 	};
 
 	// Pills, not boxed inputs: these live INSIDE the composer, where a
@@ -100,7 +102,7 @@ export function ModelSelector({
 									<DefaultStar
 										what="model"
 										saved={m === defaultModel}
-										onToggle={() => toggleDefault(`/api/default-model`, "model", defaultModel, m, setDefaultModel)}
+										onToggle={() => toggleDefault((model) => api["default-model"].$post({ json: { model } }), defaultModel, m, setDefaultModel)}
 									/>
 									{m.slice(p.length + 1)}
 								</option>
@@ -128,7 +130,7 @@ export function ModelSelector({
 							<DefaultStar
 								what="reasoning level"
 								saved={l === defaultThinking}
-								onToggle={() => toggleDefault(`/api/default-thinking`, "level", defaultThinking, l, setDefaultThinking)}
+								onToggle={() => toggleDefault((level) => api["default-thinking"].$post({ json: { level } }), defaultThinking, l, setDefaultThinking)}
 							/>
 							{l}
 						</option>

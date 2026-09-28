@@ -20,7 +20,7 @@ import { gitRoutes } from "./routes/git.js";
 import { packagesRoutes } from "./routes/packages.js";
 import { terminalsRoutes } from "./routes/terminals.js";
 
-export function createApp(deps: Deps): Hono<Env> {
+export function createApp(deps: Deps) {
 	const app = new Hono<Env>();
 
 	app.use("/api/*", async (c, next) => {
@@ -58,9 +58,15 @@ export function createApp(deps: Deps): Hono<Env> {
 		return c.json({ error: err.message }, 500);
 	});
 
-	for (const routes of [systemRoutes, sessionsRoutes, filesRoutes, gitRoutes, packagesRoutes, terminalsRoutes]) {
-		app.route("/api", routes(deps));
-	}
+	// Chained, not looped: the chain's type is AppType, which is what gives
+	// the browser's `hc` client every route's path, body and response.
+	const api = app
+		.route("/api", systemRoutes(deps))
+		.route("/api", sessionsRoutes(deps))
+		.route("/api", filesRoutes(deps))
+		.route("/api", gitRoutes(deps))
+		.route("/api", packagesRoutes(deps))
+		.route("/api", terminalsRoutes(deps));
 
 	/*
 	 * An unknown /api path is a 404, and it has to be declared BEFORE the SPA
@@ -74,5 +80,7 @@ export function createApp(deps: Deps): Hono<Env> {
 		return c.json({ error: "no such endpoint" }, 404);
 	});
 
-	return app;
+	return api;
 }
+
+export type AppType = ReturnType<typeof createApp>;

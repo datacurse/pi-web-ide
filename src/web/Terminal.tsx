@@ -16,6 +16,7 @@ import {
 } from "./termLayout.js";
 import { readTermTabsSide, writeTermTabsSide, type TermTabsSide } from "./prefs.js";
 import { Button, ContextMenu, IconButton, MenuItem, tabClassVertical } from "./ui.js";
+import { api } from "./api.js";
 
 /**
  * xterm.js, loaded on demand.
@@ -123,7 +124,8 @@ export function Terminal({
 		 * being refused rather than lost.
 		 */
 		const explain = async () => {
-			const healthy = await fetch("/api/health")
+			const healthy = await api.health
+				.$get()
 				.then((r) => r.ok)
 				.catch(() => false);
 			if (!live || everOpened) return;

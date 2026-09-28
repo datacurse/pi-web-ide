@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Star, X } from "@phosphor-icons/react";
 import type { PiwDirListing } from "../shared/types.js";
 import { Button, IconButton, ListRow, inputClass } from "./ui.js";
+import { api } from "./api.js";
 
 /**
  * The project directory picker: a folder explorer over the SERVER's
@@ -61,9 +62,7 @@ export function DirectoryPicker({
 	const go = useCallback(async (path: string) => {
 		const ticket = ++seq.current;
 		setBusy(true);
-		const r = await fetch(`/api/browse?path=${encodeURIComponent(path)}`).catch(
-			() => null,
-		);
+		const r = await api.browse.$get({ query: { path } }).catch(() => null);
 		const body = (await r?.json().catch(() => null)) as
 			(PiwDirListing & { error?: string }) | null;
 		if (ticket !== seq.current) return;
@@ -101,7 +100,7 @@ export function DirectoryPicker({
 	useEffect(() => {
 		if (!open) return;
 		void (async () => {
-			const r = await fetch(`/api/favorites`).catch(() => null);
+			const r = await api.favorites.$get().catch(() => null);
 			if (!r?.ok) return;
 			const body = (await r.json().catch(() => null)) as { favorites?: string[] } | null;
 			setFavorites(body?.favorites ?? []);
@@ -114,11 +113,7 @@ export function DirectoryPicker({
 	 * control would sit disabled most of the time.
 	 */
 	const togglePin = useCallback(async (path: string, pinned: boolean) => {
-		const r = await fetch(`/api/favorites`, {
-			method: pinned ? "DELETE" : "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ path }),
-		}).catch(() => null);
+		const r = await (pinned ? api.favorites.$delete : api.favorites.$post)({ json: { path } }).catch(() => null);
 		const body = (await r?.json().catch(() => null)) as {
 			favorites?: string[];
 			error?: string;

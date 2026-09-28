@@ -13,6 +13,7 @@ import type { FleetMachine, FleetPwi } from "../shared/types.js";
 import { Button, IconButton, IconLink, PanelHeader } from "./ui.js";
 import { timeAgo } from "./SessionList.js";
 import { Terminal } from "./Terminal.js";
+import { api } from "./api.js";
 
 const PWI: Record<FleetPwi, { text: string; tone: string; hint: string }> = {
 	running: { text: "pwi running", tone: "text-green-400", hint: "Open its pwi" },
@@ -70,11 +71,7 @@ function Row({
 		setStarting(true);
 		setError(null);
 		try {
-			const r = await fetch("/api/fleet/start", {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ ssh: m.ssh }),
-			});
+			const r = await api.fleet.start.$post({ json: { ssh: m.ssh } });
 			if (!r.ok) throw new Error(((await r.json().catch(() => ({}))) as { error?: string }).error ?? r.statusText);
 			onStarted();
 		} catch (err) {
@@ -151,7 +148,7 @@ export function Fleet({ open, onClose }: { open: boolean; onClose: () => void })
 	const load = useCallback(async () => {
 		setLoading(true);
 		try {
-			const r = await fetch("/api/fleet");
+			const r = await api.fleet.$get();
 			const body = (await r.json()) as { machines?: FleetMachine[]; error?: string };
 			if (!r.ok || !body.machines) throw new Error(body.error ?? r.statusText);
 			setMachines(body.machines);

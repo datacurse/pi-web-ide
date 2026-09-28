@@ -5,6 +5,7 @@
 
 import type { Context } from "hono";
 import { HTTPException } from "hono/http-exception";
+import { validator } from "hono/validator";
 import type { HttpBindings } from "@hono/node-server";
 import type { Registry } from "./registry.js";
 import type { Terminals } from "./terminals.js";
@@ -110,3 +111,21 @@ export async function readBody(c: Context<Env>): Promise<Record<string, unknown>
 		? (value as Record<string, unknown>)
 		: {};
 }
+
+/**
+ * A route's JSON body, typed for `hc` and not checked: the route still
+ * validates every field it reads, because the body comes from a browser.
+ *
+ * Hono parses it: a non-JSON Content-Type arrives as `{}` (a form or
+ * text/plain POST is what a foreign page can send without a preflight),
+ * and malformed JSON is a 400. A body that is JSON but not an object is `{}`
+ * too, so a route reading `body.x` never meets `null`.
+ */
+export const json = <T extends object>() =>
+	validator("json", (value): T =>
+		(value && typeof value === "object" && !Array.isArray(value) ? value : {}) as T,
+	);
+
+/** A route's query string, typed for `hc` the same way. */
+export const query = <T extends Record<string, string | undefined>>() =>
+	validator("query", (value) => value as T);

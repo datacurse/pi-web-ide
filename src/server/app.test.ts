@@ -7,6 +7,7 @@
 // route rewrite could quietly lose.
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { hc } from "hono/client";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -41,6 +42,14 @@ const app = createApp({
 });
 
 const HOST = { Host: "127.0.0.1:8890" };
+
+// The browser's typed client (web/api.ts), pointed at the app in-process: a
+// route and its caller agreeing on types is only worth something if they also
+// agree on the wire — JSON bodies, query strings, path params.
+const api = hc<typeof app>("http://127.0.0.1:8890/", {
+	headers: HOST,
+	fetch: (input: RequestInfo | URL, init?: RequestInit) => app.request(input, init),
+}).api;
 const json = (body: string, headers: Record<string, string> = {}) => ({
 	method: "POST",
 	body,
@@ -95,7 +104,7 @@ test("every /api answer is no-store, errors included", async () => {
 test("malformed JSON is a 400 with a message, not a crash", async () => {
 	const r = await app.request("/api/projects", json("{nope"));
 	assert.equal(r.status, 400);
-	assert.deepEqual(await r.json(), { error: "invalid JSON body" });
+	assert.deepEqual(await r.json(), { error: "Malformed JSON in request body" });
 });
 
 test("a non-JSON body is not parsed, so a form POST carries nothing", async () => {
@@ -163,4 +172,15 @@ test("a download is the file's bytes as an attachment, with a non-ASCII name int
 test("file operations refuse to leave the project", async () => {
 	const r = await app.request("/api/files/create", json('{"path":"/etc/pwi-test"}'));
 	assert.equal(r.status, 400);
+});
+
+test("the typed client round-trips system routes: query, JSON body, validation", async () => {
+	const listing = await api.browse.$get({ query: { path: project } });
+	assert.equal(listing.status, 200);
+	const pinned = await api.favorites.$post({ json: { path: project } });
+	assert.deepEqual(await pinned.json(), { favorites: [project] });
+	const unpinned = await api.favorites.$delete({ json: { path: project } });
+	assert.deepEqual(await unpinned.json(), { favorites: [] });
+	const bad = await api["default-thinking"].$post({ json: { level: "" } });
+	assert.equal(bad.status, 400);
 });
