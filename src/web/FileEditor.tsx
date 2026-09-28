@@ -26,12 +26,7 @@ import { ArrowClockwise, FloppyDisk } from "@phosphor-icons/react";
 import type { EditorView } from "@codemirror/view";
 import { darkPlus, languageFor, loadCodeMirror } from "./codemirror.js";
 import { Button, PanelHeader } from "./ui.js";
-
-async function getJson<T>(url: string): Promise<T> {
-	const r = await fetch(url);
-	if (!r.ok) throw new Error(((await r.json()) as { error?: string }).error ?? `${r.status}`);
-	return (await r.json()) as T;
-}
+import { api, unwrap } from "./api.js";
 
 /** `/home/me/proj/src/App.tsx` → `src/App.tsx` when it is under `cwd`. */
 function shortPath(path: string, cwd: string): string {
@@ -92,7 +87,7 @@ export function FileEditor({
 			try {
 				const [cm, file, lang] = await Promise.all([
 					loadCodeMirror(),
-					getJson<{ content: string | null }>(`/api/file?path=${encodeURIComponent(path)}`),
+					unwrap(api.file.$get({ query: { path } })),
 					languageFor(path),
 				]);
 				if (!live || !host.current) return;
@@ -161,11 +156,7 @@ export function FileEditor({
 		setSaving(true);
 		setError(null);
 		try {
-			const r = await fetch("/api/file", {
-				method: "PUT",
-				headers: { "content-type": "application/json" },
-				body: JSON.stringify({ path, content: text, expect: base }),
-			});
+			const r = await api.file.$put({ json: { path, content: text, expect: base } });
 			if (!r.ok) {
 				const body = (await r.json()) as { error?: string };
 				throw new Error(
@@ -190,9 +181,7 @@ export function FileEditor({
 	const reload = useCallback(async () => {
 		setError(null);
 		try {
-			const r = await getJson<{ content: string | null }>(
-				`/api/file?path=${encodeURIComponent(path)}`,
-			);
+			const r = await unwrap(api.file.$get({ query: { path } }));
 			const text = r.content ?? "";
 			setBase(text);
 			baseRef.current = text;

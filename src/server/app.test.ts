@@ -213,3 +213,25 @@ test("the typed client round-trips package mutations to their validation", async
 	assert.equal(r.status, 400);
 	assert.deepEqual(await r.json(), { ok: false, log: "", reason: "source required" });
 });
+
+test("the typed client round-trips file routes: create, move, read, conflict-checked save", async () => {
+	const created = await api.files.create.$post({ json: { path: join(project, "sub", "new.txt") } });
+	assert.deepEqual(await created.json(), { ok: true, path: join(project, "sub", "new.txt") });
+	const moved = await api.files.move.$post({
+		json: { from: join(project, "sub", "new.txt"), to: join(project, "sub", "moved.txt") },
+	});
+	assert.equal(moved.status, 200);
+	const path = join(project, "sub", "moved.txt");
+	const read = await api.file.$get({ query: { path } });
+	assert.deepEqual(await read.json(), { path, content: "" });
+	const saved = await api.file.$put({ json: { path, content: "one", expect: "" } });
+	assert.equal(saved.status, 200);
+	const stale = await api.file.$put({ json: { path, content: "two", expect: "" } });
+	assert.equal(stale.status, 409);
+	const listing = await api.files.$get({ query: { path: join(project, "sub") } });
+	assert.ok(listing.ok);
+	assert.deepEqual(
+		(await listing.json()).entries.map((e) => e.name),
+		["moved.txt"],
+	);
+});

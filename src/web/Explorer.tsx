@@ -33,6 +33,7 @@ import type { PiwFileEntry } from "../shared/types.js";
 import { FileGlyph } from "./fileIcon.js";
 import { readExplorerOpen, writeExplorerOpen } from "./prefs.js";
 import { ContextMenu, IconButton, ListRow, MenuItem, MenuSeparator, PanelHeader, inputClass } from "./ui.js";
+import { api, unwrap } from "./api.js";
 
 async function getJson<T>(url: string): Promise<T> {
 	const r = await fetch(url);
@@ -55,7 +56,7 @@ const inflight = new Map<string, Promise<PiwFileEntry[]>>();
 function listDir(path: string): Promise<PiwFileEntry[]> {
 	let p = inflight.get(path);
 	if (!p) {
-		p = getJson<{ entries: PiwFileEntry[] }>(`/api/files?path=${encodeURIComponent(path)}`)
+		p = unwrap(api.files.$get({ query: { path } }))
 			.then((r) => {
 				listings.set(path, r.entries);
 				return r.entries;
@@ -77,17 +78,6 @@ function relativePath(cwd: string, path: string): string {
 
 /** The folder holding `path`. */
 const parentOf = (path: string) => path.slice(0, path.lastIndexOf("/"));
-
-async function postJson<T>(url: string, body: unknown): Promise<T> {
-	const r = await fetch(url, {
-		method: "POST",
-		headers: { "Content-Type": "application/json" },
-		body: JSON.stringify(body),
-	});
-	const out = (await r.json().catch(() => ({}))) as T & { error?: string };
-	if (!r.ok) throw new Error(out.error ?? `${r.status}`);
-	return out;
-}
 
 /** A name being typed in the tree: a new entry inside `parent`, or a rename. */
 type NameEdit =
@@ -482,14 +472,15 @@ export function Explorer({
 			if (current.kind === "rename") {
 				if (name === current.name) return;
 				const to = `${parentOf(current.path)}/${name}`;
-				await postJson("/api/files/move", { from: current.path, to });
+				await unwrap(api.files.move.$post({ json: { from: current.path, to } }));
 				onPathChange(current.path, to);
 			} else {
-				const r = await postJson<{ path: string }>("/api/files/create", {
-					path: `${current.parent}/${name}`,
-					dir: current.kind === "folder",
-				});
-				if (current.kind === "file") onOpen(r.path);
+				const r = await unwrap(
+					api.files.create.$post({
+						json: { path: `${current.parent}/${name}`, dir: current.kind === "folder" },
+					}),
+				);
+				if (current.kind === "file" && r.path) onOpen(r.path);
 			}
 			refresh();
 		})().catch(fail);
@@ -502,12 +493,12 @@ export function Explorer({
 			const to = `${dir}/${clip.path.slice(clip.path.lastIndexOf("/") + 1)}`;
 			if (to !== clip.path) {
 				guard(clip.path);
-				await postJson("/api/files/move", { from: clip.path, to });
+				await unwrap(api.files.move.$post({ json: { from: clip.path, to } }));
 				onPathChange(clip.path, to);
 			}
 			setClip(null);
 		} else {
-			await postJson("/api/files/copy", { from: clip.path, toDir: dir });
+			await unwrap(api.files.copy.$post({ json: { from: clip.path, toDir: dir } }));
 		}
 		refresh();
 	};
@@ -515,7 +506,7 @@ export function Explorer({
 	const trash = async (entry: PiwFileEntry) => {
 		guard(entry.path);
 		if (!window.confirm(`Move "${entry.name}" to the Trash?`)) return;
-		await postJson("/api/files/trash", { path: entry.path });
+		await unwrap(api.files.trash.$post({ json: { path: entry.path } }));
 		onPathChange(entry.path, null);
 		if (clip && (clip.path === entry.path || clip.path.startsWith(`${entry.path}/`))) setClip(null);
 		refresh();
