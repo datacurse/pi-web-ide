@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Plus, TerminalWindow, X } from "@phosphor-icons/react";
-import { ASK_ONLY } from "../shared/types.js";
+import { addNotice, ASK_ONLY } from "../shared/types.js";
 import type {
 	AskAnswer,
 	PiAsk,
@@ -981,7 +981,7 @@ function useSession({
 						// Appended locally rather than refetched: the answer to a
 						// command is the whole event, and a refetch of a long
 						// transcript to learn one line is the wrong trade.
-						setSnapshot((s) => (s ? { ...s, notices: [...s.notices, e.notice] } : s));
+						setSnapshot((s) => (s ? { ...s, notices: addNotice(s.notices, e.notice) } : s));
 						// This IS the answer a local command was waiting for; the
 						// command itself stays, as the record of what was asked.
 						setCommand((c) => (c ? { ...c, running: false } : c));
@@ -1116,17 +1116,27 @@ function useSession({
 	}, [snapshot]);
 
 	/**
-	 * Fold the conversation. The transcript and the meter move when
-	 * `compaction_end` arrives over SSE, not here — a compaction takes a model
-	 * call, and pretending otherwise would blank the meter before the summary
-	 * exists. A refusal (mid-turn) is shown where every other session error is.
+	 * Fold the conversation. The POST lasts the whole compaction and returns
+	 * once the server has re-read the folded transcript, so the refetch after
+	 * it is what moves the transcript and the meter. A refusal (mid-turn) is
+	 * shown where every other session error is.
 	 */
+	const [compacting, setCompacting] = useState(false);
 	const compact = useCallback(async () => {
 		if (!snapshot) return;
-		const r = await fetch(`/api/sessions/${snapshot.id}/compact`, { method: "POST" });
-		if (r.ok) return;
-		const body = await r.json().catch(() => ({}) as { error?: string });
-		setSnapshot((s) => (s ? { ...s, error: body.error ?? "could not compact" } : s));
+		setCompacting(true);
+		try {
+			const r = await fetch(`/api/sessions/${snapshot.id}/compact`, { method: "POST" });
+			if (r.ok) {
+				const fresh = await fetch(`/api/sessions/${snapshot.id}`);
+				if (fresh.ok) setSnapshot(toSnapshot(await fresh.json()));
+				return;
+			}
+			const body = await r.json().catch(() => ({}) as { error?: string });
+			setSnapshot((s) => (s ? { ...s, error: body.error ?? "could not compact" } : s));
+		} finally {
+			setCompacting(false);
+		}
 	}, [snapshot]);
 
 	/** Fork this session after one of its answers, and open the fork in this column. */
@@ -1291,6 +1301,7 @@ function useSession({
 		send,
 		abort,
 		compact,
+		compacting,
 		fork,
 		restart,
 		reloadSnapshot,
@@ -2609,6 +2620,20 @@ export default function App() {
 		[shown, seen, onScreen],
 	);
 
+	// A session not attached in a column has no event stream here, so its
+	// finished run or question is caught from the list poll instead.
+	const polled = useRef(new Map<string, PiSessionInfo>());
+	useEffect(() => {
+		const attached = [tabs.active, tabs.right?.active];
+		for (const s of shown) {
+			const was = polled.current.get(s.path);
+			polled.current.set(s.path, s);
+			if (!was || attached.includes(s.path)) continue;
+			if (s.needsInput && !was.needsInput) announce(s.path, "Needs your answer");
+			else if (was.isStreaming && !s.isStreaming && !s.needsInput) announce(s.path, "Finished");
+		}
+	}, [shown, tabs.active, tabs.right?.active, announce]);
+
 	// Title and icon carry it for a tab you are not looking at: the title is
 	// readable, the icon survives a strip too narrow for any title.
 	const states = [...attention.values()];
@@ -2710,6 +2735,7 @@ export default function App() {
 			onThinkingChange={s.changeThinking}
 			onCommandMenu={s.refreshCommands}
 			onCompact={s.compact}
+			compacting={s.compacting}
 			onFork={s.fork}
 			onRestart={s.restart}
 		/>

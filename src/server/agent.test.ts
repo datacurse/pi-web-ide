@@ -14,7 +14,7 @@ import {
 	toPiMessage,
 } from "./agent.js";
 import { replayFrom } from "./agent.js";
-import { ASK_ONLY, type PiEvent } from "../shared/types.js";
+import { addNotice, ASK_ONLY, type PiEvent } from "../shared/types.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -371,4 +371,18 @@ console.log("ok");
 	const out = Buffer.from(lines.join(""));
 	assert.equal(replayFrom(out), Buffer.byteLength(lines[0] + lines[1]));
 	assert.equal(replayFrom(Buffer.from(lines[2] + lines[3])), 0, "no message_end: replay everything");
+}
+
+// A compaction is ONE notice: its end replaces its start, and pi's error text
+// is shown as is (it already reads "Compaction failed: …").
+{
+	const [start] = toEvents({ type: "compaction_start", reason: "manual" });
+	const [end] = toEvents({
+		type: "compaction_end",
+		errorMessage: "Compaction failed: Nothing to compact (session too small)",
+	});
+	assert.ok(start.type === "notice" && end.type === "notice");
+	assert.deepEqual(addNotice(addNotice([], start.notice), end.notice), [
+		{ level: "error", text: "Compaction failed: Nothing to compact (session too small)", key: "compaction" },
+	]);
 }

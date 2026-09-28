@@ -73,6 +73,7 @@ import type {
 	PiEvent,
 	PiImage,
 	PiMessage,
+	PiNotice,
 	PiPartial,
 } from "../shared/types.js";
 
@@ -1225,6 +1226,8 @@ async function wrap(child: RpcChild, cwd: string): Promise<PiSession> {
 	let thinkingLevels = state.thinkingLevels;
 	let contextWindow = state.contextWindow;
 	let contextTokens = state.contextTokens;
+	let compactionEnds = 0;
+	let compacted = Promise.resolve();
 	let commands = toCommands(await fetchCommands(child));
 
 	const listeners = new Set<(e: PiEvent) => void>();
@@ -1252,7 +1255,8 @@ async function wrap(child: RpcChild, cwd: string): Promise<PiSession> {
 				thinkingLevel = s.thinkingLevel;
 				thinkingLevels = s.thinkingLevels;
 				contextWindow = s.contextWindow;
-				contextTokens = s.contextTokens;
+				// 0 is "unknown" (right after a compaction), not "empty".
+				if (s.contextTokens > 0) contextTokens = s.contextTokens;
 			})
 			.catch(() => {});
 
@@ -1457,12 +1461,15 @@ async function wrap(child: RpcChild, cwd: string): Promise<PiSession> {
 				break;
 
 			case "compaction_end":
+				compactionEnds++;
 				// Compaction rewrites history into a summary. The event stream only
 				// ever appends, so a resync is the only way the transcript learns
 				// that older messages are gone — and the freed context only shows
 				// up in the session's own accounting.
-				void resyncMessages();
-				void refreshState();
+				// pi reports no occupancy until the next reply, so its estimate stands in.
+				if (isRecord(frame.result) && typeof frame.result.estimatedTokensAfter === "number")
+					contextTokens = frame.result.estimatedTokensAfter;
+				compacted = Promise.all([resyncMessages(), refreshState()]).then(() => {});
 				break;
 
 			case "extension_error":
@@ -1614,7 +1621,15 @@ async function wrap(child: RpcChild, cwd: string): Promise<PiSession> {
 			 * so nothing is done with the summary the response carries — reading
 			 * it here would be a second, racing copy of the same news.
 			 */
-			await child.send("compact");
+			const before = compactionEnds;
+			try {
+				await child.send("compact");
+			} catch (err) {
+				// Already on screen via `compaction_end`; throwing too shows it twice.
+				if (compactionEnds === before) throw err;
+			}
+			// The caller refetches on return, so the resync must have landed.
+			await compacted;
 		},
 		async setModel(spec: string) {
 			const slash = spec.indexOf("/");
@@ -1875,13 +1890,18 @@ export function toEvents(frame: Record<string, unknown>): PiEvent[] {
 			return [{ type: "idle" }];
 
 		case "compaction_start":
-			return [{ type: "notice", notice: { level: "info", text: "compacting the conversation…" } }];
+			return [
+				{ type: "notice", notice: { level: "info", text: "compacting the conversation…", key: "compaction" } },
+			];
 
 		case "compaction_end": {
-			const failure = typeof frame.errorMessage === "string" ? frame.errorMessage : "";
-			return failure
-				? [{ type: "notice", notice: { level: "error", text: `compaction failed: ${failure}` } }]
-				: [];
+			// pi's message already reads "Compaction failed: …".
+			let notice: PiNotice = { level: "info", text: "compacted the conversation", key: "compaction" };
+			if (typeof frame.errorMessage === "string")
+				notice = { level: "error", text: frame.errorMessage, key: "compaction" };
+			else if (frame.aborted === true)
+				notice = { level: "warning", text: "compaction cancelled", key: "compaction" };
+			return [{ type: "notice", notice }];
 		}
 
 		case "auto_retry_start": {

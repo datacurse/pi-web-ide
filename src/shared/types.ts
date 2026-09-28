@@ -74,6 +74,12 @@ export interface PiMessage {
 export interface PiNotice {
 	level: "info" | "warning" | "error";
 	text: string;
+	/** A later notice with the same key replaces this one, so a compaction is one box, not one per stage. */
+	key?: string;
+}
+
+export function addNotice(notices: PiNotice[], n: PiNotice): PiNotice[] {
+	return [...notices.filter((o) => !n.key || o.key !== n.key), n];
 }
 
 /**

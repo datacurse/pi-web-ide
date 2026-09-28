@@ -550,14 +550,17 @@ function ContextMeter({
 	tokens,
 	window: limit,
 	busy,
+	compacting,
 	onCompact,
 }: {
 	tokens: number;
 	window: number;
 	busy: boolean;
+	compacting: boolean;
 	onCompact: () => void;
 }) {
 	if (limit <= 0 || tokens <= 0) return null;
+	if (compacting) return <Compacting />;
 	const share = Math.min(1, tokens / limit);
 	const percent = Math.round(share * 100);
 	const tone =
@@ -580,6 +583,29 @@ function ContextMeter({
 			{compactTokens(tokens)}/{compactTokens(limit)}
 			<span className="sr-only"> context tokens used; compact the conversation</span>
 		</button>
+	);
+}
+
+/** The meter while a compaction runs: the turn's spinner, which is JS-driven so reduced motion does not freeze it. */
+function Compacting() {
+	const spinner = useSpinner(true, STAR_FRAMES, 120);
+	const [start] = useState(Date.now);
+	const [now, setNow] = useState(start);
+	useEffect(() => {
+		const id = setInterval(() => setNow(Date.now()), 1000);
+		return () => clearInterval(id);
+	}, []);
+	return (
+		<span
+			data-custom="context meter"
+			role="status"
+			className="flex shrink-0 items-center gap-1.5 px-1 text-meta tabular-nums text-neutral-400"
+		>
+			<span aria-hidden className="w-3 text-center text-amber-400">
+				{spinner}
+			</span>
+			compacting {elapsed(now - start)}
+		</span>
 	);
 }
 
@@ -1146,6 +1172,7 @@ export function Chat({
 	onThinkingChange,
 	onCommandMenu,
 	onCompact,
+	compacting,
 	onFork,
 	onRestart,
 	draftRev = 0,
@@ -1180,6 +1207,8 @@ export function Chat({
 	onCommandMenu: () => void;
 	/** Fold the conversation into a summary. Refused while a turn is running. */
 	onCompact: () => void;
+	/** A compaction started here is running. */
+	compacting: boolean;
 	/** Open a new session that continues from the answer that started at `at`. */
 	onFork: (at: number) => Promise<void>;
 	/** Replace this session's pi child so it sees newly installed packages. */
@@ -2055,6 +2084,7 @@ export function Chat({
 										tokens={snapshot.contextTokens}
 										window={snapshot.contextWindow}
 										busy={busy}
+										compacting={compacting}
 										onCompact={onCompact}
 									/>
 									{busy && (

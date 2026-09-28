@@ -29,7 +29,7 @@ import {
 import { currentEpoch } from "./packages.js";
 import { lastMessageAt } from "./sessions.js";
 import type { Hunk } from "../shared/hunks.js";
-import type { PiEvent, PiImage, PiNotice, PiPartial, Snapshot } from "../shared/types.js";
+import { addNotice, type PiEvent, type PiImage, type PiNotice, type PiPartial, type Snapshot } from "../shared/types.js";
 
 export type { Snapshot };
 
@@ -252,7 +252,7 @@ export class Registry {
 				case "notice":
 					// Bounded: a chatty command must not turn one session into an
 					// unbounded log that every snapshot then carries.
-					entry.notices = [...entry.notices, e.notice].slice(-MAX_NOTICES);
+					entry.notices = addNotice(entry.notices, e.notice).slice(-MAX_NOTICES);
 					break;
 				case "idle":
 					entry.streaming = false;
