@@ -665,7 +665,7 @@ export default function App() {
 
 	const refreshSessions = useCallback(async () => {
 		if (!project) return;
-		const r = await fetch(`/api/sessions?cwd=${encodeURIComponent(project)}`).catch(() => null);
+		const r = await api.sessions.$get({ query: { cwd: project } }).catch(() => null);
 		if (!r?.ok) {
 			// Said out loud, not left as an empty list: no sessions and no answer
 			// look the same in a list, and only one of them is the machine's fault.
@@ -693,11 +693,9 @@ export default function App() {
 			setSessions((list) =>
 				list.map((s) => (s.path === session.path ? { ...s, name } : s)),
 			);
-			const r = await fetch(`/api/sessions/rename`, {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ file: session.path, id: session.id, name }),
-			}).catch(() => null);
+			const r = await api.sessions.rename
+				.$post({ json: { file: session.path, id: session.id, name } })
+				.catch(() => null);
 			if (!r?.ok) {
 				const body = (await r?.json().catch(() => null)) as { error?: string } | null;
 				alert(body?.error ?? "could not rename this session");
@@ -718,11 +716,9 @@ export default function App() {
 	 */
 	const autoNameSession = useCallback(
 		async (session: PiSessionInfo) => {
-			const r = await fetch(`/api/sessions/autoname`, {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ file: session.path, id: session.id }),
-			}).catch(() => null);
+			const r = await api.sessions.autoname
+				.$post({ json: { file: session.path, id: session.id } })
+				.catch(() => null);
 			const body = (await r?.json().catch(() => null)) as {
 				name?: string;
 				error?: string;

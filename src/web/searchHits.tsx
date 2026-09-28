@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { PiSessionHit } from "../shared/types.js";
+import { api } from "./api.js";
 
 /** Wrap every occurrence of any term in a bold mark. */
 export function highlight(text: string, terms: string[]): ReactNode {
@@ -37,9 +38,7 @@ export function useSessionSearch(project: string, query: string) {
 			return;
 		}
 		const timer = setTimeout(async () => {
-			const r = await fetch(
-				`/api/sessions/search?cwd=${encodeURIComponent(project)}&q=${encodeURIComponent(q)}`,
-			).catch(() => null);
+			const r = await api.sessions.search.$get({ query: { cwd: project, q } }).catch(() => null);
 			const body = (await r?.json().catch(() => null)) as { hits?: PiSessionHit[]; error?: string } | null;
 			if (ticket !== seq.current) return;
 			if (!r?.ok || !body?.hits) {

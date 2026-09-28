@@ -235,3 +235,19 @@ test("the typed client round-trips file routes: create, move, read, conflict-che
 		["moved.txt"],
 	);
 });
+
+test("the typed client round-trips session routes: path params, bodies, validation", async () => {
+	const blankCwd = await api.sessions.open.$post({ json: { cwd: "  " } });
+	assert.deepEqual(await blankCwd.json(), { error: "cwd must not be blank" });
+	const empty = await api.sessions[":id"].prompt.$post({ param: { id: "nope" }, json: { text: " " } });
+	assert.deepEqual(await empty.json(), { error: "empty prompt" });
+	const missing = await api.sessions[":id"].prompt.$post({ param: { id: "nope" }, json: { text: "hi" } });
+	assert.equal(missing.status, 404);
+	const unnamed = await api.sessions.rename.$post({ json: { name: "x" } });
+	assert.deepEqual(await unnamed.json(), { error: "file or id required" });
+	const hunk = await api.sessions[":id"].hunks[":hunkId"].$post({
+		param: { id: "nope", hunkId: "h1" },
+		json: { state: "accepted" },
+	});
+	assert.equal(hunk.status, 404);
+});

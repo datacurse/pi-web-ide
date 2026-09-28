@@ -14,6 +14,7 @@ import type {
 import { gitChanged } from "./GitActions.js";
 import { groupOf, sideOfTab, withGroup } from "./tabs.js";
 import type { Side } from "./tabs.js";
+import { api } from "./api.js";
 
 const emptyPartial = (): PiPartial => ({ text: "", thinking: "", tools: [] });
 
@@ -253,13 +254,11 @@ export function useSession({
 				setOpening(true);
 			}
 
-			const r = await fetch(`/api/sessions/open`, {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
+			const r = await api.sessions.open
 				// Never a blank string: the server rejects that, precisely because it
 				// used to mean "the server's own cwd" and silently misfiled sessions.
-				body: JSON.stringify({ file, cwd: project || undefined }),
-			}).catch(() => null);
+				.$post({ json: { file, cwd: project || undefined } })
+				.catch(() => null);
 
 			// Server unreachable (restarting, or not up yet) is TEMPORARY — keep
 			// trying, and keep the tab. Only a 404 below means the session is gone.
@@ -386,7 +385,7 @@ export function useSession({
 			};
 
 			const refetch = async (): Promise<Snapshot | undefined> => {
-				const rr = await fetch(`/api/sessions/${snap.id}`).catch(() => null);
+				const rr = await api.sessions[":id"].$get({ param: { id: snap.id } }).catch(() => null);
 				if (!rr || rr.status === 404) {
 					reattach();
 					return undefined;
@@ -542,13 +541,12 @@ export function useSession({
 		if (!snapshot) return;
 		setCompacting(true);
 		try {
-			const r = await fetch(`/api/sessions/${snapshot.id}/compact`, {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ customInstructions: instructions || undefined }),
+			const r = await api.sessions[":id"].compact.$post({
+				param: { id: snapshot.id },
+				json: { customInstructions: instructions || undefined },
 			});
 			if (r.ok) {
-				const fresh = await fetch(`/api/sessions/${snapshot.id}`);
+				const fresh = await api.sessions[":id"].$get({ param: { id: snapshot.id } });
 				if (fresh.ok) setSnapshot(toSnapshot(await fresh.json()));
 				return;
 			}
@@ -586,11 +584,10 @@ export function useSession({
 						}
 					: null;
 			if (optimistic) setSnapshot((s) => (s ? { ...s, messages: [...s.messages, optimistic] } : s));
-			const r = await fetch(`/api/sessions/${snapshot.id}/prompt`, {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
+			const r = await api.sessions[":id"].prompt.$post({
+				param: { id: snapshot.id },
 				// The suffix goes to pi only; toPiMessage strips it from the transcript.
-				body: JSON.stringify({ text: askOnly && !trimmed.startsWith("/") ? text + ASK_ONLY : text, images }),
+				json: { text: askOnly && !trimmed.startsWith("/") ? text + ASK_ONLY : text, images },
 			});
 
 			// A rejected prompt (unsupported type, too large, 413) never reaches the
@@ -612,7 +609,7 @@ export function useSession({
 				return;
 			}
 
-			const rr = await fetch(`/api/sessions/${snapshot.id}`);
+			const rr = await api.sessions[":id"].$get({ param: { id: snapshot.id } });
 			if (rr.ok) setSnapshot(toSnapshot(await rr.json()));
 		},
 		[snapshot, busy, compact],
@@ -620,18 +617,14 @@ export function useSession({
 
 	const abort = useCallback(async () => {
 		if (!snapshot) return;
-		await fetch(`/api/sessions/${snapshot.id}/abort`, { method: "POST" });
+		await api.sessions[":id"].abort.$post({ param: { id: snapshot.id } });
 	}, [snapshot]);
 
 	/** Fork this session after one of its answers, and open the fork in this column. */
 	const fork = useCallback(
 		async (at: number) => {
 			if (!snapshot) return;
-			const r = await fetch(`/api/sessions/${snapshot.id}/fork`, {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ at }),
-			}).catch(() => null);
+			const r = await api.sessions[":id"].fork.$post({ param: { id: snapshot.id }, json: { at } }).catch(() => null);
 			const body = (await r?.json().catch(() => null)) as { file?: unknown; error?: unknown } | null;
 			if (r?.ok && typeof body?.file === "string") {
 				void attach(body.file);
@@ -650,7 +643,7 @@ export function useSession({
 	 */
 	const restart = useCallback(async () => {
 		if (!snapshot) return;
-		const r = await fetch(`/api/sessions/${snapshot.id}/restart`, { method: "POST" });
+		const r = await api.sessions[":id"].restart.$post({ param: { id: snapshot.id } });
 		const body: unknown = await r.json().catch(() => null);
 		if (r.ok && body && typeof body === "object") {
 			setSnapshot(toSnapshot(body as Partial<Snapshot>));
@@ -672,7 +665,7 @@ export function useSession({
 	 */
 	const reloadSnapshot = useCallback(async () => {
 		if (!snapshot) return;
-		const r = await fetch(`/api/sessions/${snapshot.id}`);
+		const r = await api.sessions[":id"].$get({ param: { id: snapshot.id } });
 		if (r.ok) setSnapshot(toSnapshot(await r.json()));
 	}, [snapshot]);
 
@@ -691,9 +684,7 @@ export function useSession({
 		const last = commandsFetchedAt.current;
 		if (last && last.id === snapshot.id && Date.now() - last.at < 30_000) return;
 		commandsFetchedAt.current = { id: snapshot.id, at: Date.now() };
-		const r = await fetch(`/api/sessions/${snapshot.id}/commands`, {
-			method: "POST",
-		}).catch(() => null);
+		const r = await api.sessions[":id"].commands.$post({ param: { id: snapshot.id } }).catch(() => null);
 		if (!r?.ok) return;
 		const body: unknown = await r.json().catch(() => null);
 		if (!body || typeof body !== "object" || !("commands" in body)) return;
@@ -715,13 +706,9 @@ export function useSession({
 		async (askId: string, answer: AskAnswer) => {
 			if (!snapshot) return;
 			setSnapshot((s) => (s ? { ...s, ask: null } : s));
-			const r = await fetch(`/api/sessions/${snapshot.id}/ask`, {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ askId, ...answer }),
-			});
+			const r = await api.sessions[":id"].ask.$post({ param: { id: snapshot.id }, json: { askId, ...answer } });
 			if (r.ok) return;
-			const rr = await fetch(`/api/sessions/${snapshot.id}`);
+			const rr = await api.sessions[":id"].$get({ param: { id: snapshot.id } });
 			if (rr.ok) setSnapshot(toSnapshot(await rr.json()));
 		},
 		[snapshot],
@@ -731,17 +718,13 @@ export function useSession({
 		async (model: string) => {
 			if (!snapshot) return;
 			setModelError(null);
-			const r = await fetch(`/api/sessions/${snapshot.id}/model`, {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ model }),
-			});
+			const r = await api.sessions[":id"].model.$post({ param: { id: snapshot.id }, json: { model } });
 			if (!r.ok) {
-				const body = await r.json().catch(() => ({}));
+				const body = (await r.json().catch(() => ({}))) as { error?: string };
 				setModelError(body.error ?? "failed to switch model");
 				return;
 			}
-			const rr = await fetch(`/api/sessions/${snapshot.id}`);
+			const rr = await api.sessions[":id"].$get({ param: { id: snapshot.id } });
 			if (rr.ok) setSnapshot(await rr.json());
 		},
 		[snapshot],
@@ -756,17 +739,13 @@ export function useSession({
 		async (level: string) => {
 			if (!snapshot) return;
 			setModelError(null);
-			const r = await fetch(`/api/sessions/${snapshot.id}/thinking`, {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ level }),
-			});
+			const r = await api.sessions[":id"].thinking.$post({ param: { id: snapshot.id }, json: { level } });
 			if (!r.ok) {
-				const body = await r.json().catch(() => ({}));
+				const body = (await r.json().catch(() => ({}))) as { error?: string };
 				setModelError(body.error ?? "failed to set thinking level");
 				return;
 			}
-			const rr = await fetch(`/api/sessions/${snapshot.id}`);
+			const rr = await api.sessions[":id"].$get({ param: { id: snapshot.id } });
 			if (rr.ok) setSnapshot(await rr.json());
 		},
 		[snapshot],

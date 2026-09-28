@@ -23,6 +23,7 @@ import type { Hunk, HunkState } from "../shared/hunks.js";
 import { fitHunk } from "../shared/hunks.js";
 import { darkPlus, languageFor, loadCodeMirror } from "./codemirror.js";
 import { Button, PanelHeader } from "./ui.js";
+import { api } from "./api.js";
 
 async function getJson<T>(url: string): Promise<T> {
 	const r = await fetch(url);
@@ -246,10 +247,9 @@ export function DiffView({
 		setBusy(true);
 		setError(null);
 		try {
-			const r = await fetch(`/api/sessions/${sessionId}/hunks/${encodeURIComponent(hunk.id)}`, {
-				method: "POST",
-				headers: { "content-type": "application/json" },
-				body: JSON.stringify({ state }),
+			const r = await api.sessions[":id"].hunks[":hunkId"].$post({
+				param: { id: sessionId, hunkId: encodeURIComponent(hunk.id) },
+				json: { state },
 			});
 			if (!r.ok) throw new Error(((await r.json()) as { error?: string }).error ?? `${r.status}`);
 			// Re-read from disk rather than patching local state: a revert
