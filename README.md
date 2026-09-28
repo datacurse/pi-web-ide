@@ -76,7 +76,9 @@ detached and re-adopted on startup.
 src/shared/types.ts       wire contract, zero imports
 src/server/agent.ts       the RPC boundary: the only file that spawns or speaks to pi
 src/server/registry.ts    session cache + server-authoritative message state
-src/server/index.ts       HTTP: SSE for events, POST for commands, WebSocket for terminals
+src/server/index.ts       the process: startup, static client, terminal WebSocket, shutdown
+src/server/app.ts         the HTTP API (Hono): origin/host guard, body limit, error shape
+src/server/routes/        one module per area: sessions, files, git, packages, terminals, system
 src/server/sessions.ts    session list, read from ~/.pi/agent/sessions
 src/server/files.ts       project file access; the path check is a trust boundary
 src/server/git.ts         git status/log/diff and actions; argv only, no shell
