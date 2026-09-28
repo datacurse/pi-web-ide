@@ -207,3 +207,9 @@ test("the typed client round-trips terminal routes: query, body, path param", as
 	const refused = await api.terminals.$post({ json: { fleet: true, ssh: "a;b" } });
 	assert.equal(refused.status, 400);
 });
+
+test("the typed client round-trips package mutations to their validation", async () => {
+	const r = await api.packages.$post({ json: { source: "" } });
+	assert.equal(r.status, 400);
+	assert.deepEqual(await r.json(), { ok: false, log: "", reason: "source required" });
+});

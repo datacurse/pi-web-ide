@@ -19,6 +19,8 @@ import type {
 	PiwSearchHit,
 } from "../shared/types.js";
 import { Button, IconButton, PanelHeader, inputClass, sectionLabel } from "./ui.js";
+import { parseResponse } from "hono/client";
+import { api } from "./api.js";
 
 /** `2026-09-14T20:53:55.440Z` → `14 Sep 2026`. A publish date is a month, not a minute. */
 function shortDate(iso: string | undefined): string {
@@ -34,12 +36,6 @@ function compactCount(n: number): string {
 	if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
 	if (n >= 1_000) return `${Math.round(n / 1_000)}k`;
 	return String(n);
-}
-
-async function getJson<T>(path: string): Promise<T> {
-	const r = await fetch(path);
-	if (!r.ok) throw new Error(`${r.status}`);
-	return (await r.json()) as T;
 }
 
 /**
@@ -75,7 +71,7 @@ export function Packages({
 
 	const refresh = useCallback(async () => {
 		try {
-			setView(await getJson<PiwPackagesView>("/api/packages"));
+			setView(await parseResponse(api.packages.$get()));
 			setError(null);
 		} catch (err) {
 			setError(err instanceof Error ? err.message : String(err));
@@ -87,9 +83,7 @@ export function Packages({
 		// The project's own `.pi/settings.json`, read-only: it is committed and
 		// git is its sync, so this is here to answer "why does this project
 		// have an extra command", not to be edited.
-		void getJson<{ cwd: string; packages: PiwPackage[] }>(
-			`/api/packages/project?cwd=${encodeURIComponent(cwd)}`,
-		)
+		void parseResponse(api.packages.project.$get({ query: { cwd } }))
 			.then(setProject)
 			.catch(() => setProject(null));
 	}, [refresh, cwd]);
@@ -102,11 +96,11 @@ export function Packages({
 	 * when a package turns out to be bigger than expected.
 	 */
 	const mutate = useCallback(
-		async (what: string, path: string, init: RequestInit) => {
+		async (what: string, send: () => Promise<{ json(): Promise<unknown> }>) => {
 			setWorking(what);
 			let result: PiwMutation;
 			try {
-				const r = await fetch(path, init);
+				const r = await send();
 				result = (await r.json()) as PiwMutation;
 			} catch (err) {
 				result = { ok: false, log: "", reason: err instanceof Error ? err.message : String(err) };
@@ -180,21 +174,13 @@ export function Packages({
 						project={project}
 						onAdd={() => setAdding({ source: "" })}
 						onUpdate={(source) =>
-							void mutate(`update ${source}`, "/api/packages/update", {
-								method: "POST",
-								headers: { "content-type": "application/json" },
-								body: JSON.stringify({ source }),
-							})
+							void mutate(`update ${source}`, () => api.packages.update.$post({ json: { source } }))
 						}
 						onRemove={(source) =>
-							void mutate(`remove ${source}`, "/api/packages", {
-								method: "DELETE",
-								headers: { "content-type": "application/json" },
-								body: JSON.stringify({ source }),
-							})
+							void mutate(`remove ${source}`, () => api.packages.$delete({ json: { source } }))
 						}
 						onUpdatePi={() =>
-							void mutate("update pi", "/api/packages/update-pi", { method: "POST" })
+							void mutate("update pi", () => api.packages["update-pi"].$post())
 						}
 					/>
 				)}
@@ -207,11 +193,7 @@ export function Packages({
 					onClose={() => setAdding(null)}
 					onInstall={(source) => {
 						setAdding(null);
-						void mutate(`install ${source}`, "/api/packages", {
-							method: "POST",
-							headers: { "content-type": "application/json" },
-							body: JSON.stringify({ source }),
-						});
+						void mutate(`install ${source}`, () => api.packages.$post({ json: { source } }));
 					}}
 				/>
 			)}
@@ -405,9 +387,7 @@ function Search({ onPick }: { onPick: (info: PiwPackageInfo) => void }) {
 		const timer = setTimeout(async () => {
 			setLoading(true);
 			try {
-				const body = await getJson<{ results: PiwSearchHit[]; reason?: string }>(
-					`/api/packages/search?q=${encodeURIComponent(query)}`,
-				);
+				const body = await parseResponse(api.packages.search.$get({ query: { q: query } }));
 				if (cancelled) return;
 				setHits(body.results);
 				setReason(body.reason ?? null);
@@ -443,9 +423,9 @@ function Search({ onPick }: { onPick: (info: PiwPackageInfo) => void }) {
 						<button
 							data-custom="choice card"
 							onClick={async () => {
-								const info = await getJson<PiwPackageInfo>(
-									`/api/packages/info?name=${encodeURIComponent(h.name)}`,
-								).catch(() => null);
+								const info = await parseResponse(api.packages.info.$get({ query: { name: h.name } })).catch(
+									() => null,
+								);
 								if (info) onPick(info);
 							}}
 							className="block w-full rounded-sm border border-neutral-800 bg-neutral-900/40 px-3 py-2 text-left transition-colors duration-150 ease-out hover:border-neutral-700 hover:bg-neutral-900 motion-reduce:transition-none"

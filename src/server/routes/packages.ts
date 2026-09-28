@@ -1,29 +1,10 @@
 import { Hono, type Context } from "hono";
 import * as packages from "../packages.js";
 import { info, search } from "../gallery.js";
-import { readBody, type Deps, type Env } from "../http.js";
+import { query, json, type Deps, type Env } from "../http.js";
 
 /** pi packages on this machine, the npm gallery, and the open project's own packages. */
 export function packagesRoutes({ cwd: CWD, registry, piVersion: PI_VERSION }: Deps) {
-	const routes = new Hono<Env>();
-
-	/**
-	 * Packages: what this machine has installed, and changing it.
-	 *
-	 * These routes are remote code execution by design — a pi package's
-	 * extensions are code and its skills instruct the model — which is the same
-	 * class of exposure as /api/terminals, already on this port. They inherit
-	 * that boundary and must not widen it: same loopback listener, same origin
-	 * guard, no new surface.
-	 */
-	routes.get("/packages", async (c) => {
-		try {
-			return c.json({ piVersion: PI_VERSION ?? null, ...(await packages.view()) });
-		} catch (err) {
-			return c.json({ error: err instanceof Error ? err.message : String(err) }, 500);
-		}
-	});
-
 	/** A mutation answers with its own outcome; the log tail is the interesting part. */
 	async function mutation(
 		c: Context<Env>,
@@ -48,59 +29,75 @@ export function packagesRoutes({ cwd: CWD, registry, piVersion: PI_VERSION }: De
 		return c.json(result);
 	}
 
-	routes.post("/packages", async (c) => {
-		const b = await readBody(c);
-		const source = typeof b.source === "string" ? b.source : "";
-		if (!source) return c.json({ ok: false, log: "", reason: "source required" }, 400);
-		return mutation(c, () => packages.install(source));
-	});
+	return new Hono<Env>()
+		/**
+		 * Packages: what this machine has installed, and changing it.
+		 *
+		 * These routes are remote code execution by design — a pi package's
+		 * extensions are code and its skills instruct the model — which is the same
+		 * class of exposure as /api/terminals, already on this port. They inherit
+		 * that boundary and must not widen it: same loopback listener, same origin
+		 * guard, no new surface.
+		 */
+		.get("/packages", async (c) => {
+			try {
+				return c.json({ piVersion: PI_VERSION ?? null, ...(await packages.view()) }, 200);
+			} catch (err) {
+				return c.json({ error: err instanceof Error ? err.message : String(err) }, 500);
+			}
+		})
 
-	routes.delete("/packages", async (c) => {
-		const b = await readBody(c);
-		const source = typeof b.source === "string" ? b.source : "";
-		if (!source) return c.json({ ok: false, log: "", reason: "source required" }, 400);
-		return mutation(c, () => packages.remove(source));
-	});
+		.post("/packages", json<{ source: string }>(), async (c) => {
+			const b = c.req.valid("json");
+			const source = typeof b.source === "string" ? b.source : "";
+			if (!source) return c.json({ ok: false, log: "", reason: "source required" }, 400);
+			return mutation(c, () => packages.install(source));
+		})
 
-	routes.post("/packages/update", async (c) => {
-		const b = await readBody(c);
-		const source = typeof b.source === "string" ? b.source : undefined;
-		return mutation(c, () => packages.update(source));
-	});
+		.delete("/packages", json<{ source: string }>(), async (c) => {
+			const b = c.req.valid("json");
+			const source = typeof b.source === "string" ? b.source : "";
+			if (!source) return c.json({ ok: false, log: "", reason: "source required" }, 400);
+			return mutation(c, () => packages.remove(source));
+		})
 
-	/** Update the pi CLI on this machine. Never automatic. */
-	routes.post("/packages/update-pi", (c) => {
-		return mutation(c, () => packages.updateSelf());
-	});
+		.post("/packages/update", json<{ source?: string }>(), async (c) => {
+			const b = c.req.valid("json");
+			const source = typeof b.source === "string" ? b.source : undefined;
+			return mutation(c, () => packages.update(source));
+		})
 
-	routes.get("/packages/search", async (c) => {
-		const q = c.req.query("q") ?? "";
-		return c.json(await search(q));
-	});
+		/** Update the pi CLI on this machine. Never automatic. */
+		.post("/packages/update-pi", (c) => {
+			return mutation(c, () => packages.updateSelf());
+		})
 
-	routes.get("/packages/info", async (c) => {
-		const name = c.req.query("name") ?? "";
-		if (!name) return c.json({ error: "name required" }, 400);
-		try {
-			return c.json(await info(name));
-		} catch (err) {
-			return c.json({ error: err instanceof Error ? err.message : String(err) }, 502);
-		}
-	});
+		.get("/packages/search", query<{ q?: string }>(), async (c) => {
+			const q = c.req.query("q") ?? "";
+			return c.json(await search(q), 200);
+		})
 
-	/**
-	 * The open project's own packages, read-only.
-	 *
-	 * `pi install -l` writes `.pi/settings.json`, the project commits it, and pi
-	 * installs anything missing at startup once the project is trusted. Git is
-	 * the sync for these, so this server shows them and changes nothing: a
-	 * second writer of a file that is in someone's repository is a merge
-	 * conflict waiting to be blamed on the wrong tool.
-	 */
-	routes.get("/packages/project", (c) => {
-		const cwd = c.req.query("cwd") || CWD;
-		return c.json({ cwd, packages: packages.listProject(cwd) });
-	});
+		.get("/packages/info", query<{ name?: string }>(), async (c) => {
+			const name = c.req.query("name") ?? "";
+			if (!name) return c.json({ error: "name required" }, 400);
+			try {
+				return c.json(await info(name), 200);
+			} catch (err) {
+				return c.json({ error: err instanceof Error ? err.message : String(err) }, 502);
+			}
+		})
 
-	return routes;
+		/**
+		 * The open project's own packages, read-only.
+		 *
+		 * `pi install -l` writes `.pi/settings.json`, the project commits it, and pi
+		 * installs anything missing at startup once the project is trusted. Git is
+		 * the sync for these, so this server shows them and changes nothing: a
+		 * second writer of a file that is in someone's repository is a merge
+		 * conflict waiting to be blamed on the wrong tool.
+		 */
+		.get("/packages/project", query<{ cwd?: string }>(), (c) => {
+			const cwd = c.req.query("cwd") || CWD;
+			return c.json({ cwd, packages: packages.listProject(cwd) }, 200);
+		});
 }
