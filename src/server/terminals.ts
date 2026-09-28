@@ -174,9 +174,10 @@ export class Terminals {
 		if (this.socket) {
 			const set = TMUX_OPTIONS.flatMap(([k, v]) => [";", "set", "-g", k, v]);
 			this.tmux([
-				"start-server", ...set,
+				// set-environment, not `new-session -e`, which tmux 3.0 lacks.
+				"start-server", ...set, ";", "set-environment", "-g", "PWI_TERMINAL", "1",
 				";", "new-session", "-d", "-s", id, "-c", dir, "-x", String(cols), "-y", String(rows),
-				"-e", "PWI_TERMINAL=1", shellPath(), "-l",
+				shellPath(), "-l",
 				";", "set", "-t", `=${id}:`, "@pwi_cwd", cwd,
 				";", "set", "-t", `=${id}:`, "@pwi_fleet", fleet ? "1" : "0",
 				// Typed into the shell rather than run instead of it, so leaving the
