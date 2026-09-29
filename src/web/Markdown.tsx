@@ -1,21 +1,46 @@
-import { Fragment, memo, useMemo, useState } from "react";
+import { Fragment, memo, useEffect, useMemo, useState } from "react";
+import { CaretDown, CaretRight } from "@phosphor-icons/react";
 import Markdown, { RuleType, type MarkdownToJSX } from "markdown-to-jsx";
 
 import { extractMath, PLACEHOLDER, type MathSpan } from "./math.js";
 import { Math } from "./Math.js";
-import { Button } from "./ui.js";
+import { Button, ContextMenu, MenuItem } from "./ui.js";
 import { t } from "./i18n.js";
+import { highlightLines, type Token } from "./codeHighlight.js";
+
+/** Leading whitespace in columns, tabs at 4, for the wrapped rows' hanging indent. */
+function indentCols(line: string) {
+	let n = 0;
+	for (const c of line) {
+		if (c === " ") n++;
+		else if (c === "\t") n += 4 - (n % 4);
+		else break;
+	}
+	return n;
+}
 
 /**
- * Renders one fenced code block with a copy-to-clipboard button.
+ * One fenced code block with a copy-to-clipboard button, coloured like the
+ * editor (Dark+, loaded on demand) when its language is known.
  *
- * Deliberately no syntax highlighting: that means a themed highlighter
- * (shiki/highlight.js) plus CSS per color scheme, which is a lot of weight
- * for a feature nobody has asked for yet. Plain monospace first; revisit if
- * it is actually missed.
+ * It keeps to the reading column and soft-wraps like the editor: each
+ * continuation row keeps its line's indent behind a dim `↳` (`.code-line`).
  */
-function CodeBlock({ lang, text }: { lang?: string; text: string }) {
+function CodeBox({ lang, text, className }: { lang?: string; text: string; className: string }) {
 	const [copied, setCopied] = useState(false);
+	const [colored, setColored] = useState<{ text: string; lines: Token[][] } | null>(null);
+
+	useEffect(() => {
+		if (!lang) return;
+		let live = true;
+		highlightLines(lang, text).then(
+			(lines) => live && lines && setColored({ text, lines }),
+			() => {}, // No colour is the fallback, not an error.
+		);
+		return () => {
+			live = false;
+		};
+	}, [lang, text]);
 
 	const copy = async () => {
 		try {
@@ -27,8 +52,11 @@ function CodeBlock({ lang, text }: { lang?: string; text: string }) {
 		}
 	};
 
+	// Colour lags the text by one parse while streaming; plain until it catches up.
+	const lines = colored?.text === text ? colored.lines : text.split("\n").map((l) => [{ text: l, cls: "" }]);
+
 	return (
-		<div className="chat-wide group relative my-3">
+		<div className={`group relative ${className}`}>
 			{lang && (
 				<div className="absolute top-1.5 left-2 font-mono text-caption text-neutral-600 select-none">{lang}</div>
 			)}
@@ -40,9 +68,91 @@ function CodeBlock({ lang, text }: { lang?: string; text: string }) {
 			>
 				{copied ? t("Copied") : t("Copy")}
 			</Button>
-			<pre className="chat-code overflow-x-auto rounded-sm bg-neutral-900 p-2 pt-7 text-neutral-300">
-				<code>{text}</code>
+			<pre className="chat-code rounded-sm bg-neutral-900 p-2 pt-7 whitespace-pre-wrap wrap-anywhere text-neutral-300 [tab-size:4]">
+				<code>
+					{lines.map((tokens, i) => (
+						<span
+							key={i}
+							className="code-line"
+							style={{ "--indent": `${indentCols(tokens.map((tk) => tk.text).join(""))}ch` } as React.CSSProperties}
+						>
+							{tokens.map((tk, j) => (tk.cls ? <span key={j} className={tk.cls}>{tk.text}</span> : tk.text))}
+						</span>
+					))}
+				</code>
 			</pre>
+		</div>
+	);
+}
+
+/**
+ * The drawn SVG as a PNG on the clipboard, 1024px on its long side so it stays
+ * sharp when pasted. Drawn from the <img> already on screen: a data-URL SVG
+ * without foreignObject does not taint the canvas. The blob goes in as a
+ * promise so the copy keeps the click's user activation.
+ */
+function copyPng(img: HTMLImageElement) {
+	const scale = 1024 / globalThis.Math.max(img.clientWidth, img.clientHeight);
+	const canvas = document.createElement("canvas");
+	canvas.width = globalThis.Math.round(img.clientWidth * scale);
+	canvas.height = globalThis.Math.round(img.clientHeight * scale);
+	canvas.getContext("2d")?.drawImage(img, 0, 0, canvas.width, canvas.height);
+	const png = new Promise<Blob>((ok, fail) =>
+		canvas.toBlob((b) => (b ? ok(b) : fail(new Error("PNG encode failed"))), "image/png"),
+	);
+	return navigator.clipboard.write([new ClipboardItem({ "image/png": png })]);
+}
+
+/**
+ * A fenced block. A finished `svg` block is drawn as the image itself, with
+ * its code folded under a disclosure; while it streams it is plain code.
+ * Right-click the image to copy it as PNG or as SVG code.
+ */
+function CodeBlock({ lang, text }: { lang?: string; text: string }) {
+	const [open, setOpen] = useState(false);
+	const [menu, setMenu] = useState<{ x: number; y: number; img: HTMLImageElement } | null>(null);
+	if (!(lang?.toLowerCase() === "svg" && text.includes("</svg>")))
+		return <CodeBox lang={lang} text={text} className="chat-measure my-3" />;
+	// Clipboard can be denied/unavailable; failing silently beats a crash.
+	const act = (copy: () => Promise<void>) => () => {
+		copy().catch(() => {});
+		setMenu(null);
+	};
+	return (
+		<div className="chat-measure my-3">
+			{/* Through <img>, so scripts and external loads in the SVG never run. */}
+			<img
+				src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(text)}`}
+				alt={t("SVG preview")}
+				aria-haspopup="menu"
+				onContextMenu={(e) => {
+					e.preventDefault();
+					// A keyboard-raised menu reports (0,0); anchor it to the image.
+					const box = e.currentTarget.getBoundingClientRect();
+					setMenu({ x: e.clientX || box.left + 16, y: e.clientY || box.bottom, img: e.currentTarget });
+				}}
+				className="h-48 w-auto max-w-full border border-transparent hover:border-neutral-700"
+			/>
+			{menu && (
+				<ContextMenu x={menu.x} y={menu.y} label={t("SVG preview")} onClose={() => setMenu(null)}>
+					<MenuItem role="menuitem" autoFocus onClick={act(() => copyPng(menu.img))}>
+						{t("Copy as PNG")}
+					</MenuItem>
+					<MenuItem role="menuitem" onClick={act(() => navigator.clipboard.writeText(text))}>
+						{t("Copy as SVG")}
+					</MenuItem>
+				</ContextMenu>
+			)}
+			<button
+				data-custom="transcript disclosure"
+				aria-expanded={open}
+				onClick={() => setOpen((o) => !o)}
+				className="mt-1 flex items-center gap-1 chat-code font-mono text-neutral-500 hover:text-neutral-300"
+			>
+				{open ? <CaretDown size={11} /> : <CaretRight size={11} />}
+				{t("Code")}
+			</button>
+			{open && <CodeBox lang={lang} text={text} className="mt-1" />}
 		</div>
 	);
 }
@@ -117,10 +227,9 @@ function makeRenderRule(math: MathSpan[]) {
  * the app that needs anything beyond `whitespace-pre-wrap`.
  *
  * `chat-measure` is on the elements that are READ — paragraphs, lists,
- * headings, quotes — and deliberately not on the ones that are SCANNED:
- * code blocks and tables keep the full width of the track, because a
- * horizontal scrollbar on a diff is worse than a long line, and a table
- * squeezed into 66 characters is unreadable in a different way.
+ * headings, quotes — and on code blocks, which soft-wrap instead of running
+ * past the chat. Tables keep the full width of the track: a table squeezed
+ * into 66 characters is unreadable.
  */
 const options: MarkdownToJSX.Options = {
 	/*

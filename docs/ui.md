@@ -512,7 +512,7 @@ New UI uses these; convert raw markup when you touch it. Tune styles in
 | `IconButton`    | `label` (required; aria-label + tooltip), `variant`: ghost / outline / solid, `size`: sm 24px / md 28px, `round` | Icon-only buttons. `round` only in the composer toolbar. |
 | `MenuItem`      | button props, `icon?` (16px Phosphor, fixed slot, greys with the row) | Rows in dropdown and context menus. Context-menu items carry an icon; give every item in one menu an icon or none. |
 | `MenuSeparator` | —                                                           | Rule between groups of `MenuItem`s. |
-| `ContextMenu`   | `x`, `y`, `label`, `width` (220), `onClose`                 | Right-click menu at the pointer: fixed, clamped on screen, closes on outside click, Escape, scroll, resize. Items call `onClose` after acting. |
+| `ContextMenu`   | `x`, `y`, `label`, `width` (220), `onClose`                 | Right-click menu at the pointer: fixed, clamped on screen, closes on outside click, Escape, scroll, resize. Items call `onClose` after acting. No vertical padding: item hovers run flush to its top and bottom edges. |
 | `NavItem`       | `icon` (16px Phosphor), `selected`, button props            | Category row in a page's left nav (Settings): `control-md`, `rounded-sm`, `neutral-800` fill when current. |
 | `Section`       | `title`                                                     | Settings group (fieldset + uppercase legend). |
 | `OptionRow`     | `selected`, `disabled`                                      | Clickable row wrapping a radio or checkbox. |
@@ -552,3 +552,16 @@ New UI uses these; convert raw markup when you touch it. Tune styles in
 - Dialog headers (DirectoryPicker, Packages add) use `text-title`
   and are not `PanelHeader`. Candidate: `Dialog`.
 - Candidates once they repeat: `Badge`, segmented tabs (Packages).
+
+## Chat code blocks
+
+- Code blocks keep to the reading column (`chat-measure`) and soft-wrap like the editor:
+  continuation rows keep the line's indent behind a dim `↳` (`.code-line`, same rule as
+  `.cm-wrapIndent`). No horizontal scroll.
+- They use the editor's Dark+ token colours when the fence's language is known (name or
+  extension, `codeHighlight.ts`); plain `neutral-300` otherwise and while the colour loads.
+- A finished `svg` block is drawn as the image itself (`<img>` from a data URL, so its
+  scripts never run; `h-48`, no box, background or padding; a 1px `neutral-700` border on hover marks its edges). Under it a `Code` disclosure line
+  (the `Thought` style) opens the code block. While it streams it is plain code.
+- Right-click the drawn SVG → `ContextMenu`: `Copy as PNG` (1024px on the long side) and
+  `Copy as SVG` (the code).

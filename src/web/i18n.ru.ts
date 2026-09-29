@@ -82,6 +82,8 @@ export const RU: Record<string, string> = {
 	"Attachment, full size": "Вложение в полном размере",
 	"attachment {n}": "вложение {n}",
 	"attachment": "вложение",
+	"SVG preview": "Превью SVG",
+	"Code": "Код",
 
 	// Chat
 	"Summarise older messages to free context (optional: focus instructions)":
@@ -205,6 +207,8 @@ export const RU: Record<string, string> = {
 	"Add to Chat": "Добавить в чат",
 	"Open in Terminal": "Открыть в терминале",
 	"Download": "Скачать",
+	"Copy as PNG": "Копировать как PNG",
+	"Copy as SVG": "Копировать как SVG",
 	"Copy Path": "Копировать путь",
 	"Copy Relative Path": "Копировать относительный путь",
 	"Cut": "Вырезать",

@@ -262,7 +262,7 @@ export function ContextMenu({
 			// The dismiss listener is on the window, so keep the menu's own clicks.
 			onPointerDown={(e) => e.stopPropagation()}
 			style={{ ...pos, width }}
-			className="fixed z-40 overflow-hidden rounded-md border border-neutral-700 bg-neutral-900 py-1 shadow-2xl"
+			className="fixed z-40 overflow-hidden rounded-md border border-neutral-700 bg-neutral-900 shadow-2xl"
 		>
 			{children}
 		</div>

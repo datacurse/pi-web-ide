@@ -1044,14 +1044,27 @@ input[type="number"]::-webkit-outer-spin-button {
  * leading tabs short. 6px is CodeMirror's own .cm-line left padding.
  */
 .cm-content .cm-wrapIndent {
+	--wrap-pad: 6px;
+}
+
+/* The same wrapping for chat code blocks, one block per line. */
+.code-line {
+	--wrap-pad: 0px;
+	display: block;
+	min-height: 1lh;
+}
+
+.cm-content .cm-wrapIndent,
+.code-line {
 	position: relative;
 	text-indent: calc(var(--indent) + 2ch) hanging;
 }
 
-.cm-content .cm-wrapIndent::before {
+.cm-content .cm-wrapIndent::before,
+.code-line::before {
 	content: "";
 	position: absolute;
-	left: calc(6px + var(--indent));
+	left: calc(var(--wrap-pad) + var(--indent));
 	top: 1lh;
 	bottom: 0;
 	width: 2ch;
