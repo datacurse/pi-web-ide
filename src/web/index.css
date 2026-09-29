@@ -662,6 +662,26 @@ body {
 	mask-repeat: no-repeat;
 }
 
+/* The transcript fades from the top of the git buttons plus their `mb-2` gap (3.5rem up) to nothing at the composer's
+   top edge, which overlaps the transcript by 0.75rem (Chat.tsx `-mt-3`). */
+.fade-bottom {
+	/* Ease-out, opacity (1 - t)^3: dims hard at the start and settles gently into the box. */
+	mask-image: linear-gradient(
+		to bottom,
+		#000 calc(100% - 3.5rem),
+		rgb(0 0 0 / 0.729) calc(100% - 3.225rem),
+		rgb(0 0 0 / 0.512) calc(100% - 2.95rem),
+		rgb(0 0 0 / 0.343) calc(100% - 2.675rem),
+		rgb(0 0 0 / 0.216) calc(100% - 2.4rem),
+		rgb(0 0 0 / 0.125) calc(100% - 2.125rem),
+		rgb(0 0 0 / 0.064) calc(100% - 1.85rem),
+		rgb(0 0 0 / 0.027) calc(100% - 1.575rem),
+		rgb(0 0 0 / 0.008) calc(100% - 1.3rem),
+		rgb(0 0 0 / 0.001) calc(100% - 1.025rem),
+		transparent calc(100% - 0.75rem)
+	);
+}
+
 /*
  * Every block in an answer (paragraphs, lists, code, reasoning, tool lines)
  * carries `my-3` and the margins collapse, so every gap between two of them is

@@ -139,7 +139,7 @@ export function ActivityBar({
 
 			{/* Set apart from the panels above: it toggles the dock under the
 			    tabs, not the left column. */}
-			<div aria-hidden className="my-1 h-px w-6 bg-neutral-800" />
+			<div aria-hidden className="my-1 w-full border-t border-neutral-800" />
 			<RailButton
 				label={dockOpen ? t("Hide terminal") : t("Show terminal")}
 				title={dockOpen ? t("Hide terminal (Ctrl+`) — the shells keep running") : t("Show terminal (Ctrl+`)")}

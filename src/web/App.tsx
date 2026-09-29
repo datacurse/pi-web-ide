@@ -69,6 +69,7 @@ import {
 	readTheme,
 	readToolMode,
 	readUserMode,
+	readAskMode,
 	TERMINAL_MAX_PERCENT,
 	TERMINAL_MIN_PERCENT,
 	writeDockHeight,
@@ -84,12 +85,14 @@ import {
 	writeTerminalWidth,
 	writeToolMode,
 	writeUserMode,
+	writeAskMode,
 	type Panel,
 	type SessionSort,
 	type ThemeId,
 	type ThinkingMode,
 	type ToolMode,
 	type UserMode,
+	type AskMode,
 } from "./prefs.js";
 import { setFavicon } from "./favicon.js";
 import { attentionOf, attentionTitle, nextWaiting, type Attention } from "./attention.js";
@@ -209,6 +212,7 @@ export default function App() {
 	const [thinkingMode, setThinkingMode] = useState<ThinkingMode>(readThinkingMode);
 	const [toolMode, setToolMode] = useState<ToolMode>(readToolMode);
 	const [userMode, setUserMode] = useState<UserMode>(readUserMode);
+	const [askMode, setAskMode] = useState<AskMode>(readAskMode);
 	const [notify, setNotify] = useState(readNotify);
 	const [shortNames, setShortNames] = useState(readShortNames);
 	const [hideScrollbars, setHideScrollbars] = useState(readHideScrollbars);
@@ -246,6 +250,11 @@ export default function App() {
 	const changeUserMode = useCallback((mode: UserMode) => {
 		setUserMode(mode);
 		writeUserMode(mode);
+	}, []);
+
+	const changeAskMode = useCallback((mode: AskMode) => {
+		setAskMode(mode);
+		writeAskMode(mode);
 	}, []);
 
 	const changeShortNames = useCallback((on: boolean) => {
@@ -1609,6 +1618,8 @@ export default function App() {
 				onToolMode={changeToolMode}
 				userMode={userMode}
 				onUserMode={changeUserMode}
+				askMode={askMode}
+				onAskMode={changeAskMode}
 				notify={notify}
 				onNotify={(on) => void changeNotify(on)}
 				shortNames={shortNames}
@@ -1632,6 +1643,8 @@ export default function App() {
 			thinkingMode={thinkingMode}
 			toolMode={toolMode}
 			userMode={userMode}
+			askMode={askMode}
+			onAskMode={changeAskMode}
 			command={s.command}
 			modelError={s.modelError}
 			onSend={s.send}

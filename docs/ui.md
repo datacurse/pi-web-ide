@@ -101,10 +101,13 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
 ## Composer
 
 - Only Send is a filled disc (`solid`); it greys out while there is nothing to send.
-  Attach `+`, `?` and the star are `ghost` round `IconButton`s. Stop stays `outline`.
+  Attach (`Paperclip`), `?` and Stop are `outline` round `IconButton`s; the star is `ghost`.
 - The `?` button (directly left of Send, so Stop never shifts it) toggles "Ask only":
   a 14px `QuestionMark`, `aria-pressed`. When on it uses the `on` variant (amber disc, dark
-  bold icon) so the state reads at a glance. It stays on until switched off.
+  bold icon) so the state reads at a glance. Right-click it (or Settings > Sessions >
+  `Ask only button`, `pwi:askMode`) to pick `Toggle` (default: stays on until switched
+  off) or `One shot` (switches off after each send). The menu marks the current mode
+  with a `Check`.
 - Defaults are starred inside the popups, not in the box: every model and reasoning
   option starts with a star that saves or clears it as pi's startup default
   (`defaultProvider`/`defaultModel`, `defaultThinkingLevel`) without picking it.
@@ -119,7 +122,17 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
   the row above the box.
 - That row (jump-to-latest and git) floats over the transcript's bottom edge with no
   band or background of its own; the transcript scrolls under it (`pb-12` keeps its
-  last line clear). It is a 16px ring in a ghost round `IconButton`
+  last line clear). No gap between the transcript and the box: the transcript fades from 8px
+  (the buttons' gap to the box) above the top of the git buttons to fully transparent at the box's top edge (`.fade-bottom`), along
+  an ease-out curve, opacity `(1 - t)^3`: it dims hard at the start and settles gently
+  into the box. Tried and rejected: linear / CIE L*-even (felt like it darkened faster
+  and faster) and Larsen's scrim (worse still).
+- The box overlaps the transcript by its radius (`-mt-3`), so text shows behind its
+  corners, and sticks out of the reading column by its padding (`-mx-3`), so the typed
+  text lines up with the response text, like Cursor. To keep that exact, the transcript
+  reserves its scrollbar on both sides (`scrollbar-gutter: stable both-edges`) and the
+  box's edge is an inset `ring-1`, not a border. The git row's right edge follows the box,
+  `mb-2` above it (the same gap as between its buttons), every button `control-md` tall. It is a 16px ring in a ghost round `IconButton`
   (`neutral-700` track, `neutral-400` fill, amber from 75%, red from 90%), drawn empty
   before the first turn instead of hidden.
 - Clicking the ring opens `ContextPanel` above the box (`rounded-md`, like Cursor's):
@@ -298,7 +311,7 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
 - The left side panel holds only what you work beside: Explorer and Source Control.
   Clicking the lit icon closes it.
 - The terminal is a dock under BOTH editor columns (the shells belong to the project,
-  not a column). The rail's terminal button, set apart from the panels by a rule, and
+  not a column). The rail's terminal button, set apart from the panels by a full-width `neutral-800` rule, and
   Ctrl+` toggle it; its height is a resizable share of the editor area.
 - The dock's tabs are a vertical list in a `w-12` side column (`tabClassVertical`), with `+`
   under them and split, split direction, swap side (`ArrowsLeftRight`) and hide stacked
@@ -311,9 +324,10 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
   lists the new shell in the dock. Closing the editor tab only closes that view (its
   menu is Close items only). Only the dock's per-shell close ends a shell, and that
   closes its editor tabs too. The PTY has one size: whichever view last took focus sets it.
-- Right-clicking the chat (or an empty column) opens `New AI Session` / `New Terminal
-  Tab`, both in that column. The browser keeps its own menu over selected text, links,
-  images, the composer, and on Shift+right-click.
+- Right-clicking the transcript (or an empty column) opens `New AI Session` / `New Terminal
+  Tab`, both in that column. Not over buttons or the composer area (the box, git row and
+  jump-to-latest, `data-no-column-menu`). The browser keeps its own menu over selected
+  text, links, images, the composer, and on Shift+right-click.
 - Fleet, Stats, Packages and Settings are pages, not tabs (tabs are for work: chats, files,
   terminals). The rail's bottom group opens each in one large centered modal
   (`PageDialog`): `<dialog>`, `h-[85vh] w-[min(64rem,94vw)]`, `rounded-md`, backdrop

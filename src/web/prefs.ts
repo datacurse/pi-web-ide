@@ -236,6 +236,24 @@ export function writeUserMode(mode: UserMode): void {
 	writeStored(USER_KEY, mode);
 }
 
+/** Whether the composer's Ask only button stays on after a send. */
+export const ASK_MODES = [
+	{ id: "toggle", label: "Toggle", hint: "Stays on until you switch it off or change session." },
+	{ id: "once", label: "One shot", hint: "Switches off after you send a question." },
+] as const;
+
+export type AskMode = (typeof ASK_MODES)[number]["id"];
+
+const ASK_KEY = "pwi:askMode";
+
+export function readAskMode(): AskMode {
+	return readStored(ASK_KEY) === "once" ? "once" : "toggle";
+}
+
+export function writeAskMode(mode: AskMode): void {
+	writeStored(ASK_KEY, mode);
+}
+
 /**
  * Whether a finished run raises a desktop notification.
  *

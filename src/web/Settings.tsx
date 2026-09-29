@@ -7,6 +7,8 @@ import {
 	THINKING_MODES,
 	TOOL_MODES,
 	USER_MODES,
+	ASK_MODES,
+	type AskMode,
 	type Language,
 	type ThemeId,
 	type ThinkingMode,
@@ -64,6 +66,8 @@ export function Settings({
 	onToolMode,
 	userMode,
 	onUserMode,
+	askMode,
+	onAskMode,
 	notify,
 	onNotify,
 	shortNames,
@@ -82,6 +86,8 @@ export function Settings({
 	onToolMode: (mode: ToolMode) => void;
 	userMode: UserMode;
 	onUserMode: (mode: UserMode) => void;
+	askMode: AskMode;
+	onAskMode: (mode: AskMode) => void;
 	notify: boolean;
 	onNotify: (on: boolean) => void;
 	shortNames: boolean;
@@ -271,6 +277,34 @@ export function Settings({
 								value={m.id}
 								checked={m.id === userMode}
 								onChange={() => onUserMode(m.id)}
+								className="size-3.5 shrink-0 accent-amber-400"
+							/>
+							<span className="flex-1">
+								{t(m.label)}
+								<span className="block text-meta text-neutral-500">{t(m.hint)}</span>
+							</span>
+						</OptionRow>
+					))}
+				</div>
+			),
+		},
+		{
+			category: "sessions",
+			label: t("Ask only button"),
+			text: `question once sticky ${ASK_MODES.map((m) => `${t(m.label)} ${t(m.hint)}`).join(" ")}`,
+			node: (
+				<div role="radiogroup" aria-labelledby="ask-mode-label">
+					<div id="ask-mode-label" className="px-2 pt-1 pb-1 text-ui text-neutral-300">
+						{t("Ask only button")}
+					</div>
+					{ASK_MODES.map((m) => (
+						<OptionRow key={m.id} selected={m.id === askMode}>
+							<input
+								type="radio"
+								name="askMode"
+								value={m.id}
+								checked={m.id === askMode}
+								onChange={() => onAskMode(m.id)}
 								className="size-3.5 shrink-0 accent-amber-400"
 							/>
 							<span className="flex-1">

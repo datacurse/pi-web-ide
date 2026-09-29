@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowDown, ArrowUp, Plus, QuestionMark, Square } from "@phosphor-icons/react";
+import { ArrowDown, ArrowUp, Check, Paperclip, QuestionMark, Square } from "@phosphor-icons/react";
 import type {
 	AskAnswer,
 	PiBlock,
@@ -9,11 +9,11 @@ import type {
 	PiPartial,
 	Snapshot,
 } from "../shared/types.js";
-import { Button, IconButton } from "./ui.js";
+import { Button, ContextMenu, IconButton, MenuItem } from "./ui.js";
 import { ModelSelector } from "./ModelSelector.js";
 import { GitActions } from "./GitActions.js";
 import { MarkdownText } from "./Markdown.js";
-import type { ThinkingMode, ToolMode, UserMode } from "./prefs.js";
+import { ASK_MODES, type AskMode, type ThinkingMode, type ToolMode, type UserMode } from "./prefs.js";
 import { clearDraft, readDraft, writeDraftImages, writeDraftText } from "./drafts.js";
 import { completionOptions, parseCompletion, type CommandOption } from "./commands.js";
 import { AskPanel } from "./AskPanel.js";
@@ -146,6 +146,8 @@ export function Chat({
 	thinkingMode,
 	toolMode,
 	userMode,
+	askMode,
+	onAskMode,
 	modelError,
 	command,
 	onAnswerAsk,
@@ -177,6 +179,9 @@ export function Chat({
 	toolMode: ToolMode;
 	/** How long user messages fold; see prefs.ts. */
 	userMode: UserMode;
+	/** Whether Ask only switches off after a send; see prefs.ts. */
+	askMode: AskMode;
+	onAskMode: (mode: AskMode) => void;
 	modelError?: string | null;
 	/**
 	 * The local slash command last sent, verbatim, and whether it is still
@@ -211,8 +216,10 @@ export function Chat({
 }) {
 	const showThinking = thinkingMode !== "hidden";
 	const [text, setText] = useState("");
-	// Sticky until switched off or the session changes: a run of questions is the usual case.
+	// In "toggle" mode sticky until switched off or the session changes; "once" clears it on send.
 	const [askOnly, setAskOnly] = useState(false);
+	/** The Ask only button's right-click menu position, or null when shut. */
+	const [askMenu, setAskMenu] = useState<{ x: number; y: number } | null>(null);
 	const [images, setImages] = useState<PiImage[]>([]);
 	const [attachError, setAttachError] = useState<string | null>(null);
 	/** The expanded attachment, as a data URL, or null. See Lightbox. */
@@ -672,6 +679,7 @@ export function Chat({
 		// An image on its own is a valid prompt; only block when nothing is staged.
 		if (!t && images.length === 0) return;
 		onSend(t, images.length > 0 ? images : undefined, askOnly);
+		if (askMode === "once") setAskOnly(false);
 		setText("");
 		setImages([]);
 		staged.current = [];
@@ -754,7 +762,7 @@ export function Chat({
 						// otherwise, which React would coalesce but still has to diff.
 						setAtBottom((was) => (was === bottom ? was : bottom));
 					}}
-					className="min-h-0 flex-1 overflow-y-auto pb-12"
+					className="fade-bottom min-h-0 flex-1 overflow-y-auto pb-12 [scrollbar-gutter:stable_both-edges]"
 				>
 					{snapshot.messages.length === 0 && !hasPartial && !busy && !command && (
 						<div className="flex h-full flex-col items-center justify-center gap-2 text-center select-none">
@@ -904,9 +912,10 @@ export function Chat({
 				 * the chat, not a panel docked under it. A border here drew exactly
 				 * that second panel. The context meter lives inside the composer.
 				 */}
-				<div className="relative h-0">
-				<div className="chat-gutter pointer-events-none absolute inset-x-0 bottom-0 pb-1">
-					<div className="chat-measure flex items-center justify-end gap-2">
+				<div data-no-column-menu className="chat-gutter relative -mt-3 pb-6">
+					{/* Same column as the prose above it, so the box's edges line up
+					    with the text you are replying to. */}
+					<div className="chat-measure relative">
 						{/*
 						 * Git on the right of the status line and ABOVE the composer,
 						 * which is where it belongs in the flow: you finish reading the
@@ -914,7 +923,7 @@ export function Chat({
 						 * the button owns its own state — but a commit does change the
 						 * transcript's context, so the caller gets a hook.
 						 */}
-						<div className="pointer-events-auto flex shrink-0 items-center gap-2">
+						<div className="absolute -right-3 bottom-full mb-2 flex items-center gap-2">
 							{/* Jump to the newest message. Only while scrolled away from it:
 						    a button that does nothing is worse than no button. */}
 							{!atBottom && (
@@ -929,13 +938,6 @@ export function Chat({
 							)}
 							{snapshot.cwd && <GitActions cwd={snapshot.cwd} />}
 						</div>
-					</div>
-				</div>
-				</div>
-				<div className="chat-gutter pt-1 pb-6">
-					{/* Same column as the prose above it, so the box's edges line up
-					    with the text you are replying to. */}
-					<div className="chat-measure relative">
 						{contextOpen && (
 							<ContextPanel
 								sessionId={snapshot.id}
@@ -964,7 +966,7 @@ export function Chat({
 						 * widgets that happened to be adjacent rather than as one thing
 						 * you are about to send.
 						 */}
-						<div className="rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2 focus-within:border-neutral-700">
+						<div className="-mx-3 rounded-lg bg-neutral-900 px-3 py-2 ring-1 ring-neutral-800 ring-inset focus-within:ring-neutral-700">
 							<Attachments
 								images={images}
 								onRemove={(i) => void changeImages(images.filter((_, n) => n !== i))}
@@ -1068,9 +1070,10 @@ export function Chat({
 									<IconButton
 										onClick={() => fileInput.current?.click()}
 										label={t("Attach a file")}
+										variant="outline"
 										round
 									>
-										<Plus size={14} />
+										<Paperclip size={14} />
 									</IconButton>
 									<input
 										ref={fileInput}
@@ -1115,13 +1118,36 @@ export function Chat({
 									)}
 									<IconButton
 										onClick={() => setAskOnly((a) => !a)}
+										onContextMenu={(e) => {
+											e.preventDefault();
+											setAskMenu({ x: e.clientX, y: e.clientY });
+										}}
 										label={askOnly ? t("Ask only: on (no code changes)") : t("Ask only: off")}
 										aria-pressed={askOnly}
-										variant={askOnly ? "on" : "ghost"}
+										variant={askOnly ? "on" : "outline"}
 										round
 									>
 										<QuestionMark size={14} weight={askOnly ? "bold" : "regular"} />
 									</IconButton>
+									{askMenu && (
+										<ContextMenu x={askMenu.x} y={askMenu.y} label={t("Ask only button")} onClose={() => setAskMenu(null)}>
+											{ASK_MODES.map((m) => (
+												<MenuItem
+													key={m.id}
+													role="menuitemradio"
+													aria-checked={m.id === askMode}
+													title={t(m.hint)}
+													icon={m.id === askMode ? <Check size={16} /> : <span />}
+													onClick={() => {
+														onAskMode(m.id);
+														setAskMenu(null);
+													}}
+												>
+													{t(m.label)}
+												</MenuItem>
+											))}
+										</ContextMenu>
+									)}
 									<IconButton
 										onClick={submit}
 										disabled={!text.trim() && images.length === 0}

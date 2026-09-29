@@ -154,9 +154,10 @@ export function EditorColumn({
 					onContextMenu={(e) => {
 						// Only over the chat or an empty column, and the browser keeps its
 						// own menu wherever it is the useful one: selected text, links,
-						// images, the composer, and Shift+right-click anywhere.
+						// images, the composer, and Shift+right-click anywhere. Buttons and
+						// the whole box under the transcript (git, jump-to-latest) get none.
 						if (showsDoc || e.shiftKey) return;
-						if ((e.target as Element).closest("a, img, input, textarea, select, [contenteditable]")) return;
+						if ((e.target as Element).closest("a, img, button, input, textarea, select, [contenteditable], [data-no-column-menu]")) return;
 						if (window.getSelection()?.toString()) return;
 						e.preventDefault();
 						setMenu({ x: e.clientX, y: e.clientY });

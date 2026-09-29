@@ -112,6 +112,11 @@ export const RU: Record<string, string> = {
 	"Stop this turn": "Остановить этот ход",
 	"Ask only: on (no code changes)": "Только вопрос: вкл. (без изменений кода)",
 	"Ask only: off": "Только вопрос: выкл.",
+	"Ask only button": "Кнопка «Только вопрос»",
+	"Toggle": "Переключатель",
+	"One shot": "Один раз",
+	"Stays on until you switch it off or change session.": "Остаётся включённой, пока вы её не выключите или не смените сессию.",
+	"Switches off after you send a question.": "Выключается после отправки вопроса.",
 	"Send": "Отправить",
 	"Send (Enter)": "Отправить (Enter)",
 

@@ -286,7 +286,7 @@ export function GitActions({
 
 	return (
 		<div ref={root} className="relative flex items-center gap-1.5">
-			<div className="flex items-stretch overflow-hidden rounded-full border border-neutral-700 bg-neutral-900 text-meta">
+			<div className="flex h-control-md items-stretch overflow-hidden rounded-full border border-neutral-700 bg-neutral-900 text-meta">
 				<button
 					data-custom="composer pill"
 					onClick={() => void start(primary)}
@@ -299,7 +299,7 @@ export function GitActions({
 							branch: state.branch,
 						}) + (autoName ? ` · ${t("auto-named, no dialog")}` : "")
 					}
-					className="flex items-center gap-1.5 px-3 py-1 text-neutral-200 transition-colors duration-150 ease-out hover:bg-neutral-800 disabled:text-neutral-500 motion-reduce:transition-none"
+					className="flex items-center gap-1.5 px-3 text-neutral-200 transition-colors duration-150 ease-out hover:bg-neutral-800 disabled:text-neutral-500 motion-reduce:transition-none"
 				>
 					{autoName ? <Sparkle size={13} /> : <GitBranch size={13} />}
 					{busyNow ?? t(primary.label)}
