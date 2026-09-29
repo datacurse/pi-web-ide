@@ -54,13 +54,16 @@ import {
 	applyFooterLayout,
 	applyHideScrollbars,
 	applyScrollPast,
+	applySessionLines,
 	applyTheme,
 	type Language,
 	THEMES,
 	readDockHeight,
 	readDockOpen,
+	readBrowserKeys,
 	readChatFade,
 	readFooterLayout,
+	readSessionLines,
 	readHideScrollbars,
 	readNotify,
 	readScrollPast,
@@ -250,6 +253,7 @@ export default function App() {
 	useEffect(() => applyChatFade(readChatFade()), []);
 	useEffect(() => applyScrollPast(readScrollPastOn(), readScrollPast()), []);
 	useEffect(() => applyFooterLayout(readFooterLayout()), []);
+	useEffect(() => applySessionLines(readSessionLines()), []);
 	useEffect(() => void (document.documentElement.lang = language), [language]);
 	const changeLanguage = useCallback((lang: Language) => {
 		setLanguage(lang);
@@ -932,6 +936,14 @@ export default function App() {
 		[commitTabs],
 	);
 
+	/** Tabs the user closed, newest last, for Ctrl+T. Per page load, like a browser's. */
+	const closedTabs = useRef<{ scope: string; side: Side; entry: string }[]>([]);
+	const closeByUser = (side: Side) => (entry: string) => {
+		if (sideOfTab(tabsRef.current, entry) === side) closedTabs.current.push({ scope, side, entry });
+		if (side === "right") closeRight(entry);
+		else closeTab(entry);
+	};
+
 	closeRef.current = (file) => {
 		if (sideOfTab(tabsRef.current, file) === "right") closeRight(file);
 		else closeTab(file);
@@ -1368,7 +1380,7 @@ export default function App() {
 	 */
 	useEffect(() => {
 		const onKeyDown = (e: KeyboardEvent) => {
-			if (e.code !== "KeyO" || !e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
+			if (e.code !== "KeyO" || !e.ctrlKey || e.metaKey || e.altKey || e.shiftKey || !readBrowserKeys()) return;
 			e.preventDefault();
 			e.stopPropagation();
 			setSearchOpen(true);
@@ -1380,7 +1392,7 @@ export default function App() {
 	/** Ctrl+P opens the command palette, captured like Ctrl+O (over the browser's Print). */
 	useEffect(() => {
 		const onKeyDown = (e: KeyboardEvent) => {
-			if (e.code !== "KeyP" || !e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
+			if (e.code !== "KeyP" || !e.ctrlKey || e.metaKey || e.altKey || e.shiftKey || !readBrowserKeys()) return;
 			e.preventDefault();
 			e.stopPropagation();
 			setSearchOpen(false);
@@ -1622,8 +1634,44 @@ export default function App() {
 
 	/** Everything the Ctrl+P palette can run. */
 	const lastUsedSide = (): Side => (lastSide.current === "right" && tabsRef.current.right ? "right" : "left");
+
+	/** Reopen the newest closed tab of this project that is not open again already. */
+	const reopenClosedTab = () => {
+		const stack = closedTabs.current;
+		for (let i = stack.length - 1; i >= 0; i--) {
+			const { scope: s, side, entry } = stack[i];
+			if (s !== scope) continue;
+			stack.splice(i, 1);
+			if (sideOfTab(tabsRef.current, entry)) continue;
+			if (side === "right" && tabsRef.current.right) selectRight(entry);
+			else selectTab(entry);
+			return;
+		}
+	};
+
+	/** Ctrl+T reopens the last closed tab, Ctrl+N starts a session; captured like Ctrl+O. */
+	const browserKeys = useRef({ reopenClosedTab, newSession: () => void newSession(lastUsedSide()) });
+	browserKeys.current = { reopenClosedTab, newSession: () => void newSession(lastUsedSide()) };
+	useEffect(() => {
+		const onKeyDown = (e: KeyboardEvent) => {
+			if (!e.ctrlKey || e.metaKey || e.altKey || e.shiftKey || !readBrowserKeys()) return;
+			const keys: Record<string, (() => void) | undefined> = {
+				KeyT: browserKeys.current.reopenClosedTab,
+				KeyN: browserKeys.current.newSession,
+			};
+			const run = keys[e.code];
+			if (!run) return;
+			e.preventDefault();
+			e.stopPropagation();
+			run();
+		};
+		window.addEventListener("keydown", onKeyDown, true);
+		return () => window.removeEventListener("keydown", onKeyDown, true);
+	}, []);
+
 	const paletteCommands: PaletteCommand[] = [
-		{ id: "session.new", label: t("New AI Session"), run: () => void (lastUsedSide() === "right" ? right : left).attach() },
+		{ id: "session.new", label: t("New AI Session"), keys: "Ctrl+N", run: () => void (lastUsedSide() === "right" ? right : left).attach() },
+		{ id: "tab.reopen", label: t("Reopen Closed Tab"), keys: "Ctrl+T", run: reopenClosedTab },
 		...(project
 			? [{ id: "terminal.newTab", label: t("New Terminal Tab"), run: () => void newTerminalTab(lastUsedSide()) }]
 			: []),
@@ -1886,7 +1934,7 @@ export default function App() {
 					pinned={pinned}
 					dirtyFiles={dirtyFiles}
 					onSelect={selectTab}
-					onClose={closeTab}
+					onClose={closeByUser("left")}
 					onNewSession={() => void newSession("left")}
 					onNewTerminal={project ? () => void newTerminalTab("left") : undefined}
 					onReorder={reorderTabs}
@@ -1921,7 +1969,7 @@ export default function App() {
 						pinned={pinned}
 						dirtyFiles={dirtyFiles}
 						onSelect={selectRight}
-						onClose={closeRight}
+						onClose={closeByUser("right")}
 						onNewSession={() => void newSession("right")}
 						onNewTerminal={project ? () => void newTerminalTab("right") : undefined}
 						onReorder={reorderRight}

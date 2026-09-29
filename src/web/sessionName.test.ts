@@ -55,9 +55,10 @@ assert.equal(shortName("x".repeat(60)), "X".padEnd(48, "x"));
 // Nothing in, nothing out: the caller falls back to the placeholder.
 assert.equal(shortName("   "), "");
 
-// The shown line runs on past a cut label; a name stays as it is.
+// The shown line is the whole prompt; a name or short name stays as it is.
 assert.equal(sessionLine(info, true), "Fix the parser");
-assert.equal(sessionLine(unnamed, true), `N${unnamed.firstMessage.slice(1)}`);
+assert.equal(sessionLine(info, false), "Fix the parser");
+assert.equal(sessionLine(unnamed, true), "Not a fan of opening directory like this");
 assert.equal(sessionLine(unnamed, false), unnamed.firstMessage);
 assert.equal(sessionLine(undefined, true), sessionLabel(undefined, true));
 

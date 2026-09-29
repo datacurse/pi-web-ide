@@ -76,9 +76,12 @@ fits none of the existing ones, and record it here.
 - Explorer names and session titles/snippets run to the panel's right edge (their
   rows have no right padding) and use `.fade-edge`: a fixed 2em fade at that edge,
   so any text reaching it fades whether it overflows or just fits.
-- Session rows and tabs show the name followed by the rest of the first prompt
-  (`sessionLine`), so a shortened name runs on to the edge and fades there. Session
+- Session rows and tabs show the name, or the short name when Short names is on, else
+  the whole first prompt (`sessionLine`), which runs on to the edge and fades there. Session
   rows have no right padding (`pl-3` only), so that fade sits on the panel's edge.
+- Session list titles (`.session-title`) wrap to Settings > Sessions > `Title lines`
+  (1, 2, 3 or All; `pwi:sessionLines`, `data-session-lines` on `<html>`, default 1).
+  The last shown line fades at the edge; the pin and state dot sit inline on the first line.
 - Code (editor and diff tabs) soft-wraps; continuation rows keep the line's own
   indent and start with a dim `↳` marker (`wrapIndent()`, `.cm-wrapIndent`).
 
@@ -258,8 +261,8 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
 - Window title: `N ● pwi` — N = ready + needs (omitted at 0), `●` while anything works. No brackets.
 - Favicon: the `π` breathes while anything works, turns `green-400` while a reply is
   ready, and gets a red corner dot while anything needs you.
-  It is pi's block mark (`piMark.tsx`, monochrome, never the colored pi.dev logo), white on
-  a black tile.
+  It is pi's block mark (`piMark.tsx`, monochrome, never the colored pi.dev logo), white,
+  no tile.
   The empty-session mark is the same block mark in `amber-400`.
 - The session list sorts needs, then ready, right after pinned rows.
 - Alt+J jumps to the next waiting session: needs first, then the longest-waiting reply.
@@ -434,8 +437,12 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
   pwi extensions tab stays mounted (hidden) on the other tabs so an unsaved edit survives. Changes
   apply to sessions started afterwards. pwi's own plumbing (rewind, context) is not listed.
 - Settings has a `w-48` category nav on the left (`NavItem`s: Appearance, Transcript,
-  Sessions, Notifications), like Obsidian; the right side shows only the
+  Sessions, Notifications, Keyboard), like Obsidian; the right side shows only the
   chosen category, `max-w-xl p-6`. Opens on Appearance.
+- Keyboard has one `OptionRow` checkbox, `Override browser shortcuts` (`pwi:browserKeys`,
+  on by default): Ctrl+T reopens the last tab closed in this page load, Ctrl+N starts a
+  session in the last-used column, Ctrl+O and Ctrl+P as before. Off, they reach the browser.
+  Its hint says Chrome and Firefox keep Ctrl+T/Ctrl+N unless pwi runs as an installed app.
 - Appearance has a `Language` radio group (English / Русский, each named in itself,
   `pwi:language`, per browser). Every interface string goes through `t("English text")`
   or `plural(n, one, other)` from `i18n.ts`; the Russian lives in `i18n.ru.ts`, and
@@ -517,7 +524,7 @@ New UI uses these; convert raw markup when you touch it. Tune styles in
 | --------------- | ----------------------------------------------------------- | --- |
 | `Button`        | `variant`: primary / secondary (default) / subtle / ghost / warning (inside amber notices); `size`: sm (12px) / md (13px) | Text buttons. One `primary` per dialog or panel. Cancel is `secondary`. |
 | `IconButton`    | `label` (required; aria-label + tooltip), `variant`: ghost / outline / solid, `size`: sm 24px / md 28px, `round` | Icon-only buttons. `round` only in the composer toolbar. |
-| `MenuItem`      | button props, `icon?` (16px Phosphor, fixed slot, greys with the row) | Rows in dropdown and context menus. Context-menu items carry an icon; give every item in one menu an icon or none. |
+| `MenuItem`      | button props, `icon?` (16px Phosphor, fixed slot, greys with the row) | Rows in dropdown and context menus. Context-menu items carry an icon; give every item in one menu an icon or none. A description goes under the label (`block text-meta text-neutral-500` span), never beside it. |
 | `MenuSeparator` | —                                                           | Rule between groups of `MenuItem`s. |
 | `ContextMenu`   | `x`, `y`, `label`, `width` (220), `onClose`                 | Right-click menu 6px off the pointer (right and below, flipped to the other side where it would not fit): fixed, clamped on screen, closes on outside click, Escape, scroll, resize. A second right-click within 500ms at the same spot (4px) closes it and shows the browser's own menu instead (`nativeMenuOnDoubleRightClick`, anywhere in the app). Items call `onClose` after acting. No vertical padding: item hovers run flush to its top and bottom edges; its items are `px-2 py-2` (edge to icon = icon to text; dropdown items stay `px-3 py-1.5`) and its separators have no margin. |
 | `NavItem`       | `icon` (16px Phosphor), `selected`, button props            | Category row in a page's left nav (Settings): `control-md`, `rounded-sm`, `neutral-800` fill when current. |

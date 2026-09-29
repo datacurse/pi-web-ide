@@ -1,20 +1,25 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { Bell, ChatText, GearSix, ListBullets, Palette } from "@phosphor-icons/react";
+import { Bell, ChatText, GearSix, Keyboard, ListBullets, Palette } from "@phosphor-icons/react";
 import { Button, inputClass, NavItem, OptionRow, PanelHeader, Section } from "./ui.js";
 import {
 	applyChatFade,
 	applyFooterLayout,
 	applyScrollPast,
+	applySessionLines,
+	readSessionLines,
+	SESSION_LINES,
 	chatFadeOpacity,
 	CHAT_FADE_RANGES,
 	DEFAULT_CHAT_FADE,
 	readChatFade,
+	readBrowserKeys,
 	readChatFadeOn,
 	readFooterLayout,
 	readScrollPast,
 	readScrollPastOn,
 	readSettingsExpanded,
 	SCROLL_PAST_RANGE,
+	writeBrowserKeys,
 	writeChatFadeOn,
 	writeSettingsExpanded,
 	type ChatFade,
@@ -39,6 +44,7 @@ const CATEGORIES = [
 	{ id: "transcript", label: "Transcript", icon: <ChatText size={16} /> },
 	{ id: "sessions", label: "Sessions", icon: <ListBullets size={16} /> },
 	{ id: "notifications", label: "Notifications", icon: <Bell size={16} /> },
+	{ id: "keyboard", label: "Keyboard", icon: <Keyboard size={16} /> },
 ] as const;
 type Category = (typeof CATEGORIES)[number]["id"];
 
@@ -374,6 +380,11 @@ export function Settings({
 	const [category, setCategory] = useState<Category>("appearance");
 	const [expandDetails, setExpandDetails] = useState(readSettingsExpanded);
 	const [footer, setFooter] = useState(readFooterLayout);
+	const [sessionLines, setSessionLines] = useState(readSessionLines);
+	const [browserKeys, setBrowserKeys] = useState(readBrowserKeys);
+	const browserKeysHint = t(
+		"Ctrl+T reopens the last closed tab, Ctrl+N starts a new session, Ctrl+O searches sessions and Ctrl+P opens the command palette. Off, these keys do what the browser does. Chrome and Firefox keep Ctrl+T and Ctrl+N for themselves unless pwi runs as an installed app.",
+	);
 	const [query, setQuery] = useState("");
 	const results = useRef<HTMLDivElement>(null);
 
@@ -669,6 +680,37 @@ export function Settings({
 			),
 		},
 		{
+			category: "sessions",
+			label: t("Title lines"),
+			text: `session list name wrap new line multiline ${t("How many lines a title in the session list may wrap to.")} ${t("All")}`,
+			node: (
+				<div role="radiogroup" aria-labelledby="session-lines-label">
+					<div id="session-lines-label" className="px-2 pt-1 pb-1 text-ui text-neutral-300">
+						{t("Title lines")}
+						<span className="block text-meta text-neutral-500">
+							{t("How many lines a title in the session list may wrap to.")}
+						</span>
+					</div>
+					{SESSION_LINES.map((m) => (
+						<OptionRow key={m.id} selected={m.id === sessionLines}>
+							<input
+								type="radio"
+								name="sessionLines"
+								value={m.id}
+								checked={m.id === sessionLines}
+								onChange={() => {
+									setSessionLines(m.id);
+									applySessionLines(m.id);
+								}}
+								className="size-3.5 shrink-0 accent-amber-400"
+							/>
+							<span className="flex-1">{t(m.label)}</span>
+						</OptionRow>
+					))}
+				</div>
+			),
+		},
+		{
 			category: "notifications",
 			label: t("Notify when a run finishes"),
 			text: `alert desktop done ${notifyHint}`,
@@ -684,6 +726,28 @@ export function Settings({
 					<span className="flex-1">
 						{t("Notify when a run finishes")}
 						<span className="block text-meta text-neutral-500">{notifyHint}</span>
+					</span>
+				</OptionRow>
+			),
+		},
+		{
+			category: "keyboard",
+			label: t("Override browser shortcuts"),
+			text: `keys shortcuts hotkeys ctrl ${browserKeysHint}`,
+			node: (
+				<OptionRow>
+					<input
+						type="checkbox"
+						checked={browserKeys}
+						onChange={(e) => {
+							setBrowserKeys(e.target.checked);
+							writeBrowserKeys(e.target.checked);
+						}}
+						className="size-4 shrink-0 accent-amber-400"
+					/>
+					<span className="flex-1">
+						{t("Override browser shortcuts")}
+						<span className="block text-meta text-neutral-500">{browserKeysHint}</span>
 					</span>
 				</OptionRow>
 			),

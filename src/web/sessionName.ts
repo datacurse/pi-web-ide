@@ -25,12 +25,12 @@ export function sessionLabel(
 }
 
 /**
- * `sessionLabel` followed by the rest of the first prompt, for a row or tab
- * that shows as much as fits and fades at its edge instead of stopping short.
+ * What a row or tab shows: a name or short name as is, otherwise the whole
+ * first prompt, which runs on to the edge and fades there.
  */
 export function sessionLine(info: { name?: string; firstMessage?: string } | undefined, short: boolean): string {
 	const label = sessionLabel(info, short);
-	if (info?.name?.trim()) return label;
+	if (short || info?.name?.trim()) return label;
 	const first = info?.firstMessage?.replace(/\s+/g, " ").trim() ?? "";
 	return label + first.slice(label.length);
 }

@@ -349,22 +349,26 @@ export function SessionList({
 											: ""
 								}`}
 							>
-								<div className="flex items-center gap-1.5 text-ui text-neutral-200">
+								<div className="session-title text-ui text-neutral-200">
 									{/* The session's state, the same colors as its tab π: amber
 									    pulsing while it works, steady amber for a new reply, red
-									    for a question. */}
+									    for a question. Inline, so a wrapped title keeps them on
+									    its first line. */}
 									{pins.includes(s.path) && (
-										<PushPin size={12} weight="fill" className="shrink-0 text-amber-400" aria-label={t("Pinned")} />
+										<PushPin
+											size={12}
+											weight="fill"
+											className="mr-1.5 inline align-middle text-amber-400"
+											aria-label={t("Pinned")}
+										/>
 									)}
 									{state && (
 										<span
-											className={`size-1.5 shrink-0 rounded-full ${ATTENTION_UI[state].dot}`}
+											className={`mr-1.5 inline-block size-1.5 rounded-full align-middle ${ATTENTION_UI[state].dot}`}
 											title={t(ATTENTION_UI[state].label)}
 										/>
 									)}
-									<span className="fade-edge min-w-0 flex-1">
-										{naming === s.path ? t("Naming…") : highlight(sessionLine(s, shortNames), terms)}
-									</span>
+									{naming === s.path ? t("Naming…") : highlight(sessionLine(s, shortNames), terms)}
 								</div>
 								{/*
 								  The stamp shown is the one the list is sorted by, so the

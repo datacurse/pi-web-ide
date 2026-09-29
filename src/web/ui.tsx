@@ -214,7 +214,7 @@ export function MenuItem({
 					{icon}
 				</span>
 			)}
-			{children}
+			{icon ? <span className="min-w-0 flex-1">{children}</span> : children}
 		</button>
 	);
 }

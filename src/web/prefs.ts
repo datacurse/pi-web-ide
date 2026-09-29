@@ -85,6 +85,7 @@ const SHORT_NAMES_KEY = "pwi:shortNames";
 const HIDE_SCROLLBARS_KEY = "pwi:hideScrollbars";
 const GIT_AUTONAME_KEY = "pwi:gitAutoName";
 const GIT_NESTED_KEY = "pwi:gitNested";
+const BROWSER_KEYS_KEY = "pwi:browserKeys";
 
 export function readTheme(): ThemeId {
 	const stored = readStored(THEME_KEY);
@@ -362,6 +363,30 @@ export function applyFooterLayout(layout: FooterLayout): void {
 	writeStored(FOOTER_KEY, layout);
 }
 
+/** How many lines a session list title may wrap to. */
+export const SESSION_LINES = [
+	{ id: "1", label: "1" },
+	{ id: "2", label: "2" },
+	{ id: "3", label: "3" },
+	{ id: "all", label: "All" },
+] as const;
+
+export type SessionLines = (typeof SESSION_LINES)[number]["id"];
+
+const SESSION_LINES_KEY = "pwi:sessionLines";
+
+export function readSessionLines(): SessionLines {
+	const stored = readStored(SESSION_LINES_KEY);
+	return SESSION_LINES.some((m) => m.id === stored) ? (stored as SessionLines) : "1";
+}
+
+/** A `data-session-lines` attribute on <html>; index.css wraps `.session-title`. */
+export function applySessionLines(lines: SessionLines): void {
+	if (lines === "1") delete document.documentElement.dataset.sessionLines;
+	else document.documentElement.dataset.sessionLines = lines;
+	writeStored(SESSION_LINES_KEY, lines);
+}
+
 /** Whether the composer's Ask only button stays on after a send. */
 export const ASK_MODES = [
 	{ id: "toggle", label: "Toggle", hint: "Stays on until you switch it off or change session." },
@@ -414,6 +439,18 @@ export function readGitAutoName(): boolean {
 
 export function writeGitAutoName(on: boolean): void {
 	writeStored(GIT_AUTONAME_KEY, on ? "1" : "0");
+}
+
+/**
+ * Whether pwi takes Ctrl+T, Ctrl+N, Ctrl+O and Ctrl+P from the browser.
+ * On by default; read at keydown, so a change applies without a reload.
+ */
+export function readBrowserKeys(): boolean {
+	return readStored(BROWSER_KEYS_KEY) !== "0";
+}
+
+export function writeBrowserKeys(on: boolean): void {
+	writeStored(BROWSER_KEYS_KEY, on ? "1" : "0");
 }
 
 /** Whether Source Control looks one folder down when the project is not a repository. */

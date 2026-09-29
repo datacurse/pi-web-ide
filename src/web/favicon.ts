@@ -55,17 +55,16 @@ const ALPHA_DIP = 0.35;
  */
 export type Badge = "needs" | "ready" | null;
 
-/** The mark's scale at rest: public/favicon.svg's, 38 of the tile's 64 units. */
-const MARK_SCALE = 0.068;
+/** The mark's scale at rest: public/favicon.svg's, 56 of the icon's 64 units. */
+const MARK_SCALE = 0.1;
 
 function frame(k: number, badge: Badge, tick: number): string {
 	const scale = MARK_SCALE * (1 - SCALE_DIP * k);
-	// Scale about the middle of the tile, so the π breathes in place
-	// instead of drifting towards the origin. The tile holds still.
+	// Scale about the middle of the icon, so the π breathes in place
+	// instead of drifting towards the origin.
 	const doc =
 		'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">' +
 		`<!--${tick}-->` +
-		'<rect width="64" height="64" rx="14" fill="#000"/>' +
 		`<path fill="${badge === "ready" ? "#4ade80" : "#fff"}" opacity="${(1 - ALPHA_DIP * k).toFixed(3)}"` +
 		` transform="translate(32 32) scale(${scale.toFixed(4)}) translate(-280 -280)" d="${PI_MARK}"/>` +
 		(badge === "needs" ? '<circle cx="49" cy="15" r="13" fill="#f87171" stroke="#000" stroke-width="4"/>' : "") +
