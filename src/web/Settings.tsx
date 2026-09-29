@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useId, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Bell, ChatText, ListBullets, Palette } from "@phosphor-icons/react";
 import { Button, inputClass, NavItem, OptionRow, PanelHeader, Section } from "./ui.js";
 import {
@@ -78,31 +78,82 @@ function ChatFadeControl() {
 					{t("Reset")}
 				</Button>
 			</div>
-			{CHAT_FADE_FIELDS.map((f) => {
-				const [min, max, step] = CHAT_FADE_RANGES[f.key];
-				return (
-					<label key={f.key} className="flex items-center gap-3">
-						<span className="w-28 shrink-0">
-							{t(f.label)}
-							<span className="block text-meta text-neutral-500">{t(f.hint)}</span>
-						</span>
-						<input
-							data-custom="range slider"
-							type="range"
-							min={min}
-							max={max}
-							step={step}
-							value={fade[f.key]}
-							onChange={(e) => change({ ...fade, [f.key]: Number(e.target.value) })}
-							className="min-w-0 flex-1 accent-amber-400"
-						/>
-						<span className="w-10 shrink-0 text-right font-mono text-meta text-neutral-400">
-							{fade[f.key]}
-						</span>
-					</label>
-				);
-			})}
+			{CHAT_FADE_FIELDS.map((f) => (
+				<FadeField
+					key={f.key}
+					label={t(f.label)}
+					hint={t(f.hint)}
+					range={CHAT_FADE_RANGES[f.key]}
+					value={fade[f.key]}
+					onChange={(v) => change({ ...fade, [f.key]: v })}
+				/>
+			))}
 			<ChatFadePreview fade={fade} />
+		</div>
+	);
+}
+
+/**
+ * Name with its description beside it; under them a typeable number and a slider.
+ * The box keeps what you type until it leaves focus and applies it whenever it is
+ * a number in range, so a half-typed "0." is not snapped back.
+ */
+function FadeField({
+	label,
+	hint,
+	range: [min, max, step],
+	value,
+	onChange,
+}: {
+	label: string;
+	hint: string;
+	range: [number, number, number];
+	value: number;
+	onChange: (v: number) => void;
+}) {
+	const id = useId();
+	const [draft, setDraft] = useState<string | null>(null);
+	return (
+		<div className="flex flex-col gap-1">
+			<div className="flex items-baseline gap-2">
+				<label htmlFor={id} className="shrink-0">
+					{label}
+				</label>
+				<span className="text-meta text-neutral-500">{hint}</span>
+			</div>
+			<div className="flex items-center gap-3">
+				<input
+					id={id}
+					type="number"
+					min={min}
+					max={max}
+					step="any"
+					value={draft ?? String(value)}
+					onChange={(e) => {
+						setDraft(e.target.value);
+						const v = e.target.valueAsNumber;
+						if (v >= min && v <= max) onChange(v);
+					}}
+					onBlur={() => setDraft(null)}
+					onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+					className={`w-16 shrink-0 font-mono ${inputClass.sm}`}
+				/>
+				<input
+					data-custom="range slider"
+					type="range"
+					min={min}
+					max={max}
+					step={step}
+					value={value}
+					aria-label={label}
+					onChange={(e) => {
+						setDraft(null);
+						onChange(Number(e.target.value));
+					}}
+					style={{ "--fill": `${((value - min) / (max - min)) * 100}%` } as CSSProperties}
+					className="range min-w-0 flex-1"
+				/>
+			</div>
 		</div>
 	);
 }

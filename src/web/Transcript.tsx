@@ -968,9 +968,9 @@ export function TranscriptRow({
 			{/* `chat-measure` on the LABEL too: it names the column it sits above,
 			    so it has to move with it — left in the track while the prose is
 			    centred put the speaker's name nowhere near their words. */}
-			{labelled && (
+			{labelled && role !== "assistant" && (
 				<div className={`chat-measure mb-1 ${sectionLabel}`}>
-					{role === "assistant" ? t("assistant") : role}
+					{role}
 				</div>
 			)}
 			<div className={`chat-prose ${labelled ? "flow-trim-start" : ""} ${below ? "flow-trim-end" : ""}`}>

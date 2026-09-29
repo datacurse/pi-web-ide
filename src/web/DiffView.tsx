@@ -21,7 +21,7 @@ import { ArrowCounterClockwise, Check } from "@phosphor-icons/react";
 import type { EditorView } from "@codemirror/view";
 import type { Hunk, HunkState } from "../shared/hunks.js";
 import { fitHunk } from "../shared/hunks.js";
-import { darkPlus, languageFor, loadCodeMirror } from "./codemirror.js";
+import { darkPlus, languageFor, loadCodeMirror, wrapIndent } from "./codemirror.js";
 import { Button, PanelHeader } from "./ui.js";
 import { api, unwrap } from "./api.js";
 import { t } from "./i18n.js";
@@ -65,6 +65,7 @@ function Merge({ path, before, after }: { path: string; before: string; after: s
 						cm.EditorView.editable.of(false),
 						cm.EditorState.readOnly.of(true),
 						cm.EditorView.lineWrapping,
+						wrapIndent(cm),
 						cm.lineNumbers(),
 						cm.unifiedMergeView({ original: before, mergeControls: false }),
 						// Highlighting is best-effort: a language this does not

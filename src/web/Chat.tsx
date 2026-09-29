@@ -966,7 +966,7 @@ export function Chat({
 						 * widgets that happened to be adjacent rather than as one thing
 						 * you are about to send.
 						 */}
-						<div className="-mx-3 rounded-lg bg-neutral-900 px-3 py-2 ring-1 ring-neutral-800 ring-inset focus-within:ring-neutral-700">
+						<div className="-mx-3 rounded-lg bg-neutral-900 p-3 ring-1 ring-neutral-800 ring-inset focus-within:ring-neutral-700">
 							<Attachments
 								images={images}
 								onRemove={(i) => void changeImages(images.filter((_, n) => n !== i))}

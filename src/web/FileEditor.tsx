@@ -24,7 +24,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowClockwise, FloppyDisk } from "@phosphor-icons/react";
 import type { EditorView } from "@codemirror/view";
-import { darkPlus, languageFor, loadCodeMirror } from "./codemirror.js";
+import { darkPlus, languageFor, loadCodeMirror, wrapIndent } from "./codemirror.js";
 import { Button, PanelHeader } from "./ui.js";
 import { api, unwrap } from "./api.js";
 import { t } from "./i18n.js";
@@ -112,6 +112,7 @@ export function FileEditor({
 						cm.indentOnInput(),
 						cm.autocompletion(),
 						cm.EditorView.lineWrapping,
+						wrapIndent(cm),
 						/*
 						 * `indentWithTab` last: it binds Tab, which is the
 						 * focus-escape key everywhere else on the page. Bound here it

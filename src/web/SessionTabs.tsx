@@ -1,22 +1,24 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
 	ArrowLineRight,
+	ChatText,
 	Crosshair,
 	GitDiff,
 	Path,
 	PencilSimple,
 	PushPin,
+	Sparkle,
 	TerminalWindow,
 	X,
 	XCircle,
 } from "@phosphor-icons/react";
 import type { KeyboardEvent } from "react";
 import type { PiSessionInfo } from "../shared/types.js";
-import { sessionLabel } from "./sessionName.js";
+import { sessionLabel, shortName } from "./sessionName.js";
 import { ATTENTION_UI, type Attention } from "./attention.js";
 import { FileGlyph } from "./fileIcon.js";
 import { diffParts, isDiffTab, isSessionTab, isTermTab, tabLabel, tabPath } from "./tabs.js";
-import { ContextMenu, IconButton, MenuItem, MenuSeparator, tabClass } from "./ui.js";
+import { ContextMenu, IconButton, MenuItem, MenuSeparator, inputClass, tabClass } from "./ui.js";
 import { t } from "./i18n.js";
 
 /**
@@ -102,6 +104,7 @@ export function SessionTabs({
 	onReveal,
 	onTogglePin,
 	onRename,
+	onAutoName,
 	label = t("Open sessions"),
 }: {
 	/** Open session files, in strip order. */
@@ -145,10 +148,12 @@ export function SessionTabs({
 	onTogglePin?: (file: string) => void;
 	/** Rename a session. Enables Rename in the session tab menu. */
 	onRename?: (session: PiSessionInfo, name: string) => void;
+	/** Title a session with a model call. Enables Summarise in the session tab menu. */
+	onAutoName?: (session: PiSessionInfo) => Promise<void>;
 }) {
 	const buttons = useRef<Array<HTMLButtonElement | null>>([]);
 	/** A tab's right-click menu: which tab entry, and where the pointer was. */
-	const [menu, setMenu] = useState<{ file: string; x: number; y: number } | null>(null);
+	const [menu, setMenu] = useState<{ file: string; x: number; y: number; closeOnly?: boolean } | null>(null);
 	/*
 	 * Drag state for REORDERING, which is view state and not App's: only the
 	 * committed order matters upstream, and lifting the in-flight index would
@@ -167,6 +172,21 @@ export function SessionTabs({
 	 * nothing at all, so a cross-column drag gave no clue where it would land.
 	 */
 	const [drag, setDrag] = useState<{ from: number | null; slot: number } | null>(null);
+	/*
+	 * Width of tabs closed while the pointer is on the strip, kept as empty
+	 * space at its end. Scrolled to the end, a shrinking strip clamps its
+	 * scroll and shoves every tab right; this holds them in place so the next
+	 * tab's close button lands under the pointer. Released on pointer leave.
+	 */
+	const [slack, setSlack] = useState(0);
+	/*
+	 * The tab being renamed in place, and its text — the same inline rename as
+	 * the session list: Enter saves, Escape or a click elsewhere cancels.
+	 */
+	const [renaming, setRenaming] = useState<string | null>(null);
+	const [draft, setDraft] = useState("");
+	/** The tab waiting on a generated name, so it can say so. */
+	const [naming, setNaming] = useState<string | null>(null);
 
 	/** Aim at `slot`, skipping the re-render when it has not changed. */
 	const aim = (from: number | null, slot: number) => {
@@ -190,8 +210,13 @@ export function SessionTabs({
 	// A tab can be selected by Alt+N or by a click in the session list, neither
 	// of which scrolls the strip; without this the selected tab can sit off
 	// screen. `nearest` on both axes so it never scrolls anything else.
+	// Skipped when a tab was closed: the strip must hold still so the tabs
+	// after it slide left, instead of jumping to the active tab.
+	const prevLength = useRef(tabs.length);
 	useEffect(() => {
-		if (activeIndex < 0) return;
+		const shrank = tabs.length < prevLength.current;
+		prevLength.current = tabs.length;
+		if (activeIndex < 0 || shrank) return;
 		buttons.current[activeIndex]?.scrollIntoView({
 			block: "nearest",
 			inline: "nearest",
@@ -281,6 +306,7 @@ export function SessionTabs({
 				// horizontally and a mouse has no horizontal wheel, so the vertical
 				// delta is the only gesture most pointers can make here. A trackpad's
 				// own horizontal delta is left to the browser.
+				onPointerLeave={() => setSlack(0)}
 				onWheel={(e) => {
 					if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
 					e.currentTarget.scrollLeft += e.deltaY;
@@ -331,7 +357,7 @@ export function SessionTabs({
 						<div
 							key={file}
 							role="presentation"
-							draggable
+							draggable={renaming !== file}
 							onDragStart={(e) => {
 								dragFrom.current = i;
 								// Aimed at its own slot, which draws no marker — the tab has
@@ -422,6 +448,31 @@ export function SessionTabs({
 									className="pointer-events-none absolute inset-y-1.5 -right-px w-0.5 rounded-full bg-amber-400"
 								/>
 							)}
+							{renaming === file && info ? (
+								<form
+									onSubmit={(e) => {
+										e.preventDefault();
+										const next = draft.trim();
+										setRenaming(null);
+										if (next && next !== info.name) onRename?.(info, next);
+									}}
+									className="flex h-bar items-center px-1.5"
+								>
+									<input
+										autoFocus
+										value={draft}
+										onChange={(e) => setDraft(e.target.value)}
+										onKeyDown={(e) => {
+											if (e.key === "Escape") setRenaming(null);
+										}}
+										onBlur={() => setRenaming(null)}
+										aria-label={t("Rename {name}", { name: label })}
+										title={t("Enter to save, Escape to cancel")}
+										className={`w-52 ${inputClass.sm}`}
+									/>
+								</form>
+							) : (
+							<>
 							<button
 								ref={(el) => {
 									buttons.current[i] = el;
@@ -472,7 +523,7 @@ export function SessionTabs({
 								{isEdit && <FileGlyph name={label} size={13} />}
 								{isTerm && <TerminalWindow size={13} className="shrink-0 text-neutral-400" />}
 								<span className={`fade-end ${isEdit || isDiff ? "font-mono" : ""}`}>
-									{label}
+									{naming === file ? t("Naming…") : label}
 								</span>
 								{/* Unsaved. A dot rather than an asterisk in the label, so
 								    the name stays readable at a narrow width. */}
@@ -488,7 +539,16 @@ export function SessionTabs({
 							</button>
 							<button
 								data-custom="tab close"
-								onClick={() => onClose(file)}
+								onClick={(e) => {
+									const width = e.currentTarget.parentElement?.offsetWidth ?? 0;
+									setSlack((s) => s + width);
+									onClose(file);
+								}}
+								onContextMenu={(e) => {
+									e.preventDefault();
+									const box = e.currentTarget.getBoundingClientRect();
+									setMenu({ file, x: e.clientX || box.left, y: e.clientY || box.bottom, closeOnly: true });
+								}}
 								aria-label={t("Close tab {name}", { name: label })}
 								title={
 									isTerm
@@ -503,9 +563,13 @@ export function SessionTabs({
 							>
 								<X size={13} />
 							</button>
+							</>
+							)}
 						</div>
 					);
 				})}
+
+				{slack > 0 && <div aria-hidden className="shrink-0" style={{ width: slack }} />}
 
 				{/* An empty column still has to show where the drop lands, and has no
 				    tab to hang the marker off. */}
@@ -529,8 +593,8 @@ export function SessionTabs({
 				const isFile = !isSessionTab(file);
 				const isDiff = isDiffTab(file);
 				/** Diffs and terminals: nothing to offer but closing. */
-				const closeOnly = isDiff || isTermTab(file);
-				const isEdit = isFile && !closeOnly;
+				const closeOnly = menu.closeOnly || isDiff || isTermTab(file);
+				const isEdit = isFile && !isDiff && !isTermTab(file);
 				const info = isFile ? undefined : byFile.get(file);
 				const label = isFile ? tabLabel(file) : sessionLabel(info, shortNames);
 				const act = (fn: () => void) => () => {
@@ -539,30 +603,60 @@ export function SessionTabs({
 				};
 				return (
 					<ContextMenu x={menu.x} y={menu.y} label={t("Tab {name}", { name: label })} onClose={() => setMenu(null)}>
-						{!isFile && onTogglePin && (
+						{!closeOnly && !isFile && onTogglePin && (
 							<MenuItem icon={<PushPin size={16} />} role="menuitem" autoFocus onClick={act(() => onTogglePin(file))}>
 								{pinned.includes(file) ? t("Unpin Tab") : t("Pin Tab")}
 							</MenuItem>
 						)}
-						{!isFile && onRename && (
+						{!closeOnly && !isFile && onRename && (
 							<MenuItem
 								icon={<PencilSimple size={16} />}
 								role="menuitem"
 								disabled={!info}
 								onClick={act(() => {
-									const next = window.prompt(t("Rename session"), label)?.trim();
-									if (info && next && next !== info.name) onRename(info, next);
+									setDraft(label);
+									setRenaming(file);
 								})}
 							>
 								{t("Rename…")}
 							</MenuItem>
 						)}
-						{isEdit && onReveal && (
+						{!closeOnly && !isFile && onRename && (
+							<MenuItem
+								icon={<ChatText size={16} />}
+								role="menuitem"
+								disabled={!info?.firstMessage?.trim()}
+								onClick={act(() => {
+									const next = shortName(info?.firstMessage ?? "");
+									if (info && next) onRename(info, next);
+								})}
+							>
+								{t("Name from first prompt")}
+							</MenuItem>
+						)}
+						{!closeOnly && !isFile && onAutoName && (
+							<MenuItem
+								icon={<Sparkle size={16} />}
+								role="menuitem"
+								disabled={!info}
+								onClick={act(() => {
+									if (!info) return;
+									setNaming(file);
+									void onAutoName(info).finally(() => setNaming(null));
+								})}
+							>
+								{t("Summarise with pi")}
+								<span className="block text-meta text-neutral-500">
+									{t("Asks pi to title the conversation")}
+								</span>
+							</MenuItem>
+						)}
+						{!closeOnly && isEdit && onReveal && (
 							<MenuItem icon={<Crosshair size={16} />} role="menuitem" autoFocus onClick={act(() => onReveal(tabPath(file)))}>
 								{t("Reveal in Explorer")}
 							</MenuItem>
 						)}
-						{isEdit && (
+						{!closeOnly && isEdit && (
 							<MenuItem
 								icon={<Path size={16} />}
 								role="menuitem"

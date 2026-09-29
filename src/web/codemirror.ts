@@ -12,6 +12,8 @@
  * makes every open after the first instant.
  */
 
+import type { Decoration, DecorationSet, EditorView, ViewUpdate } from "@codemirror/view";
+
 export interface CmModules {
 	HighlightStyle: typeof import("@codemirror/language").HighlightStyle;
 	tags: typeof import("@lezer/highlight").tags;
@@ -20,6 +22,9 @@ export interface CmModules {
 	highlightActiveLine: typeof import("@codemirror/view").highlightActiveLine;
 	keymap: typeof import("@codemirror/view").keymap;
 	drawSelection: typeof import("@codemirror/view").drawSelection;
+	ViewPlugin: typeof import("@codemirror/view").ViewPlugin;
+	Decoration: typeof import("@codemirror/view").Decoration;
+	countColumn: typeof import("@codemirror/state").countColumn;
 	EditorState: typeof import("@codemirror/state").EditorState;
 	Compartment: typeof import("@codemirror/state").Compartment;
 	unifiedMergeView: typeof import("@codemirror/merge").unifiedMergeView;
@@ -60,6 +65,9 @@ export function loadCodeMirror(): Promise<CmModules> {
 		highlightActiveLine: view.highlightActiveLine,
 		keymap: view.keymap,
 		drawSelection: view.drawSelection,
+		ViewPlugin: view.ViewPlugin,
+		Decoration: view.Decoration,
+		countColumn: state.countColumn,
 		EditorState: state.EditorState,
 		Compartment: state.Compartment,
 		unifiedMergeView: merge.unifiedMergeView,
@@ -80,6 +88,53 @@ export function loadCodeMirror(): Promise<CmModules> {
 		completionKeymap: autocomplete.completionKeymap,
 	}));
 	return loading;
+}
+
+/**
+ * Wrapped lines continue at their own indentation, not at column 0.
+ *
+ * Each visible line gets its leading-whitespace width as `--indent`; the
+ * `.cm-wrapIndent` rule in index.css turns that into a hanging indent and
+ * draws a wrap marker at the start of every continuation row.
+ */
+export function wrapIndent(cm: CmModules) {
+	const cache = new Map<number, Decoration>();
+	const deco = (cols: number) => {
+		let d = cache.get(cols);
+		if (!d) {
+			d = cm.Decoration.line({ class: "cm-wrapIndent", attributes: { style: `--indent: ${cols}ch` } });
+			cache.set(cols, d);
+		}
+		return d;
+	};
+	const build = (view: EditorView): DecorationSet => {
+		const ranges = [];
+		let last = -1;
+		for (const { from, to } of view.visibleRanges) {
+			for (let pos = from; pos <= to; ) {
+				const line = view.state.doc.lineAt(pos);
+				if (line.from > last) {
+					const ws = /^[ \t]*/.exec(line.text)?.[0] ?? "";
+					ranges.push(deco(cm.countColumn(ws, view.state.tabSize)).range(line.from));
+					last = line.from;
+				}
+				pos = line.to + 1;
+			}
+		}
+		return cm.Decoration.set(ranges);
+	};
+	return cm.ViewPlugin.fromClass(
+		class {
+			decorations: DecorationSet;
+			constructor(view: EditorView) {
+				this.decorations = build(view);
+			}
+			update(u: ViewUpdate) {
+				if (u.docChanged || u.viewportChanged) this.decorations = build(u.view);
+			}
+		},
+		{ decorations: (v) => v.decorations },
+	);
 }
 
 /**

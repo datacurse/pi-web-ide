@@ -1805,6 +1805,7 @@ export default function App() {
 					onReveal={revealFile}
 					onTogglePin={togglePin}
 					onRename={(s, name) => void renameSession(s, name)}
+					onAutoName={autoNameSession}
 					group={groupOf(tabs, "left")}
 					panelId={CHAT_PANEL_ID}
 					sessions={shown}
@@ -1839,6 +1840,7 @@ export default function App() {
 						onReveal={revealFile}
 						onTogglePin={togglePin}
 						onRename={(s, name) => void renameSession(s, name)}
+						onAutoName={autoNameSession}
 						group={tabs.right}
 						panelId={SPLIT_PANEL_ID}
 						sessions={shown}

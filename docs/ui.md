@@ -69,6 +69,8 @@ fits none of the existing ones, and record it here.
   `text-ellipsis` and `line-clamp-*` fail the check (except `<select>`/inputs,
   where a mask cannot follow the text). Multi-line: `.fade-clamp` (3 lines).
 - Tool call lines are always one line; the result preview fades.
+- Code (editor and diff tabs) soft-wraps; continuation rows keep the line's own
+  indent and start with a dim `↳` marker (`wrapIndent()`, `.cm-wrapIndent`).
 
 | Token            | Size | Use                                              |
 | ---------------- | ---- | ------------------------------------------------ |
@@ -100,7 +102,7 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
 
 ## Composer
 
-- The button row sits `mt-4` (16px) below the typed text.
+- The box pads `p-3` (12px) on every side. The button row sits `mt-4` (16px) below the typed text.
 - Attach, `?` and Send are `bare` round `IconButton`s whose icon fills the button (24px, `size="sm"`,
   no outline or disc, no background even on hover; hover only brightens the icon), like Cursor's. Stop is an `outline` round `sm` `IconButton`; the star is `ghost`.
 - Send is a `PaperPlaneTilt`: `neutral-100` when there is something to send, the ghost
@@ -130,7 +132,10 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
   `0.2 + 0.8(1-t^1.5)^3`: it eases in, dims fast, and settles at 0.2, never black.
   Settings > Appearance > `Chat fade` (`pwi:chatFade`, per browser) tunes it live with
   sliders for Length, End opacity, Ease in and Drop, plus `Reset`; `applyChatFade` in
-  `prefs.ts` builds the gradient into `--chat-fade`. Under the sliders, a preview: the
+  `prefs.ts` builds the gradient into `--chat-fade`. Each field is its name with the
+  description beside it (`text-meta neutral-500`), then a typeable `w-16` mono number
+  (`inputClass.sm`) left of a `.range` slider (index.css: 4px `neutral-700` track, amber
+  up to a 12px amber thumb). Under the sliders, a preview: the
   curve as an SVG chart (x opacity, y position, dashed lines at the fade start and the box)
   beside a sample answer masked by the live gradient over a mock message box, both the
   same height so their rows line up. Tried and
@@ -186,10 +191,13 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
   It floats over the label's end (no reserved padding, a short fade behind it), so
   labels use the full tab width.
 - Tabs are split by a `neutral-800` rule on each tab's right edge.
+- Closing a tab never scrolls the strip: tabs to its left stay put and tabs to its right
+  slide left. Closed width is kept as trailing space until the pointer leaves the strip.
 - A cut-off tab label fades out over its last 2em (`.fade-end`, see Overflowing text).
 - Right-click any tab → `ContextMenu`, groups split by `MenuSeparator`:
-  1. Session tabs: `Pin Tab` / `Unpin Tab` (the session list's pins), `Rename…`
-     (`window.prompt`). File tabs: `Reveal in Explorer` (opens the Explorer, expands
+  1. Session tabs: the session list's menu — `Pin Tab` / `Unpin Tab` (the list's pins),
+     `Rename…` (inline in the tab, never `window.prompt`; Enter saves, Escape or blur
+     cancels), `Name from first prompt`, `Summarise with pi`. File tabs: `Reveal in Explorer` (opens the Explorer, expands
      down to the file, scrolls to and focuses its row), `Copy Path`. Diff tabs: none.
   2. `Close`, `Close Others`, `Close to the Right` (within that column's strip).
 - In a split, only the focused column (the one last clicked or focused) keeps the amber
@@ -250,6 +258,8 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
   then fuzzy subsequence). Arrows move, Enter runs, Escape or backdrop closes.
 
 ## User message bubble
+
+- Assistant replies carry no `ASSISTANT` label; the bubble vs. plain prose already says who spoke.
 
 - Text is clamped to 3 lines (`.fade-clamp`, the last line fades). When it overflows, a ghost
   `Button size="sm"` below it toggles `Show more` / `Show less` with a 12px caret.
@@ -481,6 +491,7 @@ New UI uses these; convert raw markup when you touch it. Tune styles in
   `range slider`.
 - xterm reads `--text-body` at mount (Terminal.tsx); it cannot take a class.
 - Buttons default to `type="button"`; pass `type="submit"` explicitly.
+- Number inputs have no spin arrows (index.css); they are typed into.
 - No focus outlines. `index.css` sets `:focus-visible { outline: none }`; never add
   `focus-visible:outline-*` classes.
 
