@@ -129,10 +129,10 @@ export function SessionSearch({
 						}`}
 					>
 						<ChatCircle size={18} className="shrink-0 text-neutral-500" />
-						<span className="max-w-[60%] shrink-0 truncate text-body text-neutral-200">
+						<span className="max-w-[60%] shrink-0 fade-end text-body text-neutral-200">
 							{highlight(sessionLabel(s, shortNames), terms)}
 						</span>
-						<span className="min-w-0 flex-1 truncate text-ui text-neutral-500">
+						<span className="min-w-0 flex-1 fade-end text-ui text-neutral-500">
 							{snippet && highlight(snippet, terms)}
 						</span>
 						<span className="shrink-0 text-ui text-neutral-500">{timeAgo(s.lastActive)}</span>

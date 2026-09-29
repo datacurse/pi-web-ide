@@ -164,10 +164,10 @@ export function Packages({
 					{t("Refresh")}
 				</Button>
 				<span className="ml-auto flex min-w-0 items-center gap-2 font-mono text-caption text-neutral-500">
-					<span className="truncate" title={t("pi on this machine")}>
+					<span className="fade-end" title={t("pi on this machine")}>
 						pi {view?.piVersion ?? "?"}
 					</span>
-					{working && <span className="truncate text-amber-400">{working}…</span>}
+					{working && <span className="fade-end text-amber-400">{working}…</span>}
 				</span>
 			</PanelHeader>
 

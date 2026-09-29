@@ -518,7 +518,7 @@ export function SessionTabs({
 			</div>
 
 			{tabs.length === 0 && (
-				<p className="min-w-0 flex-1 self-center truncate px-2 text-meta text-neutral-400">
+				<p className="min-w-0 flex-1 self-center fade-end px-2 text-meta text-neutral-400">
 					{t("No open sessions. Press + or pick one from the list.")}
 				</p>
 			)}

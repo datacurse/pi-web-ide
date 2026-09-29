@@ -106,7 +106,7 @@ export function CommandPalette({
 							i === active ? "bg-neutral-800" : ""
 						}`}
 					>
-						<span className="min-w-0 flex-1 truncate text-body text-neutral-200">{c.label}</span>
+						<span className="min-w-0 flex-1 fade-end text-body text-neutral-200">{c.label}</span>
 						{c.keys && <span className="shrink-0 text-ui text-neutral-500">{c.keys}</span>}
 					</button>
 				))}

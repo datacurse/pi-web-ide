@@ -309,7 +309,7 @@ export function DirectoryPicker({
 								data-custom="pinned-folder chip"
 								onClick={() => void go(path)}
 								title={path}
-								className={`max-w-40 truncate rounded-l-sm px-1.5 py-0.5 transition-colors duration-150 ease-out hover:bg-neutral-800 motion-reduce:transition-none ${
+								className={`max-w-40 fade-end rounded-l-sm px-1.5 py-0.5 transition-colors duration-150 ease-out hover:bg-neutral-800 motion-reduce:transition-none ${
 									path === current ? "text-amber-400" : "text-neutral-300"
 								}`}
 							>
@@ -351,7 +351,7 @@ export function DirectoryPicker({
 							{"\u25b8"}
 						</span>
 						<span
-							className={`truncate ${e.hidden ? "text-neutral-500" : "text-neutral-200"}`}
+							className={`fade-end ${e.hidden ? "text-neutral-500" : "text-neutral-200"}`}
 						>
 							{e.name}
 						</span>
@@ -383,7 +383,7 @@ export function DirectoryPicker({
 				>
 					{already ? t("Already added") : t("Add this folder")}
 				</Button>
-				<span className="min-w-0 flex-1 truncate font-mono text-meta text-neutral-500">
+				<span className="min-w-0 flex-1 fade-end font-mono text-meta text-neutral-500">
 					{error ? <span className="text-red-400">{error}</span> : current}
 				</span>
 			</div>

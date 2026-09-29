@@ -43,8 +43,7 @@ function AnsiOutput({ text, className }: { text: string; className?: string }) {
  * require opening every single one to see what happened.
  */
 function resultPreview(result: string): string {
-	const firstLine = stripAnsi(result).split("\n", 1)[0]?.trim() ?? "";
-	return firstLine.length > 80 ? `${firstLine.slice(0, 80)}…` : firstLine;
+	return stripAnsi(result).split("\n", 1)[0]?.trim() ?? "";
 }
 
 /**
@@ -82,11 +81,11 @@ export function Tool({
 	const spinner = useSpinner(running);
 	const preview = !open && result ? resultPreview(result) : "";
 	return (
-		<div className="chat-wide my-1">
+		<div className="chat-wide my-3">
 			<button
 				data-custom="transcript disclosure"
 				onClick={() => setOpen((o) => !o)}
-				className={`flex items-center gap-1 font-mono text-body ${isError ? "text-red-400" : running ? "text-amber-400" : "text-neutral-500"} hover:text-neutral-300`}
+				className={`flex max-w-full items-center gap-1 whitespace-nowrap chat-code font-mono ${isError ? "text-red-400" : running ? "text-amber-400" : "text-neutral-500"} hover:text-neutral-300`}
 			>
 				{open ? <CaretDown size={11} /> : <CaretRight size={11} />}
 				{name}
@@ -97,7 +96,7 @@ export function Tool({
 				) : (
 					<Check size={11} weight="bold" className="text-green-400" />
 				)}
-				{preview && <span className="ml-1 font-normal text-neutral-600">{preview}</span>}
+				{preview && <span className="fade-end ml-1 min-w-0 font-normal text-neutral-600">{preview}</span>}
 			</button>
 			{open && (
 				<div className="chat-code mt-1 max-h-80 overflow-auto rounded-sm bg-neutral-900 p-2 text-neutral-400">
@@ -201,14 +200,14 @@ export function ToolGroup({ blocks, streaming }: { blocks: PiBlock[]; streaming?
 					: plural(thoughts, "Thought", "Thought {n} times")
 				: plural(blocks.length, "{n} step", "{n} steps");
 	return (
-		<div className="chat-wide my-1">
+		<div className="chat-wide my-3">
 			<button
 				data-custom="transcript disclosure"
 				onClick={() => setOpen((o) => !o)}
-				className="flex items-center gap-1 font-mono text-body text-neutral-500 hover:text-neutral-300"
+				className="flex max-w-full items-center gap-1 whitespace-nowrap chat-code font-mono text-neutral-500 hover:text-neutral-300"
 			>
 				{open ? <CaretDown size={11} /> : <CaretRight size={11} />}
-				{label}
+				<span className="fade-end min-w-0">{label}</span>
 				{/* No spinner while running: TurnStatus below already animates, and a
 				    second one on a line that joins and splits between messages
 				    flickered. */}
@@ -222,7 +221,7 @@ export function ToolGroup({ blocks, streaming }: { blocks: PiBlock[]; streaming?
 				)}
 			</button>
 			{open && (
-				<div className="chat-nested mt-1 border-l border-neutral-800 pl-3">
+				<div className="chat-nested flow-trim mt-1 flow-root border-l border-neutral-800 pl-3">
 					{blocks.map((b, i) => (
 						<Block key={i} block={b} isUser={false} autoOpenTools={false} />
 					))}
@@ -263,16 +262,14 @@ export function Block({
 			<img
 				src={`data:${block.mimeType};base64,${block.data}`}
 				alt={t("attachment")}
-				className="chat-wide my-2 max-h-80 rounded-sm border border-neutral-800"
+				className="chat-wide my-3 max-h-80 rounded-sm border border-neutral-800"
 			/>
 		);
 	if (block.kind === "thinking")
 		return foldThinking ? (
 			<Thought text={block.text} />
 		) : (
-			<div className="chat-measure text-body whitespace-pre-wrap text-neutral-500 italic">
-				{block.text}
-			</div>
+			<Reasoning text={block.text} />
 		);
 	return (
 		<Tool
@@ -282,6 +279,25 @@ export function Block({
 			args={block.args}
 			autoOpen={autoOpenTools}
 		/>
+	);
+}
+
+/**
+ * Reasoning shown inline. Split into paragraphs so they are spaced like the
+ * answer's (`my-3`), not by a raw blank line of the smaller reasoning text.
+ */
+export function Reasoning({ text, className = "chat-measure my-3" }: { text: string; className?: string }) {
+	return (
+		<div className={`${className} text-neutral-500 italic`}>
+			{text
+				.trim()
+				.split(/\n\s*\n/)
+				.map((p, i) => (
+					<p key={i} className="my-3 whitespace-pre-wrap first:mt-0 last:mb-0">
+						{p}
+					</p>
+				))}
+		</div>
 	);
 }
 
@@ -296,21 +312,17 @@ export function Thought({ text, streaming = false }: { text: string; streaming?:
 		if (!streaming) setOpen(false);
 	}, [streaming]);
 	return (
-		<div className="chat-wide my-1">
+		<div className="chat-wide my-3">
 			<button
 				data-custom="transcript disclosure"
 				aria-expanded={open}
 				onClick={() => setOpen((o) => !o)}
-				className="flex items-center gap-1 font-mono text-body text-neutral-500 hover:text-neutral-300"
+				className="flex items-center gap-1 chat-code font-mono text-neutral-500 hover:text-neutral-300"
 			>
 				{open ? <CaretDown size={11} /> : <CaretRight size={11} />}
 				{streaming ? t("Thinking") : t("Thought")}
 			</button>
-			{open && (
-				<div className="chat-nested mt-1 border-l border-neutral-800 pl-3 text-body whitespace-pre-wrap text-neutral-500 italic">
-					{text}
-				</div>
-			)}
+			{open && <Reasoning text={text} className="chat-nested mt-1 border-l border-neutral-800 pl-3" />}
 		</div>
 	);
 }
@@ -337,7 +349,7 @@ function UserText({ text, mode }: { text: string; mode: UserMode }) {
 	if (mode === "full") return <div className="whitespace-pre-wrap">{text}</div>;
 	return (
 		<>
-			<div ref={ref} className={`whitespace-pre-wrap ${open ? "" : "line-clamp-3"}`}>
+			<div ref={ref} className={`whitespace-pre-wrap ${open || !overflows ? "" : "fade-clamp"}`}>
 				{text}
 			</div>
 			{overflows && (
@@ -569,7 +581,7 @@ export function ContextPanel({
 						{expanded ? <CaretDown size={12} /> : <CaretRight size={12} />}
 					</span>
 				)}
-				<span className={`min-w-0 truncate ${l.mono ? "font-mono" : ""}`}>{l.name}</span>
+				<span className={`min-w-0 fade-end ${l.mono ? "font-mono" : ""}`}>{l.name}</span>
 				{l.detail && <span className="shrink-0 text-neutral-500">{l.detail}</span>}
 				<span aria-hidden className="ml-auto h-1 w-16 shrink-0 overflow-hidden rounded-full bg-neutral-800">
 					<span className={`block h-full ${PARTS[key].color}`} style={{ width: `${(i.tokens / of) * 100}%` }} />
@@ -829,7 +841,7 @@ export function TurnStatus({ since }: { since: number | undefined }) {
 	const slot = Math.floor((now - start) / VERB_MS);
 	const verb = useMemo(randomVerb, [slot]);
 	return (
-		<div className="chat-gutter py-3" role="status">
+		<div className="chat-gutter my-3" role="status">
 			<div className="chat-measure flex items-center gap-2 text-body text-neutral-500">
 				<span aria-hidden className="w-4 text-center text-amber-400">
 					{spinner}
@@ -927,7 +939,7 @@ export function TranscriptRow({
 	role: PiMessage["role"];
 	labelled: boolean;
 	children: ReactNode;
-	/** User rows only: actions under the pill, shown on hover. */
+	/** Under the pill (user, shown on hover) or under the answer (its footer). */
 	below?: ReactNode;
 }) {
 	if (role === "user") {
@@ -961,7 +973,10 @@ export function TranscriptRow({
 					{role === "assistant" ? t("assistant") : role}
 				</div>
 			)}
-			<div className="chat-prose">{children}</div>
+			<div className={`chat-prose ${labelled ? "flow-trim-start" : ""} ${below ? "flow-trim-end" : ""}`}>
+				{children}
+			</div>
+			{below}
 		</div>
 	);
 }
@@ -1029,6 +1044,8 @@ export function Message({
 					<IconButton size="sm" label={t("Edit")} onClick={() => setEditing(true)}>
 						<PencilSimple size={14} />
 					</IconButton>
+				) : footer ? (
+					<AnswerFooter footer={footer} text={text} onFork={onFork} />
 				) : undefined
 			}
 		>
@@ -1044,9 +1061,6 @@ export function Message({
 			{rest.map((b, i) => (
 				<Block key={i} block={b} isUser={isUser} autoOpenTools={autoOpenTools} userMode={userMode} foldThinking={foldThinking} />
 			))}
-			{footer && (
-				<AnswerFooter footer={footer} text={text} onFork={onFork} />
-			)}
 		</TranscriptRow>
 	);
 }

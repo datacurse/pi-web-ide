@@ -214,7 +214,7 @@ export function FileEditor({
 	return (
 		<div className="flex min-h-0 min-w-0 flex-1 flex-col bg-neutral-950" onKeyDown={onKeyDown}>
 			<PanelHeader>
-				<span className="min-w-0 truncate font-mono text-meta text-neutral-400" title={path}>
+				<span className="min-w-0 fade-end font-mono text-meta text-neutral-400" title={path}>
 					{shortPath(path, cwd)}
 				</span>
 				<Button

@@ -102,5 +102,5 @@ export function preview(tool: string, args: unknown): string {
 				? a.path
 				: JSON.stringify(args ?? {});
 	const line = text.replace(/\s+/g, " ").trim();
-	return line.length > 160 ? `${line.slice(0, 159)}…` : line;
+	return line.slice(0, 160);
 }

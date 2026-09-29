@@ -114,10 +114,10 @@ function FileRow({
 			style={{ paddingLeft: `${0.75 + depth}rem` }}
 		>
 			<FileGlyph name={name} size={13} />
-			<span className="truncate">{name}</span>
+			<span className="fade-end">{name}</span>
 			{/* The directory is context, not identity: dimmed, and the first
 			    thing to be given up when the panel is narrow. */}
-			{dir && <span className="min-w-0 truncate text-neutral-500">{dir}</span>}
+			{dir && <span className="min-w-0 fade-end text-neutral-500">{dir}</span>}
 			<span className="ml-auto flex shrink-0 items-center pl-1">
 				<StatusMark status={change.status} />
 			</span>
@@ -196,9 +196,9 @@ function RepoRow({
 	return (
 		<ListRow selected={selected} onClick={onSelect} title={cwd}>
 			<FolderSimple size={13} className="shrink-0 text-neutral-500" />
-			<span className="truncate">{name}</span>
+			<span className="fade-end">{name}</span>
 			{state?.branch && (
-				<span className="min-w-0 truncate font-mono text-meta text-neutral-500">{state.branch}</span>
+				<span className="min-w-0 fade-end font-mono text-meta text-neutral-500">{state.branch}</span>
 			)}
 			{changed > 0 && <span className="ml-auto shrink-0 pl-1 text-caption text-neutral-500">{changed}</span>}
 		</ListRow>
@@ -592,7 +592,7 @@ function RepoView({
 									{expanded ? <CaretDown size={11} /> : <CaretRight size={11} />}
 								</span>
 								<GitCommit size={13} className="shrink-0 text-neutral-600" />
-								<span className="truncate">{c.subject}</span>
+								<span className="fade-end">{c.subject}</span>
 								{/*
 								 * "3 hours ago" on all fifty rows is the same three words
 								 * repeated down a 300px column, which crowds out the subject
@@ -632,7 +632,7 @@ function Header({ branch, onClose }: { branch: string; onClose: () => void }) {
 			{branch && (
 				<span
 					title={t("On branch {branch}", { branch })}
-					className="min-w-0 truncate font-mono text-meta text-neutral-500"
+					className="min-w-0 fade-end font-mono text-meta text-neutral-500"
 				>
 					{branch}
 				</span>

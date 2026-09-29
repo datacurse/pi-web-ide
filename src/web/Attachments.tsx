@@ -1,4 +1,11 @@
-import { createContext, useContext, useEffect } from "react";
+import {
+	createContext,
+	type RefObject,
+	useContext,
+	useEffect,
+	useLayoutEffect,
+	useState,
+} from "react";
 import { X } from "@phosphor-icons/react";
 import type { PiImage } from "../shared/types.js";
 import { t } from "./i18n.js";
@@ -109,13 +116,47 @@ export function Thumb({
  * size has to be one click away — and it is an overlay rather than a new tab
  * because the data is a base64 URL: a tab would show a megabyte of address
  * bar and, in some browsers, refuse to navigate to it at all.
+ *
+ * It spans the whole window but stops just above the last line of `above`
+ * (the composer's field), the line you type on: you open a picture to
+ * describe it, so that line has to stay usable under it. The field grows
+ * upward, so its last line, and the overlay's edge, stay put as you type.
  */
-export function Lightbox({ src, onClose }: { src: string; onClose: () => void }) {
+export function Lightbox({
+	src,
+	above,
+	onClose,
+}: {
+	src: string;
+	above: RefObject<HTMLElement | null>;
+	onClose: () => void;
+}) {
+	const [bottom, setBottom] = useState(0);
+	useLayoutEffect(() => {
+		const el = above.current;
+		if (!el) return;
+		const measure = () =>
+			setBottom(
+				window.innerHeight -
+					el.getBoundingClientRect().bottom +
+					parseFloat(getComputedStyle(el).lineHeight),
+			);
+		measure();
+		const ro = new ResizeObserver(measure);
+		ro.observe(el);
+		window.addEventListener("resize", measure);
+		return () => {
+			ro.disconnect();
+			window.removeEventListener("resize", measure);
+		};
+	}, [above]);
+
 	// Escape closes, because that is what every overlay in this app answers to
 	// and because the click target (the backdrop) is not obvious.
 	useEffect(() => {
 		const onKey = (e: KeyboardEvent) => {
-			if (e.key === "Escape") onClose();
+			// Not when the composer already used it (closing the command picker).
+			if (e.key === "Escape" && !e.defaultPrevented) onClose();
 		};
 		window.addEventListener("keydown", onKey);
 		return () => window.removeEventListener("keydown", onKey);
@@ -124,17 +165,14 @@ export function Lightbox({ src, onClose }: { src: string; onClose: () => void })
 	return (
 		<div
 			role="dialog"
-			aria-modal="true"
 			aria-label={t("Attachment")}
 			onClick={onClose}
-			className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-6"
+			style={{ bottom }}
+			className="fixed inset-x-0 top-0 z-50 flex items-center justify-center bg-black/80 p-6"
 		>
-			{/* The image itself does not close on click: dragging to select or
-			    right-clicking to save must not dismiss what you are looking at. */}
 			<img
 				src={src}
 				alt={t("Attachment, full size")}
-				onClick={(e) => e.stopPropagation()}
 				className="max-h-full max-w-full rounded-sm border border-neutral-700 object-contain"
 			/>
 		</div>

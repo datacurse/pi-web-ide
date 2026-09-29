@@ -33,6 +33,7 @@ import {
 	Footer,
 	Message,
 	Notices,
+	Reasoning,
 	Thought,
 	Tool,
 	ToolGroup,
@@ -113,7 +114,7 @@ function CommandPicker({
 					<span className="font-mono text-neutral-100">{o.label}</span>
 					{o.source && <span className="font-mono text-meta text-neutral-500">{o.source}</span>}
 					{o.description && (
-						<span className="truncate text-meta text-neutral-400">{o.description}</span>
+						<span className="fade-end text-meta text-neutral-400">{o.description}</span>
 					)}
 				</div>
 			))}
@@ -817,9 +818,7 @@ export function Chat({
 								/>
 							)}
 							{!folds && thinkingMode === "shown" && partial.thinking && (
-								<div className="chat-measure text-body whitespace-pre-wrap text-neutral-500 italic">
-									{partial.thinking}
-								</div>
+								<Reasoning text={partial.thinking} />
 							)}
 							{showTools &&
 								!folds &&
@@ -1142,7 +1141,7 @@ export function Chat({
 				</div>
 
 				{/* Last, so it paints over everything: an expanded attachment. */}
-				{zoomed && <Lightbox src={zoomed} onClose={() => setZoomed(null)} />}
+				{zoomed && <Lightbox src={zoomed} above={composer} onClose={() => setZoomed(null)} />}
 			</main>
 		</ZoomContext.Provider>
 	);

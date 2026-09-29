@@ -336,7 +336,7 @@ export function SessionList({
 											: ""
 								}`}
 							>
-								<div className="flex items-center gap-1.5 truncate text-ui text-neutral-200">
+								<div className="flex items-center gap-1.5 fade-end text-ui text-neutral-200">
 									{/* The session's state, the same colors as its tab π: amber
 									    pulsing while it works, steady amber for a new reply, red
 									    for a question. */}
@@ -349,7 +349,7 @@ export function SessionList({
 											title={t(ATTENTION_UI[state].label)}
 										/>
 									)}
-									<span className="truncate">
+									<span className="fade-end">
 										{naming === s.path ? t("Naming…") : highlight(label, terms)}
 									</span>
 								</div>
@@ -361,7 +361,7 @@ export function SessionList({
 								  sort mode exists to answer.
 								*/}
 								{snippet ? (
-									<div className="mt-0.5 truncate text-meta text-neutral-500">
+									<div className="mt-0.5 fade-end text-meta text-neutral-500">
 										{highlight(snippet, terms)}
 									</div>
 								) : (

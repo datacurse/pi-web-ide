@@ -328,7 +328,7 @@ export function GitActions({
 					 * decision, so it belongs where the decision is made — and it is
 					 * the branch that matters as much as the host.
 					 */}
-					<p className="truncate px-3 pt-0.5 pb-1.5 text-meta text-neutral-500">
+					<p className="fade-end px-3 pt-0.5 pb-1.5 text-meta text-neutral-500">
 						<span className="text-neutral-400">{state.branch}</span>
 						{state.remote ? ` → ${state.upstream || t("{remote} (new)", { remote: state.remote })}` : ` · ${t("no remote")}`}
 					</p>
@@ -397,7 +397,7 @@ export function GitActions({
 					data-custom="composer pill"
 					onClick={() => setResult(null)}
 					title={result.error}
-					className="max-w-60 truncate rounded-full px-2 py-1 text-meta text-red-400 hover:text-red-300"
+					className="max-w-60 fade-end rounded-full px-2 py-1 text-meta text-red-400 hover:text-red-300"
 				>
 					{result.error ?? t("Failed")}
 				</button>
@@ -407,7 +407,7 @@ export function GitActions({
 					href={result.url}
 					target="_blank"
 					rel="noreferrer"
-					className="max-w-60 truncate rounded-full px-2 py-1 text-meta text-neutral-400 hover:text-neutral-200"
+					className="max-w-60 fade-end rounded-full px-2 py-1 text-meta text-neutral-400 hover:text-neutral-200"
 				>
 					{t("Pull request ↗")}
 				</a>
@@ -507,7 +507,7 @@ function GitDialog({
 			>
 				<div className="mb-3 flex items-baseline justify-between gap-2">
 					<h2 className="text-title font-semibold text-neutral-100">{t(action.label)}</h2>
-					<span className="truncate font-mono text-meta text-neutral-500">
+					<span className="fade-end font-mono text-meta text-neutral-500">
 						{state.branch}
 						{state.changed > 0 ? ` · ${t("{n} changed", { n: state.changed })}` : ""}
 					</span>

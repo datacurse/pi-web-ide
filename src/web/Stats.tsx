@@ -843,7 +843,7 @@ function Bars({ title, rows }: { title?: string; rows: [string, number][] }) {
 			<div className="flex flex-col gap-1">
 				{rows.map(([label, n]) => (
 					<div key={label} className="flex items-center gap-2 text-meta">
-						<span className="w-28 shrink-0 truncate text-neutral-300" title={label}>
+						<span className="w-28 shrink-0 fade-end text-neutral-300" title={label}>
 							{label}
 						</span>
 						<div className="h-2 min-w-0 flex-1">
@@ -923,7 +923,7 @@ function ToolCosts({ turns }: { turns: StatsTurn[] }) {
 					</div>
 					{rows.map(([key, c]) => (
 						<div key={key} className="flex items-center gap-2">
-							<span className="w-48 shrink-0 truncate font-mono text-neutral-300" title={key}>
+							<span className="w-48 shrink-0 fade-end font-mono text-neutral-300" title={key}>
 								{key}
 							</span>
 							<div className="h-2 min-w-0 flex-1">
@@ -974,8 +974,8 @@ function Outliers({ title, by, turns }: { title: string; by: "ms" | "tokens"; tu
 						className="flex items-center gap-2"
 						title={`${o.preview}\n${stampFmt().format(new Date(o.turn.start))} · ${projectName(o.turn.cwd)} · ${o.turn.prompt}`}
 					>
-						<span className="w-12 shrink-0 truncate font-mono text-neutral-500">{o.key.split(":")[0]}</span>
-						<span className="min-w-0 flex-1 truncate font-mono text-neutral-300">{o.preview}</span>
+						<span className="w-12 shrink-0 fade-end font-mono text-neutral-500">{o.key.split(":")[0]}</span>
+						<span className="min-w-0 flex-1 fade-end font-mono text-neutral-300">{o.preview}</span>
 						<span className="w-14 shrink-0 text-right tabular-nums text-neutral-200">
 							{by === "ms" ? callDuration(o.ms) : num().format(o.tokens)}
 						</span>
@@ -1007,7 +1007,7 @@ function Background({ turns }: { turns: StatsTurn[] }) {
 						className="flex items-center gap-2"
 						title={`${b.text}\n${stampFmt().format(new Date(b.turn.start))} \u00b7 ${projectName(b.turn.cwd)} \u00b7 ${b.turn.prompt}`}
 					>
-						<span className="min-w-0 flex-1 truncate font-mono text-neutral-300">{b.text}</span>
+						<span className="min-w-0 flex-1 fade-end font-mono text-neutral-300">{b.text}</span>
 						<span className="w-14 shrink-0 text-right tabular-nums text-neutral-200">{callDuration(b.ms)}</span>
 					</li>
 				))}
@@ -1028,7 +1028,7 @@ function Answers({ turns }: { turns: StatsTurn[] }) {
 					return (
 						<li key={`${turn.session}-${turn.start}`} className="border-b border-neutral-800 py-1.5">
 							<div className="flex items-center gap-2">
-								<span className="min-w-0 flex-1 truncate text-neutral-200" title={turn.prompt}>
+								<span className="min-w-0 flex-1 fade-end text-neutral-200" title={turn.prompt}>
 									{turn.prompt || t("(image)")}
 								</span>
 								{(turn.outcome === "error" || turn.outcome === "aborted") && (
@@ -1041,7 +1041,7 @@ function Answers({ turns }: { turns: StatsTurn[] }) {
 								{turn.machine && <span className="shrink-0 text-caption text-neutral-400">{turn.machine}</span>}
 								<span className="shrink-0 text-caption text-neutral-400 tabular-nums">{duration(turn.ms)}</span>
 							</div>
-							<div className="truncate text-meta text-neutral-500">
+							<div className="fade-end text-meta text-neutral-500">
 								{stampFmt().format(new Date(turn.start))} · {projectName(turn.cwd)} · {turn.model || "?"}
 								{tools > 0 && ` · ${plural(tools, "{n} tool", "{n} tools")}`}
 								{turn.cost > 0 && ` · ${usd().format(turn.cost)}`}

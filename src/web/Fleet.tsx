@@ -90,11 +90,11 @@ function Row({
 					className={`size-2 shrink-0 rounded-full ${m.online ? "bg-green-500" : "bg-neutral-700"}`}
 				/>
 				<div className="min-w-0 flex-1">
-					<p className={`truncate ${m.online ? "text-neutral-100" : "text-neutral-500"}`}>
+					<p className={`fade-end ${m.online ? "text-neutral-100" : "text-neutral-500"}`}>
 						{m.name}
 						{m.self && <span className="ml-2 text-caption text-neutral-500">{t("this PC")}</span>}
 					</p>
-					<p className="truncate text-meta text-neutral-500">
+					<p className="fade-end text-meta text-neutral-500">
 						{[m.os, m.ip, m.self ? null : `ssh ${m.ssh}`].filter(Boolean).join(" · ")}
 					</p>
 				</div>

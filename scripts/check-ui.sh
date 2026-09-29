@@ -15,6 +15,7 @@ check "Hand-rolled subtle button (use <Button variant=\"subtle\">)" 'rounded-sm 
 check "Hand-rolled input (use inputClass)" 'outline-none[^"`]*focus(-visible)?:border-'
 check "Hand-rolled section label (use sectionLabel)" 'text-caption tracking-wide text-neutral-500 uppercase'
 check "Arbitrary spacing or height (use the 4px scale or a control token)" '\b-?(p|m)[xytblr]?-\[[0-9.]+px\]|\b(gap(-[xy])?|h|size|min-h)-\[[0-9.]+px\]'
+check "Ellipsis truncation (use fade-end; line-clamp: fade-clamp)" '^(?!.*(pill-select|inputClass)).*\b(truncate|text-ellipsis|line-clamp-\d)\b'
 check "Icon weight stripped from the build (use regular, bold or fill)" '\b(weight=|weight:\s*)[^>]*"(thin|light|duotone)"'
 if ! out=$(perl ../../scripts/check-raw.pl ./*.tsx); then
 	echo "Raw element (use a ui.tsx primitive, inputClass, or data-custom=\"reason\"):"; echo "$out"; fail=1

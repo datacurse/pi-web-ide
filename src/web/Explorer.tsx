@@ -227,7 +227,7 @@ function TreeDir({
 					<span className="flex w-4 shrink-0 justify-center text-neutral-500" aria-hidden>
 						{open ? <CaretDown size={14} /> : <CaretRight size={14} />}
 					</span>
-					<span className="truncate">{entry.name}</span>
+					<span className="fade-end">{entry.name}</span>
 				</ListRow>
 			)}
 			{open && adding && <NameRow depth={depth + 1} dir={adding.kind === "folder"} initial="" />}
@@ -289,7 +289,7 @@ function TreeFile({
 			style={{ paddingLeft: `${depth * 12 + 4}px` }}
 		>
 			<FileGlyph name={entry.name} />
-			<span className="truncate">{entry.name}</span>
+			<span className="fade-end">{entry.name}</span>
 		</ListRow>
 	);
 }

@@ -46,7 +46,9 @@ left alone and startup fails.
 
 - **Sessions**: tabs restored on reload, split columns, full-text search,
   rename or auto-name, fork from any answer, drafts kept across reloads.
-- **Chat**: image paste/drop, file uploads, slash-command picker, thinking
+- **Chat**: image paste/drop (click one to expand it across the window
+  while the composer stays usable, so you can describe what you see),
+  file uploads, slash-command picker, thinking
   level, context meter, KaTeX math, answers to `ask`/`confirm`/`select`
   questions, desktop notification when a run finishes.
 - **Files**: explorer, CodeMirror editor, conflict-safe saves (409 when the

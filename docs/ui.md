@@ -17,7 +17,8 @@ fits none of the existing ones, and record it here.
 | `text-body`         | 14px   | Content: chat tool output, notices, questions, editors, tables. |
 | `text-title`        | 16px   | Dialog titles, empty-state heading.              |
 | `text-display`      | 48px   | The π mark only.                                 |
-| `.chat-prose`       | 17px   | Assistant/user prose (`--prose-size`).           |
+| `.chat-prose`       | 17px   | Assistant/user prose (`--prose-size`), and reasoning. |
+| `.chat-code`        | 15px   | Code blocks, tool/group/thought lines (`--code-size`, the optical match for 17px sans). |
 | `text-h1/h2/h3`     | em     | Markdown headings, relative to prose.            |
 | `text-code-inline`  | 0.875em | Inline code and math fallback inside prose.     |
 
@@ -36,6 +37,8 @@ fits none of the existing ones, and record it here.
 - Hierarchy comes from color and weight first, size second. Section labels are
   `text-caption uppercase tracking-wide text-neutral-500`.
 - Arbitrary sizes (`text-[13px]`) are banned.
+- An answer reads as one size: prose and reasoning 17px, its mono lines 15px.
+  Reasoning and tool lines recede by color and italics, not by size.
 
 ## Radius
 
@@ -54,6 +57,18 @@ fits none of the existing ones, and record it here.
 - Spacing uses Tailwind's 4px scale: `0.5 1 1.5 2 3 4 6`. Markdown's `pl-5`
   list indent and em-based prose margins are the only exceptions.
 - Arbitrary px spacing or heights (`py-[5px]`, `h-[30px]`) fail the check.
+- An answer has one vertical gap: every block (paragraph, list, code, table,
+  reasoning paragraph, tool/group/thought line) is `my-3` and margins collapse.
+  Markdown renders without a wrapper div so its blocks are siblings of the tool
+  lines. `.flow-trim-start` / `-end` / `.flow-trim` (index.css) drop the gap under
+  the speaker label, above the answer footer and inside an opened group.
+
+## Overflowing text
+
+- Cut-off text fades out over its end (`.fade-end`), never `…`. `truncate`,
+  `text-ellipsis` and `line-clamp-*` fail the check (except `<select>`/inputs,
+  where a mask cannot follow the text). Multi-line: `.fade-clamp` (3 lines).
+- Tool call lines are always one line; the result preview fades.
 
 | Token            | Size | Use                                              |
 | ---------------- | ---- | ------------------------------------------------ |
@@ -126,6 +141,10 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
     (`ArrowsOutLineVertical` / `ArrowsInLineVertical`).
   - The panel floats over the transcript (absolute, above the box) and grows with its
     content up to the top of the chat, then scrolls; it never moves the layout.
+- Clicking an image thumbnail (staged or sent) expands it across the whole window width
+  (explorer, columns, sessions list), from the top down to just above the line you type on,
+  `bg-black/80`. The composer stays visible and usable below it so you can describe
+  the picture while looking at it. Escape or any click on it (image included) closes it.
 - Placeholder is `Message pi…`; key hints live in the textarea's `title`. The field
   uses `field-sizing-content max-h-60` and grows as you type.
 
@@ -137,7 +156,7 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
   It floats over the label's end (no reserved padding, a short fade behind it), so
   labels use the full tab width.
 - Tabs are split by a `neutral-800` rule on each tab's right edge.
-- A cut-off tab label fades out over its last 2em (`.fade-end` in index.css), no `…`.
+- A cut-off tab label fades out over its last 2em (`.fade-end`, see Overflowing text).
 - Right-click any tab → `ContextMenu`, groups split by `MenuSeparator`:
   1. Session tabs: `Pin Tab` / `Unpin Tab` (the session list's pins), `Rename…`
      (`window.prompt`). File tabs: `Reveal in Explorer` (opens the Explorer, expands
@@ -202,7 +221,7 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
 
 ## User message bubble
 
-- Text is clamped to 3 lines (`line-clamp-3`, ellipsis). When it overflows, a ghost
+- Text is clamped to 3 lines (`.fade-clamp`, the last line fades). When it overflows, a ghost
   `Button size="sm"` below it toggles `Show more` / `Show less` with a 12px caret.
   Settings → Transcript → `Your messages` picks Collapsed (default), Expanded (starts
   open, `Show less` still shown) or Always full (no clamp, no button); `pwi:userMessages`.
@@ -217,7 +236,7 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
 
 - Settings → Transcript → `Reasoning`: Shown (default, italic `neutral-500` text), Folded
   or Hidden (`pwi:showThinking`: `1` / `fold` / `0`).
-- Folded is `Thought`: a disclosure line like a tool call (11px caret, mono `text-body`
+- Folded is `Thought`: a disclosure line like a tool call (11px caret, mono `chat-code`
   `neutral-500`), `Thinking` while the model is still thinking and open, then `Thought`
   and folded once text or a tool call starts. The text sits under a `border-l` like a group.
 - In the Grouped and Answer only tool modes reasoning folds into the group either way.

@@ -1,4 +1,4 @@
-import { memo, useMemo, useState } from "react";
+import { Fragment, memo, useMemo, useState } from "react";
 import Markdown, { RuleType, type MarkdownToJSX } from "markdown-to-jsx";
 
 import { extractMath, PLACEHOLDER, type MathSpan } from "./math.js";
@@ -28,7 +28,7 @@ function CodeBlock({ lang, text }: { lang?: string; text: string }) {
 	};
 
 	return (
-		<div className="chat-wide group relative my-2">
+		<div className="chat-wide group relative my-3">
 			{lang && (
 				<div className="absolute top-1.5 left-2 font-mono text-caption text-neutral-600 select-none">{lang}</div>
 			)}
@@ -131,6 +131,9 @@ const options: MarkdownToJSX.Options = {
 	 * column's left edge. The shortest answers were the misaligned ones.
 	 */
 	forceBlock: true,
+	// No wrapper div: every block is a sibling of the tool lines and reasoning
+	// around it, so their `my-3` margins collapse into one gap.
+	wrapper: Fragment,
 	overrides: {
 		a: {
 			component: ({ children, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement>) => (
@@ -139,22 +142,21 @@ const options: MarkdownToJSX.Options = {
 				</a>
 			),
 		},
-		ul: { props: { className: "chat-measure my-2 list-disc pl-5" } },
-		ol: { props: { className: "chat-measure my-2 list-decimal pl-5" } },
+		ul: { props: { className: "chat-measure my-3 list-disc pl-5" } },
+		ol: { props: { className: "chat-measure my-3 list-decimal pl-5" } },
 		blockquote: {
-			props: { className: "chat-measure my-1 border-l-2 border-neutral-700 pl-2 text-neutral-400 italic" },
+			props: { className: "chat-measure my-3 border-l-2 border-neutral-700 pl-2 text-neutral-400 italic" },
 		},
 		h1: { props: { className: "chat-measure mt-3 mb-1 text-h1 font-semibold" } },
 		h2: { props: { className: "chat-measure mt-3 mb-1 text-h2 font-semibold" } },
 		h3: { props: { className: "chat-measure mt-3 mb-1 text-h3 font-semibold" } },
 		h4: { props: { className: "chat-measure mt-2 mb-1 text-h3 font-semibold" } },
-		table: { props: { className: "chat-wide my-2 border-collapse text-body" } },
+		table: { props: { className: "chat-wide my-3 border-collapse text-body" } },
 		th: { props: { className: "border border-neutral-800 px-2 py-1 text-left font-semibold" } },
 		td: { props: { className: "border border-neutral-800 px-2 py-1" } },
-		// Paragraph spacing tracks the text size rather than a fixed 4px: at
-		// 17px/1.6 a `my-1` gap is tighter than the line spacing inside the
-		// paragraph, which reads as one undifferentiated slab.
-		p: { props: { className: "chat-measure my-[0.75em] first:mt-0 last:mb-0" } },
+		// `my-3` is the one gap between every block in an answer (paragraphs,
+		// reasoning, tool lines); margins collapse, so neighbours never add up.
+		p: { props: { className: "chat-measure my-3" } },
 	},
 };
 

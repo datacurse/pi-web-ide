@@ -261,7 +261,7 @@ export function DiffView({
 	return (
 		<div className="flex min-h-0 min-w-0 flex-1 flex-col bg-neutral-950">
 			<PanelHeader>
-				<span className="min-w-0 truncate font-mono text-meta text-neutral-400" title={path}>
+				<span className="min-w-0 fade-end font-mono text-meta text-neutral-400" title={path}>
 					{shortPath(path, cwd)}
 				</span>
 				<span className="shrink-0 text-meta text-neutral-500">
