@@ -662,23 +662,24 @@ body {
 	mask-repeat: no-repeat;
 }
 
-/* The transcript fades from the top of the git buttons plus their `mb-2` gap (3.5rem up) to nothing at the composer's
+/* The transcript fades from the top of the git buttons plus their `mb-2` gap (3.5rem up) to 0.2 at the composer's
    top edge, which overlaps the transcript by 0.75rem (Chat.tsx `-mt-3`). */
 .fade-bottom {
-	/* Ease-out, opacity (1 - t)^3: dims hard at the start and settles gently into the box. */
+	/* Opacity 0.2 + 0.8(1-t^1.5)^3: eases in, dims fast, settles at 0.2, never black. */
 	mask-image: linear-gradient(
 		to bottom,
 		#000 calc(100% - 3.5rem),
-		rgb(0 0 0 / 0.729) calc(100% - 3.225rem),
-		rgb(0 0 0 / 0.512) calc(100% - 2.95rem),
-		rgb(0 0 0 / 0.343) calc(100% - 2.675rem),
-		rgb(0 0 0 / 0.216) calc(100% - 2.4rem),
-		rgb(0 0 0 / 0.125) calc(100% - 2.125rem),
-		rgb(0 0 0 / 0.064) calc(100% - 1.85rem),
-		rgb(0 0 0 / 0.027) calc(100% - 1.575rem),
-		rgb(0 0 0 / 0.008) calc(100% - 1.3rem),
-		rgb(0 0 0 / 0.001) calc(100% - 1.025rem),
-		transparent calc(100% - 0.75rem)
+		rgb(0 0 0 / 0.973) calc(100% - 3.362rem),
+		rgb(0 0 0 / 0.926) calc(100% - 3.225rem),
+		rgb(0 0 0 / 0.804) calc(100% - 2.95rem),
+		rgb(0 0 0 / 0.667) calc(100% - 2.675rem),
+		rgb(0 0 0 / 0.533) calc(100% - 2.4rem),
+		rgb(0 0 0 / 0.416) calc(100% - 2.125rem),
+		rgb(0 0 0 / 0.323) calc(100% - 1.85rem),
+		rgb(0 0 0 / 0.257) calc(100% - 1.575rem),
+		rgb(0 0 0 / 0.218) calc(100% - 1.3rem),
+		rgb(0 0 0 / 0.202) calc(100% - 1.025rem),
+		rgb(0 0 0 / 0.2) calc(100% - 0.75rem)
 	);
 }
 

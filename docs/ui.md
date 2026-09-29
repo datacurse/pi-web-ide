@@ -123,10 +123,11 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
 - That row (jump-to-latest and git) floats over the transcript's bottom edge with no
   band or background of its own; the transcript scrolls under it (`pb-12` keeps its
   last line clear). No gap between the transcript and the box: the transcript fades from 8px
-  (the buttons' gap to the box) above the top of the git buttons to fully transparent at the box's top edge (`.fade-bottom`), along
-  an ease-out curve, opacity `(1 - t)^3`: it dims hard at the start and settles gently
-  into the box. Tried and rejected: linear / CIE L*-even (felt like it darkened faster
-  and faster) and Larsen's scrim (worse still).
+  (the buttons' gap to the box) above the top of the git buttons to 0.2 opacity at the box's top edge (`.fade-bottom`), along
+  `0.2 + 0.8(1-t^1.5)^3`: it eases in, dims fast, and settles at 0.2, never black. Tried and
+  rejected: `0.2 + 0.8(1-t)^3` (entry too abrupt), linear / CIE L*-even (felt like it darkened faster and faster), Larsen's scrim
+  (worse still), pure `(1-t)^3` (right start, but a near-black band above the box) and
+  `0.8(1-t)^4 + 0.2(1-t^4)` (held dim, but still ended at zero).
 - The box overlaps the transcript by its radius (`-mt-3`), so text shows behind its
   corners, and sticks out of the reading column by its padding (`-mx-3`), so the typed
   text lines up with the response text, like Cursor. To keep that exact, the transcript
@@ -326,7 +327,10 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
   closes its editor tabs too. The PTY has one size: whichever view last took focus sets it.
 - Right-clicking the transcript (or an empty column) opens `New AI Session` / `New Terminal
   Tab`, both in that column. Not over buttons or the composer area (the box, git row and
-  jump-to-latest, `data-no-column-menu`). The browser keeps its own menu over selected
+  jump-to-latest, `data-no-column-menu`). Under a `MenuSeparator` it offers `Copy Chat`,
+  `Copy Chat with Reasoning` and `Copy Chat with Reasoning and Tools`: Markdown
+  (`chatExport.ts`), a `## You` / `## pi` heading per speaker change, reasoning as a
+  `>` quote, each tool as its bold name, args and result in fences, nothing cut. The browser keeps its own menu over selected
   text, links, images, the composer, and on Shift+right-click.
 - Fleet, Stats, Packages and Settings are pages, not tabs (tabs are for work: chats, files,
   terminals). The rail's bottom group opens each in one large centered modal

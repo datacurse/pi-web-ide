@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { Plus, TerminalWindow } from "@phosphor-icons/react";
-import type { PiSessionInfo } from "../shared/types.js";
+import { Brain, ChatText, Plus, TerminalWindow, Wrench } from "@phosphor-icons/react";
+import type { PiMessage, PiSessionInfo } from "../shared/types.js";
+import { chatMarkdown, type ChatExport } from "./chatExport.js";
 import type { Hunk } from "../shared/hunks.js";
 import { SessionTabs, tabDomId } from "./SessionTabs.js";
 import { Terminal } from "./Terminal.js";
@@ -10,7 +11,7 @@ import { diffParts, isDiffTab, isFileTab, isTermTab, termId, tabPath } from "./t
 import type { Side, TabGroup } from "./tabs.js";
 import { SplitZone } from "./SplitZone.js";
 import { type Attention } from "./attention.js";
-import { ContextMenu, MenuItem } from "./ui.js";
+import { ContextMenu, MenuItem, MenuSeparator } from "./ui.js";
 import { t } from "./i18n.js";
 
 /**
@@ -45,6 +46,7 @@ export function EditorColumn({
 	hunks,
 	onHunksChanged,
 	chat,
+	messages,
 	focused,
 	onReveal,
 	onTogglePin,
@@ -76,6 +78,8 @@ export function EditorColumn({
 	onHunksChanged: () => void;
 	/** This column's chat, or null when the column holds no session. */
 	chat: React.ReactNode;
+	/** The chat's transcript, for the right-click Copy items. */
+	messages?: PiMessage[];
 	/** In a split, whether this is the column keys and new tabs go to. */
 	focused: boolean;
 	/** Show a file tab's file in the Explorer. */
@@ -95,6 +99,11 @@ export function EditorColumn({
 	const showsTerm = active !== undefined && isTermTab(active);
 	/** The chat hides under a file, a diff or a terminal. */
 	const showsDoc = showsFile || showsDiff || showsTerm;
+	const canCopy = !!chat && !!messages?.length;
+	const copy = (level: ChatExport) => {
+		setMenu(null);
+		if (messages) void navigator.clipboard.writeText(chatMarkdown(messages, level)).catch(() => {});
+	};
 
 	return (
 		<div
@@ -238,6 +247,20 @@ export function EditorColumn({
 					>
 						{t("New Terminal Tab")}
 					</MenuItem>
+					{canCopy && (
+						<>
+							<MenuSeparator />
+							<MenuItem icon={<ChatText size={16} />} role="menuitem" onClick={() => copy("chat")}>
+								{t("Copy Chat")}
+							</MenuItem>
+							<MenuItem icon={<Brain size={16} />} role="menuitem" onClick={() => copy("reasoning")}>
+								{t("Copy Chat with Reasoning")}
+							</MenuItem>
+							<MenuItem icon={<Wrench size={16} />} role="menuitem" onClick={() => copy("tools")}>
+								{t("Copy Chat with Reasoning and Tools")}
+							</MenuItem>
+						</>
+					)}
 				</ContextMenu>
 			)}
 		</div>

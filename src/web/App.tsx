@@ -1825,6 +1825,7 @@ export default function App() {
 					hunks={leftHunks.snapshot?.hunks ?? EMPTY_HUNKS}
 					onHunksChanged={() => void leftHunks.reloadSnapshot()}
 					chat={chatFor(left, "left")}
+					messages={left.snapshot?.messages}
 					focused={!tabs.right || focusedSide === "left"}
 				/>
 
@@ -1858,6 +1859,7 @@ export default function App() {
 						// Only a column holding a session gets a chat; otherwise it says
 						// "drag a tab here" instead of showing an empty conversation.
 						chat={tabs.right.files.some(isSessionTab) ? chatFor(right, "right") : null}
+						messages={right.snapshot?.messages}
 						focused={focusedSide === "right"}
 					/>
 				)}

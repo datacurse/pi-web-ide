@@ -160,7 +160,7 @@ export function ActivityBar({
 			 * Just the release number, because 11px of rail is all there is. The
 			 * commit and the dirty marker are not dropped, only moved into the
 			 * tooltip — they are exactly what you need when two machines both
-			 * claim 0.1.0, so losing them to fit would defeat showing a version
+			 * claim v112, so losing them to fit would defeat showing a version
 			 * at all.
 			 */}
 				<p
