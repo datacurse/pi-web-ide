@@ -463,7 +463,7 @@ function RepoView({
 
 			{/* TOP HALF: the working tree, and what to call it. */}
 			<div className="flex min-h-0 shrink-0 flex-col border-b border-neutral-800">
-				<div className="flex items-start gap-1.5 p-2">
+				<div className="flex p-2 pb-1">
 					<textarea
 						value={message}
 						onChange={(e) => setMessage(e.target.value)}
@@ -477,6 +477,9 @@ function RepoView({
 						}}
 						className={`min-w-0 flex-1 resize-none ${inputClass.sm}`}
 					/>
+				</div>
+
+				<div className="flex items-center justify-between px-2 pb-2">
 					<IconButton
 						onClick={() => void requestName()}
 						disabled={naming || running || !dirty}
@@ -485,6 +488,21 @@ function RepoView({
 					>
 						<Sparkle size={14} className={naming ? "animate-pulse" : undefined} />
 					</IconButton>
+					{/* Auto-name is shared with GitActions' menu: one preference, so
+					    flipping it in either place changes both. */}
+					<label className="flex cursor-pointer items-center gap-2 text-meta text-neutral-500 hover:text-neutral-300">
+						<input
+							type="checkbox"
+							checked={autoName}
+							onChange={(e) => {
+								setAutoName(e.target.checked);
+								writeGitAutoName(e.target.checked);
+							}}
+							// The accent every other checkbox in the app uses (Settings.tsx).
+							className="size-3.5 accent-amber-400"
+						/>
+						{t("Auto-name commits")}
+					</label>
 				</div>
 
 				<Button
@@ -518,22 +536,6 @@ function RepoView({
 						</span>
 					)}
 				</Button>
-
-				{/* Auto-name is shared with GitActions' menu: one preference, so
-				    flipping it in either place changes both. */}
-				<label className="flex cursor-pointer items-center gap-2 px-3 pb-2 text-meta text-neutral-500 hover:text-neutral-300">
-					<input
-						type="checkbox"
-						checked={autoName}
-						onChange={(e) => {
-							setAutoName(e.target.checked);
-							writeGitAutoName(e.target.checked);
-						}}
-						// The accent every other checkbox in the app uses (Settings.tsx).
-						className="size-3.5 accent-amber-400"
-					/>
-					{t("Auto-name commits")}
-				</label>
 			</div>
 
 			{error && (

@@ -47,6 +47,13 @@ export function duration(ms: number): string {
 	return t("{h}h {m}m", { h: Math.floor(m / 60), m: m % 60 });
 }
 
+/** A tool call's time: `340ms`, `2.4s`, then as `duration`. */
+export function callDuration(ms: number): string {
+	if (ms < 1000) return t("{n}ms", { n: Math.round(ms) });
+	if (ms < 60_000) return t("{s}s", { s: (ms / 1000).toFixed(1) });
+	return duration(ms);
+}
+
 /**
  * The heatmap's columns: `weeks` weeks of days ending with the week holding
  * `today`, each column Monday first. Days after today are null.

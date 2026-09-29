@@ -1,7 +1,18 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { Bell, ChatText, ListBullets, Palette, UserCircle } from "@phosphor-icons/react";
 import { Button, inputClass, NavItem, OptionRow, PanelHeader, Section } from "./ui.js";
-import { LANGUAGES, THEMES, TOOL_MODES, type Language, type ThemeId, type ToolMode } from "./prefs.js";
+import {
+	LANGUAGES,
+	THEMES,
+	THINKING_MODES,
+	TOOL_MODES,
+	USER_MODES,
+	type Language,
+	type ThemeId,
+	type ThinkingMode,
+	type ToolMode,
+	type UserMode,
+} from "./prefs.js";
 import { api } from "./api.js";
 import { t } from "./i18n.js";
 
@@ -62,10 +73,12 @@ export function Settings({
 	onTheme,
 	language,
 	onLanguage,
-	showThinking,
-	onShowThinking,
+	thinkingMode,
+	onThinkingMode,
 	toolMode,
 	onToolMode,
+	userMode,
+	onUserMode,
 	notify,
 	onNotify,
 	shortNames,
@@ -77,10 +90,12 @@ export function Settings({
 	onTheme: (theme: ThemeId) => void;
 	language: Language;
 	onLanguage: (language: Language) => void;
-	showThinking: boolean;
-	onShowThinking: (show: boolean) => void;
+	thinkingMode: ThinkingMode;
+	onThinkingMode: (mode: ThinkingMode) => void;
 	toolMode: ToolMode;
 	onToolMode: (mode: ToolMode) => void;
+	userMode: UserMode;
+	onUserMode: (mode: UserMode) => void;
 	notify: boolean;
 	onNotify: (on: boolean) => void;
 	shortNames: boolean;
@@ -265,25 +280,30 @@ export function Settings({
 		},
 		{
 			category: "transcript",
-			label: t("Show thinking"),
-			text: t("Reasoning blocks in assistant messages, as they stream and in history."),
+			label: t("Reasoning"),
+			text: `reasoning thinking ${THINKING_MODES.map((m) => `${t(m.label)} ${t(m.hint)}`).join(" ")}`,
 			node: (
-				// A real checkbox, visible rather than sr-only: there is no swatch
-				// to carry the state, so the box itself is the affordance.
-				<OptionRow>
-					<input
-						type="checkbox"
-						checked={showThinking}
-						onChange={(e) => onShowThinking(e.target.checked)}
-						className="size-4 shrink-0 accent-amber-400"
-					/>
-					<span className="flex-1">
-						{t("Show thinking")}
-						<span className="block text-meta text-neutral-500">
-							{t("Reasoning blocks in assistant messages, as they stream and in history.")}
-						</span>
-					</span>
-				</OptionRow>
+				<div role="radiogroup" aria-labelledby="thinking-mode-label">
+					<div id="thinking-mode-label" className="px-2 pt-1 pb-1 text-ui text-neutral-300">
+						{t("Reasoning")}
+					</div>
+					{THINKING_MODES.map((m) => (
+						<OptionRow key={m.id} selected={m.id === thinkingMode}>
+							<input
+								type="radio"
+								name="thinkingMode"
+								value={m.id}
+								checked={m.id === thinkingMode}
+								onChange={() => onThinkingMode(m.id)}
+								className="size-3.5 shrink-0 accent-amber-400"
+							/>
+							<span className="flex-1">
+								{t(m.label)}
+								<span className="block text-meta text-neutral-500">{t(m.hint)}</span>
+							</span>
+						</OptionRow>
+					))}
+				</div>
 			),
 		},
 		{
@@ -305,6 +325,34 @@ export function Settings({
 								value={m.id}
 								checked={m.id === toolMode}
 								onChange={() => onToolMode(m.id)}
+								className="size-3.5 shrink-0 accent-amber-400"
+							/>
+							<span className="flex-1">
+								{t(m.label)}
+								<span className="block text-meta text-neutral-500">{t(m.hint)}</span>
+							</span>
+						</OptionRow>
+					))}
+				</div>
+			),
+		},
+		{
+			category: "transcript",
+			label: t("Your messages"),
+			text: `prompt collapse expand show more ${USER_MODES.map((m) => `${t(m.label)} ${t(m.hint)}`).join(" ")}`,
+			node: (
+				<div role="radiogroup" aria-labelledby="user-mode-label">
+					<div id="user-mode-label" className="px-2 pt-1 pb-1 text-ui text-neutral-300">
+						{t("Your messages")}
+					</div>
+					{USER_MODES.map((m) => (
+						<OptionRow key={m.id} selected={m.id === userMode}>
+							<input
+								type="radio"
+								name="userMode"
+								value={m.id}
+								checked={m.id === userMode}
+								onChange={() => onUserMode(m.id)}
 								className="size-3.5 shrink-0 accent-amber-400"
 							/>
 							<span className="flex-1">

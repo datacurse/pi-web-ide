@@ -98,18 +98,29 @@ export function applyTheme(id: ThemeId): void {
 }
 
 /**
- * Whether reasoning blocks are rendered in the transcript.
+ * How reasoning blocks are rendered in the transcript.
  *
- * On by default: thinking is why the answer looks the way it does, and hiding
- * it by default would make the transcript quietly incomplete. Anything other
- * than an explicit "0" reads as on, so a corrupt value fails visible.
+ * Shown by default: thinking is why the answer looks the way it does, and hiding
+ * it by default would make the transcript quietly incomplete. `folded` is one
+ * "Thinking" line that stays open while the model thinks and folds once it
+ * moves on. Stored under the old boolean key: "0" is hidden, "fold" folded,
+ * anything else shown, so a corrupt value fails visible.
  */
-export function readShowThinking(): boolean {
-	return readStored(THINKING_KEY) !== "0";
+export const THINKING_MODES = [
+	{ id: "shown", label: "Shown", hint: "As text, as it streams and in history." },
+	{ id: "folded", label: "Folded", hint: "Open while the model thinks, one line once it moves on." },
+	{ id: "hidden", label: "Hidden", hint: "Not shown at all." },
+] as const;
+
+export type ThinkingMode = (typeof THINKING_MODES)[number]["id"];
+
+export function readThinkingMode(): ThinkingMode {
+	const stored = readStored(THINKING_KEY);
+	return stored === "0" ? "hidden" : stored === "fold" ? "folded" : "shown";
 }
 
-export function writeShowThinking(show: boolean): void {
-	writeStored(THINKING_KEY, show ? "1" : "0");
+export function writeThinkingMode(mode: ThinkingMode): void {
+	writeStored(THINKING_KEY, mode === "hidden" ? "0" : mode === "folded" ? "fold" : "1");
 }
 
 /**
@@ -191,6 +202,26 @@ export function readToolMode(): ToolMode {
 
 export function writeToolMode(mode: ToolMode): void {
 	writeStored(TOOL_KEY, mode);
+}
+
+/** How your own long messages show in the transcript. */
+export const USER_MODES = [
+	{ id: "clamped", label: "Collapsed", hint: "Long messages show 3 lines, with Show more." },
+	{ id: "expanded", label: "Expanded", hint: "Shown in full, with Show less." },
+	{ id: "full", label: "Always full", hint: "Shown in full, no button." },
+] as const;
+
+export type UserMode = (typeof USER_MODES)[number]["id"];
+
+const USER_KEY = "pwi:userMessages";
+
+export function readUserMode(): UserMode {
+	const stored = readStored(USER_KEY);
+	return USER_MODES.some((m) => m.id === stored) ? (stored as UserMode) : "clamped";
+}
+
+export function writeUserMode(mode: UserMode): void {
+	writeStored(USER_KEY, mode);
 }
 
 /**

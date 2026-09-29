@@ -12,11 +12,15 @@
  * prompt has none and counts as system prompt whole.
  */
 
-type Block = { type: string; text?: string; thinking?: string; name?: string; arguments?: unknown };
+// With `.ts`: pi's loader, not tsx, resolves this.
+import { contentChars, subKey } from "../shared/toolCalls.ts";
+
+type Block = { type: string; text?: string; thinking?: string; id?: string; name?: string; arguments?: unknown };
 type Message = {
 	role: string;
 	content?: string | Block[];
 	toolName?: string;
+	toolCallId?: string;
 	summary?: string;
 	command?: string;
 	output?: string;
@@ -46,6 +50,7 @@ interface Item {
 	name: string;
 	tokens: number;
 	count?: number;
+	items?: Item[];
 }
 
 const COMMAND = "pwi-context";
@@ -69,24 +74,40 @@ function blocks(text: string, block: RegExp, name: RegExp): Item[] {
 	}));
 }
 
-function contentChars(content: Message["content"]): number {
-	if (typeof content === "string") return content.length;
-	let n = 0;
-	for (const b of content ?? []) {
-		if (b.type === "text") n += b.text?.length ?? 0;
-		else if (b.type === "image") n += 4800;
-	}
-	return n;
+type Tally = { name: string; tokens: number; count: number; subs: Map<string, Tally> };
+
+function bump(into: Map<string, Tally>, name: string, chars: number, count: number): Tally {
+	const k = into.get(name) ?? { name, tokens: 0, count: 0, subs: new Map() };
+	k.tokens += chars;
+	k.count += count;
+	into.set(name, k);
+	return k;
 }
 
-/** Conversation chars by kind, and tool calls plus their results by tool. */
+function items(tallies: Map<string, Tally>): Item[] {
+	return [...tallies.values()]
+		.map(({ name, tokens: chars, count, subs }) => ({
+			name,
+			tokens: tokens(chars),
+			count,
+			...(subs.size > 0 && { items: items(subs) }),
+		}))
+		.filter((k) => k.tokens > 0)
+		.sort((a, b) => b.tokens - a.tokens);
+}
+
+/**
+ * Conversation chars by kind, and tool calls plus their results by tool, and
+ * within a tool by program or file (toolCalls.ts).
+ */
 function conversation(messages: Message[]): Item[] {
-	const kinds = new Map<string, Item>();
-	const add = (name: string, chars: number, count = 0) => {
-		const k = kinds.get(name) ?? { name, tokens: 0, count: 0 };
-		k.tokens += chars;
-		k.count = (k.count ?? 0) + count;
-		kinds.set(name, k);
+	const kinds = new Map<string, Tally>();
+	const home = process.env.HOME;
+	/** A call's sub-item, for its result to land in. */
+	const subs = new Map<string, string>();
+	const add = (name: string, chars: number, count = 0, sub?: string) => {
+		const k = bump(kinds, name, chars, count);
+		if (sub !== undefined) bump(k.subs, sub, chars, count);
 	};
 	for (const m of messages) {
 		if (m.role === "user") add("Your messages", contentChars(m.content), 1);
@@ -94,19 +115,21 @@ function conversation(messages: Message[]): Item[] {
 			for (const b of m.content) {
 				if (b.type === "text") add("Replies", b.text?.length ?? 0);
 				else if (b.type === "thinking") add("Thinking", b.thinking?.length ?? 0);
-				else if (b.type === "toolCall")
-					add(`tool:${b.name}`, (b.name?.length ?? 0) + JSON.stringify(b.arguments ?? {}).length, 1);
+				else if (b.type === "toolCall") {
+					let sub = subKey(b.name ?? "", b.arguments);
+					if (sub && home && home !== "/" && sub.startsWith(home)) sub = `~${sub.slice(home.length)}`;
+					if (sub !== undefined && b.id) subs.set(b.id, sub);
+					add(`tool:${b.name}`, (b.name?.length ?? 0) + JSON.stringify(b.arguments ?? {}).length, 1, sub);
+				}
 			}
-		} else if (m.role === "toolResult") add(`tool:${m.toolName ?? "?"}`, contentChars(m.content));
+		} else if (m.role === "toolResult")
+			add(`tool:${m.toolName ?? "?"}`, contentChars(m.content), 0, subs.get(m.toolCallId ?? ""));
 		else if (m.role === "compactionSummary" || m.role === "branchSummary")
 			add("Summaries", m.summary?.length ?? 0, 1);
 		else if (m.role === "bashExecution") add("Shell commands", (m.command?.length ?? 0) + (m.output?.length ?? 0), 1);
 		else add("Other", contentChars(m.content));
 	}
-	return [...kinds.values()]
-		.map((k) => ({ ...k, tokens: tokens(k.tokens) }))
-		.filter((k) => k.tokens > 0)
-		.sort((a, b) => b.tokens - a.tokens);
+	return items(kinds);
 }
 
 export default function context(pi: Pi) {

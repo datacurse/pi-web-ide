@@ -61,11 +61,12 @@ import {
 	readSeenSessions,
 	readSessionSort,
 	readShortNames,
-	readShowThinking,
+	readThinkingMode,
 	readTerminalLayout,
 	readTerminalWidth,
 	readTheme,
 	readToolMode,
+	readUserMode,
 	TERMINAL_MAX_PERCENT,
 	TERMINAL_MIN_PERCENT,
 	writeDockHeight,
@@ -76,14 +77,17 @@ import {
 	writeSeenSessions,
 	writeSessionSort,
 	writeShortNames,
-	writeShowThinking,
+	writeThinkingMode,
 	writeTerminalLayout,
 	writeTerminalWidth,
 	writeToolMode,
+	writeUserMode,
 	type Panel,
 	type SessionSort,
 	type ThemeId,
+	type ThinkingMode,
 	type ToolMode,
+	type UserMode,
 } from "./prefs.js";
 import { setFavicon } from "./favicon.js";
 import { attentionOf, attentionTitle, nextWaiting, type Attention } from "./attention.js";
@@ -200,8 +204,9 @@ export default function App() {
 	const splitRow = useRef<HTMLDivElement | null>(null);
 	const [theme, setTheme] = useState<ThemeId>(readTheme);
 	const [language, setLanguageState] = useState<Language>(getLanguage);
-	const [showThinking, setShowThinking] = useState(readShowThinking);
+	const [thinkingMode, setThinkingMode] = useState<ThinkingMode>(readThinkingMode);
 	const [toolMode, setToolMode] = useState<ToolMode>(readToolMode);
+	const [userMode, setUserMode] = useState<UserMode>(readUserMode);
 	const [notify, setNotify] = useState(readNotify);
 	const [shortNames, setShortNames] = useState(readShortNames);
 	/** This pwi's project list: its directories plus the cwd it was launched against. */
@@ -224,14 +229,19 @@ export default function App() {
 		setLanguageState(lang);
 	}, []);
 
-	const changeShowThinking = useCallback((show: boolean) => {
-		setShowThinking(show);
-		writeShowThinking(show);
+	const changeThinkingMode = useCallback((mode: ThinkingMode) => {
+		setThinkingMode(mode);
+		writeThinkingMode(mode);
 	}, []);
 
 	const changeToolMode = useCallback((mode: ToolMode) => {
 		setToolMode(mode);
 		writeToolMode(mode);
+	}, []);
+
+	const changeUserMode = useCallback((mode: UserMode) => {
+		setUserMode(mode);
+		writeUserMode(mode);
 	}, []);
 
 	const changeShortNames = useCallback((on: boolean) => {
@@ -1543,8 +1553,8 @@ export default function App() {
 		},
 		{
 			id: "view.thinking",
-			label: showThinking ? t("Hide Thinking") : t("Show Thinking"),
-			run: () => changeShowThinking(!showThinking),
+			label: thinkingMode === "hidden" ? t("Show Thinking") : t("Hide Thinking"),
+			run: () => changeThinkingMode(thinkingMode === "hidden" ? "shown" : "hidden"),
 		},
 		{ id: "page.fleet", label: t("Open Fleet"), run: () => setPage("fleet") },
 		{ id: "page.stats", label: t("Open Stats"), run: () => setPage("stats") },
@@ -1581,10 +1591,12 @@ export default function App() {
 				onTheme={setTheme}
 				language={language}
 				onLanguage={changeLanguage}
-				showThinking={showThinking}
-				onShowThinking={changeShowThinking}
+				thinkingMode={thinkingMode}
+				onThinkingMode={changeThinkingMode}
 				toolMode={toolMode}
 				onToolMode={changeToolMode}
+				userMode={userMode}
+				onUserMode={changeUserMode}
 				notify={notify}
 				onNotify={(on) => void changeNotify(on)}
 				shortNames={shortNames}
@@ -1603,8 +1615,9 @@ export default function App() {
 			partial={s.partial}
 			busy={s.busy}
 			opening={s.opening}
-			showThinking={showThinking}
+			thinkingMode={thinkingMode}
 			toolMode={toolMode}
+			userMode={userMode}
 			command={s.command}
 			modelError={s.modelError}
 			onSend={s.send}

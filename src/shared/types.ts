@@ -190,6 +190,10 @@ export interface StatsTurn {
 	prompt: string;
 	/** Tool name \u2192 calls in this turn. */
 	tools: Record<string, number>;
+	/** Tool, bash split by program (`bash: git status`) \u2192 what its calls cost. */
+	costs: Record<string, ToolCost>;
+	/** This turn's slowest and largest calls. */
+	outliers: ToolOutlier[];
 	outputTokens: number;
 	cost: number;
 	/** The last assistant message's `stopReason`: `stop`, `error`, `aborted`\u2026 */
@@ -269,6 +273,26 @@ export interface ContextItem {
 	name: string;
 	tokens: number;
 	count?: number;
+	/** A tool's calls by program (bash) or file (read, edit, write). */
+	items?: ContextItem[];
+}
+
+/**
+ * Tool calls in a turn: tokens are arguments plus result (chars / 4), ms is
+ * the wait for the result. Calls sent together share one wait, split evenly.
+ */
+export interface ToolCost {
+	calls: number;
+	tokens: number;
+	ms: number;
+}
+
+export interface ToolOutlier {
+	/** As in `StatsTurn.costs`. */
+	key: string;
+	preview: string;
+	tokens: number;
+	ms: number;
 }
 
 export type ContextBreakdown = ContextPart[];

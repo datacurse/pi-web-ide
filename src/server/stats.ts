@@ -8,7 +8,8 @@
 import { createReadStream, type Stats } from "node:fs";
 import { stat } from "node:fs/promises";
 import { createInterface } from "node:readline";
-import type { StatsTurn, StatsView } from "../shared/types.js";
+import { contentChars, preview, subKey } from "../shared/toolCalls.js";
+import type { StatsTurn, StatsView, ToolOutlier } from "../shared/types.js";
 import { machines } from "./machines.js";
 import { pooled, sessionFiles, userText } from "./sessions.js";
 
@@ -19,6 +20,9 @@ interface Parsed {
 	cwd: string;
 	turns: Omit<StatsTurn, "machine">[];
 }
+
+/** How many of a turn's slowest, and of its largest, calls it keeps. */
+const OUTLIERS = 3;
 
 /** Same versioning as sessions.ts: pi only appends, so size + mtime is the version. */
 const cache = new Map<string, Parsed>();
@@ -63,9 +67,30 @@ export async function parseLines(
 	const out: Omit<Parsed, "size" | "mtimeMs"> = { id: "", cwd: "", turns: [] };
 	let turn: Omit<StatsTurn, "machine"> | undefined;
 	let end = 0;
+	/** This turn's calls, sizes in chars until close; `sent`/`batch` time the wait for the result. */
+	let calls: (ToolOutlier & { sent: number; batch: number })[] = [];
+	const pending = new Map<string, (typeof calls)[number]>();
 	const close = () => {
-		if (turn && end > turn.start && turn.outcome) out.turns.push({ ...turn, ms: end - turn.start });
+		if (turn && end > turn.start && turn.outcome) {
+			for (const c of calls) {
+				c.tokens = Math.ceil(c.tokens / 4);
+				const cost = (turn.costs[c.key] ??= { calls: 0, tokens: 0, ms: 0 });
+				cost.calls++;
+				cost.tokens += c.tokens;
+				cost.ms += c.ms;
+			}
+			const by = (k: "ms" | "tokens") => [...calls].sort((a, b) => b[k] - a[k]).slice(0, OUTLIERS);
+			turn.outliers = [...new Set([...by("ms"), ...by("tokens")])].map(({ key, preview, tokens, ms }) => ({
+				key,
+				preview,
+				tokens,
+				ms,
+			}));
+			out.turns.push({ ...turn, ms: end - turn.start });
+		}
 		turn = undefined;
+		calls = [];
+		pending.clear();
 	};
 	for await (const line of lines) {
 		if (!line) continue;
@@ -97,6 +122,8 @@ export async function parseLines(
 				model: "",
 				prompt: userText(m),
 				tools: {},
+				costs: {},
+				outliers: [],
 				outputTokens: 0,
 				cost: 0,
 				outcome: "",
@@ -106,6 +133,15 @@ export async function parseLines(
 		}
 		if (!turn) continue;
 		if (!Number.isNaN(at)) end = at;
+		if (m.role === "toolResult") {
+			const c = pending.get(String(m.toolCallId));
+			const done = typeof m.timestamp === "number" ? m.timestamp : at;
+			if (!c) continue;
+			pending.delete(String(m.toolCallId));
+			c.tokens += contentChars(m.content);
+			if (done > c.sent) c.ms = (done - c.sent) / c.batch;
+			continue;
+		}
 		if (m.role !== "assistant") continue;
 		if (typeof m.model === "string") turn.model = m.model;
 		if (typeof m.stopReason === "string") turn.outcome = m.stopReason;
@@ -113,9 +149,24 @@ export async function parseLines(
 		if (typeof usage?.output === "number") turn.outputTokens += usage.output;
 		if (typeof usage?.cost?.total === "number") turn.cost += usage.cost.total;
 		if (Array.isArray(m.content)) {
-			for (const b of m.content as { type?: unknown; name?: unknown }[]) {
-				if (b?.type === "toolCall" && typeof b.name === "string")
-					turn.tools[b.name] = (turn.tools[b.name] ?? 0) + 1;
+			const batch = (m.content as { type?: unknown; name?: unknown; id?: unknown; arguments?: unknown }[]).filter(
+				(b): b is { type: "toolCall"; name: string; id?: unknown; arguments?: unknown } =>
+					b?.type === "toolCall" && typeof b.name === "string",
+			);
+			for (const b of batch) {
+				turn.tools[b.name] = (turn.tools[b.name] ?? 0) + 1;
+				const sub = b.name === "bash" ? subKey(b.name, b.arguments) : undefined;
+				const c = {
+					key: sub ? `bash: ${sub}` : b.name,
+					preview: preview(b.name, b.arguments),
+					tokens: b.name.length + JSON.stringify(b.arguments ?? {}).length,
+					ms: 0,
+					// The entry is written when the message ends, which is when its tools start.
+					sent: at,
+					batch: batch.length,
+				};
+				calls.push(c);
+				if (typeof b.id === "string") pending.set(b.id, c);
 			}
 		}
 	}

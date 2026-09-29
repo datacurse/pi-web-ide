@@ -7,9 +7,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowClockwise } from "@phosphor-icons/react";
-import type { StatsTurn, StatsView, UsageSample } from "../shared/types.js";
+import type { StatsTurn, StatsView, ToolCost, UsageSample } from "../shared/types.js";
 import { Button, IconButton, PanelHeader, sectionLabel, useBatches } from "./ui.js";
-import { dayKey, duration, heatmapWeeks, LIMIT_WINDOW_MS, pace, percentile, span, streaks, type Pace } from "./stats.js";
+import { callDuration, dayKey, duration, heatmapWeeks, LIMIT_WINDOW_MS, pace, percentile, span, streaks, type Pace } from "./stats.js";
 import { api } from "./api.js";
 import { locale, perLocale, plural, t } from "./i18n.js";
 
@@ -182,6 +182,11 @@ export function Stats({ open, revision, onClose }: { open: boolean; revision?: u
 									8,
 								)}
 							/>
+						</div>
+						<ToolCosts turns={turns} />
+						<div className="grid gap-6 md:grid-cols-2">
+							<Outliers title={t("Slowest calls")} by="ms" turns={turns} />
+							<Outliers title={t("Largest calls")} by="tokens" turns={turns} />
 						</div>
 						<Answers turns={turns} />
 					</>
@@ -849,6 +854,125 @@ function Bars({ title, rows }: { title?: string; rows: [string, number][] }) {
 					</div>
 				))}
 			</div>
+		</div>
+	);
+}
+
+type Metric = keyof ToolCost;
+const METRICS: [Metric, string][] = [
+	["tokens", "Tokens"],
+	["ms", "Time"],
+	["calls", "Calls"],
+];
+const TOOL_ROWS = 15;
+
+/** Each tool, bash by program, ranked by what its calls cost in tokens, time or count. */
+function ToolCosts({ turns }: { turns: StatsTurn[] }) {
+	const [by, setBy] = useState<Metric>("tokens");
+	const costs = useMemo(() => {
+		const m = new Map<string, ToolCost>();
+		for (const turn of turns)
+			for (const [k, c] of Object.entries(turn.costs)) {
+				const a = m.get(k) ?? { calls: 0, tokens: 0, ms: 0 };
+				a.calls += c.calls;
+				a.tokens += c.tokens;
+				a.ms += c.ms;
+				m.set(k, a);
+			}
+		return m;
+	}, [turns]);
+	const rows = [...costs].sort((a, b) => b[1][by] - a[1][by]).slice(0, TOOL_ROWS);
+	const max = Math.max(1, ...rows.map(([, c]) => c[by]));
+	const cell = (m: Metric | "avg") =>
+		`w-14 shrink-0 text-right tabular-nums ${m === by ? "text-neutral-200" : "text-neutral-500"}`;
+	return (
+		<div>
+			<div className="mb-2 flex items-center gap-2">
+				<h3 className={sectionLabel}>{t("Tool calls")}</h3>
+				<div className="ml-auto flex gap-1">
+					{METRICS.map(([m, label]) => (
+						<Button
+							key={m}
+							size="sm"
+							variant={by === m ? "subtle" : "ghost"}
+							aria-pressed={by === m}
+							onClick={() => setBy(m)}
+						>
+							{t(label)}
+						</Button>
+					))}
+				</div>
+			</div>
+			{rows.length === 0 ? (
+				<p className="text-meta text-neutral-500">{t("None yet.")}</p>
+			) : (
+				<div className="flex flex-col gap-1 text-meta">
+					<div className="flex items-center gap-2 text-caption text-neutral-500">
+						<span className="min-w-0 flex-1" />
+						<span className="w-14 shrink-0 text-right">{t("Calls")}</span>
+						<span className="w-14 shrink-0 text-right">{t("Tokens")}</span>
+						<span className="w-14 shrink-0 text-right">{t("Time")}</span>
+						<span className="w-14 shrink-0 text-right">{t("Per call")}</span>
+					</div>
+					{rows.map(([key, c]) => (
+						<div key={key} className="flex items-center gap-2">
+							<span className="w-48 shrink-0 truncate font-mono text-neutral-300" title={key}>
+								{key}
+							</span>
+							<div className="h-2 min-w-0 flex-1">
+								<div
+									className="h-full rounded-full bg-amber-500"
+									style={{ width: `${(c[by] / max) * 100}%` }}
+								/>
+							</div>
+							<span className={cell("calls")}>{num().format(c.calls)}</span>
+							<span className={cell("tokens")}>{num().format(c.tokens)}</span>
+							<span className={cell("ms")}>{callDuration(c.ms)}</span>
+							<span className={cell("avg")}>{callDuration(c.ms / c.calls)}</span>
+						</div>
+					))}
+				</div>
+			)}
+			<p className="mt-2 text-meta text-neutral-500">
+				{t(
+					"Tokens are arguments plus result, about 4 characters each. Time is the wait for the result; calls sent together split their wait evenly.",
+				)}
+			</p>
+		</div>
+	);
+}
+
+const OUTLIER_ROWS = 10;
+
+/** The single calls that cost the most, across the turns shown. */
+function Outliers({ title, by, turns }: { title: string; by: "ms" | "tokens"; turns: StatsTurn[] }) {
+	const rows = useMemo(
+		() =>
+			turns
+				.flatMap((turn) => turn.outliers.map((o) => ({ ...o, turn })))
+				.sort((a, b) => b[by] - a[by])
+				.slice(0, OUTLIER_ROWS),
+		[turns, by],
+	);
+	return (
+		<div>
+			<h3 className={`mb-2 ${sectionLabel}`}>{title}</h3>
+			{rows.length === 0 && <p className="text-meta text-neutral-500">{t("None yet.")}</p>}
+			<ul className="flex flex-col gap-1 text-meta">
+				{rows.map((o, i) => (
+					<li
+						key={i}
+						className="flex items-center gap-2"
+						title={`${o.preview}\n${stampFmt().format(new Date(o.turn.start))} · ${projectName(o.turn.cwd)} · ${o.turn.prompt}`}
+					>
+						<span className="w-12 shrink-0 truncate font-mono text-neutral-500">{o.key.split(":")[0]}</span>
+						<span className="min-w-0 flex-1 truncate font-mono text-neutral-300">{o.preview}</span>
+						<span className="w-14 shrink-0 text-right tabular-nums text-neutral-200">
+							{by === "ms" ? callDuration(o.ms) : num().format(o.tokens)}
+						</span>
+					</li>
+				))}
+			</ul>
 		</div>
 	);
 }

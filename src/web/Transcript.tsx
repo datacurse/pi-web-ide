@@ -9,6 +9,7 @@ import { MarkdownText } from "./Markdown.js";
 import { timeAgo } from "./SessionList.js";
 import { Thumb } from "./Attachments.js";
 import { t, plural, locale, getLanguage } from "./i18n.js";
+import type { UserMode } from "./prefs.js";
 
 /** Braille spinner, same visual language as the TUI. */
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
@@ -240,16 +241,20 @@ export function Block({
 	block,
 	isUser,
 	autoOpenTools,
+	userMode = "clamped",
+	foldThinking = false,
 }: {
 	block: PiBlock;
 	isUser: boolean;
 	autoOpenTools: boolean;
+	userMode?: UserMode;
+	foldThinking?: boolean;
 }) {
 	if (block.kind === "text")
 		// No `chat-measure` on the user branch: the pill IS the column, and a
 		// second centred box inside it would indent the text off its own edge.
 		return isUser ? (
-			<UserText text={block.text} />
+			<UserText key={userMode} text={block.text} mode={userMode} />
 		) : (
 			<MarkdownText text={block.text} />
 		);
@@ -262,7 +267,9 @@ export function Block({
 			/>
 		);
 	if (block.kind === "thinking")
-		return (
+		return foldThinking ? (
+			<Thought text={block.text} />
+		) : (
 			<div className="chat-measure text-body whitespace-pre-wrap text-neutral-500 italic">
 				{block.text}
 			</div>
@@ -279,22 +286,55 @@ export function Block({
 }
 
 /**
+ * A reasoning block as one disclosure line (the "Folded" thinking setting).
+ * Open while `streaming`, so you can watch what the model is working on; it
+ * folds once the model moves on, and a click opens it again.
+ */
+export function Thought({ text, streaming = false }: { text: string; streaming?: boolean }) {
+	const [open, setOpen] = useState(streaming);
+	useEffect(() => {
+		if (!streaming) setOpen(false);
+	}, [streaming]);
+	return (
+		<div className="chat-wide my-1">
+			<button
+				data-custom="transcript disclosure"
+				aria-expanded={open}
+				onClick={() => setOpen((o) => !o)}
+				className="flex items-center gap-1 font-mono text-body text-neutral-500 hover:text-neutral-300"
+			>
+				{open ? <CaretDown size={11} /> : <CaretRight size={11} />}
+				{streaming ? t("Thinking") : t("Thought")}
+			</button>
+			{open && (
+				<div className="chat-nested mt-1 border-l border-neutral-800 pl-3 text-body whitespace-pre-wrap text-neutral-500 italic">
+					{text}
+				</div>
+			)}
+		</div>
+	);
+}
+
+/**
  * A user message clamped to 3 lines so a long prompt does not bury the
  * transcript. The toggle shows only when the clamp actually cuts text.
  */
-function UserText({ text }: { text: string }) {
+function UserText({ text, mode }: { text: string; mode: UserMode }) {
 	const ref = useRef<HTMLDivElement>(null);
-	const [open, setOpen] = useState(false);
+	const [open, setOpen] = useState(mode !== "clamped");
 	const [overflows, setOverflows] = useState(false);
 	useLayoutEffect(() => {
 		const el = ref.current;
-		if (!el || open) return;
-		const check = () => setOverflows(el.scrollHeight > el.clientHeight + 1);
+		if (!el || mode === "full") return;
+		// Against 3 lines, not clientHeight, so it also holds while open.
+		const check = () =>
+			setOverflows(el.scrollHeight > 3 * parseFloat(getComputedStyle(el).lineHeight) + 1);
 		check();
 		const ro = new ResizeObserver(check);
 		ro.observe(el);
 		return () => ro.disconnect();
-	}, [text, open]);
+	}, [text, mode]);
+	if (mode === "full") return <div className="whitespace-pre-wrap">{text}</div>;
 	return (
 		<>
 			<div ref={ref} className={`whitespace-pre-wrap ${open ? "" : "line-clamp-3"}`}>
@@ -401,12 +441,20 @@ function percentText(share: number): string {
 	return share > 0 && share < 0.01 ? "<1%" : `${Math.round(share * 100)}%`;
 }
 
-/** A conversation item's name and count, as the popup shows them. */
-function itemLabel(key: ContextPart["key"], item: ContextItem): { name: string; detail?: string; mono: boolean } {
-	const tool = key === "conversation" && item.name.startsWith("tool:");
+/** A conversation item's name and count, as the popup shows them. `sub`: a tool's program or file. */
+function itemLabel(
+	key: ContextPart["key"],
+	item: ContextItem,
+	sub = false,
+): { name: string; detail?: string; mono: boolean } {
+	const tool = sub || (key === "conversation" && item.name.startsWith("tool:"));
 	const n = item.count ?? 0;
 	const detail = !n ? undefined : tool ? plural(n, "{n} call", "{n} calls") : String(n);
-	return { name: tool ? item.name.slice(5) : item.name, detail, mono: tool || key === "tools" || key === "skills" };
+	return {
+		name: tool && !sub ? item.name.slice(5) : item.name,
+		detail,
+		mono: tool || key === "tools" || key === "skills",
+	};
 }
 
 /**
@@ -487,12 +535,13 @@ export function ContextPanel({
 	const talk = parts?.find((p) => p.key === "conversation");
 	const talkReal = tokens > 0 ? Math.max(0, tokens - fixed) : (talk?.tokens ?? 0);
 	const scale = talk && talk.tokens > 0 ? talkReal / talk.tokens : 0;
+	const scaled = (i: ContextItem): ContextItem => ({
+		...i,
+		tokens: Math.round(i.tokens * scale),
+		items: i.items?.map(scaled),
+	});
 	const rows = (parts ?? [])
-		.map((p) =>
-			p.key === "conversation"
-				? { ...p, tokens: talkReal, items: p.items?.map((i) => ({ ...i, tokens: Math.round(i.tokens * scale) })) }
-				: p,
-		)
+		.map((p) => (p.key === "conversation" ? { ...p, tokens: talkReal, items: p.items?.map(scaled) } : p))
 		.filter((p) => p.tokens > 0);
 	const total = parts ? Math.max(tokens, fixed + talkReal) : tokens;
 	const share = limit > 0 ? Math.min(1, total / limit) : 0;
@@ -504,7 +553,55 @@ export function ContextPanel({
 			undefined,
 		);
 
-	const expandable = rows.filter((p) => p.items?.some((i) => i.tokens > 0)).map((p) => p.key);
+	const expandable = rows.flatMap((p) => [
+		...(p.items?.some((i) => i.tokens > 0) ? [p.key] : []),
+		...(p.items ?? []).filter((i) => i.items?.some((s) => s.tokens > 0)).map((i) => `${p.key}/${i.name}`),
+	]);
+	/** A piece's row; a tool whose calls split by program or file opens into them. */
+	const itemRow = (key: ContextPart["key"], i: ContextItem, of: number, id: string, sub = false): ReactNode => {
+		const l = itemLabel(key, i, sub);
+		const subs = i.items?.filter((s) => s.tokens > 0) ?? [];
+		const expanded = open.has(id);
+		const cells = (
+			<>
+				{subs.length > 0 && (
+					<span aria-hidden className="w-3 shrink-0 text-neutral-500">
+						{expanded ? <CaretDown size={12} /> : <CaretRight size={12} />}
+					</span>
+				)}
+				<span className={`min-w-0 truncate ${l.mono ? "font-mono" : ""}`}>{l.name}</span>
+				{l.detail && <span className="shrink-0 text-neutral-500">{l.detail}</span>}
+				<span aria-hidden className="ml-auto h-1 w-16 shrink-0 overflow-hidden rounded-full bg-neutral-800">
+					<span className={`block h-full ${PARTS[key].color}`} style={{ width: `${(i.tokens / of) * 100}%` }} />
+				</span>
+				<span className="w-10 text-right tabular-nums text-neutral-500">{percentText(i.tokens / total)}</span>
+				<span className="w-12 text-right tabular-nums">{popupTokens(i.tokens)}</span>
+			</>
+		);
+		// A caret sits left of the name, so the name lines up with its siblings'.
+		const indent = sub ? "pl-16" : subs.length > 0 ? "pl-7" : "pl-12";
+		const row = `flex w-full items-center gap-2 py-0.5 pr-3 text-left text-meta text-neutral-400 ${indent}`;
+		return (
+			<div key={id}>
+				{subs.length > 0 ? (
+					<button
+						data-custom="transcript disclosure"
+						title={i.name}
+						aria-expanded={expanded}
+						onClick={() => toggle(id)}
+						className={`${row} hover:bg-neutral-800`}
+					>
+						{cells}
+					</button>
+				) : (
+					<div title={i.name} className={row}>
+						{cells}
+					</div>
+				)}
+				{expanded && subs.map((s) => itemRow(key, s, i.tokens, `${id}/${s.name}`, true))}
+			</div>
+		);
+	};
 	const allOpen = expandable.length > 0 && expandable.every((k) => open.has(k));
 	const toggle = (key: string) =>
 		setOpen((o) => {
@@ -610,30 +707,7 @@ export function ContextPanel({
 										{popupTokens(p.tokens)}
 									</span>
 								</ListRow>
-								{expanded &&
-									items.map((i) => {
-										const l = itemLabel(p.key, i);
-										return (
-											<div
-												key={i.name}
-												title={i.name}
-												className="flex items-center gap-2 py-0.5 pr-3 pl-12 text-meta text-neutral-400"
-											>
-												<span className={`min-w-0 truncate ${l.mono ? "font-mono" : ""}`}>{l.name}</span>
-												{l.detail && <span className="shrink-0 text-neutral-500">{l.detail}</span>}
-												<span aria-hidden className="ml-auto h-1 w-16 shrink-0 overflow-hidden rounded-full bg-neutral-800">
-													<span
-														className={`block h-full ${PARTS[p.key].color}`}
-														style={{ width: `${(i.tokens / p.tokens) * 100}%` }}
-													/>
-												</span>
-												<span className="w-10 text-right tabular-nums text-neutral-500">
-													{percentText(i.tokens / total)}
-												</span>
-												<span className="w-12 text-right tabular-nums">{popupTokens(i.tokens)}</span>
-											</div>
-										);
-									})}
+								{expanded && items.map((i) => itemRow(p.key, i, p.tokens, `${p.key}/${i.name}`))}
 							</div>
 						);
 					})}
@@ -898,6 +972,8 @@ export function Message({
 	blocks,
 	labelled,
 	autoOpenTools,
+	userMode,
+	foldThinking,
 	footer,
 	onFork,
 	at,
@@ -907,6 +983,8 @@ export function Message({
 	blocks: PiBlock[];
 	labelled: boolean;
 	autoOpenTools: boolean;
+	userMode: UserMode;
+	foldThinking: boolean;
 	footer?: Footer;
 	onFork: (at: number) => Promise<void>;
 	/** The message's start timestamp: how the server finds a user message to edit. */
@@ -964,7 +1042,7 @@ export function Message({
 				</div>
 			)}
 			{rest.map((b, i) => (
-				<Block key={i} block={b} isUser={isUser} autoOpenTools={autoOpenTools} />
+				<Block key={i} block={b} isUser={isUser} autoOpenTools={autoOpenTools} userMode={userMode} foldThinking={foldThinking} />
 			))}
 			{footer && (
 				<AnswerFooter footer={footer} text={text} onFork={onFork} />

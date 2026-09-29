@@ -109,6 +109,9 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
   - A row opens into its pieces (each tool, rule file, skill; the conversation as your
     messages, replies, thinking, and each tool's calls plus results), `text-meta`, with
     a `w-16` share bar. The largest part starts open.
+  - A tool opens further, with a caret left of its name: bash by program (`git status`,
+    `grep`, see `shared/toolCalls.ts`), read/edit/write by file, `pl-16`, each bar a share
+    of its tool. Expand all opens these too.
   - Footer: an estimates note and `Compact` (`Button sm`). ✕, Escape or a click
     outside closes it.
   - Beside ✕, an `IconButton sm` expands or collapses every part
@@ -121,6 +124,11 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
 ## Tabs
 
 - Session (AI) tabs lead with a bold `π` (the greeting-screen mark) that is also the live signal (see Attention). File tabs use `FileGlyph`, diff tabs `GitDiff`.
+- A tab's close ✕ shows only while the pointer is over that tab (or it has keyboard
+  focus), active tab included. Touchscreens always show it (`.tab-close` in index.css).
+  It floats over the label's end (no reserved padding, a short fade behind it), so
+  labels use the full tab width.
+- Tabs are split by a `neutral-800` rule on each tab's right edge.
 - Right-click any tab → `ContextMenu`, groups split by `MenuSeparator`:
   1. Session tabs: `Pin Tab` / `Unpin Tab` (the session list's pins), `Rename…`
      (`window.prompt`). File tabs: `Reveal in Explorer` (opens the Explorer, expands
@@ -187,12 +195,23 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
 
 - Text is clamped to 3 lines (`line-clamp-3`, ellipsis). When it overflows, a ghost
   `Button size="sm"` below it toggles `Show more` / `Show less` with a 12px caret.
+  Settings → Transcript → `Your messages` picks Collapsed (default), Expanded (starts
+  open, `Show less` still shown) or Always full (no clamp, no button); `pwi:userMessages`.
 - On hover, a right-aligned `PencilSimple` ghost `IconButton size="sm"` (`Edit`) sits
   under the pill; hidden while a turn runs. It swaps the pill for a textarea in the same
   `rounded-lg` card (plus a `neutral-700` border) with `Cancel` / primary `Send`
   (`Button sm`). Enter sends, Escape cancels. Sending rewinds the session in place to
   before that message (pi's `/tree`; the old branch stays in the file) and asks again,
   attachments unchanged.
+
+## Reasoning
+
+- Settings → Transcript → `Reasoning`: Shown (default, italic `neutral-500` text), Folded
+  or Hidden (`pwi:showThinking`: `1` / `fold` / `0`).
+- Folded is `Thought`: a disclosure line like a tool call (11px caret, mono `text-body`
+  `neutral-500`), `Thinking` while the model is still thinking and open, then `Thought`
+  and folded once text or a tool call starts. The text sits under a `border-l` like a group.
+- In the Grouped and Answer only tool modes reasoning folds into the group either way.
 
 ## Answer footer
 
@@ -232,6 +251,8 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
 
 ## Source Control
 
+- The commit message box is full width. Under it, one row: the `Sparkle` auto-name
+  `IconButton` left, the `Auto-name commits` checkbox right. Then `Commit & Push`.
 - When the project folder is not a git repository, a checkbox (same style as
   `Auto-name commits`) reads `Find repositories one folder down` (`pwi:gitNested`,
   per browser, off by default). On, a `Repositories` section under the header lists
@@ -297,8 +318,15 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
   Escape inside it goes to the shell, not the dialog.
 - Stats uses the dialog's width: usage beside the summary tiles (1/3 + 2/3), a 52-week
   heatmap full width, answer time beside by-hour, Machines (when there are others) /
-  Models / Projects / Tools in columns, then every answer (50 at a time, more as the end
-  scrolls into view). The grids stack below `md`.
+  Models / Projects / Tools in columns, then Tool calls, then Slowest calls beside Largest
+  calls, then every answer (50 at a time, more as the end scrolls into view). The grids
+  stack below `md`.
+- Tool calls ranks the top 15 tools, bash split by program (`bash: git status`), by
+  Tokens / Time / Calls (header `Button sm`, `subtle`/`ghost`, `aria-pressed`). Mono name,
+  an `amber-500` bar of the chosen metric, then calls, tokens, total time and per call;
+  the chosen column is `neutral-200`, the rest `neutral-500`. A `text-meta` note says how
+  both are measured. Slowest and Largest calls list single calls (tool, command or path,
+  value); the `title` adds when, the project and the prompt.
 - Stats covers other machines too: every concrete `Host` in `~/.ssh/config` with pi
   sessions is mirrored over rsync (`server/machines.ts`), no config of its own. The
   header filters All / This PC / one button per machine (ssh alias), the same way as
@@ -349,7 +377,7 @@ New UI uses these; convert raw markup when you touch it. Tune styles in
 | `inputClass.sm/md` | class string                                             | Inputs and textareas (a string so refs pass through). |
 | `IconLink`      | `label`, `href`, `variant`, `size` (as `IconButton`)       | An `IconButton` that is a link, opening in a new tab (Fleet's Tailscale links). |
 | `ListRow`       | `selected`, `muted`, `size`: ui (default) / body, button props                           | Tree and list rows (Explorer, Source Control, directory picker). 22px; indent with `style.paddingLeft`. |
-| `tabClass(active)` | class string; caller adds `pr-7` (with close button) or `pr-3` | Session/editor tabs and terminal tabs: flat, full `bar` height, amber 2px underline when active, no fill. The strip is `h-bar` with a hidden scrollbar (`.tab-strip`). |
+| `tabClass(active)` | class string; caller adds `pr-3` (the close button overlays the label) | Session/editor tabs and terminal tabs: flat, full `bar` height, amber 2px underline when active, no fill. The strip is `h-bar` with a hidden scrollbar (`.tab-strip`). |
 | `tabClassVertical(active)` | class string | Tabs in a vertical list (terminal dock): full width, `control-md` tall, amber 2px left edge when active. |
 | `useBatches(total)` | returns `{ shown, end, more }`                           | Long lists (session list, Stats answers): render `rows.slice(0, shown)`, then `{more && <div ref={end} className="h-4" />}`; 50 more mount when it scrolls into view. |
 | `PanelHeader`   | `title?`, `onClose?`, `closeLabel?`, children               | Top row of a side panel or editor tab. Children go after the title. |

@@ -42,3 +42,37 @@ test("one turn per user prompt, timed to its last message", async () => {
 	assert.equal(t?.cost, 0.75);
 	assert.deepEqual(t?.tools, { bash: 1 });
 });
+
+test("tool calls cost their size and their wait, split across a batch", async () => {
+	const p = await parseLines([
+		msg("2026-01-01T00:00:00Z", { role: "user", content: "go", timestamp: Date.parse("2026-01-01T00:00:00Z") }),
+		msg("2026-01-01T00:00:02Z", {
+			role: "assistant",
+			stopReason: "toolUse",
+			content: [
+				{ type: "toolCall", id: "a", name: "bash", arguments: { command: "cd x && git status" } },
+				{ type: "toolCall", id: "b", name: "read", arguments: { path: "f" } },
+			],
+		}),
+		msg("2026-01-01T00:00:06Z", {
+			role: "toolResult",
+			toolCallId: "a",
+			content: [{ type: "text", text: "x".repeat(400) }],
+			timestamp: Date.parse("2026-01-01T00:00:06Z"),
+		}),
+		msg("2026-01-01T00:00:06Z", {
+			role: "toolResult",
+			toolCallId: "b",
+			content: [],
+			timestamp: Date.parse("2026-01-01T00:00:06Z"),
+		}),
+		msg("2026-01-01T00:00:08Z", { role: "assistant", stopReason: "stop", content: [] }),
+	]);
+	const [t] = p.turns;
+	const bash = t?.costs["bash: git status"];
+	assert.equal(bash?.calls, 1);
+	assert.equal(bash?.ms, 2000);
+	assert.equal(bash?.tokens, Math.ceil((4 + JSON.stringify({ command: "cd x && git status" }).length + 400) / 4));
+	assert.equal(t?.costs.read?.ms, 2000);
+	assert.equal(t?.outliers[0]?.preview, "cd x && git status");
+});

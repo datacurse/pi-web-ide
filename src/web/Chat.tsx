@@ -13,7 +13,7 @@ import { Button, IconButton } from "./ui.js";
 import { ModelSelector } from "./ModelSelector.js";
 import { GitActions } from "./GitActions.js";
 import { MarkdownText } from "./Markdown.js";
-import type { ToolMode } from "./prefs.js";
+import type { ThinkingMode, ToolMode, UserMode } from "./prefs.js";
 import { clearDraft, readDraft, writeDraftImages, writeDraftText } from "./drafts.js";
 import { completionOptions, parseCompletion, type CommandOption } from "./commands.js";
 import { AskPanel } from "./AskPanel.js";
@@ -33,6 +33,7 @@ import {
 	Footer,
 	Message,
 	Notices,
+	Thought,
 	Tool,
 	ToolGroup,
 	TranscriptRow,
@@ -141,8 +142,9 @@ export function Chat({
 	partial,
 	busy,
 	opening,
-	showThinking,
+	thinkingMode,
 	toolMode,
+	userMode,
 	modelError,
 	command,
 	onAnswerAsk,
@@ -169,9 +171,11 @@ export function Chat({
 	 */
 	opening: boolean;
 	/** Reasoning blocks are a setting; see prefs.ts. */
-	showThinking: boolean;
+	thinkingMode: ThinkingMode;
 	/** How much of a tool call to show; see prefs.ts. */
 	toolMode: ToolMode;
+	/** How long user messages fold; see prefs.ts. */
+	userMode: UserMode;
 	modelError?: string | null;
 	/**
 	 * The local slash command last sent, verbatim, and whether it is still
@@ -204,6 +208,7 @@ export function Chat({
 	/** Bumped when the session list picked `entry`: focus the composer once it shows. */
 	focus?: { entry: string; n: number };
 }) {
+	const showThinking = thinkingMode !== "hidden";
 	const [text, setText] = useState("");
 	// Sticky until switched off or the session changes: a run of questions is the usual case.
 	const [askOnly, setAskOnly] = useState(false);
@@ -784,6 +789,8 @@ export function Chat({
 								blocks={r.blocks}
 								labelled={r.labelled}
 								autoOpenTools={toolMode === "live"}
+								userMode={userMode}
+								foldThinking={thinkingMode === "folded"}
 								footer={r.footer}
 								onFork={onFork}
 								at={r.at}
@@ -803,7 +810,13 @@ export function Chat({
 								<ToolGroup blocks={partialFold} streaming />
 							)}
 							{/* Unfolded modes show the live thought as itself. */}
-							{!folds && showThinking && partial.thinking && (
+							{!folds && thinkingMode === "folded" && partial.thinking && (
+								<Thought
+									text={partial.thinking}
+									streaming={!partial.text && liveTools.length === 0}
+								/>
+							)}
+							{!folds && thinkingMode === "shown" && partial.thinking && (
 								<div className="chat-measure text-body whitespace-pre-wrap text-neutral-500 italic">
 									{partial.thinking}
 								</div>

@@ -64,7 +64,7 @@ import { personalityPath, readRemind } from "./personality.js";
 import { repairSessionFile } from "./repair.js";
 import { sessionHeaderCwd } from "./sessions.js";
 import { stateDir } from "./state.js";
-import { ASK_ONLY, type ContextBreakdown, type ContextPart } from "../shared/types.js";
+import { ASK_ONLY, type ContextBreakdown, type ContextItem, type ContextPart } from "../shared/types.js";
 import type {
 	AskAnswer,
 	PiAsk,
@@ -1646,17 +1646,16 @@ async function wrap(child: RpcChild, cwd: string): Promise<PiSession> {
 			}
 			if (!Array.isArray(parsed)) throw new Error("pi did not measure the context");
 			const num = (v: unknown) => (typeof v === "number" && v >= 0 ? v : 0);
+			const items = (v: unknown): ContextItem[] =>
+				records(v).map((i) => ({
+					name: String(i.name ?? ""),
+					tokens: num(i.tokens),
+					...(typeof i.count === "number" ? { count: i.count } : {}),
+					...(Array.isArray(i.items) ? { items: items(i.items) } : {}),
+				}));
 			return records(parsed)
 				.filter((p): p is typeof p & { key: ContextPart["key"] } => CONTEXT_KEYS.includes(p.key as ContextPart["key"]))
-				.map((p) => ({
-					key: p.key,
-					tokens: num(p.tokens),
-					items: records(p.items).map((i) => ({
-						name: String(i.name ?? ""),
-						tokens: num(i.tokens),
-						...(typeof i.count === "number" ? { count: i.count } : {}),
-					})),
-				}));
+				.map((p) => ({ key: p.key, tokens: num(p.tokens), items: items(p.items) }));
 		},
 		async refreshCommands() {
 			commands = toCommands(await fetchCommands(child));
