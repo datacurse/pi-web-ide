@@ -67,6 +67,8 @@ interface Parsed {
 	 * and restarted the child on each tab switch.
 	 */
 	lastMessageMs?: number;
+	/** The timestamp of the last assistant `message` entry. */
+	lastResponse?: string;
 	/** The session's display name, from the last `session_info` entry. */
 	title?: string;
 	firstMessage: string;
@@ -262,7 +264,11 @@ async function parse(
 					}
 					// Last one wins: the entries are in file order, so this ends
 					// up as the newest real conversation activity.
-					if (typeof entry.timestamp === "string") out.lastMessage = entry.timestamp;
+					if (typeof entry.timestamp === "string") {
+						out.lastMessage = entry.timestamp;
+						if ((entry.message as { role?: unknown } | undefined)?.role === "assistant")
+							out.lastResponse = entry.timestamp;
+					}
 					const ms = (entry.message as { timestamp?: unknown } | undefined)?.timestamp;
 					out.lastMessageMs = typeof ms === "number" ? ms : undefined;
 					break;
@@ -320,6 +326,7 @@ function project(file: string, p: Parsed): PiSessionInfo {
 		firstMessage: p.firstMessage,
 	};
 	if (p.lastPrompt) info.lastPrompt = p.lastPrompt;
+	if (p.lastResponse) info.lastResponse = p.lastResponse;
 	// Left unset when the session has never been named, because the UI falls
 	// back to `firstMessage` only for a falsy name.
 	if (p.title) info.name = p.title;

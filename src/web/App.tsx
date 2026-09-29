@@ -1830,7 +1830,7 @@ export default function App() {
 						// you miss, and there is nothing else to aim at. 13px, leaning
 						// right so it stays off the panel's scrollbar; z-10 so the
 						// editor beside it cannot paint over half of it.
-						className="relative z-10 w-px shrink-0 data-hover:cursor-col-resize bg-neutral-800 transition-colors delay-1000 duration-500 ease-out after:absolute after:inset-y-0 after:-left-0.5 after:-right-2.5 after:content-[''] data-hover:bg-amber-600 data-hover:delay-0 data-hover:duration-100 focus-visible:bg-amber-500 focus-visible:outline-none motion-reduce:transition-none narrow:hidden"
+						className="relative z-10 w-0 shrink-0 data-hover:cursor-col-resize border-l border-neutral-800 transition-colors delay-1000 duration-500 ease-out after:absolute after:inset-y-0 after:-left-0.75 after:-right-2.5 after:content-[''] data-hover:border-amber-600 data-hover:delay-0 data-hover:duration-100 focus-visible:border-amber-500 focus-visible:outline-none motion-reduce:transition-none narrow:hidden"
 					/>
 				</>
 			)}
@@ -1936,7 +1936,7 @@ export default function App() {
 							onPointerDown={startDockDrag}
 							{...hoverIntent}
 							onKeyDown={dockKeys}
-							className="relative z-10 h-px shrink-0 data-hover:cursor-row-resize bg-neutral-800 transition-colors delay-1000 duration-500 ease-out after:absolute after:inset-x-0 after:-top-1 after:-bottom-1 after:content-[''] data-hover:bg-amber-600 data-hover:delay-0 data-hover:duration-100 focus-visible:bg-amber-500 focus-visible:outline-none motion-reduce:transition-none"
+							className="relative z-10 h-0 shrink-0 data-hover:cursor-row-resize border-t border-neutral-800 transition-colors delay-1000 duration-500 ease-out after:absolute after:inset-x-0 after:-top-1.25 after:-bottom-1 after:content-[''] data-hover:border-amber-600 data-hover:delay-0 data-hover:duration-100 focus-visible:border-amber-500 focus-visible:outline-none motion-reduce:transition-none"
 						/>
 						<div
 							className="flex min-h-0 min-w-0 flex-col [flex:0_0_var(--dock-h)]"
@@ -1978,7 +1978,7 @@ export default function App() {
 				onKeyDown={listDividerKeys}
 				// Same line and 9px hit box as the panel's divider, leaning right to
 				// stay off the editor's scrollbar.
-				className="relative z-10 w-px shrink-0 data-hover:cursor-col-resize bg-neutral-800 transition-colors delay-1000 duration-500 ease-out after:absolute after:inset-y-0 after:-left-0.5 after:-right-1.5 after:content-[''] data-hover:bg-amber-600 data-hover:delay-0 data-hover:duration-100 focus-visible:bg-amber-500 focus-visible:outline-none motion-reduce:transition-none narrow:hidden"
+				className="relative z-10 w-0 shrink-0 data-hover:cursor-col-resize border-l border-neutral-800 transition-colors delay-1000 duration-500 ease-out after:absolute after:inset-y-0 after:-left-0.75 after:-right-1.5 after:content-[''] data-hover:border-amber-600 data-hover:delay-0 data-hover:duration-100 focus-visible:border-amber-500 focus-visible:outline-none motion-reduce:transition-none narrow:hidden"
 			/>
 			<SessionList
 				width={listWidth}

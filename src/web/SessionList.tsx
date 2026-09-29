@@ -11,6 +11,7 @@ import { ScrollPane } from "./OverlayScrollbar.js";
 
 /** The timestamp a row shows, which is always the one it is sorted by. */
 function stamp(s: PiSessionInfo, sort: SessionSort): string {
+	if (sort === "response") return s.lastResponse ?? s.created;
 	return sort === "created" ? s.created : s.lastActive;
 }
 
@@ -245,8 +246,11 @@ export function SessionList({
 					    control. */}
 					<Button
 						size="sm"
-						onClick={() => onSort(sort === "created" ? "active" : "created")}
-						title={t("Switch between newest-created and most-recently-active")}
+						onClick={() => {
+							const i = SESSION_SORTS.findIndex((s) => s.id === sort);
+							onSort(SESSION_SORTS[(i + 1) % SESSION_SORTS.length].id);
+						}}
+						title={t("Switch between newest-created, most-recently-active and latest response")}
 					>
 						{t(SESSION_SORTS.find((s) => s.id === sort)?.label ?? "")}
 						<CaretUpDown size={10} />
@@ -354,14 +358,6 @@ export function SessionList({
 									    pulsing while it works, steady amber for a new reply, red
 									    for a question. Inline, so a wrapped title keeps them on
 									    its first line. */}
-									{pins.includes(s.path) && (
-										<PushPin
-											size={12}
-											weight="fill"
-											className="mr-1.5 inline align-middle text-amber-400"
-											aria-label={t("Pinned")}
-										/>
-									)}
 									{state && (
 										<span
 											className={`mr-1.5 inline-block size-1.5 rounded-full align-middle ${ATTENTION_UI[state].dot}`}
@@ -398,6 +394,9 @@ export function SessionList({
 										<ChatCircle size={12} className="shrink-0 text-neutral-500" aria-hidden />
 										{s.messageCount}
 									</span>
+									{pins.includes(s.path) && (
+										<PushPin size={12} weight="fill" className="shrink-0 text-amber-400" aria-label={t("Pinned")} />
+									)}
 								</div>
 								)}
 							</button>

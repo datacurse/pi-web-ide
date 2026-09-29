@@ -56,11 +56,11 @@ export function sessionsRoutes({ cwd: CWD, registry }: Deps) {
 		})
 
 		/** Full-text search over one project's sessions. Before `/api/sessions/:id`, which would swallow it. */
-		.get("/sessions/search", query<{ cwd?: string; q?: string }>(), async (c) => {
+		.get("/sessions/search", query<{ cwd?: string; q?: string; word?: string }>(), async (c) => {
 			try {
 				const cwd = c.req.query("cwd") || CWD;
 				const q = c.req.query("q") ?? "";
-				return c.json({ hits: await searchSessions(cwd, q) }, 200);
+				return c.json({ hits: await searchSessions(cwd, q, c.req.query("word") === "1") }, 200);
 			} catch (err) {
 				return c.json({ error: err instanceof Error ? err.message : String(err) }, 500);
 			}

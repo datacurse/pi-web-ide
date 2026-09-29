@@ -909,7 +909,7 @@ function UserFooter({ text, at, onEdit }: { text: string; at?: number; onEdit?: 
 
 /**
  * Under the answer that ends a turn: copy it, fork a new session from it,
- * when it was answered (exact time on hover) and how long the turn took.
+ * and how long the turn took (exact end time on hover).
  */
 function AnswerFooter({
 	footer,
@@ -937,10 +937,11 @@ function AnswerFooter({
 			>
 				<GitFork size={14} />
 			</IconButton>
-			<span className="msg-footer-time ml-1">
-				<span title={new Date(end).toLocaleString(locale())}>{timeAgo(end)}</span>
-				{took >= 1000 && <span className="tabular-nums"> · {elapsed(took)}</span>}
-			</span>
+			{took >= 1000 && (
+				<span className="msg-footer-time ml-1 tabular-nums" title={new Date(end).toLocaleString(locale())}>
+					{elapsed(took)}
+				</span>
+			)}
 		</div>
 	);
 }

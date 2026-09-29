@@ -456,6 +456,7 @@ export function writeGitNested(on: boolean): void {
 export const SESSION_SORTS = [
 	{ id: "created", label: "Created" },
 	{ id: "active", label: "Last active" },
+	{ id: "response", label: "Last response" },
 ] as const;
 
 export type SessionSort = (typeof SESSION_SORTS)[number]["id"];

@@ -20,21 +20,24 @@ const SNIPPET_LENGTH = 160;
 type Text = { raw: string; lower: string };
 const cache = new Map<string, { size: number; mtimeMs: number } & Text>();
 
-export async function searchSessions(cwd: string, query: string): Promise<PiSessionHit[]> {
+/** `word`: each term must stand as a whole word (not inside `confusion`), and no fuzzy title matches. */
+export async function searchSessions(cwd: string, query: string, word = false): Promise<PiSessionHit[]> {
 	const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
 	if (!terms.length) return [];
+	const res = word ? terms.map(wordRe) : null;
+	const find = (hay: string, i: number) => (res ? hay.search(res[i]) : hay.indexOf(terms[i]));
 	const sessions = await listSessions(cwd);
 	const hits: (PiSessionHit & { rank: number })[] = [];
 	await pooled(sessions, async (session) => {
 		const text = await readText(session.path);
 		const title = (session.name || session.firstMessage).toLowerCase();
-		const inTitle = terms.every((t) => title.includes(t));
-		const inAll = inTitle || terms.every((t) => title.includes(t) || text.lower.includes(t));
+		const inTitle = terms.every((_, i) => find(title, i) >= 0);
+		const inAll = inTitle || terms.every((_, i) => find(title, i) >= 0 || find(text.lower, i) >= 0);
 		// Fuzzy only on the title, where a subsequence still means something:
 		// over megabytes of transcript nearly every query would match.
-		const rank = inTitle ? 0 : inAll ? 1 : fuzzy(title, terms.join("")) ? 2 : -1;
+		const rank = inTitle ? 0 : inAll ? 1 : !word && fuzzy(title, terms.join("")) ? 2 : -1;
 		if (rank < 0) return;
-		hits.push({ session, snippet: snippet(text, terms), rank });
+		hits.push({ session, snippet: snippet(text, terms, find), rank });
 	});
 	return hits
 		.sort((a, b) => a.rank - b.rank || b.session.lastActive.localeCompare(a.session.lastActive))
@@ -50,10 +53,15 @@ function fuzzy(hay: string, needle: string): boolean {
 	return false;
 }
 
+/** `term` not preceded or followed by a letter, digit or `_` (Unicode-aware, unlike `\b`). */
+function wordRe(term: string): RegExp {
+	return new RegExp(`(?<![\\p{L}\\p{N}_])${term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\\p{L}\\p{N}_])`, "u");
+}
+
 /** A single line around the first term found, starting a little before it. */
-function snippet(text: Text, terms: string[]): string {
-	for (const t of terms) {
-		const at = text.lower.indexOf(t);
+function snippet(text: Text, terms: string[], find: (hay: string, i: number) => number): string {
+	for (let i = 0; i < terms.length; i++) {
+		const at = find(text.lower, i);
 		if (at < 0) continue;
 		const start = Math.max(0, at - SNIPPET_BEFORE);
 		const cut = text.raw.slice(start, at + SNIPPET_LENGTH).replace(/\s+/g, " ").trim();

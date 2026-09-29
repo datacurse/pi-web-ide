@@ -121,7 +121,7 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
 - Primary text `neutral-100`/`200`; secondary `neutral-300`/`400`; hints `neutral-500`; disabled `neutral-600`.
 - Accent and primary action: `amber-*`. Errors: `red-*`. Success: `green-*`.
 - Every separator (panel edges, list row rules, table rows) is `border-neutral-800`; no fainter `neutral-900` rules.
-- The side panel's, the session list's (px width, 180–640, default 288; replaces the list's `border-l` on wide) and the terminal's resize dividers are 1px `neutral-800` lines like any other edge; their hit area is an invisible `after` box (9px; 13px on the side panel's), `z-10` so neighbors cannot cover it; the side panel's and session list's lean 2px left (and 10px / 6px right) to stay off the scrollbar to their left. They use the scrollbar's timing: amber after 300ms of hover (100ms fade), timed in JS by `hoverIntent` (ui.tsx) because a CSS `hover:delay-300` still flashed on a fast pass, the resize cursor shows on the same 300ms (a press shows both at once), then 1s after the pointer leaves they fade back over 500ms.
+- The side panel's, the session list's (px width, 180–640, default 288; replaces the list's `border-l` on wide) and the terminal's resize dividers are 1px `neutral-800` lines like any other edge, drawn as a `border` on a zero-size box (a 1px `bg` box straddles two device pixels under display scaling and looks thicker than the bordered edges); their hit area is an invisible `after` box (9px; 13px on the side panel's), `z-10` so neighbors cannot cover it; the side panel's and session list's lean 2px left (and 10px / 6px right) to stay off the scrollbar to their left. They use the scrollbar's timing: amber after 300ms of hover (100ms fade), timed in JS by `hoverIntent` (ui.tsx) because a CSS `hover:delay-300` still flashed on a fast pass, the resize cursor shows on the same 300ms (a press shows both at once), then 1s after the pointer leaves they fade back over 500ms.
 - Settings lists themes in two groups, Dark then Light (`light` flag in `prefs.ts`).
 
 ## Composer
@@ -297,6 +297,9 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
 - Empty query lists the most recently active sessions, so it is also a switcher.
 - Scope is the open project. Matches user and assistant text and tool-call arguments;
   title matches rank first, then content, then fuzzy (subsequence) title matches.
+- The popup's `TextAUnderline` toggle left of ✕ (or Alt+W in the query), `on` variant while
+  pressed, matches whole words only (`fusion` no longer hits `confusion`) and drops the
+  fuzzy title matches. Per popup, off by default.
 
 ## Command palette
 

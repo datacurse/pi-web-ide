@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ChatCircle, CircleNotch, MagnifyingGlass, X } from "@phosphor-icons/react";
+import { ChatCircle, CircleNotch, MagnifyingGlass, TextAUnderline, X } from "@phosphor-icons/react";
 import type { PiSessionHit, PiSessionInfo } from "../shared/types.js";
 import { sessionLabel } from "./sessionName.js";
 import { timeAgo } from "./SessionList.js";
@@ -32,7 +32,8 @@ export function SessionSearch({
 	const ref = useRef<HTMLDialogElement>(null);
 	const list = useRef<HTMLDivElement>(null);
 	const [query, setQuery] = useState("");
-	const { hits, terms, pending, error } = useSessionSearch(project, query);
+	const [wholeWord, setWholeWord] = useState(false);
+	const { hits, terms, word, pending, error } = useSessionSearch(project, query, wholeWord);
 	const [active, setActive] = useState(0);
 
 	useEffect(() => {
@@ -86,7 +87,10 @@ export function SessionSearch({
 					value={query}
 					onChange={(e) => setQuery(e.target.value)}
 					onKeyDown={(e) => {
-						if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+						if (e.altKey && e.code === "KeyW") {
+							e.preventDefault();
+							setWholeWord((w) => !w);
+						} else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
 							e.preventDefault();
 							const step = e.key === "ArrowDown" ? 1 : -1;
 							setActive((a) => Math.min(Math.max(a + step, 0), Math.max(rows.length - 1, 0)));
@@ -99,6 +103,14 @@ export function SessionSearch({
 					aria-label={t("Search sessions")}
 					className="min-w-0 flex-1 bg-transparent text-title text-neutral-100 outline-none placeholder:text-neutral-500"
 				/>
+				<IconButton
+					variant={wholeWord ? "on" : "ghost"}
+					aria-pressed={wholeWord}
+					onClick={() => setWholeWord((w) => !w)}
+					label={t("Match whole word (Alt+W)")}
+				>
+					<TextAUnderline size={16} />
+				</IconButton>
 				<IconButton onClick={onClose} label={t("Close search")}>
 					<X size={13} />
 				</IconButton>
@@ -131,10 +143,10 @@ export function SessionSearch({
 					>
 						<ChatCircle size={18} className="shrink-0 text-neutral-500" />
 						<span className="max-w-[60%] shrink-0 fade-end text-body text-neutral-200">
-							{highlight(sessionLabel(s, latestPrompt), terms)}
+							{highlight(sessionLabel(s, latestPrompt), terms, word)}
 						</span>
 						<span className="min-w-0 flex-1 fade-end text-ui text-neutral-500">
-							{snippet && highlight(snippet, terms)}
+							{snippet && highlight(snippet, terms, word)}
 						</span>
 						<span className="shrink-0 text-ui text-neutral-500">{timeAgo(s.lastActive)}</span>
 					</button>
