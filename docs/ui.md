@@ -91,6 +91,9 @@ They are spacing keys, so `h-control-sm`, `size-control-md` and `h-bar` all work
   content with `OverlayScrollbar` (drag it, or click the track to page), so nothing
   reserves a strip at its edges. It shows only while you scroll (wheel, touch, keys),
   hover its track or drag, then fades out after 1s idle; auto-scroll does not show it.
+  Lists do the same through `ScrollPane` (OverlayScrollbar.tsx), so row highlights span
+  the full width: Explorer, sessions, Source Control, Fleet, command palette, session
+  search, directory picker. Use it for any new scrolling list.
 Text and icon buttons of the same size share a height and line up in a row.
 
 ## Icons
@@ -134,8 +137,10 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
 - The context meter sits in the composer's left group, right of Attach. Git stays in
   the row above the box.
 - That row (jump-to-latest and git) floats over the transcript's bottom edge with no
-  band or background of its own; the transcript scrolls under it (`pb-12` keeps its
-  last line clear). No gap between the transcript and the box: the transcript fades from 8px
+  band or background of its own; the transcript scrolls under it (`pb-[max(3rem,var(--chat-scroll-past))]` keeps its
+  last line clear). Settings > Transcript > `Scroll past the end` (`pwi:scrollPastOn`, on by
+  default, like Cursor) adds room under the last message: `Amount` (`pwi:scrollPast`, 0–90% of
+  the window height, default 25) is a `FadeField` shown while on; `applyScrollPast` sets `--chat-scroll-past`. No gap between the transcript and the box: the transcript fades from 8px
   (the buttons' gap to the box) above the top of the git buttons to 0.2 opacity at the box's top edge (`.fade-bottom`), along
   `0.2 + 0.8(1-t^1.5)^3`: it eases in, dims fast, and settles at 0.2, never black.
   Settings > Appearance > `Chat fade` is a checkbox row (`pwi:chatFadeOn`, on by default;
@@ -213,6 +218,9 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
 - Closing a tab never scrolls the strip: tabs to its left stay put and tabs to its right
   slide left. Closed width is kept as trailing space until the pointer leaves the strip.
 - A cut-off tab label fades out over its last 2em (`.fade-end`, see Overflowing text).
+- When tabs overflow the strip, a tab cut off at either end fades out over 2em instead
+  of a hard cut (`.tab-strip`, `--strip-fade-start`/`-end`), so you can see there is more
+  to scroll to. Each fade goes once the strip is scrolled to that end.
 - Right-click any tab → `ContextMenu`, groups split by `MenuSeparator`:
   1. Session tabs: the session list's menu — `Pin Tab` / `Unpin Tab` (the list's pins),
      `Rename…` (inline in the tab, never `window.prompt`; Enter saves, Escape or blur

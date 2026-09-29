@@ -35,6 +35,7 @@ import { readExplorerOpen, writeExplorerOpen } from "./prefs.js";
 import { ContextMenu, IconButton, ListRow, MenuItem, MenuSeparator, PanelHeader, inputClass } from "./ui.js";
 import { api, unwrap } from "./api.js";
 import { t } from "./i18n.js";
+import { ScrollPane } from "./OverlayScrollbar.js";
 
 /*
  * Directory listings, kept for the life of the page.
@@ -541,9 +542,10 @@ export function Explorer({
 			)}
 
 			<EditContext.Provider value={{ edit, done: finishEdit }}>
-				<div
+				<ScrollPane
 					ref={tree}
-					className="min-h-0 flex-1 overflow-auto py-1"
+					className="min-h-0 flex-1"
+					innerClassName="py-1"
 					// The empty space below the rows: a menu for the project itself.
 					onContextMenu={(e) => {
 						if (e.target !== e.currentTarget) return;
@@ -579,7 +581,7 @@ export function Explorer({
 							/>
 						),
 					)}
-				</div>
+				</ScrollPane>
 			</EditContext.Provider>
 
 			{menu && (() => {

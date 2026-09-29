@@ -6,6 +6,7 @@ import { timeAgo } from "./SessionList.js";
 import { highlight, useSessionSearch } from "./searchHits.js";
 import { IconButton } from "./ui.js";
 import { t } from "./i18n.js";
+import { ScrollPane } from "./OverlayScrollbar.js";
 
 const RECENT = 50;
 
@@ -103,7 +104,7 @@ export function SessionSearch({
 				</IconButton>
 			</div>
 
-			<div ref={list} role="listbox" aria-label={t("Sessions")} className="min-h-0 flex-1 overflow-y-auto p-1.5">
+			<ScrollPane ref={list} role="listbox" aria-label={t("Sessions")} className="min-h-0 flex-1" innerClassName="p-1.5">
 				{error ? (
 					<p className="px-3 py-4 text-ui text-red-400" role="alert">
 						{error}
@@ -138,7 +139,7 @@ export function SessionSearch({
 						<span className="shrink-0 text-ui text-neutral-500">{timeAgo(s.lastActive)}</span>
 					</button>
 				))}
-			</div>
+			</ScrollPane>
 		</dialog>
 	);
 }

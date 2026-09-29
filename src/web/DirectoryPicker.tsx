@@ -4,6 +4,7 @@ import type { PiwDirListing } from "../shared/types.js";
 import { Button, IconButton, ListRow, inputClass } from "./ui.js";
 import { api } from "./api.js";
 import { t } from "./i18n.js";
+import { ScrollPane } from "./OverlayScrollbar.js";
 
 /**
  * The project directory picker: a folder explorer over the SERVER's
@@ -331,7 +332,7 @@ export function DirectoryPicker({
 
 			{/* min-h-0 so this scrolls instead of stretching the dialog past the
 			    viewport and stranding the footer. */}
-			<div className="min-h-0 flex-1 overflow-y-auto">
+			<ScrollPane className="min-h-0 flex-1">
 				{listing && entries.length === 0 && (
 					<p className="px-3 py-4 text-meta text-neutral-400">
 						{fragment
@@ -370,7 +371,7 @@ export function DirectoryPicker({
 						)}
 					</ListRow>
 				))}
-			</div>
+			</ScrollPane>
 
 			<div className="flex items-center gap-2 border-t border-neutral-800 px-2 py-2">
 				<Button

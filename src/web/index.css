@@ -676,6 +676,50 @@ body {
 	scrollbar-width: none;
 }
 
+/* Tabs cut off at either end of the strip fade out like `.fade-end` text, so you can see there is more to scroll to. */
+@property --strip-fade-start {
+	syntax: "<length>";
+	inherits: false;
+	initial-value: 0px;
+}
+
+@property --strip-fade-end {
+	syntax: "<length>";
+	inherits: false;
+	initial-value: 0px;
+}
+
+@supports (animation-timeline: scroll()) {
+	.tab-strip {
+		mask-image: linear-gradient(
+			to right,
+			transparent,
+			#000 var(--strip-fade-start),
+			#000 calc(100% - var(--strip-fade-end)),
+			transparent
+		);
+		animation: strip-fade linear both;
+		animation-timeline: scroll(self inline);
+	}
+}
+
+@keyframes strip-fade {
+	from {
+		--strip-fade-start: 0px;
+		--strip-fade-end: 2em;
+	}
+	5% {
+		--strip-fade-start: 2em;
+	}
+	95% {
+		--strip-fade-end: 2em;
+	}
+	to {
+		--strip-fade-start: 2em;
+		--strip-fade-end: 0px;
+	}
+}
+
 /*
  * A hover-only reveal does not exist on a touchscreen — there is no hover, so
  * the close affordance would simply be unreachable. Coarse pointers get it

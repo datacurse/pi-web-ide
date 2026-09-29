@@ -4,13 +4,17 @@ import { Button, inputClass, NavItem, OptionRow, PanelHeader, Section } from "./
 import {
 	applyChatFade,
 	applyFooterLayout,
+	applyScrollPast,
 	chatFadeOpacity,
 	CHAT_FADE_RANGES,
 	DEFAULT_CHAT_FADE,
 	readChatFade,
 	readChatFadeOn,
 	readFooterLayout,
+	readScrollPast,
+	readScrollPastOn,
 	readSettingsExpanded,
+	SCROLL_PAST_RANGE,
 	writeChatFadeOn,
 	writeSettingsExpanded,
 	type ChatFade,
@@ -141,6 +145,46 @@ function ChatFadeControl({ expandByDefault }: { expandByDefault: boolean }) {
 						))}
 					</div>
 					<ChatFadePreview fade={fade} />
+				</div>
+			)}
+		</div>
+	);
+}
+
+/** Toggle for scrolling the transcript past its last line, with the amount while on. */
+function ScrollPastControl() {
+	const [on, setOn] = useState(readScrollPastOn);
+	const [amount, setAmount] = useState(readScrollPast);
+	const change = (nextOn: boolean, next: number) => {
+		setOn(nextOn);
+		setAmount(next);
+		applyScrollPast(nextOn, next);
+	};
+	return (
+		<div className="flex flex-col gap-2">
+			<OptionRow>
+				<input
+					type="checkbox"
+					checked={on}
+					onChange={(e) => change(e.target.checked, amount)}
+					className="size-4 shrink-0 accent-amber-400"
+				/>
+				<span className="flex-1">
+					{t("Scroll past the end")}
+					<span className="block text-meta text-neutral-500">
+						{t("Let the chat scroll past its last message.")}
+					</span>
+				</span>
+			</OptionRow>
+			{on && (
+				<div className="grid grid-cols-[auto_1fr] items-center gap-x-3 gap-y-1 px-2">
+					<FadeField
+						label={t("Amount")}
+						hint={t("How far, in % of the window height.")}
+						range={SCROLL_PAST_RANGE}
+						value={amount}
+						onChange={(v) => change(true, v)}
+					/>
 				</div>
 			)}
 		</div>
@@ -507,6 +551,12 @@ export function Settings({
 					</span>
 				</OptionRow>
 			),
+		},
+		{
+			category: "transcript",
+			label: t("Scroll past the end"),
+			text: `overscroll bottom padding ${t("Let the chat scroll past its last message.")} ${t("Amount")}`,
+			node: <ScrollPastControl />,
 		},
 		{
 			category: "transcript",

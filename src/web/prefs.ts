@@ -205,6 +205,31 @@ export function writeChatFadeOn(on: boolean): void {
 	applyChatFade(readChatFade());
 }
 
+const SCROLL_PAST_ON_KEY = "pwi:scrollPastOn";
+const SCROLL_PAST_KEY = "pwi:scrollPast";
+
+/** min, max, step: how far the transcript scrolls past its last line, in % of the window height. */
+export const SCROLL_PAST_RANGE: [number, number, number] = [0, 90, 5];
+export const DEFAULT_SCROLL_PAST = 25;
+
+/** On by default, like Cursor. */
+export function readScrollPastOn(): boolean {
+	return readStored(SCROLL_PAST_ON_KEY) !== "0";
+}
+
+export function readScrollPast(): number {
+	const v = Number(readStored(SCROLL_PAST_KEY) ?? DEFAULT_SCROLL_PAST);
+	const [min, max] = SCROLL_PAST_RANGE;
+	return Number.isFinite(v) && v >= min && v <= max ? v : DEFAULT_SCROLL_PAST;
+}
+
+/** Stores both and sets `--chat-scroll-past`, the transcript's extra bottom padding (Chat.tsx). */
+export function applyScrollPast(on: boolean, amount: number): void {
+	writeStored(SCROLL_PAST_ON_KEY, on ? "1" : "0");
+	writeStored(SCROLL_PAST_KEY, String(amount));
+	document.documentElement.style.setProperty("--chat-scroll-past", on ? `${amount}vh` : "0px");
+}
+
 const SETTINGS_EXPANDED_KEY = "pwi:settingsExpanded";
 
 /** Whether settings with a details panel (Chat fade) start expanded. On by default. */

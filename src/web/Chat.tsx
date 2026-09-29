@@ -774,7 +774,7 @@ export function Chat({
 						// otherwise, which React would coalesce but still has to diff.
 						setAtBottom((was) => (was === bottom ? was : bottom));
 					}}
-					className="no-scrollbar fade-bottom min-h-0 flex-1 overflow-y-auto pb-12"
+					className="no-scrollbar fade-bottom min-h-0 flex-1 overflow-y-auto pb-[max(3rem,var(--chat-scroll-past,0px))]"
 				>
 					{snapshot.messages.length === 0 && !hasPartial && !busy && !command && (
 						<div className="flex h-full flex-col items-center justify-center gap-2 text-center select-none">

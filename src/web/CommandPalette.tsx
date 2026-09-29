@@ -3,6 +3,7 @@ import { Command, X } from "@phosphor-icons/react";
 import { matches } from "./Settings.js";
 import { IconButton } from "./ui.js";
 import { t } from "./i18n.js";
+import { ScrollPane } from "./OverlayScrollbar.js";
 
 export interface PaletteCommand {
 	id: string;
@@ -92,7 +93,7 @@ export function CommandPalette({
 				</IconButton>
 			</div>
 
-			<div ref={list} role="listbox" aria-label={t("Commands")} className="min-h-0 flex-1 overflow-y-auto p-1.5">
+			<ScrollPane ref={list} role="listbox" aria-label={t("Commands")} className="min-h-0 flex-1" innerClassName="p-1.5">
 				{rows.length === 0 && <p className="px-3 py-4 text-ui text-neutral-400">{t("No matching commands.")}</p>}
 				{rows.map((c, i) => (
 					<button
@@ -110,7 +111,7 @@ export function CommandPalette({
 						{c.keys && <span className="shrink-0 text-ui text-neutral-500">{c.keys}</span>}
 					</button>
 				))}
-			</div>
+			</ScrollPane>
 		</dialog>
 	);
 }

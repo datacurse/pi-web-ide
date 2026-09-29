@@ -186,6 +186,7 @@ export const RU: Record<string, string> = {
 	"Close": "Закрыть",
 	"Close Others": "Закрыть другие",
 	"Close to the Right": "Закрыть справа",
+	"Close All": "Закрыть все",
 	"Close {name}": "Закрыть: {name}",
 	"Close panel": "Закрыть панель",
 
@@ -696,6 +697,10 @@ export const RU: Record<string, string> = {
 	"Built-in: {model}": "Встроенная: {model}",
 	"Not selected": "Не выбрана",
 	"Chat fade": "Затухание чата",
+	"Scroll past the end": "Прокрутка за конец",
+	"Let the chat scroll past its last message.": "Чат прокручивается дальше последнего сообщения.",
+	"Amount": "Насколько",
+	"How far, in % of the window height.": "Насколько далеко, в % высоты окна.",
 	"Reset": "Сбросить",
 	"Length": "Длина",
 	"How far above the message box it starts, in rem.": "Насколько выше поля ввода оно начинается, в rem.",

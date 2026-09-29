@@ -12,6 +12,7 @@ import {
 	TerminalWindow,
 	X,
 	XCircle,
+	XSquare,
 } from "@phosphor-icons/react";
 import type { KeyboardEvent } from "react";
 import type { PiSessionInfo } from "../shared/types.js";
@@ -705,6 +706,15 @@ export function SessionTabs({
 							})}
 						>
 							{t("Close to the Right")}
+						</MenuItem>
+						<MenuItem
+							icon={<XSquare size={16} />}
+							role="menuitem"
+							onClick={act(() => {
+								for (const f of tabs) onClose(f);
+							})}
+						>
+							{t("Close All")}
 						</MenuItem>
 					</ContextMenu>
 				);

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type RefObject } from "react";
+import { forwardRef, useEffect, useRef, useState, type HTMLAttributes, type RefObject } from "react";
 
 /** How long a scrollbar stays after the last scroll before it fades. */
 const SHOW_MS = 1000;
@@ -145,3 +145,30 @@ export function OverlayScrollbar({ target }: { target: RefObject<HTMLElement | n
 		</div>
 	);
 }
+
+/**
+ * A scrolling list whose rows span its full width: the native scrollbar is
+ * hidden and OverlayScrollbar draws over the rows instead of beside them.
+ * `className` sizes the outer box (e.g. `min-h-0 flex-1`); everything else,
+ * `ref` included, goes to the scrolling element.
+ */
+export const ScrollPane = forwardRef<
+	HTMLDivElement,
+	HTMLAttributes<HTMLDivElement> & { innerClassName?: string }
+>(function ScrollPane({ className = "", innerClassName = "", ...props }, ref) {
+	const pane = useRef<HTMLDivElement | null>(null);
+	return (
+		<div className={`relative flex flex-col ${className}`}>
+			<div
+				{...props}
+				ref={(el) => {
+					pane.current = el;
+					if (typeof ref === "function") ref(el);
+					else if (ref) ref.current = el;
+				}}
+				className={`no-scrollbar min-h-0 flex-1 overflow-auto ${innerClassName}`}
+			/>
+			<OverlayScrollbar target={pane} />
+		</div>
+	);
+});

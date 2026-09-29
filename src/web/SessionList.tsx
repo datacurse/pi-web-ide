@@ -7,6 +7,7 @@ import { ATTENTION_UI, attentionRank, type Attention } from "./attention.js";
 import { highlight, useSessionSearch } from "./searchHits.js";
 import { Button, ContextMenu, IconButton, MenuItem, inputClass, sectionLabel, useBatches } from "./ui.js";
 import { perLocale, plural, t } from "./i18n.js";
+import { ScrollPane } from "./OverlayScrollbar.js";
 
 /** The timestamp a row shows, which is always the one it is sorted by. */
 function stamp(s: PiSessionInfo, sort: SessionSort): string {
@@ -248,7 +249,7 @@ export function SessionList({
 				    `min-height: auto` by default, so a long list would push the
 				    panel past the viewport and scroll the whole page instead of
 				    itself. */}
-				<div className="min-h-0 flex-1 overflow-y-auto">
+				<ScrollPane className="min-h-0 flex-1">
 					{listError || searchError ? (
 						<p className="px-3 py-4 text-meta text-red-400" role="alert">
 							{listError ?? searchError}
@@ -385,7 +386,7 @@ export function SessionList({
 						);
 					})}
 					{more && <div ref={end} className="h-4" />}
-				</div>
+				</ScrollPane>
 
 			</aside>
 

@@ -15,6 +15,7 @@ import { timeAgo } from "./SessionList.js";
 import { Terminal } from "./Terminal.js";
 import { api } from "./api.js";
 import { t } from "./i18n.js";
+import { ScrollPane } from "./OverlayScrollbar.js";
 
 const PWI: Record<FleetPwi, { text: string; tone: string; hint: string }> = {
 	running: { text: "pwi running", tone: "text-green-400", hint: "Open its pwi" },
@@ -208,7 +209,7 @@ export function Fleet({ open, onClose }: { open: boolean; onClose: () => void })
 				</IconButton>
 				{loading && <span className="text-meta text-neutral-500">{t("Checking machines…")}</span>}
 			</PanelHeader>
-			<div className="max-h-1/2 shrink-0 overflow-y-auto">
+			<ScrollPane className="max-h-1/2 shrink-0">
 				{error && <p className="px-4 py-2 text-meta text-red-400">{error}</p>}
 				{machines && (
 					<ul>
@@ -223,7 +224,7 @@ export function Fleet({ open, onClose }: { open: boolean; onClose: () => void })
 						))}
 					</ul>
 				)}
-			</div>
+			</ScrollPane>
 			{shellId ? (
 				<div
 					className="flex min-h-0 flex-1 flex-col"

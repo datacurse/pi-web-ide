@@ -53,6 +53,7 @@ import {
 	applyChatFade,
 	applyFooterLayout,
 	applyHideScrollbars,
+	applyScrollPast,
 	applyTheme,
 	type Language,
 	THEMES,
@@ -62,6 +63,8 @@ import {
 	readFooterLayout,
 	readHideScrollbars,
 	readNotify,
+	readScrollPast,
+	readScrollPastOn,
 	readPanel,
 	readPinnedSessions,
 	readSeenSessions,
@@ -238,6 +241,7 @@ export default function App() {
 	useEffect(() => applyHideScrollbars(hideScrollbars), [hideScrollbars]);
 	// Settings owns later changes; this paints the stored fade once.
 	useEffect(() => applyChatFade(readChatFade()), []);
+	useEffect(() => applyScrollPast(readScrollPastOn(), readScrollPast()), []);
 	useEffect(() => applyFooterLayout(readFooterLayout()), []);
 	useEffect(() => void (document.documentElement.lang = language), [language]);
 	const changeLanguage = useCallback((lang: Language) => {

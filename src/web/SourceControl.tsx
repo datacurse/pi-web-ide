@@ -43,6 +43,7 @@ import { readGitAutoName, readGitNested, writeGitAutoName, writeGitNested } from
 import { Button, IconButton, ListRow, PanelHeader, inputClass, sectionLabel } from "./ui.js";
 import { api, unwrap } from "./api.js";
 import { plural, t } from "./i18n.js";
+import { ScrollPane } from "./OverlayScrollbar.js";
 
 /** `/home/me/proj/src/web/App.tsx` → `src/web/App.tsx` when it is under `cwd`. */
 function shortPath(path: string, cwd: string): string {
@@ -547,7 +548,7 @@ function RepoView({
 			{/* Two scrollers, not one: scanning fifty commits used to push the
 			    changed files off the top, and they are the half you act on. Equal
 			    halves (flex-1 basis-0) so neither list can starve the other. */}
-			<div className="min-h-0 flex-1 basis-0 overflow-auto">
+			<ScrollPane className="min-h-0 flex-1 basis-0">
 				<p className={`sticky top-0 z-10 bg-neutral-950 px-3 py-1.5 ${sectionLabel}`}>
 					{t("Changes")}
 					{dirty && <span className="ml-1 text-neutral-500">{state?.changed}</span>}
@@ -570,11 +571,11 @@ function RepoView({
 					))
 				)}
 
-			</div>
+			</ScrollPane>
 
 			{/* BOTTOM HALF: history. Collapsed, because a commit is a row you
 			    scan and only sometimes open. */}
-			<div className="min-h-0 flex-1 basis-0 overflow-auto border-t border-neutral-800">
+			<ScrollPane className="min-h-0 flex-1 basis-0 border-t border-neutral-800">
 				<p className={`sticky top-0 z-10 bg-neutral-950 px-3 py-1.5 ${sectionLabel}`}>
 					{t("Commits")}
 				</p>
@@ -617,7 +618,7 @@ function RepoView({
 						</div>
 					);
 				})}
-			</div>
+			</ScrollPane>
 		</div>
 	);
 }

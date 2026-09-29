@@ -281,8 +281,9 @@ export function GitActions({
 
 	const dirty = state.changed > 0;
 	const unpushed = state.ahead > 0 || (!state.upstream && state.remote !== "");
-	if (!dirty && !unpushed && !running && !result) return null;
-	const primary = ACTIONS[0];
+	const shown = result && (!result.ok || result.url);
+	if (!dirty && !unpushed && !running && !shown) return null;
+	const primary = dirty ? ACTIONS[0] : ACTIONS[2];
 
 	return (
 		<div ref={root} className="relative flex items-center gap-1.5">
