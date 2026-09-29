@@ -1,6 +1,6 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import { Bell, ChatText, ListBullets, Palette, UserCircle } from "@phosphor-icons/react";
-import { Button, inputClass, NavItem, OptionRow, PanelHeader, Section } from "./ui.js";
+import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { Bell, ChatText, ListBullets, Palette } from "@phosphor-icons/react";
+import { inputClass, NavItem, OptionRow, PanelHeader, Section } from "./ui.js";
 import {
 	LANGUAGES,
 	THEMES,
@@ -13,25 +13,13 @@ import {
 	type ToolMode,
 	type UserMode,
 } from "./prefs.js";
-import { api } from "./api.js";
 import { t } from "./i18n.js";
-
-/** What GET/PUT /api/personality answer with. */
-interface Personality {
-	path: string;
-	content: string;
-	exists: boolean;
-	remind: boolean;
-}
-
-type SaveState = "idle" | "saving" | "saved";
 
 const CATEGORIES = [
 	{ id: "appearance", label: "Appearance", icon: <Palette size={16} /> },
 	{ id: "transcript", label: "Transcript", icon: <ChatText size={16} /> },
 	{ id: "sessions", label: "Sessions", icon: <ListBullets size={16} /> },
 	{ id: "notifications", label: "Notifications", icon: <Bell size={16} /> },
-	{ id: "personality", label: "Personality", icon: <UserCircle size={16} /> },
 ] as const;
 type Category = (typeof CATEGORIES)[number]["id"];
 
@@ -61,14 +49,11 @@ function Swatch({ theme }: { theme: ThemeId }) {
 }
 
 /**
- * The Settings page, shown in the page dialog: one <fieldset> per setting, all but the
- * personality browser-local (see prefs.ts).
- *
- * Stays mounted once opened, so an unsaved personality edit survives
- * closing the dialog. `open` is "the dialog is showing it".
+ * The Settings page, shown in the page dialog: one <fieldset> per setting, all
+ * browser-local (see prefs.ts). The personality, which is the server's, lives
+ * in Packages with the other pwi extensions.
  */
 export function Settings({
-	open,
 	theme,
 	onTheme,
 	language,
@@ -87,7 +72,6 @@ export function Settings({
 	onHideScrollbars,
 	onClose,
 }: {
-	open: boolean;
 	theme: ThemeId;
 	onTheme: (theme: ThemeId) => void;
 	language: Language;
@@ -121,100 +105,9 @@ export function Settings({
 			? t("Blocked — allow notifications for this site in your browser.")
 			: t("Only when the page is in the background. Shows the first line of the answer.");
 
-	/*
-	 * Personality lives on the server, so unlike every other control here it
-	 * has to be fetched — and it is fetched by this component rather than
-	 * lifted into App, because nothing outside the dialog reads it and a piece
-	 * of state whose only consumer is one panel does not belong three levels up.
-	 *
-	 * Reloaded on every open so an edit made in $EDITOR (or on another machine's
-	 * pwi) is what you see — EXCEPT when there are unsaved edits, which a
-	 * refetch would silently throw away. Closing the dialog by accident is one
-	 * Escape press; losing the paragraph you just typed to it would be pwi's
-	 * fault, not yours.
-	 */
-	const [personality, setPersonality] = useState<Personality | null>(null);
-	const [draft, setDraft] = useState<string | null>(null);
-	const [saveState, setSaveState] = useState<SaveState>("idle");
-	const [saveError, setSaveError] = useState<string | null>(null);
-	const dirty = draft !== null && draft !== personality?.content;
-
-	const [loadError, setLoadError] = useState<string | null>(null);
 	const [category, setCategory] = useState<Category>("appearance");
 	const [query, setQuery] = useState("");
 	const results = useRef<HTMLDivElement>(null);
-
-	useEffect(() => {
-		if (!open || dirty) return;
-		void (async () => {
-			// The personality on screen is the selected host's, not this page's.
-			const r = await api.personality.$get().catch(() => null);
-			/*
-			 * Every failure mode ends up as a message, never as a control that
-			 * sits on "loading…" forever. The one that actually happened: a
-			 * browser running this code against a pwi process started before the
-			 * endpoint existed, where the SPA fallback answered with index.html
-			 * and a 200 — so a successful-looking response whose body is not JSON
-			 * has to be treated as the version mismatch it is.
-			 */
-			const loaded = r?.ok
-				? ((await r.json().catch(() => null)) as Personality | null)
-				: null;
-			if (!loaded || typeof loaded.content !== "string") {
-				setLoadError(
-					r && !r.ok
-						? t("could not read it (HTTP {status})", { status: r.status })
-						: t("could not read it — is this pwi older than the field? restart it"),
-				);
-				return;
-			}
-			setPersonality(loaded);
-			setDraft(loaded.content);
-			setSaveState("idle");
-			setSaveError(null);
-			setLoadError(null);
-		})();
-		// `dirty` is deliberately not a dependency: this runs on open, and
-		// re-running it the moment an edit is undone would refetch mid-typing.
-	}, [open]);
-
-	// Saved on click like every other checkbox here, independent of the text's
-	// Save button, since it is its own file on the server.
-	const saveRemind = async (remind: boolean) => {
-		const r = await api.personality.remind.$put({ json: { remind } }).catch(() => null);
-		if (!r?.ok) {
-			setSaveError(t("could not save the reminder setting"));
-			return;
-		}
-		setPersonality((p) => (p ? { ...p, remind } : p));
-	};
-
-	const savePersonality = async () => {
-		if (draft === null) return;
-		setSaveState("saving");
-		setSaveError(null);
-		const r = await api.personality.$put({ json: { content: draft } }).catch(() => null);
-		const body = (await r?.json().catch(() => ({}))) as Partial<Personality> & {
-			error?: string;
-		};
-		if (!r?.ok) {
-			setSaveState("idle");
-			setSaveError(body.error ?? t("could not save"));
-			return;
-		}
-		// The server answers with what it wrote (a trailing newline may have
-		// been added), so the draft is reconciled against the file rather than
-		// against what was typed — otherwise the field stays "dirty" forever.
-		const saved: Personality = {
-			path: body.path ?? personality?.path ?? "",
-			content: body.content ?? draft,
-			exists: true,
-			remind: body.remind ?? personality?.remind ?? false,
-		};
-		setPersonality(saved);
-		setDraft(saved.content);
-		setSaveState("saved");
-	};
 
 	/*
 	 * Every setting as one searchable item: `label` is its name (fuzzy-matched),
@@ -428,95 +321,6 @@ export function Settings({
 					<span className="flex-1">
 						{t("Notify when a run finishes")}
 						<span className="block text-meta text-neutral-500">{notifyHint}</span>
-					</span>
-				</OptionRow>
-			),
-		},
-		{
-			category: "personality",
-			label: t("Personality"),
-			text: `system prompt instructions ${t("Appended to every new session's system prompt")}`,
-			/*
-			  The one control here that is not browser-local: it edits this
-			  server's own personality.md, in the state directory. The path is
-			  shown because a field that silently writes a file somewhere is
-			  worse than no field, and the hint says when the change lands —
-			  the file is handed to each child as `--append-system-prompt` at
-			  spawn, so a running session keeps the prompt it started with.
-			*/
-			node: (
-				<>
-					<label className="block px-2">
-						<span className="text-ui text-neutral-300">
-							{t("Appended to every new session's system prompt")}
-						</span>
-						<span className="mt-0.5 block font-mono text-meta break-all text-neutral-500">
-							{loadError ? (
-								<span className="text-red-400">{loadError}</span>
-							) : (
-								<>
-									{personality?.path ?? t("loading…")}
-									{personality && !personality.exists && ` ${t("(not created yet)")}`}
-								</>
-							)}
-						</span>
-						<textarea
-							value={draft ?? ""}
-							onChange={(e) => {
-								setDraft(e.target.value);
-								setSaveState("idle");
-							}}
-							disabled={draft === null}
-							rows={10}
-							spellCheck={false}
-							placeholder={loadError ? t("Unavailable.") : t("Empty means nothing is appended.")}
-							className={`mt-2 block w-full resize-y font-mono ${inputClass.sm}`}
-						/>
-					</label>
-					<div className="mt-2 flex items-center gap-2 px-2">
-						<Button
-							variant="subtle"
-							size="sm"
-							onClick={() => void savePersonality()}
-							disabled={!dirty || saveState === "saving"}
-						>
-							{saveState === "saving" ? t("Saving…") : t("Save")}
-						</Button>
-						<span className="min-w-0 flex-1 text-meta text-neutral-500">
-							{saveError ? (
-								<span className="text-red-400">{saveError}</span>
-							) : dirty ? (
-								t("Unsaved changes.")
-							) : saveState === "saved" ? (
-								t("Saved. Applies to sessions started from now on.")
-							) : (
-								t("Read from disk each time Settings is shown.")
-							)}
-						</span>
-					</div>
-				</>
-			),
-		},
-		{
-			category: "personality",
-			label: t("Repeat before every reply"),
-			text: `remind tokens drift ${t("Also adds the text to the end of each of your messages on every model request, so long sessions do not drift from it. Costs its length in tokens per message, mostly at the cache-read rate. Applies to sessions started from now on.")}`,
-			node: (
-				<OptionRow>
-					<input
-						type="checkbox"
-						checked={personality?.remind ?? false}
-						disabled={!personality}
-						onChange={(e) => void saveRemind(e.target.checked)}
-						className="size-4 shrink-0 accent-amber-400"
-					/>
-					<span className="flex-1">
-						{t("Repeat before every reply")}
-						<span className="block text-meta text-neutral-500">
-							{t(
-								"Also adds the text to the end of each of your messages on every model request, so long sessions do not drift from it. Costs its length in tokens per message, mostly at the cache-read rate. Applies to sessions started from now on.",
-							)}
-						</span>
 					</span>
 				</OptionRow>
 			),

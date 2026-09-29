@@ -1056,7 +1056,7 @@ export function spawnArgs(opts: {
 	if (opts.model) args.push("--model", opts.model);
 	// `--append-system-prompt` accepts a path and reads the file. Applied at
 	// spawn, so an edit reaches children started after the save — which is what
-	// the settings dialog says.
+	// the Packages page says.
 	if (opts.personality) args.push("--append-system-prompt", opts.personality);
 	// The same file again at the end of each request; see remind-extension.ts.
 	if (opts.personality && opts.remind) {

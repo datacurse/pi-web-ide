@@ -20,6 +20,7 @@ import type {
 	PwiExtensions,
 } from "../shared/types.js";
 import { Button, IconButton, OptionRow, PanelHeader, inputClass, sectionLabel } from "./ui.js";
+import { Personality } from "./Personality.js";
 import { parseResponse } from "hono/client";
 import { api } from "./api.js";
 import { t, locale } from "./i18n.js";
@@ -51,10 +52,13 @@ const warning = () =>
 	t("Packages run with full system access: extensions are code, and skills can tell the model to run anything.");
 
 export function Packages({
+	open,
 	onChanged,
 	cwd,
 	onClose,
 }: {
+	/** The page dialog is showing it: the personality is re-read then. */
+	open: boolean;
 	/** A package changed: the open session's snapshot is now out of date. */
 	onChanged: () => void;
 	/** The project on screen, whose own `.pi/settings.json` is shown read-only. */
@@ -168,8 +172,10 @@ export function Packages({
 			</PanelHeader>
 
 			<div className="min-h-0 flex-1 overflow-y-auto p-3">
-				{tab === "installed" && (
+				{/* Hidden, not unmounted, on the other tab: an unsaved personality edit lives in it. */}
+				<div className={tab === "installed" ? "" : "hidden"}>
 					<Installed
+						open={open}
 						packages={packages}
 						piVersion={view?.piVersion}
 						error={error}
@@ -185,7 +191,7 @@ export function Packages({
 							void mutate(t("update pi"), () => api.packages["update-pi"].$post())
 						}
 					/>
-				)}
+				</div>
 				{tab === "search" && <Search onPick={setAdding} />}
 			</div>
 
@@ -218,6 +224,7 @@ export function Packages({
 }
 
 function Installed({
+	open,
 	packages,
 	piVersion,
 	error,
@@ -227,6 +234,7 @@ function Installed({
 	onRemove,
 	onUpdatePi,
 }: {
+	open: boolean;
 	packages: PiwPackage[];
 	piVersion: string | null | undefined;
 	error: string | null;
@@ -330,7 +338,7 @@ function Installed({
 				</tbody>
 			</table>
 
-			<PwiExtensionsSection />
+			<PwiExtensionsSection open={open} />
 
 			<div className="mt-6 border-t border-neutral-800 pt-3">
 				<h3 className={sectionLabel}>{t("pi itself")}</h3>
@@ -375,11 +383,10 @@ function Installed({
 }
 
 /**
- * pi extensions that ship with pwi and load only into the sessions it starts,
- * each with its switch. The reminder's is the same setting as in Settings ›
- * Personality.
+ * pi extensions that ship with pwi and load only into the sessions it starts:
+ * the tool-metrics switch, and the personality with its reminder.
  */
-function PwiExtensionsSection() {
+function PwiExtensionsSection({ open }: { open: boolean }) {
 	const [state, setState] = useState<PwiExtensions | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	useEffect(() => {
@@ -389,32 +396,12 @@ function PwiExtensionsSection() {
 			.then((s) => (s ? setState(s) : setError(t("could not load pwi extensions"))))
 			.catch(() => setError(t("could not load pwi extensions")));
 	}, []);
-	const set = async (key: "toolMetrics" | "remind", on: boolean) => {
-		const r = await (key === "toolMetrics"
-			? api["pwi-extensions"]["tool-metrics"].$put({ json: { on } })
-			: api.personality.remind.$put({ json: { remind: on } })
-		).catch(() => null);
+	const setToolMetrics = async (on: boolean) => {
+		const r = await api["pwi-extensions"]["tool-metrics"].$put({ json: { on } }).catch(() => null);
 		if (!r?.ok) return setError(t("could not save the setting"));
 		setError(null);
-		setState((s) => (s ? { ...s, [key]: on } : s));
+		setState({ toolMetrics: on });
 	};
-	const rows: { key: "toolMetrics" | "remind"; name: string; text: string; off?: boolean }[] = [
-		{
-			key: "toolMetrics",
-			name: t("Tool metrics"),
-			text: t(
-				"Times every tool call, and each command inside a bash call with its output size, for Stats and the context panel. Nothing reaches the model.",
-			),
-		},
-		{
-			key: "remind",
-			name: t("Personality reminder"),
-			text: state?.personality
-				? t("Repeats your personality text at the end of each message, so long sessions do not drift from it.")
-				: t("Repeats your personality text at the end of each message. Write one in Settings › Personality first."),
-			off: !state?.personality,
-		},
-	];
 	return (
 		<div className="mt-6 border-t border-neutral-800 pt-3">
 			<h3 className={sectionLabel}>{t("pwi extensions")}</h3>
@@ -425,21 +412,24 @@ function PwiExtensionsSection() {
 			</p>
 			{error && <p className="mt-1 text-meta text-red-400">{error}</p>}
 			<div className="mt-2 max-w-xl">
-				{rows.map((row) => (
-					<OptionRow key={row.key} disabled={!state || row.off}>
-						<input
-							type="checkbox"
-							checked={state?.[row.key] ?? false}
-							disabled={!state || row.off}
-							onChange={(e) => void set(row.key, e.target.checked)}
-							className="size-4 shrink-0 accent-amber-400"
-						/>
-						<span className="flex-1">
-							{row.name}
-							<span className="block text-meta text-neutral-500">{row.text}</span>
+				<OptionRow disabled={!state}>
+					<input
+						type="checkbox"
+						checked={state?.toolMetrics ?? false}
+						disabled={!state}
+						onChange={(e) => void setToolMetrics(e.target.checked)}
+						className="size-4 shrink-0 accent-amber-400"
+					/>
+					<span className="flex-1">
+						{t("Tool metrics")}
+						<span className="block text-meta text-neutral-500">
+							{t(
+								"Times every tool call, and each command inside a bash call with its output size, for Stats and the context panel. Nothing reaches the model.",
+							)}
 						</span>
-					</OptionRow>
-				))}
+					</span>
+				</OptionRow>
+				<Personality open={open} />
 			</div>
 		</div>
 	);

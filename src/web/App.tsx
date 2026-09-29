@@ -1580,6 +1580,7 @@ export default function App() {
 		if (page === "packages")
 			return (
 				<Packages
+					open={active}
 					onChanged={() => {
 						void left.reloadSnapshot();
 						void right.reloadSnapshot();
@@ -1590,7 +1591,6 @@ export default function App() {
 			);
 		return (
 			<Settings
-				open={active}
 				theme={theme}
 				onTheme={setTheme}
 				language={language}
@@ -1889,8 +1889,8 @@ export default function App() {
 				sessions={shown}
 				attention={attention}
 				listError={listError}
-				activeFile={snapshot?.file}
-				openFiles={tabs.files}
+				activeFile={(focusedSide === "right" && tabs.right ? right : left).snapshot?.file ?? snapshot?.file}
+				openFiles={tabs.right ? [...tabs.files, ...tabs.right.files] : tabs.files}
 				sort={sessionSort}
 				pinned={pinned}
 				onTogglePin={togglePin}

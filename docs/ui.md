@@ -298,13 +298,15 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
   have no lit state. Escape in a popup inside a page (Packages add) closes only that popup.
 - Packages' Installed tab has two kinds: pi packages (the table; installed into pi, also
   in a terminal) and, under it, `pwi extensions`: extensions built into pwi and loaded only
-  into the sessions it starts. Each is an `OptionRow` checkbox with a `text-meta` line
-  saying what it does: Tool metrics (on by default) and Personality reminder (the same
-  setting as in Settings › Personality, disabled until a personality text exists).
-  Changes apply to sessions started afterwards. pwi's own plumbing (rewind, context)
-  is not listed.
+  into the sessions it starts. Tool metrics is an `OptionRow` checkbox (on by default) with
+  a `text-meta` line saying what it does. Under it, Personality (`Personality.tsx`, moved
+  from Settings): a `text-ui` heading, the file's path, a mono `textarea` with `Save`
+  (`Button sm subtle`) and a status line, then the `Repeat before every reply` checkbox.
+  It is re-read each time the page is shown unless there are unsaved edits, and the
+  Installed tab stays mounted (hidden) on Search so an unsaved edit survives. Changes
+  apply to sessions started afterwards. pwi's own plumbing (rewind, context) is not listed.
 - Settings has a `w-48` category nav on the left (`NavItem`s: Appearance, Transcript,
-  Sessions, Notifications, Personality), like Obsidian; the right side shows only the
+  Sessions, Notifications), like Obsidian; the right side shows only the
   chosen category, `max-w-xl p-6`. Opens on Appearance.
 - Appearance has a `Language` radio group (English / Русский, each named in itself,
   `pwi:language`, per browser). Every interface string goes through `t("English text")`

@@ -469,7 +469,7 @@ export const RU: Record<string, string> = {
 	"Saving…": "Сохраняю…",
 	"Unsaved changes.": "Есть несохранённые изменения.",
 	"Saved. Applies to sessions started from now on.": "Сохранено. Действует для сессий, запущенных с этого момента.",
-	"Read from disk each time Settings is shown.": "Читается с диска при каждом открытии настроек.",
+	"Read from disk each time Packages is shown.": "Читается с диска при каждом открытии пакетов.",
 	"Repeat before every reply": "Повторять перед каждым ответом",
 	"Also adds the text to the end of each of your messages on every model request, so long sessions do not drift from it. Costs its length in tokens per message, mostly at the cache-read rate. Applies to sessions started from now on.":
 		"Также добавляет текст в конец каждого вашего сообщения при каждом запросе к модели, чтобы длинные сессии от него не уходили. Стоит его длину в токенах на сообщение, в основном по цене чтения из кэша. Действует для сессий, запущенных с этого момента.",
@@ -504,11 +504,6 @@ export const RU: Record<string, string> = {
 	"Tool metrics": "Метрики инструментов",
 	"Times every tool call, and each command inside a bash call with its output size, for Stats and the context panel. Nothing reaches the model.":
 		"Замеряет время каждого вызова инструмента и каждой команды внутри вызова bash вместе с объёмом её вывода — для статистики и панели контекста. Модель ничего из этого не видит.",
-	"Personality reminder": "Напоминание о личности",
-	"Repeats your personality text at the end of each message, so long sessions do not drift from it.":
-		"Повторяет текст личности в конце каждого сообщения, чтобы длинные сессии от него не уходили.",
-	"Repeats your personality text at the end of each message. Write one in Settings › Personality first.":
-		"Повторяет текст личности в конце каждого сообщения. Сначала напишите его в Настройки › Личность.",
 	"pwi extensions": "Расширения pwi",
 	"Built into pwi and loaded only into the sessions it starts, not into pi in a terminal. A change applies to sessions started from now on.":
 		"Встроены в pwi и загружаются только в сессии, которые он запускает, а не в pi в терминале. Изменение действует для сессий, запущенных после него.",

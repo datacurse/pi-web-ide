@@ -222,9 +222,6 @@ export interface StatsView {
 /** The switchable pi extensions pwi loads into the sessions it starts (server/pwiExtensions.ts). */
 export interface PwiExtensions {
 	toolMetrics: boolean;
-	remind: boolean;
-	/** A personality text exists, which the reminder repeats; without one it does nothing. */
-	personality: boolean;
 }
 
 /** One reading of every Claude limit, from `/api/usage`'s `history`. */
