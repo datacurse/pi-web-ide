@@ -428,6 +428,8 @@ export const RU: Record<string, string> = {
 	"could not save the reminder setting": "не удалось сохранить настройку напоминания",
 	"could not save": "не удалось сохранить",
 	"Theme": "Тема",
+	"Dark": "Тёмные",
+	"Light": "Светлые",
 	"Language": "Язык",
 	"Show thinking": "Показывать размышления",
 	"Reasoning blocks in assistant messages, as they stream and in history.":

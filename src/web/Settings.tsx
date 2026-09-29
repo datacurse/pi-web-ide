@@ -211,7 +211,12 @@ export function Settings({
 				// Real radios, visually hidden: the group gets arrow-key navigation,
 				// roving focus and the right screen reader announcement for free.
 				<div role="radiogroup" aria-label={t("Theme")} className="flex flex-col gap-0.5">
-					{THEMES.map((th) => (
+					{THEMES.map((th, i) => [
+						th.light !== THEMES[i - 1]?.light && (
+							<div key={th.light ? "light" : "dark"} className="px-2 pt-1 pb-1 text-ui text-neutral-300">
+								{th.light ? t("Light") : t("Dark")}
+							</div>
+						),
 						<OptionRow key={th.id} selected={th.id === theme}>
 							<input
 								type="radio"
@@ -226,8 +231,8 @@ export function Settings({
 							<span aria-hidden className={th.id === theme ? "text-amber-400" : "invisible"}>
 								{"\u2713"}
 							</span>
-						</OptionRow>
-					))}
+						</OptionRow>,
+					])}
 				</div>
 			),
 		},

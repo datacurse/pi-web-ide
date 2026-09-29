@@ -40,12 +40,12 @@ function writeStored(key: string, value: string): void {
  * family, so the dialog cannot prefix them all with "Catppuccin".
  */
 export const THEMES = [
-	{ id: "mocha", label: "Catppuccin Mocha" },
-	{ id: "macchiato", label: "Catppuccin Macchiato" },
-	{ id: "frappe", label: "Catppuccin Frappé" },
-	{ id: "latte", label: "Catppuccin Latte" },
-	{ id: "claude", label: "Claude" },
-	{ id: "claude-light", label: "Claude Light" },
+	{ id: "mocha", label: "Catppuccin Mocha", light: false },
+	{ id: "macchiato", label: "Catppuccin Macchiato", light: false },
+	{ id: "frappe", label: "Catppuccin Frappé", light: false },
+	{ id: "claude", label: "Claude", light: false },
+	{ id: "latte", label: "Catppuccin Latte", light: true },
+	{ id: "claude-light", label: "Claude Light", light: true },
 ] as const;
 
 export type ThemeId = (typeof THEMES)[number]["id"];

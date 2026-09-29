@@ -685,8 +685,9 @@ function Compacting() {
 
 /** Claude Code's glyph cycle, there and back. */
 // No ✳ (U+2733): it has emoji presentation and Windows draws it as a green
-// square. Claude Code swaps it for `*` on Windows for the same reason.
-const STAR_FRAMES = ["·", "✢", "*", "✶", "✻", "✽", "✻", "✶", "*", "✢"];
+// square. Claude Code swaps it for `*` on Windows for the same reason; ours is
+// ∗ (U+2217) because ASCII `*` sits at the top of the line, not the middle.
+const STAR_FRAMES = ["·", "✢", "∗", "✶", "✻", "✽", "✻", "✶", "∗", "✢"];
 /** Claude Code's spinner verbs. */
 const VERBS = [
 	"Accomplishing", "Actioning", "Actualizing", "Baking", "Booping", "Brewing",
