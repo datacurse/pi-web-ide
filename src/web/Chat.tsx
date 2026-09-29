@@ -43,6 +43,7 @@ import {
 	turnStart,
 } from "./Transcript.js";
 import { t } from "./i18n.js";
+import { PiMark } from "./piMark.js";
 
 /** pi's `get_commands` omits its TUI-only `/compact`; `send` in useSession.ts runs it. */
 const COMPACT_COMMAND: PiCommand = {
@@ -778,7 +779,7 @@ export function Chat({
 				>
 					{snapshot.messages.length === 0 && !hasPartial && !busy && !command && (
 						<div className="flex h-full flex-col items-center justify-center gap-2 text-center select-none">
-							<div className="text-display text-amber-400">π</div>
+							<PiMark className="text-display size-[1em] text-amber-400" />
 							<div className="text-title text-neutral-200">{t("New session")}</div>
 							<div className="text-ui text-neutral-500">
 								{t("in")} <span className="font-mono text-neutral-400">{snapshot.cwd.split(/[\\/]/).filter(Boolean).at(-1) ?? snapshot.cwd}</span>

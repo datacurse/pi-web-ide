@@ -601,6 +601,29 @@ export function writeTerminalWidth(percent: number): void {
 	writeStored(TERM_WIDTH_KEY, String(Math.round(percent)));
 }
 
+/**
+ * The session list's width, in PIXELS unlike the panel: it is a list of
+ * titles, which need the same room at any window size.
+ */
+const LIST_WIDTH_KEY = "pwi:sessionListWidth";
+
+export const LIST_MIN_PX = 180;
+export const LIST_MAX_PX = 640;
+const DEFAULT_LIST_PX = 288;
+
+export const clampListWidth = (px: number): number => Math.min(LIST_MAX_PX, Math.max(LIST_MIN_PX, px));
+
+export function readListWidth(): number {
+	const raw = readStored(LIST_WIDTH_KEY);
+	if (raw === null) return DEFAULT_LIST_PX;
+	const stored = Number(raw);
+	return Number.isFinite(stored) ? clampListWidth(stored) : DEFAULT_LIST_PX;
+}
+
+export function writeListWidth(px: number): void {
+	writeStored(LIST_WIDTH_KEY, String(Math.round(px)));
+}
+
 const TERM_TABS_SIDE_KEY = "pwi:termTabsSide";
 
 /** Which side of the terminal dock its tab list sits on. */

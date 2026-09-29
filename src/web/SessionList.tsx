@@ -66,6 +66,7 @@ export function SessionList({
 	shortNames,
 	onSearch,
 	project,
+	width,
 }: {
 	sessions: PiSessionInfo[];
 	/** Each session's working / ready / needs state, keyed by file. */
@@ -98,6 +99,8 @@ export function SessionList({
 	onSearch: () => void;
 	/** The project whose sessions the search box searches. */
 	project: string;
+	/** Column width in px on a wide viewport; the drawer keeps its own. */
+	width: number;
 }) {
 	/*
 	 * Sorted here rather than on the server: both timestamps are already on
@@ -174,7 +177,10 @@ export function SessionList({
 				// Right edge now, opposite the activity rail: `border-l` and the
 				// drawer anchored to `right-0`, or it would slide in from the side it
 				// no longer lives on.
-				className={`w-72 shrink-0 flex-col border-l border-neutral-800 bg-neutral-950 narrow:fixed narrow:inset-y-0 narrow:right-0 narrow:z-30 narrow:w-[min(20rem,85vw)] narrow:shadow-2xl ${
+				// On wide the divider App draws is the left edge, so the border is
+				// the drawer's only.
+				style={{ "--list-w": `${width}px` } as React.CSSProperties}
+				className={`w-(--list-w) shrink-0 flex-col border-neutral-800 narrow:border-l bg-neutral-950 narrow:fixed narrow:inset-y-0 narrow:right-0 narrow:z-30 narrow:w-[min(20rem,85vw)] narrow:shadow-2xl ${
 					open ? "flex" : "hidden wide:flex"
 				}`}
 			>

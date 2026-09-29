@@ -10,12 +10,35 @@ import {
 	useState,
 	type AnchorHTMLAttributes,
 	type ButtonHTMLAttributes,
+	type PointerEvent,
 	type ReactNode,
 } from "react";
 import { X } from "@phosphor-icons/react";
 import { t } from "./i18n.js";
 
 const EASE = "transition-colors duration-150 ease-out motion-reduce:transition-none";
+
+const hoverTimers = new WeakMap<Element, number>();
+
+/**
+ * Sets `data-hover` only after the pointer rests 300ms, like the overlay
+ * scrollbar, so sweeping across the element lights nothing. A press sets it
+ * at once. Style with `data-hover:`.
+ */
+export const hoverIntent = {
+	onPointerEnter(e: PointerEvent<HTMLElement>) {
+		const el = e.currentTarget;
+		hoverTimers.set(el, window.setTimeout(() => el.setAttribute("data-hover", ""), 300));
+	},
+	onPointerDownCapture(e: PointerEvent<HTMLElement>) {
+		clearTimeout(hoverTimers.get(e.currentTarget));
+		e.currentTarget.setAttribute("data-hover", "");
+	},
+	onPointerLeave(e: PointerEvent<HTMLElement>) {
+		clearTimeout(hoverTimers.get(e.currentTarget));
+		e.currentTarget.removeAttribute("data-hover");
+	},
+};
 
 /**
  * Lazy list rendering: how many of `total` rows to render, starting at `batch`
@@ -199,6 +222,23 @@ export function MenuItem({
 /* A rule between groups of MenuItems. */
 export function MenuSeparator() {
 	return <div role="separator" className="my-1 border-t border-neutral-800" />;
+}
+
+/*
+ * A second right-click within 500ms at the same spot gets the browser's own
+ * menu: stopped at the window in capture, no app handler sees it.
+ */
+export function nativeMenuOnDoubleRightClick() {
+	let last = { t: 0, x: 0, y: 0 };
+	window.addEventListener(
+		"contextmenu",
+		(e) => {
+			const again = e.timeStamp - last.t < 500 && Math.abs(e.clientX - last.x) <= 4 && Math.abs(e.clientY - last.y) <= 4;
+			last = again ? { t: 0, x: 0, y: 0 } : { t: e.timeStamp, x: e.clientX, y: e.clientY };
+			if (again) e.stopImmediatePropagation();
+		},
+		true,
+	);
 }
 
 /*

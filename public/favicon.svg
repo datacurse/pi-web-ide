@@ -1,4 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-	<!-- The π mark from the greeting screen. Transparent background so it sits on light and dark chrome. -->
-	<text x="32" y="54" text-anchor="middle" font-family="system-ui, sans-serif" font-size="64" font-weight="700" fill="#fb8c2b">π</text>
+	<!-- pi's block π, white on a black tile. src/web/favicon.ts draws its live frames from the same path. -->
+	<rect width="64" height="64" rx="14" fill="#000"/>
+	<path fill="#fff" transform="translate(13 13) scale(0.068)" d="M420 280H280V140H0V0H420V280ZM560 560H420V280H560V560ZM140 560H0V140H140V280H280V420H140V560Z"/>
 </svg>

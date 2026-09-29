@@ -73,6 +73,11 @@ import {
 	readThinkingMode,
 	readTerminalLayout,
 	readTerminalWidth,
+	readListWidth,
+	clampListWidth,
+	LIST_MIN_PX,
+	LIST_MAX_PX,
+	writeListWidth,
 	readTheme,
 	readToolMode,
 	readUserMode,
@@ -104,7 +109,7 @@ import {
 } from "./prefs.js";
 import { setFavicon } from "./favicon.js";
 import { attentionOf, attentionTitle, nextWaiting, type Attention } from "./attention.js";
-import { Button, IconButton, PanelHeader } from "./ui.js";
+import { Button, hoverIntent, IconButton, PanelHeader } from "./ui.js";
 import { api, unwrap } from "./api.js";
 import { getLanguage, setLanguage, t } from "./i18n.js";
 
@@ -206,6 +211,8 @@ export default function App() {
 	const [termsReady, setTermsReady] = useState(false);
 	/** One width for the one panel column, whichever panel is in it. */
 	const [panelWidth, setPanelWidth] = useState(readTerminalWidth);
+	/** The session list's width in px; see prefs.ts. */
+	const [listWidth, setListWidth] = useState(readListWidth);
 	/**
 	 * The terminal pane's arrangement for the CURRENT project: its tabs,
 	 * splits and their shares. Per project, restored from storage and then
@@ -524,6 +531,54 @@ export default function App() {
 			writeTerminalWidth(clampPanel(next));
 		},
 		[resizePanel, panelWidth],
+	);
+
+	/**
+	 * The session list's divider, the panel's done in px. The list sits on the
+	 * RIGHT, so it grows as the pointer moves left, and ArrowLeft grows it.
+	 */
+	const startListDrag = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+		if (event.button !== 0) return;
+		const right = splitRow.current?.getBoundingClientRect().right;
+		if (right === undefined) return;
+		const divider = event.currentTarget;
+		divider.setPointerCapture(event.pointerId);
+		event.preventDefault();
+		let latest = 0;
+		const move = (moved: PointerEvent) => {
+			latest = clampListWidth(right - moved.clientX);
+			setListWidth(latest);
+		};
+		const end = () => {
+			divider.removeEventListener("pointermove", move);
+			divider.removeEventListener("pointerup", end);
+			divider.removeEventListener("pointercancel", end);
+			if (latest) writeListWidth(latest);
+		};
+		divider.addEventListener("pointermove", move);
+		divider.addEventListener("pointerup", end);
+		divider.addEventListener("pointercancel", end);
+	}, []);
+
+	const listDividerKeys = useCallback(
+		(event: React.KeyboardEvent<HTMLDivElement>) => {
+			const step = event.shiftKey ? 64 : 16;
+			const next =
+				event.key === "ArrowLeft"
+					? listWidth + step
+					: event.key === "ArrowRight"
+						? listWidth - step
+						: event.key === "Home"
+							? LIST_MIN_PX
+							: event.key === "End"
+								? LIST_MAX_PX
+								: undefined;
+			if (next === undefined) return;
+			event.preventDefault();
+			setListWidth(clampListWidth(next));
+			writeListWidth(clampListWidth(next));
+		},
+		[listWidth],
 	);
 
 	/*
@@ -1791,12 +1846,13 @@ export default function App() {
 						aria-valuemax={TERMINAL_MAX_PERCENT}
 						tabIndex={0}
 						onPointerDown={startDrag}
+						{...hoverIntent}
 						onKeyDown={dividerKeys}
 						// The `after` box is the real hit area: a 1px line is a target
-						// you miss, and there is nothing else to aim at. 9px, leaning
+						// you miss, and there is nothing else to aim at. 13px, leaning
 						// right so it stays off the panel's scrollbar; z-10 so the
 						// editor beside it cannot paint over half of it.
-						className="relative z-10 w-px shrink-0 cursor-col-resize bg-neutral-800 transition-colors delay-1000 duration-500 ease-out after:absolute after:inset-y-0 after:-left-0.5 after:-right-1.5 after:content-[''] hover:bg-amber-600 hover:delay-300 hover:duration-100 focus-visible:bg-amber-500 focus-visible:outline-none motion-reduce:transition-none narrow:hidden"
+						className="relative z-10 w-px shrink-0 data-hover:cursor-col-resize bg-neutral-800 transition-colors delay-1000 duration-500 ease-out after:absolute after:inset-y-0 after:-left-0.5 after:-right-2.5 after:content-[''] data-hover:bg-amber-600 data-hover:delay-0 data-hover:duration-100 focus-visible:bg-amber-500 focus-visible:outline-none motion-reduce:transition-none narrow:hidden"
 					/>
 				</>
 			)}
@@ -1900,8 +1956,9 @@ export default function App() {
 							aria-valuemax={TERMINAL_MAX_PERCENT}
 							tabIndex={0}
 							onPointerDown={startDockDrag}
+							{...hoverIntent}
 							onKeyDown={dockKeys}
-							className="relative z-10 h-px shrink-0 cursor-row-resize bg-neutral-800 transition-colors delay-1000 duration-500 ease-out after:absolute after:inset-x-0 after:-top-1 after:-bottom-1 after:content-[''] hover:bg-amber-600 hover:delay-300 hover:duration-100 focus-visible:bg-amber-500 focus-visible:outline-none motion-reduce:transition-none"
+							className="relative z-10 h-px shrink-0 data-hover:cursor-row-resize bg-neutral-800 transition-colors delay-1000 duration-500 ease-out after:absolute after:inset-x-0 after:-top-1 after:-bottom-1 after:content-[''] data-hover:bg-amber-600 data-hover:delay-0 data-hover:duration-100 focus-visible:bg-amber-500 focus-visible:outline-none motion-reduce:transition-none"
 						/>
 						<div
 							className="flex min-h-0 min-w-0 flex-col [flex:0_0_var(--dock-h)]"
@@ -1930,7 +1987,23 @@ export default function App() {
 			    pieces of persistent chrome now bracket the window instead of
 			    stacking on one side. It keeps its narrow-viewport drawer
 			    behaviour, which now slides in from the right. */}
+			<div
+				role="separator"
+				aria-orientation="vertical"
+				aria-label={t("Resize session list")}
+				aria-valuenow={listWidth}
+				aria-valuemin={LIST_MIN_PX}
+				aria-valuemax={LIST_MAX_PX}
+				tabIndex={0}
+				onPointerDown={startListDrag}
+				{...hoverIntent}
+				onKeyDown={listDividerKeys}
+				// Same line and 9px hit box as the panel's divider, leaning right to
+				// stay off the editor's scrollbar.
+				className="relative z-10 w-px shrink-0 data-hover:cursor-col-resize bg-neutral-800 transition-colors delay-1000 duration-500 ease-out after:absolute after:inset-y-0 after:-left-0.5 after:-right-1.5 after:content-[''] data-hover:bg-amber-600 data-hover:delay-0 data-hover:duration-100 focus-visible:bg-amber-500 focus-visible:outline-none motion-reduce:transition-none narrow:hidden"
+			/>
 			<SessionList
+				width={listWidth}
 				sessions={shown}
 				attention={attention}
 				listError={listError}

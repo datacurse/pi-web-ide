@@ -118,7 +118,7 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
 - Primary text `neutral-100`/`200`; secondary `neutral-300`/`400`; hints `neutral-500`; disabled `neutral-600`.
 - Accent and primary action: `amber-*`. Errors: `red-*`. Success: `green-*`.
 - Every separator (panel edges, list row rules, table rows) is `border-neutral-800`; no fainter `neutral-900` rules.
-- The side panel's and the terminal's resize dividers are 1px `neutral-800` lines like any other edge; their hit area is an invisible 9px `after` box, `z-10` so neighbors cannot cover it; the side panel's leans 2px left / 6px right to stay off the panel's scrollbar. They use the scrollbar's timing: amber after 300ms of hover (100ms fade), so passing over them does not flash, then 1s after the pointer leaves they fade back over 500ms.
+- The side panel's, the session list's (px width, 180–640, default 288; replaces the list's `border-l` on wide) and the terminal's resize dividers are 1px `neutral-800` lines like any other edge; their hit area is an invisible `after` box (9px; 13px on the side panel's), `z-10` so neighbors cannot cover it; the side panel's and session list's lean 2px left (and 10px / 6px right) to stay off the scrollbar to their left. They use the scrollbar's timing: amber after 300ms of hover (100ms fade), timed in JS by `hoverIntent` (ui.tsx) because a CSS `hover:delay-300` still flashed on a fast pass, the resize cursor shows on the same 300ms (a press shows both at once), then 1s after the pointer leaves they fade back over 500ms.
 - Settings lists themes in two groups, Dark then Light (`light` flag in `prefs.ts`).
 
 ## Composer
@@ -218,7 +218,7 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
 
 ## Tabs
 
-- Session (AI) tabs lead with a bold `π` (the greeting-screen mark) that is also the live signal (see Attention). File tabs use `FileGlyph`, diff tabs `GitDiff`.
+- Session (AI) tabs lead with a bold `π` (text, not the block mark) that is also the live signal (see Attention). File tabs use `FileGlyph`, diff tabs `GitDiff`.
 - A tab's close ✕ shows only while the pointer is over that tab (or it has keyboard
   focus), active tab included. Touchscreens always show it (`.tab-close` in index.css).
   It floats over the label's end (no reserved padding, a short fade behind it), so
@@ -256,8 +256,11 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
 - "Seen" means on screen in either column while the window is visible and focused.
   Per-browser (`localStorage`), synced across pwi windows.
 - Window title: `N ● pwi` — N = ready + needs (omitted at 0), `●` while anything works. No brackets.
-- Favicon: the `π` breathes while anything works; a corner dot (red for needs, else amber)
-  while anything waits.
+- Favicon: the `π` breathes while anything works, turns `green-400` while a reply is
+  ready, and gets a red corner dot while anything needs you.
+  It is pi's block mark (`piMark.tsx`, monochrome, never the colored pi.dev logo), white on
+  a black tile.
+  The empty-session mark is the same block mark in `amber-400`.
 - The session list sorts needs, then ready, right after pinned rows.
 - Alt+J jumps to the next waiting session: needs first, then the longest-waiting reply.
 
@@ -516,7 +519,7 @@ New UI uses these; convert raw markup when you touch it. Tune styles in
 | `IconButton`    | `label` (required; aria-label + tooltip), `variant`: ghost / outline / solid, `size`: sm 24px / md 28px, `round` | Icon-only buttons. `round` only in the composer toolbar. |
 | `MenuItem`      | button props, `icon?` (16px Phosphor, fixed slot, greys with the row) | Rows in dropdown and context menus. Context-menu items carry an icon; give every item in one menu an icon or none. |
 | `MenuSeparator` | —                                                           | Rule between groups of `MenuItem`s. |
-| `ContextMenu`   | `x`, `y`, `label`, `width` (220), `onClose`                 | Right-click menu 6px off the pointer (right and below, flipped to the other side where it would not fit): fixed, clamped on screen, closes on outside click, Escape, scroll, resize. Items call `onClose` after acting. No vertical padding: item hovers run flush to its top and bottom edges; its items are `px-2 py-2` (edge to icon = icon to text; dropdown items stay `px-3 py-1.5`) and its separators have no margin. |
+| `ContextMenu`   | `x`, `y`, `label`, `width` (220), `onClose`                 | Right-click menu 6px off the pointer (right and below, flipped to the other side where it would not fit): fixed, clamped on screen, closes on outside click, Escape, scroll, resize. A second right-click within 500ms at the same spot (4px) closes it and shows the browser's own menu instead (`nativeMenuOnDoubleRightClick`, anywhere in the app). Items call `onClose` after acting. No vertical padding: item hovers run flush to its top and bottom edges; its items are `px-2 py-2` (edge to icon = icon to text; dropdown items stay `px-3 py-1.5`) and its separators have no margin. |
 | `NavItem`       | `icon` (16px Phosphor), `selected`, button props            | Category row in a page's left nav (Settings): `control-md`, `rounded-sm`, `neutral-800` fill when current. |
 | `Section`       | `title`                                                     | Settings group (fieldset + uppercase legend). |
 | `OptionRow`     | `selected`, `disabled`                                      | Clickable row wrapping a radio or checkbox. |

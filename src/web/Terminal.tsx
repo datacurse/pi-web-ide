@@ -15,7 +15,7 @@ import {
 	type TermLayout,
 } from "./termLayout.js";
 import { readTermTabsSide, writeTermTabsSide, type TermTabsSide } from "./prefs.js";
-import { Button, ContextMenu, IconButton, MenuItem, tabClassVertical } from "./ui.js";
+import { Button, ContextMenu, hoverIntent, IconButton, MenuItem, tabClassVertical } from "./ui.js";
 import { api } from "./api.js";
 import { t, plural } from "./i18n.js";
 
@@ -488,10 +488,11 @@ export function TerminalPane({
 										aria-orientation={tab.direction === "column" ? "horizontal" : "vertical"}
 										aria-label={t("Resize split")}
 										onPointerDown={startDrag(i - 1)}
-										className={`relative shrink-0 bg-neutral-800 transition-colors delay-1000 duration-500 hover:bg-amber-600 hover:delay-300 hover:duration-100 ${
+										{...hoverIntent}
+										className={`relative shrink-0 bg-neutral-800 transition-colors delay-1000 duration-500 data-hover:bg-amber-600 data-hover:delay-0 data-hover:duration-100 ${
 											tab.direction === "column"
-												? "h-1 cursor-row-resize after:absolute after:inset-x-0 after:-top-1 after:-bottom-1 after:content-['']"
-												: "w-1 cursor-col-resize after:absolute after:inset-y-0 after:-left-1 after:-right-1 after:content-['']"
+												? "h-1 data-hover:cursor-row-resize after:absolute after:inset-x-0 after:-top-1 after:-bottom-1 after:content-['']"
+												: "w-1 data-hover:cursor-col-resize after:absolute after:inset-y-0 after:-left-1 after:-right-1 after:content-['']"
 										}`}
 									/>
 								)}

@@ -1,5 +1,8 @@
+import { PI_MARK } from "./piMark.js";
+
 /**
- * A breathing favicon for "the agent is working", with a dot for "waiting on you".
+ * A breathing favicon for "the agent is working", green for "a reply is ready"
+ * and a red dot for "waiting on you".
  *
  * Browsers ignore animation inside a favicon: SMIL and CSS in an SVG icon are
  * never ticked, and APNG support is nowhere near universal. The only portable
@@ -45,27 +48,27 @@ const STEP_MS = 250;
 const SCALE_DIP = 0.34;
 const ALPHA_DIP = 0.35;
 
-/** The static icon's markup, fetched once and reused by every run. */
-let artwork: Promise<string> | null = null;
-
 /**
- * A corner dot for "a session wants you": red for a question, amber for a
- * reply. Drawn outside the breathing group so it holds still, with a dark
- * ring so it separates from the orange π at 16px.
+ * "A session wants you": a reply turns the π green (`green-400`), a question
+ * adds a red corner dot (`red-400`), drawn outside the breathing π so it holds
+ * still, with a dark ring so it separates from the π at 16px.
  */
 export type Badge = "needs" | "ready" | null;
-const BADGE_FILL = { needs: "#f87171", ready: "#fbbf24" } as const;
 
-function frame(inner: string, k: number, badge: Badge, tick: number): string {
-	const scale = 1 - SCALE_DIP * k;
-	// Scale about the middle of the viewBox, so the π breathes in place
-	// instead of drifting towards the origin.
+/** The mark's scale at rest: public/favicon.svg's, 38 of the tile's 64 units. */
+const MARK_SCALE = 0.068;
+
+function frame(k: number, badge: Badge, tick: number): string {
+	const scale = MARK_SCALE * (1 - SCALE_DIP * k);
+	// Scale about the middle of the tile, so the π breathes in place
+	// instead of drifting towards the origin. The tile holds still.
 	const doc =
 		'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">' +
 		`<!--${tick}-->` +
-		`<g transform="translate(32 32) scale(${scale.toFixed(3)}) translate(-32 -32)"` +
-		` opacity="${(1 - ALPHA_DIP * k).toFixed(3)}">${inner}</g>` +
-		(badge ? `<circle cx="49" cy="15" r="13" fill="${BADGE_FILL[badge]}" stroke="#000" stroke-width="4"/>` : "") +
+		'<rect width="64" height="64" rx="14" fill="#000"/>' +
+		`<path fill="${badge === "ready" ? "#4ade80" : "#fff"}" opacity="${(1 - ALPHA_DIP * k).toFixed(3)}"` +
+		` transform="translate(32 32) scale(${scale.toFixed(4)}) translate(-280 -280)" d="${PI_MARK}"/>` +
+		(badge === "needs" ? '<circle cx="49" cy="15" r="13" fill="#f87171" stroke="#000" stroke-width="4"/>' : "") +
 		"</svg>";
 	return `data:image/svg+xml,${encodeURIComponent(doc)}`;
 }
@@ -75,14 +78,12 @@ let original: HTMLLinkElement | null | undefined;
 let live: HTMLLinkElement | null = null;
 let timer: number | undefined;
 let tick = 0;
-/** Bumped by every call, so a slow artwork fetch cannot apply a stale state. */
-let generation = 0;
 
-function show(inner: string, k: number, badge: Badge) {
+function show(k: number, badge: Badge) {
 	const next = document.createElement("link");
 	next.rel = "icon";
 	next.type = "image/svg+xml";
-	next.href = frame(inner, k, badge, tick++);
+	next.href = frame(k, badge, tick++);
 	// Appended, then the previous one dropped: with two icon links in the
 	// head Chrome renders the first, so the old frame must not outlive the
 	// new one.
@@ -92,48 +93,30 @@ function show(inner: string, k: number, badge: Badge) {
 }
 
 /**
- * Show the app's state in the tab icon: breathing while anything works, a
- * corner dot while anything waits. Call again whenever either changes.
+ * Show the app's state in the tab icon: breathing while anything works,
+ * green or a corner dot while anything waits. Call again whenever either changes.
  */
 export function setFavicon(working: boolean, badge: Badge): void {
-	const gen = ++generation;
 	if (timer !== undefined) window.clearInterval(timer);
 	timer = undefined;
 
 	if (original === undefined) original = document.querySelector<HTMLLinkElement>('link[rel~="icon"]');
-	const source = original?.href;
-	if (!source) return;
 	// Nothing to say and the page's icon still up: leave it be.
 	if (!working && !badge && !live) return;
 
-	artwork ??= fetch(source)
-		.then((r) => r.text())
-		// The file is ours, and the comments in it are worth a third of every
-		// frame's URL.
-		.then((text) => text.replace(/<!--[\s\S]*?-->/g, "").replace(/\s+/g, " "));
-
-	artwork
-		.then((inner) => {
-			if (gen !== generation) return;
-			// The original link has to go: it is first in the head, so Chrome
-			// would keep drawing it and ignore every frame.
-			original?.remove();
-			show(inner, 0, badge);
-			// Someone who asked the OS for less motion gets a still icon; the
-			// title already says "working" for them. Settling is a fresh rest
-			// frame rather than the original link, because Chrome ignores a
-			// return to an icon URL this tab has already loaded.
-			if (!working || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
-			const started = Date.now();
-			timer = window.setInterval(() => {
-				const phase = ((Date.now() - started) % PERIOD_MS) / PERIOD_MS;
-				// Cosine, so the breath eases at both ends instead of bouncing.
-				show(inner, 0.5 - 0.5 * Math.cos(phase * 2 * Math.PI), badge);
-			}, STEP_MS);
-		})
-		.catch(() => {
-			// A favicon is not worth a console error. Let the static one stand,
-			// and do not keep a rejected promise around to poison later runs.
-			artwork = null;
-		});
+	// The original link has to go: it is first in the head, so Chrome
+	// would keep drawing it and ignore every frame.
+	original?.remove();
+	show(0, badge);
+	// Someone who asked the OS for less motion gets a still icon; the
+	// title already says "working" for them. Settling is a fresh rest
+	// frame rather than the original link, because Chrome ignores a
+	// return to an icon URL this tab has already loaded.
+	if (!working || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+	const started = Date.now();
+	timer = window.setInterval(() => {
+		const phase = ((Date.now() - started) % PERIOD_MS) / PERIOD_MS;
+		// Cosine, so the breath eases at both ends instead of bouncing.
+		show(0.5 - 0.5 * Math.cos(phase * 2 * Math.PI), badge);
+	}, STEP_MS);
 }

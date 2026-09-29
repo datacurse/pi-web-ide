@@ -59,6 +59,7 @@ export const RU: Record<string, string> = {
 	"Pick a project first — a working tree belongs to a repository.":
 		"Сначала выберите проект — рабочее дерево принадлежит репозиторию.",
 	"Resize panel": "Изменить ширину панели",
+	"Resize session list": "Изменить ширину списка сессий",
 	"Resize terminal": "Изменить высоту терминала",
 	"Terminal": "Терминал",
 	"Pick a project first: a shell has to start somewhere.": "Сначала выберите проект: оболочке нужно где-то запуститься.",
