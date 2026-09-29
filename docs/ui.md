@@ -296,6 +296,13 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
   `bg-black/50` + `backdrop-blur-sm`. Escape, the header ✕ or the backdrop closes it.
   A page stays mounted once opened, so unsaved edits survive closing. The rail buttons
   have no lit state. Escape in a popup inside a page (Packages add) closes only that popup.
+- Packages' Installed tab has two kinds: pi packages (the table; installed into pi, also
+  in a terminal) and, under it, `pwi extensions`: extensions built into pwi and loaded only
+  into the sessions it starts. Each is an `OptionRow` checkbox with a `text-meta` line
+  saying what it does: Tool metrics (on by default) and Personality reminder (the same
+  setting as in Settings › Personality, disabled until a personality text exists).
+  Changes apply to sessions started afterwards. pwi's own plumbing (rewind, context)
+  is not listed.
 - Settings has a `w-48` category nav on the left (`NavItem`s: Appearance, Transcript,
   Sessions, Notifications, Personality), like Obsidian; the right side shows only the
   chosen category, `max-w-xl p-6`. Opens on Appearance.

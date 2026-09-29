@@ -53,6 +53,8 @@ assert.deepEqual(
 );
 // The reminder repeats the personality file, so without one it adds nothing.
 assert.deepEqual(spawnArgs({ remind: true }), BASE);
+// Switched off in Packages: the collector is left out, nothing else changes.
+assert.deepEqual(spawnArgs({ toolMetrics: false }), ["--mode", "rpc", "--approve", "-e", REWIND, "-e", CONTEXT]);
 {
 	const args = spawnArgs({ personality: "/p.md", remind: true });
 	assert.equal(args[args.lastIndexOf("-e") + 1]!.endsWith("/remind-extension.ts"), true);

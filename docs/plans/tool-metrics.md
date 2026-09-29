@@ -123,6 +123,11 @@ changes.
 - A "pwi extensions" section: Reminders and Tool metrics, each on/off. Off
   leaves out the collector, `BASH_ENV` and the wrapper for new sessions.
 
+Done: `server/pwiExtensions.ts` (`pwi-extensions.json`, tool metrics on unless
+turned off), `GET /api/pwi-extensions`, `PUT /api/pwi-extensions/tool-metrics`;
+`spawnArgs({ toolMetrics: false })` leaves the collector out. The reminder row
+uses the existing `PUT /api/personality/remind`.
+
 ## Checks
 
 - Unit tests with recorded fixtures; `pnpm typecheck`.

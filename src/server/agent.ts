@@ -61,6 +61,7 @@ import { isRecord, records } from "./guards.js";
 import { hunkFromWrite, hunksFromEdit, type Hunk } from "../shared/hunks.js";
 import { fileURLToPath } from "node:url";
 import { personalityPath, readRemind } from "./personality.js";
+import { readToolMetrics } from "./pwiExtensions.js";
 import { repairSessionFile } from "./repair.js";
 import { sessionHeaderCwd } from "./sessions.js";
 import { stateDir, statePath } from "./state.js";
@@ -1037,6 +1038,8 @@ export function spawnArgs(opts: {
 	model?: string;
 	personality?: string;
 	remind?: boolean;
+	/** Load the tool-metrics collector; on unless false (Packages switches it). */
+	toolMetrics?: boolean;
 }): string[] {
 	const args = ["--mode", "rpc"];
 	// Project-local extensions, skills and prompt templates are silently
@@ -1046,7 +1049,8 @@ export function spawnArgs(opts: {
 	// decided to run its code.
 	args.push("--approve");
 	// First among extensions, so it sees each result before other packages' hooks.
-	args.push("-e", TOOL_METRICS_EXTENSION, "-e", REWIND_EXTENSION, "-e", CONTEXT_EXTENSION);
+	if (opts.toolMetrics !== false) args.push("-e", TOOL_METRICS_EXTENSION);
+	args.push("-e", REWIND_EXTENSION, "-e", CONTEXT_EXTENSION);
 	if (opts.file) args.push("--session", opts.file);
 	else if (opts.fork) args.push("--fork", opts.fork);
 	if (opts.model) args.push("--model", opts.model);
@@ -1108,7 +1112,13 @@ export async function openSession(opts: OpenOptions): Promise<PiSession> {
 	}
 
 	const child = await RpcChild.start(
-		spawnArgs({ file: opts.file, model: opts.model, personality: personalityFile(), remind: readRemind() }),
+		spawnArgs({
+			file: opts.file,
+			model: opts.model,
+			personality: personalityFile(),
+			remind: readRemind(),
+			toolMetrics: readToolMetrics(),
+		}),
 		cwd,
 	);
 	return wrap(child, cwd);
@@ -1141,7 +1151,7 @@ function personalityFile(): string | undefined {
 export async function forkSession(file: string, at: number, cwd: string): Promise<PiSession> {
 	if (!existsSync(file)) throw new Error(`session file not found: ${file}`);
 	const child = await RpcChild.start(
-		spawnArgs({ fork: file, personality: personalityFile(), remind: readRemind() }),
+		spawnArgs({ fork: file, personality: personalityFile(), remind: readRemind(), toolMetrics: readToolMetrics() }),
 		cwd,
 	);
 	let copy: string | undefined;

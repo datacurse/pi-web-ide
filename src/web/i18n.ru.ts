@@ -499,6 +499,19 @@ export const RU: Record<string, string> = {
 	"Tokens are arguments plus result, about 4 characters each. Time is measured for {pct}% of calls; the rest is estimated from session timestamps, with calls sent together splitting their wait evenly. Hooks is the part of Time other extensions (pi-lens) spent on the result. A measured bash call counts per command; bash: (shell) is its time outside them.":
 		"Токены — аргументы плюс результат, примерно 4 символа на токен. Время измерено для {pct}% вызовов; для остальных оно оценено по меткам времени сессии, и вызовы, отправленные вместе, делят ожидание поровну. Хуки — часть времени, которую другие расширения (pi-lens) тратят на результат. Измеренный вызов bash считается по командам; bash: (shell) — его время вне них.",
 	"Background jobs": "Фоновые задачи",
+	"could not load pwi extensions": "не удалось загрузить расширения pwi",
+	"could not save the setting": "не удалось сохранить настройку",
+	"Tool metrics": "Метрики инструментов",
+	"Times every tool call, and each command inside a bash call with its output size, for Stats and the context panel. Nothing reaches the model.":
+		"Замеряет время каждого вызова инструмента и каждой команды внутри вызова bash вместе с объёмом её вывода — для статистики и панели контекста. Модель ничего из этого не видит.",
+	"Personality reminder": "Напоминание о личности",
+	"Repeats your personality text at the end of each message, so long sessions do not drift from it.":
+		"Повторяет текст личности в конце каждого сообщения, чтобы длинные сессии от него не уходили.",
+	"Repeats your personality text at the end of each message. Write one in Settings › Personality first.":
+		"Повторяет текст личности в конце каждого сообщения. Сначала напишите его в Настройки › Личность.",
+	"pwi extensions": "Расширения pwi",
+	"Built into pwi and loaded only into the sessions it starts, not into pi in a terminal. A change applies to sessions started from now on.":
+		"Встроены в pwi и загружаются только в сессии, которые он запускает, а не в pi в терминале. Изменение действует для сессий, запущенных после него.",
 	"Current session": "Текущая сессия",
 	"This week": "Эта неделя",
 	"{model} this week": "{model} за неделю",

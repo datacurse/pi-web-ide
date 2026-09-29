@@ -17,8 +17,9 @@ import type {
 	PiwPackageInfo,
 	PiwPackagesView,
 	PiwSearchHit,
+	PwiExtensions,
 } from "../shared/types.js";
-import { Button, IconButton, PanelHeader, inputClass, sectionLabel } from "./ui.js";
+import { Button, IconButton, OptionRow, PanelHeader, inputClass, sectionLabel } from "./ui.js";
 import { parseResponse } from "hono/client";
 import { api } from "./api.js";
 import { t, locale } from "./i18n.js";
@@ -329,6 +330,8 @@ function Installed({
 				</tbody>
 			</table>
 
+			<PwiExtensionsSection />
+
 			<div className="mt-6 border-t border-neutral-800 pt-3">
 				<h3 className={sectionLabel}>{t("pi itself")}</h3>
 				<p className="mt-1 max-w-prose text-meta text-neutral-500">
@@ -368,6 +371,77 @@ function Installed({
 				</div>
 			)}
 		</>
+	);
+}
+
+/**
+ * pi extensions that ship with pwi and load only into the sessions it starts,
+ * each with its switch. The reminder's is the same setting as in Settings ›
+ * Personality.
+ */
+function PwiExtensionsSection() {
+	const [state, setState] = useState<PwiExtensions | null>(null);
+	const [error, setError] = useState<string | null>(null);
+	useEffect(() => {
+		void api["pwi-extensions"]
+			.$get()
+			.then((r) => (r.ok ? r.json() : null))
+			.then((s) => (s ? setState(s) : setError(t("could not load pwi extensions"))))
+			.catch(() => setError(t("could not load pwi extensions")));
+	}, []);
+	const set = async (key: "toolMetrics" | "remind", on: boolean) => {
+		const r = await (key === "toolMetrics"
+			? api["pwi-extensions"]["tool-metrics"].$put({ json: { on } })
+			: api.personality.remind.$put({ json: { remind: on } })
+		).catch(() => null);
+		if (!r?.ok) return setError(t("could not save the setting"));
+		setError(null);
+		setState((s) => (s ? { ...s, [key]: on } : s));
+	};
+	const rows: { key: "toolMetrics" | "remind"; name: string; text: string; off?: boolean }[] = [
+		{
+			key: "toolMetrics",
+			name: t("Tool metrics"),
+			text: t(
+				"Times every tool call, and each command inside a bash call with its output size, for Stats and the context panel. Nothing reaches the model.",
+			),
+		},
+		{
+			key: "remind",
+			name: t("Personality reminder"),
+			text: state?.personality
+				? t("Repeats your personality text at the end of each message, so long sessions do not drift from it.")
+				: t("Repeats your personality text at the end of each message. Write one in Settings › Personality first."),
+			off: !state?.personality,
+		},
+	];
+	return (
+		<div className="mt-6 border-t border-neutral-800 pt-3">
+			<h3 className={sectionLabel}>{t("pwi extensions")}</h3>
+			<p className="mt-1 max-w-prose text-meta text-neutral-500">
+				{t(
+					"Built into pwi and loaded only into the sessions it starts, not into pi in a terminal. A change applies to sessions started from now on.",
+				)}
+			</p>
+			{error && <p className="mt-1 text-meta text-red-400">{error}</p>}
+			<div className="mt-2 max-w-xl">
+				{rows.map((row) => (
+					<OptionRow key={row.key} disabled={!state || row.off}>
+						<input
+							type="checkbox"
+							checked={state?.[row.key] ?? false}
+							disabled={!state || row.off}
+							onChange={(e) => void set(row.key, e.target.checked)}
+							className="size-4 shrink-0 accent-amber-400"
+						/>
+						<span className="flex-1">
+							{row.name}
+							<span className="block text-meta text-neutral-500">{row.text}</span>
+						</span>
+					</OptionRow>
+				))}
+			</div>
+		</div>
 	);
 }
 
