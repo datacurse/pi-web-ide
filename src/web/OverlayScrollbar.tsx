@@ -166,7 +166,7 @@ export const ScrollPane = forwardRef<
 					if (typeof ref === "function") ref(el);
 					else if (ref) ref.current = el;
 				}}
-				className={`no-scrollbar min-h-0 flex-1 overflow-auto ${innerClassName}`}
+				className={`no-scrollbar scroll-fade-y min-h-0 flex-1 overflow-auto ${innerClassName}`}
 			/>
 			<OverlayScrollbar target={pane} />
 		</div>

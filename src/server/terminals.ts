@@ -69,7 +69,7 @@ export interface Term {
 }
 
 export type TermEvent =
-	| { type: "data"; data: string }
+	| { type: "data"; data: string; replay?: true }
 	| { type: "exit"; code: number; signal?: number };
 
 /** What a client needs to render a terminal it is not attached to yet. */
@@ -285,7 +285,8 @@ export class Terminals {
 	attach(id: string, listener: (e: TermEvent) => void): () => void {
 		const term = this.terms.get(id);
 		if (!term) return () => {};
-		if (term.scrollback) listener({ type: "data", data: term.scrollback });
+		// Marked so the client does not answer the terminal queries in it again.
+		if (term.scrollback) listener({ type: "data", data: term.scrollback, replay: true });
 		if (term.exit) listener({ type: "exit", ...term.exit });
 		term.listeners.add(listener);
 		return () => term.listeners.delete(listener);

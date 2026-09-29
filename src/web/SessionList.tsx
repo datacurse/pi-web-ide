@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { ArrowsOut, CaretUpDown, MagnifyingGlass, PushPin, X } from "@phosphor-icons/react";
 import type { PiSessionInfo } from "../shared/types.js";
 import { SESSION_SORTS, type SessionSort } from "./prefs.js";
-import { sessionLabel, shortName } from "./sessionName.js";
+import { sessionLabel, sessionLine, shortName } from "./sessionName.js";
 import { ATTENTION_UI, attentionRank, type Attention } from "./attention.js";
 import { highlight, useSessionSearch } from "./searchHits.js";
 import { Button, ContextMenu, IconButton, MenuItem, inputClass, sectionLabel, useBatches } from "./ui.js";
@@ -355,7 +355,7 @@ export function SessionList({
 										/>
 									)}
 									<span className="fade-end">
-										{naming === s.path ? t("Naming…") : highlight(label, terms)}
+										{naming === s.path ? t("Naming…") : highlight(sessionLine(s, shortNames), terms)}
 									</span>
 								</div>
 								{/*

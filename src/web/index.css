@@ -530,6 +530,19 @@ body,
 }
 
 /*
+ * The page itself never scrolls; only panes do. Without this, anything that
+ * pokes a few px past the window lets a pane's scroll chain to the page at its
+ * end and shift the whole layout. `clip` (unlike `hidden`) also stops
+ * scrollIntoView from scrolling it.
+ */
+html {
+	overflow: hidden;
+}
+body {
+	overflow: clip;
+}
+
+/*
  * The app paints its own background on a div, so the body has to carry the
  * same color or an overscroll bounce reveals the browser canvas underneath.
  */
@@ -676,47 +689,72 @@ body {
 	scrollbar-width: none;
 }
 
-/* Tabs cut off at either end of the strip fade out like `.fade-end` text, so you can see there is more to scroll to. */
-@property --strip-fade-start {
+/*
+ * A scrolling list or tab strip fades out at each edge it can still scroll past,
+ * like `.fade-end` text, so you can see there is more. Each fade grows over the
+ * first 2em of scroll and shrinks over the last 2em; a pane that cannot scroll
+ * has no timeline, so no fade.
+ */
+@property --scroll-fade-start {
 	syntax: "<length>";
 	inherits: false;
 	initial-value: 0px;
 }
 
-@property --strip-fade-end {
+@property --scroll-fade-end {
 	syntax: "<length>";
 	inherits: false;
 	initial-value: 0px;
 }
 
 @supports (animation-timeline: scroll()) {
-	.tab-strip {
+	.scroll-fade-x,
+	.scroll-fade-y {
+		animation:
+			scroll-fade-start linear both,
+			scroll-fade-end linear both;
+		animation-range:
+			0 2em,
+			calc(100% - 2em) 100%;
+	}
+
+	.scroll-fade-x {
 		mask-image: linear-gradient(
 			to right,
 			transparent,
-			#000 var(--strip-fade-start),
-			#000 calc(100% - var(--strip-fade-end)),
+			#000 var(--scroll-fade-start),
+			#000 calc(100% - var(--scroll-fade-end)),
 			transparent
 		);
-		animation: strip-fade linear both;
 		animation-timeline: scroll(self inline);
+	}
+
+	.scroll-fade-y {
+		mask-image: linear-gradient(
+			transparent,
+			#000 var(--scroll-fade-start),
+			#000 calc(100% - var(--scroll-fade-end)),
+			transparent
+		);
+		animation-timeline: scroll(self block);
 	}
 }
 
-@keyframes strip-fade {
+@keyframes scroll-fade-start {
 	from {
-		--strip-fade-start: 0px;
-		--strip-fade-end: 2em;
-	}
-	5% {
-		--strip-fade-start: 2em;
-	}
-	95% {
-		--strip-fade-end: 2em;
+		--scroll-fade-start: 0px;
 	}
 	to {
-		--strip-fade-start: 2em;
-		--strip-fade-end: 0px;
+		--scroll-fade-start: 2em;
+	}
+}
+
+@keyframes scroll-fade-end {
+	from {
+		--scroll-fade-end: 2em;
+	}
+	to {
+		--scroll-fade-end: 0px;
 	}
 }
 

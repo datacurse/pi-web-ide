@@ -1,6 +1,6 @@
 // Run: node --import tsx src/web/sessionName.test.ts
 import assert from "node:assert/strict";
-import { sessionLabel, shortName } from "./sessionName.js";
+import { sessionLabel, sessionLine, shortName } from "./sessionName.js";
 
 // Precedence: a name always wins, and it wins in both modes.
 const info = {
@@ -54,5 +54,11 @@ assert.equal(shortName(`add --${"x".repeat(44)} to it`), "Add");
 assert.equal(shortName("x".repeat(60)), "X".padEnd(48, "x"));
 // Nothing in, nothing out: the caller falls back to the placeholder.
 assert.equal(shortName("   "), "");
+
+// The shown line runs on past a cut label; a name stays as it is.
+assert.equal(sessionLine(info, true), "Fix the parser");
+assert.equal(sessionLine(unnamed, true), `N${unnamed.firstMessage.slice(1)}`);
+assert.equal(sessionLine(unnamed, false), unnamed.firstMessage);
+assert.equal(sessionLine(undefined, true), sessionLabel(undefined, true));
 
 console.log("ok");

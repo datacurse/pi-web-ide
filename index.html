@@ -26,6 +26,18 @@
 					document.documentElement.dataset.scrollbars = "hidden";
 			} catch {}
 		</script>
+		<!--
+		  index.css arrives with the JS bundle, so until then the page would be
+		  white. Paint each theme's backdrop (--ct-mantle) now; keep in sync.
+		-->
+		<style>
+			html { background: #181825; color-scheme: dark; }
+			html[data-theme="macchiato"] { background: #1e2030; }
+			html[data-theme="frappe"] { background: #292c3c; }
+			html[data-theme="claude"] { background: #141414; }
+			html[data-theme="latte"] { background: #e6e9ef; color-scheme: light; }
+			html[data-theme="claude-light"] { background: #f0eee6; color-scheme: light; }
+		</style>
 	</head>
 	<body>
 		<div id="root"></div>

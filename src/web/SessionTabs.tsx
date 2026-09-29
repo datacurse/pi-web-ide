@@ -16,7 +16,7 @@ import {
 } from "@phosphor-icons/react";
 import type { KeyboardEvent } from "react";
 import type { PiSessionInfo } from "../shared/types.js";
-import { sessionLabel, shortName } from "./sessionName.js";
+import { sessionLabel, sessionLine, shortName } from "./sessionName.js";
 import { ATTENTION_UI, type Attention } from "./attention.js";
 import { FileGlyph } from "./fileIcon.js";
 import { diffParts, isDiffTab, isSessionTab, isTermTab, tabLabel, tabPath } from "./tabs.js";
@@ -335,7 +335,7 @@ export function SessionTabs({
 				// it is pushed into the middle of the strip. It does claim it when it
 				// is a drop target, because an empty column needs somewhere to aim.
 				// -mb-px: the active tab's underline sits on the strip's border.
-				className={`tab-strip -mb-px flex min-w-0 items-stretch overflow-x-auto ${
+				className={`tab-strip scroll-fade-x -mb-px flex min-w-0 items-stretch overflow-x-auto ${
 					tabs.length > 0 || onAdopt ? "flex-1" : "flex-none"
 				}`}
 			>
@@ -528,7 +528,7 @@ export function SessionTabs({
 								{isEdit && <FileGlyph name={label} size={13} />}
 								{isTerm && <TerminalWindow size={13} className="shrink-0 text-neutral-400" />}
 								<span className={`fade-end ${isEdit || isDiff ? "font-mono" : ""}`}>
-									{naming === file ? t("Naming…") : label}
+									{naming === file ? t("Naming…") : isFile ? label : sessionLine(info, shortNames)}
 								</span>
 								{/* Unsaved. A dot rather than an asterisk in the label, so
 								    the name stays readable at a narrow width. */}

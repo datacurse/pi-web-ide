@@ -114,6 +114,13 @@ export function Terminal({
 		 * amount of retrying fixes — see the diagnosis in `explain` below.
 		 */
 		let everOpened = false;
+		/*
+		 * True while the scrollback replay is being parsed. It holds the queries
+		 * programs sent long ago (tmux's device-attribute probe, cursor reports),
+		 * and xterm answers them; forwarded, the answers land at the prompt as
+		 * `1;2c0;276;0c`.
+		 */
+		let replaying = false;
 
 		/**
 		 * Say why the socket will not open, once retrying has clearly failed.
@@ -204,13 +211,16 @@ export function Terminal({
 				};
 
 				ws.onmessage = (ev) => {
-					let msg: { type?: string; data?: string; message?: string; code?: number };
+					let msg: { type?: string; data?: string; replay?: boolean; message?: string; code?: number };
 					try {
 						msg = JSON.parse(ev.data as string);
 					} catch {
 						return;
 					}
-					if (msg.type === "data" && typeof msg.data === "string") term?.write(msg.data);
+					if (msg.type === "data" && typeof msg.data === "string") {
+						if (msg.replay) replaying = true;
+						term?.write(msg.data, msg.replay ? () => (replaying = false) : undefined);
+					}
 					else if (msg.type === "exit") {
 						// The shell itself ended. Nothing to reattach to.
 						finished = true;
@@ -240,7 +250,7 @@ export function Terminal({
 			connect();
 
 			term.onData((data) => {
-				if (socket?.readyState === WebSocket.OPEN)
+				if (!replaying && socket?.readyState === WebSocket.OPEN)
 					socket.send(JSON.stringify({ type: "input", data }));
 			});
 

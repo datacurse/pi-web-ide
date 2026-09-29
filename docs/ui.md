@@ -69,6 +69,12 @@ fits none of the existing ones, and record it here.
   `text-ellipsis` and `line-clamp-*` fail the check (except `<select>`/inputs,
   where a mask cannot follow the text). Multi-line: `.fade-clamp` (3 lines).
 - Tool call lines are always one line; the result preview fades.
+- Anything that scrolls fades out over 2em at each edge it can still scroll past, so
+  you can see there is more: `.scroll-fade-y` on every `ScrollPane` list, `.scroll-fade-x`
+  on the tab strips. Each fade grows over the first 2em of scroll and goes over the last.
+- Text fades only where it meets an edge. Never fade text that fits.
+- Session rows and tabs show the name followed by the rest of the first prompt
+  (`sessionLine`), so a shortened name runs on to the edge and fades there.
 - Code (editor and diff tabs) soft-wraps; continuation rows keep the line's own
   indent and start with a dim `↳` marker (`wrapIndent()`, `.cm-wrapIndent`).
 
@@ -218,9 +224,8 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
 - Closing a tab never scrolls the strip: tabs to its left stay put and tabs to its right
   slide left. Closed width is kept as trailing space until the pointer leaves the strip.
 - A cut-off tab label fades out over its last 2em (`.fade-end`, see Overflowing text).
-- When tabs overflow the strip, a tab cut off at either end fades out over 2em instead
-  of a hard cut (`.tab-strip`, `--strip-fade-start`/`-end`), so you can see there is more
-  to scroll to. Each fade goes once the strip is scrolled to that end.
+- When tabs overflow the strip, a tab cut off at either end fades out (`.scroll-fade-x`,
+  see Overflowing text).
 - Right-click any tab → `ContextMenu`, groups split by `MenuSeparator`:
   1. Session tabs: the session list's menu — `Pin Tab` / `Unpin Tab` (the list's pins),
      `Rename…` (inline in the tab, never `window.prompt`; Enter saves, Escape or blur

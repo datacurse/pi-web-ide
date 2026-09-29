@@ -25,6 +25,17 @@ export function sessionLabel(
 }
 
 /**
+ * `sessionLabel` followed by the rest of the first prompt, for a row or tab
+ * that shows as much as fits and fades at its edge instead of stopping short.
+ */
+export function sessionLine(info: { name?: string; firstMessage?: string } | undefined, short: boolean): string {
+	const label = sessionLabel(info, short);
+	if (info?.name?.trim()) return label;
+	const first = info?.firstMessage?.replace(/\s+/g, " ").trim() ?? "";
+	return label + first.slice(label.length);
+}
+
+/**
  * A session with no name and nothing said in it yet.
  *
  * It used to be eight characters of the file's uuid, which is unique but says
