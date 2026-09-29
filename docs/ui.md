@@ -116,7 +116,10 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
   provider labels as uppercase captions, current option in amber. Other browsers
   show the native popup.
 - The context meter sits in the composer's right group, before Stop. Git stays in
-  the row above the box. It is a 16px ring in a ghost round `IconButton`
+  the row above the box.
+- That row (jump-to-latest and git) floats over the transcript's bottom edge with no
+  band or background of its own; the transcript scrolls under it (`pb-12` keeps its
+  last line clear). It is a 16px ring in a ghost round `IconButton`
   (`neutral-700` track, `neutral-400` fill, amber from 75%, red from 90%), drawn empty
   before the first turn instead of hidden.
 - Clicking the ring opens `ContextPanel` above the box (`rounded-md`, like Cursor's):
@@ -141,10 +144,12 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
     (`ArrowsOutLineVertical` / `ArrowsInLineVertical`).
   - The panel floats over the transcript (absolute, above the box) and grows with its
     content up to the top of the chat, then scrolls; it never moves the layout.
-- Clicking an image thumbnail (staged or sent) expands it across the whole window width
-  (explorer, columns, sessions list), from the top down to just above the line you type on,
-  `bg-black/80`. The composer stays visible and usable below it so you can describe
-  the picture while looking at it. Escape or any click on it (image included) closes it.
+- Clicking an image thumbnail (staged or sent) expands it, centered in the area spanning
+  the whole window width (explorer, columns, sessions list) from the top down to just
+  above the line you type on. No backdrop: a `border-2 border-neutral-200` `rounded-md`
+  frame with `shadow-2xl`, and a round ✕ badge at its top right that shows on hover.
+  The composer and the rest of the app stay usable around it. A click on the image or
+  Escape closes it.
 - Placeholder is `Message pi…`; key hints live in the textarea's `title`. The field
   uses `field-sizing-content max-h-60` and grows as you type.
 
@@ -315,14 +320,21 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
   `bg-black/50` + `backdrop-blur-sm`. Escape, the header ✕ or the backdrop closes it.
   A page stays mounted once opened, so unsaved edits survive closing. The rail buttons
   have no lit state. Escape in a popup inside a page (Packages add) closes only that popup.
-- Packages' Installed tab has two kinds: pi packages (the table; installed into pi, also
-  in a terminal) and, under it, `pwi extensions`: extensions built into pwi and loaded only
-  into the sessions it starts. Tool metrics is an `OptionRow` checkbox (on by default) with
+- Packages has three tabs: `pi packages` (the table; installed into pi, also in a terminal),
+  `pwi extensions` (built into pwi and loaded only into the sessions it starts) and `Search`.
+  A package with settings (only SoL-Pi, `SolPiSettings.tsx`) gets a `settings` `Button sm`
+  (`subtle` while open) after its kind; it opens a row under it: an amber notice when the
+  project's `.pi/sol-pi.json` overrides, one `OptionRow` checkbox per mechanism (saved on
+  click to `~/.pi/agent/sol-pi.json`), and the file path as status under them. A
+  mechanism's own settings sit under its checkbox, lined up with its text, only while it
+  is on: the reducer model as one `<select>` of pi's models grouped by provider, saved on
+  pick (first option `Built-in: …`, or a disabled `Not selected` when pi cannot reach the
+  built-in model; no warning), and the compact's cost ratio as a `w-24` input with `Save`. Tool metrics is an `OptionRow` checkbox (on by default) with
   a `text-meta` line saying what it does. Under it, Personality (`Personality.tsx`, moved
   from Settings): a `text-ui` heading, the file's path, a mono `textarea` with `Save`
   (`Button sm subtle`) and a status line, then the `Repeat before every reply` checkbox.
   It is re-read each time the page is shown unless there are unsaved edits, and the
-  Installed tab stays mounted (hidden) on Search so an unsaved edit survives. Changes
+  pwi extensions tab stays mounted (hidden) on the other tabs so an unsaved edit survives. Changes
   apply to sessions started afterwards. pwi's own plumbing (rewind, context) is not listed.
 - Settings has a `w-48` category nav on the left (`NavItem`s: Appearance, Transcript,
   Sessions, Notifications), like Obsidian; the right side shows only the

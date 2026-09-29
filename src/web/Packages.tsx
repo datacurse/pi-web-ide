@@ -8,7 +8,7 @@
  * on.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import { X } from "@phosphor-icons/react";
 import { stripAnsi } from "fancy-ansi";
 import type {
@@ -21,6 +21,7 @@ import type {
 } from "../shared/types.js";
 import { Button, IconButton, OptionRow, PanelHeader, inputClass, sectionLabel } from "./ui.js";
 import { Personality } from "./Personality.js";
+import { SolPiSettings } from "./SolPiSettings.js";
 import { parseResponse } from "hono/client";
 import { api } from "./api.js";
 import { t, locale } from "./i18n.js";
@@ -65,7 +66,7 @@ export function Packages({
 	cwd: string;
 	onClose: () => void;
 }) {
-	const [tab, setTab] = useState<"installed" | "search">("installed");
+	const [tab, setTab] = useState<"installed" | "pwi" | "search">("installed");
 	const [project, setProject] = useState<{ cwd: string; packages: PiwPackage[] } | null>(null);
 	const [view, setView] = useState<PiwPackagesView | null>(null);
 	const [error, setError] = useState<string | null>(null);
@@ -148,7 +149,7 @@ export function Packages({
 		>
 			<PanelHeader title={t("Packages")} onClose={onClose}>
 				<div className="flex gap-1">
-					{(["installed", "search"] as const).map((id) => (
+					{(["installed", "pwi", "search"] as const).map((id) => (
 						<Button
 							key={id}
 							variant={tab === id ? "subtle" : "ghost"}
@@ -156,7 +157,7 @@ export function Packages({
 							onClick={() => setTab(id)}
 							aria-pressed={tab === id}
 						>
-							{id === "installed" ? t("Installed") : t("Search")}
+							{id === "installed" ? t("pi packages") : id === "pwi" ? t("pwi extensions") : t("Search")}
 						</Button>
 					))}
 				</div>
@@ -172,10 +173,9 @@ export function Packages({
 			</PanelHeader>
 
 			<div className="min-h-0 flex-1 overflow-y-auto p-3">
-				{/* Hidden, not unmounted, on the other tab: an unsaved personality edit lives in it. */}
 				<div className={tab === "installed" ? "" : "hidden"}>
 					<Installed
-						open={open}
+						cwd={cwd}
 						packages={packages}
 						piVersion={view?.piVersion}
 						error={error}
@@ -191,6 +191,10 @@ export function Packages({
 							void mutate(t("update pi"), () => api.packages["update-pi"].$post())
 						}
 					/>
+				</div>
+				{/* Hidden, not unmounted, on the other tabs: an unsaved personality edit lives in it. */}
+				<div className={tab === "pwi" ? "" : "hidden"}>
+					<PwiExtensionsSection open={open} />
 				</div>
 				{tab === "search" && <Search onPick={setAdding} />}
 			</div>
@@ -223,8 +227,11 @@ export function Packages({
 	);
 }
 
+/** Packages with a settings panel in their row, by identity. */
+const hasSettings = (identity: string) => /(^|\/)sol-pi$/i.test(identity);
+
 function Installed({
-	open,
+	cwd,
 	packages,
 	piVersion,
 	error,
@@ -234,7 +241,7 @@ function Installed({
 	onRemove,
 	onUpdatePi,
 }: {
-	open: boolean;
+	cwd: string;
 	packages: PiwPackage[];
 	piVersion: string | null | undefined;
 	error: string | null;
@@ -244,6 +251,7 @@ function Installed({
 	onRemove: (source: string) => void;
 	onUpdatePi: () => void;
 }) {
+	const [settingsOf, setSettingsOf] = useState<string | null>(null);
 	return (
 		<>
 			<div className="mb-3 flex items-center gap-2">
@@ -273,10 +281,22 @@ function Installed({
 				</thead>
 				<tbody>
 					{packages.map((p) => (
-						<tr key={p.identity} className="group border-b border-neutral-800 align-top">
+						<Fragment key={p.identity}>
+						<tr className="group border-b border-neutral-800 align-top">
 							<td className="py-1.5 pr-3">
 								<span className="font-mono text-neutral-100">{p.identity}</span>
 								<span className="ml-2 text-caption text-neutral-600">{p.kind}</span>
+								{hasSettings(p.identity) && (
+									<Button
+										size="sm"
+										variant={settingsOf === p.identity ? "subtle" : "ghost"}
+										className="ml-2"
+										aria-expanded={settingsOf === p.identity}
+										onClick={() => setSettingsOf(settingsOf === p.identity ? null : p.identity)}
+									>
+										{t("settings")}
+									</Button>
+								)}
 							</td>
 							<td className="py-1.5 pr-3">
 								<span className="font-mono text-meta text-neutral-300">
@@ -327,6 +347,14 @@ function Installed({
 								)}
 							</td>
 						</tr>
+						{settingsOf === p.identity && (
+							<tr className="border-b border-neutral-800">
+								<td colSpan={2} className="pt-1">
+									<SolPiSettings cwd={cwd} />
+								</td>
+							</tr>
+						)}
+						</Fragment>
 					))}
 					{packages.length === 0 && (
 						<tr>
@@ -337,8 +365,6 @@ function Installed({
 					)}
 				</tbody>
 			</table>
-
-			<PwiExtensionsSection open={open} />
 
 			<div className="mt-6 border-t border-neutral-800 pt-3">
 				<h3 className={sectionLabel}>{t("pi itself")}</h3>
@@ -403,7 +429,7 @@ function PwiExtensionsSection({ open }: { open: boolean }) {
 		setState({ toolMetrics: on });
 	};
 	return (
-		<div className="mt-6 border-t border-neutral-800 pt-3">
+		<div>
 			<h3 className={sectionLabel}>{t("pwi extensions")}</h3>
 			<p className="mt-1 max-w-prose text-meta text-neutral-500">
 				{t(

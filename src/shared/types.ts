@@ -224,6 +224,29 @@ export interface PwiExtensions {
 	toolMetrics: boolean;
 }
 
+/** SoL-Pi's four mechanisms and their knobs, as `sol-pi.json` holds them. */
+export interface SolPiConfig {
+	actionFusion: boolean;
+	observationPack: boolean;
+	evidencePreservingReducer: boolean;
+	onlineContextCompact: boolean;
+	/** Omitted means SoL-Pi's default, 12.5. */
+	cacheWriteReadRatio?: number;
+	/** Omitted means SoL-Pi's built-in reducer route. */
+	evidencePreservingReducerProvider?: string;
+	evidencePreservingReducerModel?: string;
+}
+
+/** What GET/PUT /api/packages/sol-pi answer with. */
+export interface SolPiSettings {
+	/** `<pi agent dir>/sol-pi.json`, the file these settings edit. */
+	path: string;
+	exists: boolean;
+	config: SolPiConfig;
+	/** The open project's `.pi/sol-pi.json`, which replaces this file when the project is trusted. */
+	projectFile: string | null;
+}
+
 /** One reading of every Claude limit, from `/api/usage`'s `history`. */
 export interface UsageSample {
 	at: number;

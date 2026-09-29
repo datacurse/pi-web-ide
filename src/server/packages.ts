@@ -232,7 +232,7 @@ export function validate(source: string): PiwPackage {
 // Reading
 // ---------------------------------------------------------------------------
 
-function agentDir(): string {
+export function agentDir(): string {
 	return process.env.PI_CODING_AGENT_DIR ?? join(homedir(), ".pi", "agent");
 }
 

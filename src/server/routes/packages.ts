@@ -1,6 +1,7 @@
 import { Hono, type Context } from "hono";
 import * as packages from "../packages.js";
 import { info, search } from "../gallery.js";
+import { readSolPi, writeSolPi } from "../solPi.js";
 import { query, json, type Deps, type Env } from "../http.js";
 
 /** pi packages on this machine, the npm gallery, and the open project's own packages. */
@@ -99,5 +100,27 @@ export function packagesRoutes({ cwd: CWD, registry, piVersion: PI_VERSION }: De
 		.get("/packages/project", query<{ cwd?: string }>(), (c) => {
 			const cwd = c.req.query("cwd") || CWD;
 			return c.json({ cwd, packages: packages.listProject(cwd) }, 200);
+		})
+
+		/** SoL-Pi's settings file. `cwd` only reports whether that project's own file replaces it. */
+		.get("/packages/sol-pi", query<{ cwd?: string }>(), (c) => {
+			try {
+				return c.json(readSolPi(c.req.query("cwd") || CWD), 200);
+			} catch (err) {
+				return c.json({ error: err instanceof Error ? err.message : String(err) }, 500);
+			}
+		})
+
+		.put("/packages/sol-pi", query<{ cwd?: string }>(), json<Record<string, unknown>>(), (c) => {
+			const b = c.req.valid("json");
+			if (!b || typeof b !== "object" || Array.isArray(b)) return c.json({ error: "object required" }, 400);
+			try {
+				const settings = writeSolPi(b, c.req.query("cwd") || CWD);
+				// A prewarmed spare started under the old settings.
+				registry.discardSpares();
+				return c.json(settings, 200);
+			} catch (err) {
+				return c.json({ error: err instanceof Error ? err.message : String(err) }, 400);
+			}
 		});
 }

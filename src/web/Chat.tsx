@@ -754,7 +754,7 @@ export function Chat({
 						// otherwise, which React would coalesce but still has to diff.
 						setAtBottom((was) => (was === bottom ? was : bottom));
 					}}
-					className="min-h-0 flex-1 overflow-y-auto pb-3"
+					className="min-h-0 flex-1 overflow-y-auto pb-12"
 				>
 					{snapshot.messages.length === 0 && !hasPartial && !busy && !command && (
 						<div className="flex h-full flex-col items-center justify-center gap-2 text-center select-none">
@@ -904,7 +904,8 @@ export function Chat({
 				 * the chat, not a panel docked under it. A border here drew exactly
 				 * that second panel. The context meter lives inside the composer.
 				 */}
-				<div className="chat-gutter py-2">
+				<div className="relative h-0">
+				<div className="chat-gutter pointer-events-none absolute inset-x-0 bottom-0 pb-1">
 					<div className="chat-measure flex items-center justify-end gap-2">
 						{/*
 						 * Git on the right of the status line and ABOVE the composer,
@@ -913,7 +914,7 @@ export function Chat({
 						 * the button owns its own state — but a commit does change the
 						 * transcript's context, so the caller gets a hook.
 						 */}
-						<div className="flex shrink-0 items-center gap-2">
+						<div className="pointer-events-auto flex shrink-0 items-center gap-2">
 							{/* Jump to the newest message. Only while scrolled away from it:
 						    a button that does nothing is worse than no button. */}
 							{!atBottom && (
@@ -929,6 +930,7 @@ export function Chat({
 							{snapshot.cwd && <GitActions cwd={snapshot.cwd} />}
 						</div>
 					</div>
+				</div>
 				</div>
 				<div className="chat-gutter pt-1 pb-6">
 					{/* Same column as the prose above it, so the box's edges line up

@@ -151,8 +151,7 @@ export function Lightbox({
 		};
 	}, [above]);
 
-	// Escape closes, because that is what every overlay in this app answers to
-	// and because the click target (the backdrop) is not obvious.
+	// Escape closes, because that is what every overlay in this app answers to.
 	useEffect(() => {
 		const onKey = (e: KeyboardEvent) => {
 			// Not when the composer already used it (closing the command picker).
@@ -163,18 +162,29 @@ export function Lightbox({
 	}, [onClose]);
 
 	return (
+		// No backdrop: clicks around the image reach the app under it.
 		<div
 			role="dialog"
 			aria-label={t("Attachment")}
-			onClick={onClose}
 			style={{ bottom }}
-			className="fixed inset-x-0 top-0 z-50 flex items-center justify-center bg-black/80 p-6"
+			className="pointer-events-none fixed inset-x-0 top-0 z-50 flex items-center justify-center"
 		>
-			<img
-				src={src}
-				alt={t("Attachment, full size")}
-				className="max-h-full max-w-full rounded-sm border border-neutral-700 object-contain"
-			/>
+			<button
+				data-custom="expanded image, click closes"
+				onClick={onClose}
+				aria-label={t("Close")}
+				className="group pointer-events-auto relative overflow-hidden rounded-md border-2 border-neutral-200 shadow-2xl"
+			>
+				<img
+					src={src}
+					alt={t("Attachment, full size")}
+					style={{ maxHeight: `calc(100vh - ${bottom + 48}px)`, maxWidth: "calc(100vw - 48px)" }}
+					className="block object-contain"
+				/>
+				<span className="absolute top-2 right-2 flex size-7 items-center justify-center rounded-full border border-neutral-700 bg-neutral-900 text-neutral-100 opacity-0 transition-opacity duration-150 ease-out group-hover:opacity-100 motion-reduce:transition-none">
+					<X size={14} />
+				</span>
+			</button>
 		</div>
 	);
 }
