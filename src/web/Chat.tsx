@@ -1065,7 +1065,7 @@ export function Chat({
 							/>
 
 							{/* Attach, context and the model on the left, send on the right. */}
-							<div className="mt-1 flex items-center justify-between gap-2">
+							<div className="mt-4 flex items-center justify-between gap-2">
 								<div className="flex min-w-0 items-center gap-1.5">
 									<IconButton
 										onClick={() => fileInput.current?.click()}

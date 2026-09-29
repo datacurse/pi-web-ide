@@ -100,6 +100,7 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
 
 ## Composer
 
+- The button row sits `mt-4` (16px) below the typed text.
 - Attach, `?` and Send are `bare` round `IconButton`s whose icon fills the button (24px, `size="sm"`,
   no outline or disc, no background even on hover; hover only brightens the icon), like Cursor's. Stop is an `outline` round `sm` `IconButton`; the star is `ghost`.
 - Send is a `PaperPlaneTilt`: `neutral-100` when there is something to send, the ghost
