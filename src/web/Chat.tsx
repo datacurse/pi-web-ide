@@ -1064,16 +1064,15 @@ export function Chat({
 								className="chat-prose field-sizing-content max-h-60 w-full resize-none bg-transparent outline-none placeholder:text-neutral-600"
 							/>
 
-							{/* Attach and the model on the left, send on the right. */}
+							{/* Attach, context and the model on the left, send on the right. */}
 							<div className="mt-1 flex items-center justify-between gap-2">
 								<div className="flex min-w-0 items-center gap-1.5">
 									<IconButton
 										onClick={() => fileInput.current?.click()}
 										label={t("Attach a file")}
-										variant="outline"
 										round
 									>
-										<Paperclip size={14} />
+										<Paperclip size={28} />
 									</IconButton>
 									<input
 										ref={fileInput}
@@ -1087,6 +1086,13 @@ export function Chat({
 											void addFiles(files);
 										}}
 									/>
+									<ContextMeter
+										tokens={snapshot.contextTokens}
+										window={snapshot.contextWindow}
+										compacting={compacting}
+										open={contextOpen}
+										onToggle={() => setContextOpen((o) => !o)}
+									/>
 									<ModelSelector
 										model={snapshot.model}
 										disabled={busy}
@@ -1098,13 +1104,6 @@ export function Chat({
 									/>
 								</div>
 								<div className="flex shrink-0 items-center gap-1.5">
-									<ContextMeter
-										tokens={snapshot.contextTokens}
-										window={snapshot.contextWindow}
-										compacting={compacting}
-										open={contextOpen}
-										onToggle={() => setContextOpen((o) => !o)}
-									/>
 									{busy && (
 										<IconButton
 											onClick={onAbort}

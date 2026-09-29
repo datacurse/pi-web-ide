@@ -1,7 +1,13 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { Bell, ChatText, ListBullets, Palette } from "@phosphor-icons/react";
-import { inputClass, NavItem, OptionRow, PanelHeader, Section } from "./ui.js";
+import { Button, inputClass, NavItem, OptionRow, PanelHeader, Section } from "./ui.js";
 import {
+	applyChatFade,
+	chatFadeOpacity,
+	CHAT_FADE_RANGES,
+	DEFAULT_CHAT_FADE,
+	readChatFade,
+	type ChatFade,
 	LANGUAGES,
 	THEMES,
 	THINKING_MODES,
@@ -47,6 +53,113 @@ function Swatch({ theme }: { theme: ThemeId }) {
 				<span className="block size-4 bg-amber-400" />
 			</span>
 		</span>
+	);
+}
+
+const CHAT_FADE_FIELDS: { key: keyof ChatFade; label: string; hint: string }[] = [
+	{ key: "length", label: "Length", hint: "How far above the message box it starts, in rem." },
+	{ key: "floor", label: "End opacity", hint: "How visible the text stays at the box. 0 fades it out completely." },
+	{ key: "easeIn", label: "Ease in", hint: "How softly the fade starts. 1 starts abruptly." },
+	{ key: "drop", label: "Drop", hint: "How early it gets dim. Higher dims sooner and holds longer." },
+];
+
+/** Sliders for the transcript's fade above the composer, applied live. */
+function ChatFadeControl() {
+	const [fade, setFade] = useState(readChatFade);
+	const change = (next: ChatFade) => {
+		setFade(next);
+		applyChatFade(next);
+	};
+	return (
+		<div className="flex flex-col gap-2 px-2">
+			<div className="flex items-center justify-between gap-2">
+				<span className="text-ui text-neutral-300">{t("Chat fade")}</span>
+				<Button size="sm" variant="ghost" onClick={() => change(DEFAULT_CHAT_FADE)}>
+					{t("Reset")}
+				</Button>
+			</div>
+			{CHAT_FADE_FIELDS.map((f) => {
+				const [min, max, step] = CHAT_FADE_RANGES[f.key];
+				return (
+					<label key={f.key} className="flex items-center gap-3">
+						<span className="w-28 shrink-0">
+							{t(f.label)}
+							<span className="block text-meta text-neutral-500">{t(f.hint)}</span>
+						</span>
+						<input
+							data-custom="range slider"
+							type="range"
+							min={min}
+							max={max}
+							step={step}
+							value={fade[f.key]}
+							onChange={(e) => change({ ...fade, [f.key]: Number(e.target.value) })}
+							className="min-w-0 flex-1 accent-amber-400"
+						/>
+						<span className="w-10 shrink-0 text-right font-mono text-meta text-neutral-400">
+							{fade[f.key]}
+						</span>
+					</label>
+				);
+			})}
+			<ChatFadePreview fade={fade} />
+		</div>
+	);
+}
+
+/**
+ * The curve beside a sample answer masked by the live `--chat-fade`, over a mock
+ * message box. Both columns are `height` rem tall, so the chart's rows line up
+ * with the text: x is opacity, y is the same vertical position as the text.
+ */
+function ChatFadePreview({ fade }: { fade: ChatFade }) {
+	const height = fade.length + 3;
+	const start = height - 0.75 - fade.length;
+	const box = height - 0.75;
+	const points = [`1,0`, `1,${start}`];
+	for (let i = 1; i <= 48; i++) {
+		const u = i / 48;
+		points.push(`${chatFadeOpacity(fade, u)},${start + u * fade.length}`);
+	}
+	points.push(`${fade.floor},${height}`);
+	return (
+		<div className="mt-2 grid grid-cols-2 gap-3">
+			<div>
+				<svg
+					viewBox={`0 0 1 ${height}`}
+					preserveAspectRatio="none"
+					style={{ height: `${height}rem` }}
+					className="block w-full rounded-sm bg-neutral-900"
+					aria-hidden
+				>
+					{[0.25, 0.5, 0.75].map((x) => (
+						<line key={x} x1={x} x2={x} y1={0} y2={height} className="stroke-neutral-800" vectorEffect="non-scaling-stroke" />
+					))}
+					{[start, box].map((y) => (
+						<line key={y} x1={0} x2={1} y1={y} y2={y} className="stroke-neutral-600" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />
+					))}
+					<polygon points={`0,0 ${points.join(" ")} 0,${height}`} className="fill-amber-500/15" />
+					<polyline points={points.join(" ")} fill="none" className="stroke-amber-400" strokeWidth={2} vectorEffect="non-scaling-stroke" />
+				</svg>
+				<div className="mt-1 flex justify-between text-caption text-neutral-500">
+					<span>0</span>
+					<span>{t("opacity")}</span>
+					<span>1</span>
+				</div>
+			</div>
+			<div>
+				<div style={{ height: `${height}rem` }} className="fade-bottom flex flex-col justify-end overflow-hidden">
+					<p className="text-body text-neutral-200">
+						{t(
+							"The tests pass and the build is clean. I renamed the helper, moved the parser into its own module and updated every caller, so nothing else should need to change. The old export stays as an alias for one release.",
+						)}
+					</p>
+				</div>
+				<div className="relative -mt-3 rounded-lg bg-neutral-900 px-3 py-2 text-body text-neutral-600 ring-1 ring-neutral-800 ring-inset">
+					{t("Message pi…")}
+				</div>
+			</div>
+		</div>
 	);
 }
 
@@ -259,6 +372,12 @@ export function Settings({
 					</span>
 				</OptionRow>
 			),
+		},
+		{
+			category: "appearance",
+			label: t("Chat fade"),
+			text: `gradient mask composer message box ${CHAT_FADE_FIELDS.map((f) => `${t(f.label)} ${t(f.hint)}`).join(" ")}`,
+			node: <ChatFadeControl />,
 		},
 		{
 			category: "transcript",

@@ -101,7 +101,8 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
 ## Composer
 
 - Only Send is a filled disc (`solid`); it greys out while there is nothing to send.
-  Attach (`Paperclip`), `?` and Stop are `outline` round `IconButton`s; the star is `ghost`.
+  `?` and Stop are `outline` round `IconButton`s; the star is `ghost`. Attach is a ghost round
+  `IconButton` whose `Paperclip` fills it (28px, no outline), like Cursor's.
 - The `?` button (directly left of Send, so Stop never shifts it) toggles "Ask only":
   a 14px `QuestionMark`, `aria-pressed`. When on it uses the `on` variant (amber disc, dark
   bold icon) so the state reads at a glance. Right-click it (or Settings > Sessions >
@@ -118,13 +119,19 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
   `<select>`, Chromium 135+): `rounded-md` neutral-900 surface, `text-ui` rows,
   provider labels as uppercase captions, current option in amber. Other browsers
   show the native popup.
-- The context meter sits in the composer's right group, before Stop. Git stays in
+- The context meter sits in the composer's left group, right of Attach. Git stays in
   the row above the box.
 - That row (jump-to-latest and git) floats over the transcript's bottom edge with no
   band or background of its own; the transcript scrolls under it (`pb-12` keeps its
   last line clear). No gap between the transcript and the box: the transcript fades from 8px
   (the buttons' gap to the box) above the top of the git buttons to 0.2 opacity at the box's top edge (`.fade-bottom`), along
-  `0.2 + 0.8(1-t^1.5)^3`: it eases in, dims fast, and settles at 0.2, never black. Tried and
+  `0.2 + 0.8(1-t^1.5)^3`: it eases in, dims fast, and settles at 0.2, never black.
+  Settings > Appearance > `Chat fade` (`pwi:chatFade`, per browser) tunes it live with
+  sliders for Length, End opacity, Ease in and Drop, plus `Reset`; `applyChatFade` in
+  `prefs.ts` builds the gradient into `--chat-fade`. Under the sliders, a preview: the
+  curve as an SVG chart (x opacity, y position, dashed lines at the fade start and the box)
+  beside a sample answer masked by the live gradient over a mock message box, both the
+  same height so their rows line up. Tried and
   rejected: `0.2 + 0.8(1-t)^3` (entry too abrupt), linear / CIE L*-even (felt like it darkened faster and faster), Larsen's scrim
   (worse still), pure `(1-t)^3` (right start, but a near-black band above the box) and
   `0.8(1-t)^4 + 0.2(1-t^4)` (held dim, but still ended at zero).
@@ -133,7 +140,7 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
   text lines up with the response text, like Cursor. To keep that exact, the transcript
   reserves its scrollbar on both sides (`scrollbar-gutter: stable both-edges`) and the
   box's edge is an inset `ring-1`, not a border. The git row's right edge follows the box,
-  `mb-2` above it (the same gap as between its buttons), every button `control-md` tall. It is a 16px ring in a ghost round `IconButton`
+  `mb-2` above it (the same gap as between its buttons), every button `control-md` tall. It is a ring in a ghost round `IconButton`, as wide as the outlined buttons (28px outer edge, 3px stroke: a `size-8 shrink-0` SVG with `stroke={1.5}`, so the flex button cannot shrink it)
   (`neutral-700` track, `neutral-400` fill, amber from 75%, red from 90%), drawn empty
   before the first turn instead of hidden.
 - Clicking the ring opens `ContextPanel` above the box (`rounded-md`, like Cursor's):
@@ -142,8 +149,10 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
   - A full-width `h-2` stacked bar of what the USED part is made of (not scaled to the
     window, so small parts still show).
   - One `ListRow` per part: caret, `size-3` swatch, label, piece count, % of used, tokens.
-    Colors: System prompt `neutral-400`, Tool definitions `--ct-mauve`, Rules `green-400`,
-    Skills `yellow-500`, Personality `blue-400`, Conversation `--ct-teal`. Empty parts hide.
+    Colors are Cursor's, as `ctx-*` tokens in `@theme` (fixed, not themed): System prompt
+    `ctx-system` gray, Tool definitions `ctx-tools` purple, Rules `ctx-rules` green, Skills
+    `ctx-skills` orange, Personality `ctx-personality` (Cursor's subagent blue), Conversation
+    `ctx-conversation` plum. Empty parts hide.
   - A row opens into its pieces (each tool, rule file, skill; the conversation as your
     messages, replies, thinking, and each tool's calls plus results), `text-meta`, with
     a `w-16` share bar. The largest part starts open.
@@ -466,7 +475,8 @@ New UI uses these; convert raw markup when you touch it. Tune styles in
   `composer pill` (model selects, git split button), `composer`, `choice card`
   (chat question options, package search hits), `session card`, `transcript
   disclosure`, `context meter`, `image thumbnail`, `thumbnail remove badge`,
-  `pinned-folder chip`, `activity bar item`, `search field`, `search result`.
+  `pinned-folder chip`, `activity bar item`, `search field`, `search result`,
+  `range slider`.
 - xterm reads `--text-body` at mount (Terminal.tsx); it cannot take a class.
 - Buttons default to `type="button"`; pass `type="submit"` explicitly.
 - No focus outlines. `index.css` sets `:focus-visible { outline: none }`; never add

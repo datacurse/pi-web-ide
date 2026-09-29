@@ -154,6 +154,57 @@ export function applyHideScrollbars(on: boolean): void {
 }
 
 /**
+ * How the transcript fades out above the composer: opacity
+ * `floor + (1 - floor)(1 - t^easeIn)^drop` over `length` rem, ending at the box's top
+ * edge, which overlaps the transcript by 0.75rem (Chat.tsx `-mt-3`).
+ */
+export type ChatFade = { length: number; floor: number; easeIn: number; drop: number };
+
+export const DEFAULT_CHAT_FADE: ChatFade = { length: 2.75, floor: 0.2, easeIn: 1.5, drop: 3 };
+
+/** min, max, step per field. */
+export const CHAT_FADE_RANGES: Record<keyof ChatFade, [number, number, number]> = {
+	length: [0.5, 8, 0.25],
+	floor: [0, 1, 0.05],
+	easeIn: [1, 4, 0.1],
+	drop: [1, 6, 0.1],
+};
+
+const CHAT_FADE_KEY = "pwi:chatFade";
+
+export function readChatFade(): ChatFade {
+	let stored: Partial<Record<keyof ChatFade, unknown>> = {};
+	try {
+		stored = JSON.parse(readStored(CHAT_FADE_KEY) ?? "{}") ?? {};
+	} catch {
+		/* default */
+	}
+	const fade = { ...DEFAULT_CHAT_FADE };
+	for (const key of Object.keys(fade) as (keyof ChatFade)[]) {
+		const v = stored[key];
+		const [min, max] = CHAT_FADE_RANGES[key];
+		if (typeof v === "number" && v >= min && v <= max) fade[key] = v;
+	}
+	return fade;
+}
+
+/** Opacity at `u` (0 = where the fade starts, 1 = the box's top edge). */
+export function chatFadeOpacity(fade: ChatFade, u: number): number {
+	return fade.floor + (1 - fade.floor) * (1 - u ** fade.easeIn) ** fade.drop;
+}
+
+export function applyChatFade(fade: ChatFade): void {
+	const stops = ["#000 calc(100% - " + (0.75 + fade.length) + "rem)"];
+	for (let i = 1; i <= 24; i++) {
+		const u = i / 24;
+		const a = chatFadeOpacity(fade, u);
+		stops.push(`rgb(0 0 0 / ${a.toFixed(3)}) calc(100% - ${(0.75 + (1 - u) * fade.length).toFixed(3)}rem)`);
+	}
+	document.documentElement.style.setProperty("--chat-fade", `linear-gradient(to bottom, ${stops.join(", ")})`);
+	writeStored(CHAT_FADE_KEY, JSON.stringify(fade));
+}
+
+/**
  * How much of a tool call the transcript shows.
  *
  * `live` is the default and the old behaviour: a call with no result yet is

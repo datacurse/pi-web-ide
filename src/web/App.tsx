@@ -50,12 +50,14 @@ import { EMPTY_LAYOUT, addTab, allTerminals, reconcile, type TermLayout } from "
 import { Settings } from "./Settings.js";
 import { Packages } from "./Packages.js";
 import {
+	applyChatFade,
 	applyHideScrollbars,
 	applyTheme,
 	type Language,
 	THEMES,
 	readDockHeight,
 	readDockOpen,
+	readChatFade,
 	readHideScrollbars,
 	readNotify,
 	readPanel,
@@ -231,6 +233,8 @@ export default function App() {
 	 */
 	useEffect(() => applyTheme(theme), [theme]);
 	useEffect(() => applyHideScrollbars(hideScrollbars), [hideScrollbars]);
+	// Settings owns later changes; this paints the stored fade once.
+	useEffect(() => applyChatFade(readChatFade()), []);
 	useEffect(() => void (document.documentElement.lang = language), [language]);
 	const changeLanguage = useCallback((lang: Language) => {
 		setLanguage(lang);

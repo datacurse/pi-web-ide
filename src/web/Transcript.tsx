@@ -412,7 +412,7 @@ export function ContextMeter({
 			: t("Context usage");
 	return (
 		<IconButton label={label} onClick={onToggle} aria-expanded={open} data-context-meter round>
-			<Ring share={share} className={`size-4 ${tone}`} />
+			<Ring share={share} stroke={1.5} className={`size-8 shrink-0 ${tone}`} />
 		</IconButton>
 	);
 }
@@ -441,12 +441,12 @@ function Ring({ share, className, stroke = 2 }: { share: number; className: stri
 }
 
 const PARTS: Record<ContextPart["key"], { label: string; color: string }> = {
-	system: { label: "System prompt", color: "bg-neutral-400" },
-	tools: { label: "Tool definitions", color: "bg-(--ct-mauve)" },
-	rules: { label: "Rules", color: "bg-green-400" },
-	skills: { label: "Skills", color: "bg-yellow-500" },
-	personality: { label: "Personality", color: "bg-blue-400" },
-	conversation: { label: "Conversation", color: "bg-(--ct-teal)" },
+	system: { label: "System prompt", color: "bg-ctx-system" },
+	tools: { label: "Tool definitions", color: "bg-ctx-tools" },
+	rules: { label: "Rules", color: "bg-ctx-rules" },
+	skills: { label: "Skills", color: "bg-ctx-skills" },
+	personality: { label: "Personality", color: "bg-ctx-personality" },
+	conversation: { label: "Conversation", color: "bg-ctx-conversation" },
 };
 
 function percentText(share: number): string {

@@ -69,6 +69,14 @@
 	--spacing-control-sm: 24px; /* toolbar buttons, icon buttons in headers */
 	--spacing-control-md: 28px; /* dialog buttons, composer icon buttons */
 	--spacing-bar: 36px; /* panel and editor header rows */
+
+	/* Context panel parts, Cursor's palette. Fixed, not themed. */
+	--color-ctx-system: #9e9e9e;
+	--color-ctx-tools: #b58ae6;
+	--color-ctx-rules: #3fa468;
+	--color-ctx-skills: #f2b264;
+	--color-ctx-personality: #7fa3c9;
+	--color-ctx-conversation: #6b4152;
 }
 
 /*
@@ -662,25 +670,9 @@ body {
 	mask-repeat: no-repeat;
 }
 
-/* The transcript fades from the top of the git buttons plus their `mb-2` gap (3.5rem up) to 0.2 at the composer's
-   top edge, which overlaps the transcript by 0.75rem (Chat.tsx `-mt-3`). */
+/* The transcript fades out above the composer; the gradient is built from Settings (prefs.ts `applyChatFade`). */
 .fade-bottom {
-	/* Opacity 0.2 + 0.8(1-t^1.5)^3: eases in, dims fast, settles at 0.2, never black. */
-	mask-image: linear-gradient(
-		to bottom,
-		#000 calc(100% - 3.5rem),
-		rgb(0 0 0 / 0.973) calc(100% - 3.362rem),
-		rgb(0 0 0 / 0.926) calc(100% - 3.225rem),
-		rgb(0 0 0 / 0.804) calc(100% - 2.95rem),
-		rgb(0 0 0 / 0.667) calc(100% - 2.675rem),
-		rgb(0 0 0 / 0.533) calc(100% - 2.4rem),
-		rgb(0 0 0 / 0.416) calc(100% - 2.125rem),
-		rgb(0 0 0 / 0.323) calc(100% - 1.85rem),
-		rgb(0 0 0 / 0.257) calc(100% - 1.575rem),
-		rgb(0 0 0 / 0.218) calc(100% - 1.3rem),
-		rgb(0 0 0 / 0.202) calc(100% - 1.025rem),
-		rgb(0 0 0 / 0.2) calc(100% - 0.75rem)
-	);
+	mask-image: var(--chat-fade);
 }
 
 /*
