@@ -987,7 +987,7 @@ function Answers({ turns }: { turns: StatsTurn[] }) {
 				{turns.slice(0, shown).map((turn) => {
 					const tools = Object.values(turn.tools).reduce((a, b) => a + b, 0);
 					return (
-						<li key={`${turn.session}-${turn.start}`} className="border-b border-neutral-900 py-1.5">
+						<li key={`${turn.session}-${turn.start}`} className="border-b border-neutral-800 py-1.5">
 							<div className="flex items-center gap-2">
 								<span className="min-w-0 flex-1 truncate text-neutral-200" title={turn.prompt}>
 									{turn.prompt || t("(image)")}

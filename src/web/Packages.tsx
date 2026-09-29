@@ -264,7 +264,7 @@ function Installed({
 				</thead>
 				<tbody>
 					{packages.map((p) => (
-						<tr key={p.identity} className="group border-b border-neutral-900 align-top">
+						<tr key={p.identity} className="group border-b border-neutral-800 align-top">
 							<td className="py-1.5 pr-3">
 								<span className="font-mono text-neutral-100">{p.identity}</span>
 								<span className="ml-2 text-caption text-neutral-600">{p.kind}</span>
@@ -329,7 +329,7 @@ function Installed({
 				</tbody>
 			</table>
 
-			<div className="mt-6 border-t border-neutral-900 pt-3">
+			<div className="mt-6 border-t border-neutral-800 pt-3">
 				<h3 className={sectionLabel}>{t("pi itself")}</h3>
 				<p className="mt-1 max-w-prose text-meta text-neutral-500">
 					{t(
@@ -346,7 +346,7 @@ function Installed({
 			</div>
 
 			{project && project.packages.length > 0 && (
-				<div className="mt-6 border-t border-neutral-900 pt-3">
+				<div className="mt-6 border-t border-neutral-800 pt-3">
 					<h3 className={sectionLabel}>
 						{t("This project — {cwd}", { cwd: project.cwd })}
 					</h3>

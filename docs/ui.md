@@ -80,6 +80,7 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
 
 - Primary text `neutral-100`/`200`; secondary `neutral-300`/`400`; hints `neutral-500`; disabled `neutral-600`.
 - Accent and primary action: `amber-*`. Errors: `red-*`. Success: `green-*`.
+- Every separator (panel edges, list row rules, table rows) is `border-neutral-800`; no fainter `neutral-900` rules.
 - Settings lists themes in two groups, Dark then Light (`light` flag in `prefs.ts`).
 
 ## Composer
