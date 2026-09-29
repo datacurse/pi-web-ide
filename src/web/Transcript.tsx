@@ -868,6 +868,47 @@ export interface Footer {
 	asked?: number;
 }
 
+/** Copy `text`; the icon swaps to a check for 1.2s. */
+function CopyButton({ text }: { text: string }) {
+	const [copied, setCopied] = useState(false);
+	const copy = async () => {
+		try {
+			await navigator.clipboard.writeText(text);
+			setCopied(true);
+			setTimeout(() => setCopied(false), 1200);
+		} catch {
+			// Clipboard API can be denied/unavailable; failing silently beats a crash.
+		}
+	};
+	return (
+		<IconButton size="sm" label={copied ? t("Copied") : t("Copy")} onClick={() => void copy()}>
+			{copied ? <Check size={14} /> : <Copy size={14} />}
+		</IconButton>
+	);
+}
+
+/**
+ * Under your prompt: copy it, edit it (absent while a turn runs), and when it
+ * was sent. The answer footer's shape, with Edit in Fork's place.
+ */
+function UserFooter({ text, at, onEdit }: { text: string; at?: number; onEdit?: () => void }) {
+	return (
+		<div className="chat-measure mt-1 flex items-center gap-1 text-meta text-neutral-500">
+			<CopyButton text={text} />
+			{onEdit && (
+				<IconButton size="sm" label={t("Edit")} onClick={onEdit}>
+					<PencilSimple size={14} />
+				</IconButton>
+			)}
+			{at !== undefined && (
+				<span className="ml-1" title={new Date(at).toLocaleString(locale())}>
+					{timeAgo(at)}
+				</span>
+			)}
+		</div>
+	);
+}
+
 /**
  * Under the answer that ends a turn: copy it, fork a new session from it,
  * when it was answered (exact time on hover) and how long the turn took.
@@ -881,24 +922,12 @@ function AnswerFooter({
 	text: string;
 	onFork: (at: number) => Promise<void>;
 }) {
-	const [copied, setCopied] = useState(false);
 	const [forking, setForking] = useState(false);
-	const copy = async () => {
-		try {
-			await navigator.clipboard.writeText(text);
-			setCopied(true);
-			setTimeout(() => setCopied(false), 1200);
-		} catch {
-			// Clipboard API can be denied/unavailable; failing silently beats a crash.
-		}
-	};
 	const end = footer.endedAt ?? footer.at;
 	const took = footer.endedAt && footer.asked ? footer.endedAt - footer.asked : 0;
 	return (
 		<div className="chat-measure mt-1 flex items-center gap-1 text-meta text-neutral-500">
-			<IconButton size="sm" label={copied ? t("Copied") : t("Copy")} onClick={() => void copy()}>
-				{copied ? <Check size={14} /> : <Copy size={14} />}
-			</IconButton>
+			<CopyButton text={text} />
 			<IconButton
 				size="sm"
 				label={forking ? t("Forking…") : t("Fork from here")}
@@ -944,15 +973,11 @@ export function TranscriptRow({
 }) {
 	if (role === "user") {
 		return (
-			<div className="group chat-gutter py-2">
+			<div className="chat-gutter mt-2 pt-6">
 				<div className="chat-measure chat-prose rounded-lg bg-neutral-900 px-4 py-3">
 					{children}
 				</div>
-				{below && (
-					<div className="chat-measure mt-1 flex justify-end opacity-0 group-hover:opacity-100 focus-within:opacity-100">
-						{below}
-					</div>
-				)}
+				{below}
 			</div>
 		);
 	}
@@ -1040,10 +1065,8 @@ export function Message({
 			role={role}
 			labelled={labelled}
 			below={
-				isUser && onEdit && at !== undefined ? (
-					<IconButton size="sm" label={t("Edit")} onClick={() => setEditing(true)}>
-						<PencilSimple size={14} />
-					</IconButton>
+				isUser ? (
+					<UserFooter text={text} at={at} onEdit={onEdit && at !== undefined ? () => setEditing(true) : undefined} />
 				) : footer ? (
 					<AnswerFooter footer={footer} text={text} onFork={onFork} />
 				) : undefined
@@ -1083,7 +1106,7 @@ function EditMessage({
 	const [draft, setDraft] = useState(text);
 	const canSend = draft.trim() !== "" || attached.length > 0;
 	return (
-		<div className="chat-gutter py-2">
+		<div className="chat-gutter mt-2 pt-6">
 			<div className="chat-measure rounded-lg border border-neutral-700 bg-neutral-900 px-4 py-3">
 				{attached.length > 0 && (
 					<div className="mb-2 flex flex-wrap gap-2">

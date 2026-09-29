@@ -132,9 +132,10 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
   `0.2 + 0.8(1-t^1.5)^3`: it eases in, dims fast, and settles at 0.2, never black.
   Settings > Appearance > `Chat fade` (`pwi:chatFade`, per browser) tunes it live with
   sliders for Length, End opacity, Ease in and Drop, plus `Reset`; `applyChatFade` in
-  `prefs.ts` builds the gradient into `--chat-fade`. Each field is its name with the
-  description beside it (`text-meta neutral-500`), then a typeable `w-16` mono number
-  (`inputClass.sm`) left of a `.range` slider (index.css: 4px `neutral-700` track, amber
+  `prefs.ts` builds the gradient into `--chat-fade`. The fields share one
+  `grid-cols-[auto_1fr]`: names in the first column so every description (`text-meta
+  neutral-500`) starts at the same edge, and under each name a typeable mono number
+  (`inputClass.sm`, `w-16`: a stretched number input sizes the column to ~20 characters) left of a `.range` slider (index.css: 4px `neutral-700` track, amber
   up to a 12px amber thumb). Under the sliders, a preview: the
   curve as an SVG chart (x opacity, y position, dashed lines at the fade start and the box)
   beside a sample answer masked by the live gradient over a mock message box, both the
@@ -260,13 +261,16 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
 ## User message bubble
 
 - Assistant replies carry no `ASSISTANT` label; the bubble vs. plain prose already says who spoke.
+- The user row is `mt-2 pt-6` (32px) with no bottom padding: the gap above your prompt (between turns)
+  is wider than the one under it (to its own answer).
+- Under the pill, always shown: the answer footer's shape — `Copy`, `Edit` (`PencilSimple`,
+  in Fork's slot, absent while a turn runs), then `timeAgo` of when it was sent.
 
 - Text is clamped to 3 lines (`.fade-clamp`, the last line fades). When it overflows, a ghost
   `Button size="sm"` below it toggles `Show more` / `Show less` with a 12px caret.
   Settings → Transcript → `Your messages` picks Collapsed (default), Expanded (starts
   open, `Show less` still shown) or Always full (no clamp, no button); `pwi:userMessages`.
-- On hover, a right-aligned `PencilSimple` ghost `IconButton size="sm"` (`Edit`) sits
-  under the pill; hidden while a turn runs. It swaps the pill for a textarea in the same
+- `Edit` swaps the pill for a textarea in the same
   `rounded-lg` card (plus a `neutral-700` border) with `Cancel` / primary `Send`
   (`Button sm`). Enter sends, Escape cancels. Sending rewinds the session in place to
   before that message (pi's `/tree`; the old branch stays in the file) and asks again,

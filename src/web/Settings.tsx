@@ -78,16 +78,19 @@ function ChatFadeControl() {
 					{t("Reset")}
 				</Button>
 			</div>
-			{CHAT_FADE_FIELDS.map((f) => (
-				<FadeField
-					key={f.key}
-					label={t(f.label)}
-					hint={t(f.hint)}
-					range={CHAT_FADE_RANGES[f.key]}
-					value={fade[f.key]}
-					onChange={(v) => change({ ...fade, [f.key]: v })}
-				/>
-			))}
+			{/* One grid for all fields: names share a column, so every description starts at the same edge. */}
+			<div className="grid grid-cols-[auto_1fr] items-center gap-x-3 gap-y-1">
+				{CHAT_FADE_FIELDS.map((f) => (
+					<FadeField
+						key={f.key}
+						label={t(f.label)}
+						hint={t(f.hint)}
+						range={CHAT_FADE_RANGES[f.key]}
+						value={fade[f.key]}
+						onChange={(v) => change({ ...fade, [f.key]: v })}
+					/>
+				))}
+			</div>
 			<ChatFadePreview fade={fade} />
 		</div>
 	);
@@ -114,15 +117,12 @@ function FadeField({
 	const id = useId();
 	const [draft, setDraft] = useState<string | null>(null);
 	return (
-		<div className="flex flex-col gap-1">
-			<div className="flex items-baseline gap-2">
-				<label htmlFor={id} className="shrink-0">
-					{label}
-				</label>
-				<span className="text-meta text-neutral-500">{hint}</span>
-			</div>
-			<div className="flex items-center gap-3">
-				<input
+		<div className="contents">
+			<label htmlFor={id} className="pt-2">
+				{label}
+			</label>
+			<span className="pt-2 text-meta text-neutral-500">{hint}</span>
+			<input
 					id={id}
 					type="number"
 					min={min}
@@ -136,9 +136,9 @@ function FadeField({
 					}}
 					onBlur={() => setDraft(null)}
 					onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
-					className={`w-16 shrink-0 font-mono ${inputClass.sm}`}
+					className={`w-16 font-mono ${inputClass.sm}`}
 				/>
-				<input
+			<input
 					data-custom="range slider"
 					type="range"
 					min={min}
@@ -151,9 +151,8 @@ function FadeField({
 						onChange(Number(e.target.value));
 					}}
 					style={{ "--fill": `${((value - min) / (max - min)) * 100}%` } as CSSProperties}
-					className="range min-w-0 flex-1"
+					className="range w-full"
 				/>
-			</div>
 		</div>
 	);
 }
@@ -200,7 +199,9 @@ function ChatFadePreview({ fade }: { fade: ChatFade }) {
 			</div>
 			<div>
 				<div style={{ height: `${height}rem` }} className="fade-bottom flex flex-col justify-end overflow-hidden">
-					<p className="text-body text-neutral-200">
+					{/* The box (overlapping 0.75rem) cuts through the middle of the last line's lowercase:
+					    the paragraph's bottom is trimmed to the baseline, then half an x-height below the box. */}
+					<p className="mb-[calc(0.75rem_-_0.5ex)] text-body text-neutral-200 [text-box:trim-end_ex_alphabetic]">
 						{t(
 							"The tests pass and the build is clean. I renamed the helper, moved the parser into its own module and updated every caller, so nothing else should need to change. The old export stays as an alias for one release.",
 						)}
