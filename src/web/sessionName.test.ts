@@ -1,6 +1,6 @@
 // Run: node --import tsx src/web/sessionName.test.ts
 import assert from "node:assert/strict";
-import { sessionLabel, sessionLine, shortName } from "./sessionName.js";
+import { sessionLabel, shortName } from "./sessionName.js";
 
 // Precedence: a name always wins, and it wins in both modes.
 const info = {
@@ -10,21 +10,17 @@ const info = {
 assert.equal(sessionLabel(info, false), "Fix the parser");
 assert.equal(sessionLabel(info, true), "Fix the parser");
 
-// No name: the first prompt, whole or shortened.
+// No name: the first prompt, or the latest one, whole and on one line.
 const unnamed = {
-	firstMessage:
-		"not a fan of opening directory like this. i would rather open it with some kind of folder explorer",
+	firstMessage: "not a fan of opening directory like this.\ni would rather open it with some kind of folder explorer",
+	lastPrompt: "and the tabs too",
 };
 assert.equal(
 	sessionLabel(unnamed, false),
-	"not a fan of opening directory like this. i would rather ope",
-	"long mode is the first line, capped at 60",
+	"not a fan of opening directory like this. i would rather open it with some kind of folder explorer",
 );
-assert.equal(
-	sessionLabel(unnamed, true),
-	"Not a fan of opening directory like this",
-	"short mode is the opening clause, at most eight words",
-);
+assert.equal(sessionLabel(unnamed, true), "and the tabs too");
+assert.equal(sessionLabel({ firstMessage: "only one" }, true), "only one", "no latest yet: the first");
 
 // Neither: a placeholder, not eight characters of uuid — a fresh tab says what
 // it is, and a hex id says nothing at all.
@@ -54,12 +50,5 @@ assert.equal(shortName(`add --${"x".repeat(44)} to it`), "Add");
 assert.equal(shortName("x".repeat(60)), "X".padEnd(48, "x"));
 // Nothing in, nothing out: the caller falls back to the placeholder.
 assert.equal(shortName("   "), "");
-
-// The shown line is the whole prompt; a name or short name stays as it is.
-assert.equal(sessionLine(info, true), "Fix the parser");
-assert.equal(sessionLine(info, false), "Fix the parser");
-assert.equal(sessionLine(unnamed, true), "Not a fan of opening directory like this");
-assert.equal(sessionLine(unnamed, false), unnamed.firstMessage);
-assert.equal(sessionLine(undefined, true), sessionLabel(undefined, true));
 
 console.log("ok");

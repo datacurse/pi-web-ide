@@ -60,7 +60,6 @@ import {
 	THEMES,
 	readDockHeight,
 	readDockOpen,
-	readBrowserKeys,
 	readChatFade,
 	readFooterLayout,
 	readSessionLines,
@@ -72,7 +71,7 @@ import {
 	readPinnedSessions,
 	readSeenSessions,
 	readSessionSort,
-	readShortNames,
+	readLatestPrompt,
 	readThinkingMode,
 	readTerminalLayout,
 	readTerminalWidth,
@@ -95,7 +94,7 @@ import {
 	writePinnedSessions,
 	writeSeenSessions,
 	writeSessionSort,
-	writeShortNames,
+	writeLatestPrompt,
 	writeThinkingMode,
 	writeTerminalLayout,
 	writeTerminalWidth,
@@ -110,6 +109,7 @@ import {
 	type UserMode,
 	type AskMode,
 } from "./prefs.js";
+import { matchShortcut, readBindings, recorder, shortcutKeys, type ShortcutId } from "./shortcuts.js";
 import { setFavicon } from "./favicon.js";
 import { attentionOf, attentionTitle, nextWaiting, type Attention } from "./attention.js";
 import { Button, hoverIntent, IconButton, PanelHeader } from "./ui.js";
@@ -232,7 +232,7 @@ export default function App() {
 	const [userMode, setUserMode] = useState<UserMode>(readUserMode);
 	const [askMode, setAskMode] = useState<AskMode>(readAskMode);
 	const [notify, setNotify] = useState(readNotify);
-	const [shortNames, setShortNames] = useState(readShortNames);
+	const [latestPrompt, setLatestPrompt] = useState(readLatestPrompt);
 	const [hideScrollbars, setHideScrollbars] = useState(readHideScrollbars);
 	/** This pwi's project list: its directories plus the cwd it was launched against. */
 	const [projects, setProjects] = useState<Projects>({ projects: [], seed: "" });
@@ -280,9 +280,9 @@ export default function App() {
 		writeAskMode(mode);
 	}, []);
 
-	const changeShortNames = useCallback((on: boolean) => {
-		setShortNames(on);
-		writeShortNames(on);
+	const changeLatestPrompt = useCallback((on: boolean) => {
+		setLatestPrompt(on);
+		writeLatestPrompt(on);
 	}, []);
 
 	/**
@@ -1329,79 +1329,6 @@ export default function App() {
 	const hasUnsaved = (path: string) =>
 		Object.entries(dirtyFiles).some(([p, dirty]) => dirty && (p === path || p.startsWith(`${path}/`)));
 
-	/**
-	 * Alt+1..9 selects the Nth tab.
-	 *
-	 * Alt and not Ctrl/Cmd: Ctrl/Cmd+1..9 and Ctrl/Cmd+W are the browser's own
-	 * tab bindings, and a web app stealing them is hostile. `code` rather than
-	 * `key` because Alt+digit produces a different character on several
-	 * keyboard layouts (macOS Alt+1 is "¡"), while the physical digit key is
-	 * what the user pressed. preventDefault only once a tab has matched, so
-	 * Alt+7 with three tabs open still reaches the browser.
-	 */
-	useEffect(() => {
-		const onKeyDown = (e: KeyboardEvent) => {
-			if (!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
-			const digit = /^Digit([1-9])$/.exec(e.code);
-			if (!digit) return;
-			const file = tabs.files[Number(digit[1]) - 1];
-			if (!file) return;
-			e.preventDefault();
-			selectTab(file);
-		};
-		window.addEventListener("keydown", onKeyDown);
-		return () => window.removeEventListener("keydown", onKeyDown);
-	}, [tabs.files, selectTab]);
-
-	/**
-	 * Ctrl+` toggles the terminal — the binding VS Code, Windows Terminal and
-	 * every editor with a panel already use, so it is the one a hand reaches
-	 * for without being told. `code` again, because the backquote key produces
-	 * a different character on non-US layouts.
-	 *
-	 * Not captured while the terminal itself has focus: Ctrl+` there is a
-	 * keystroke for the shell. Except that closing it from inside is exactly
-	 * what the binding is for in an editor, so it stays global and the shell
-	 * loses one obscure control character it has no binding for anyway.
-	 */
-	useEffect(() => {
-		const onKeyDown = (e: KeyboardEvent) => {
-			if (e.code !== "Backquote" || !e.ctrlKey || e.metaKey || e.altKey) return;
-			e.preventDefault();
-			toggleTerminal();
-		};
-		window.addEventListener("keydown", onKeyDown);
-		return () => window.removeEventListener("keydown", onKeyDown);
-	}, [toggleTerminal]);
-
-	/**
-	 * Ctrl+O opens session search. Captured on window before anything else, so
-	 * neither the browser's Open File nor a focused terminal or editor gets it.
-	 */
-	useEffect(() => {
-		const onKeyDown = (e: KeyboardEvent) => {
-			if (e.code !== "KeyO" || !e.ctrlKey || e.metaKey || e.altKey || e.shiftKey || !readBrowserKeys()) return;
-			e.preventDefault();
-			e.stopPropagation();
-			setSearchOpen(true);
-		};
-		window.addEventListener("keydown", onKeyDown, true);
-		return () => window.removeEventListener("keydown", onKeyDown, true);
-	}, []);
-
-	/** Ctrl+P opens the command palette, captured like Ctrl+O (over the browser's Print). */
-	useEffect(() => {
-		const onKeyDown = (e: KeyboardEvent) => {
-			if (e.code !== "KeyP" || !e.ctrlKey || e.metaKey || e.altKey || e.shiftKey || !readBrowserKeys()) return;
-			e.preventDefault();
-			e.stopPropagation();
-			setSearchOpen(false);
-			setPaletteOpen(true);
-		};
-		window.addEventListener("keydown", onKeyDown, true);
-		return () => window.removeEventListener("keydown", onKeyDown, true);
-	}, []);
-
 	/*
 	 * Notice when the server we are talking to is not the one that served this
 	 * page.
@@ -1612,9 +1539,8 @@ export default function App() {
 	};
 
 	/**
-	 * Alt+J jumps to the next session waiting on you: questions first, then
-	 * the reply that has waited longest. Alt for the same reason as Alt+1..9,
-	 * and J because no browser binds Alt+J.
+	 * Jump to the next session waiting on you: questions first, then the
+	 * reply that has waited longest.
 	 */
 	const jumpToWaiting = useCallback(() => {
 		const t = tabsRef.current;
@@ -1623,14 +1549,6 @@ export default function App() {
 		if (next) focusSession(next);
 		return !!next;
 	}, [shown, attention, focusSession]);
-	useEffect(() => {
-		const onKeyDown = (e: KeyboardEvent) => {
-			if (e.code !== "KeyJ" || !e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
-			if (jumpToWaiting()) e.preventDefault();
-		};
-		window.addEventListener("keydown", onKeyDown);
-		return () => window.removeEventListener("keydown", onKeyDown);
-	}, [jumpToWaiting]);
 
 	/** Everything the Ctrl+P palette can run. */
 	const lastUsedSide = (): Side => (lastSide.current === "right" && tabsRef.current.right ? "right" : "left");
@@ -1649,34 +1567,46 @@ export default function App() {
 		}
 	};
 
-	/** Ctrl+T reopens the last closed tab, Ctrl+N starts a session; captured like Ctrl+O. */
-	const browserKeys = useRef({ reopenClosedTab, newSession: () => void newSession(lastUsedSide()) });
-	browserKeys.current = { reopenClosedTab, newSession: () => void newSession(lastUsedSide()) };
+	/**
+	 * Every shortcut in Settings > Shortcuts, dispatched from one capture
+	 * listener on window, so neither the browser nor a focused terminal or
+	 * editor sees a key that pwi handles. A handler that finds nothing to do
+	 * (Go to Tab 7 with three tabs) returns false and the key goes on.
+	 */
+	const shortcutActions = useRef<Record<ShortcutId, (digit: number) => boolean>>(null!);
+	shortcutActions.current = {
+		"tab.reopen": () => (reopenClosedTab(), true),
+		"session.new": () => (void newSession(lastUsedSide()), true),
+		"session.search": () => (setSearchOpen(true), true),
+		palette: () => (setSearchOpen(false), setPaletteOpen(true), true),
+		"view.terminal": () => (toggleTerminal(), true),
+		"session.nextWaiting": () => jumpToWaiting(),
+		"tab.select": (digit) => {
+			const file = tabsRef.current.files[digit - 1];
+			if (file) selectTab(file);
+			return !!file;
+		},
+	};
 	useEffect(() => {
 		const onKeyDown = (e: KeyboardEvent) => {
-			if (!e.ctrlKey || e.metaKey || e.altKey || e.shiftKey || !readBrowserKeys()) return;
-			const keys: Record<string, (() => void) | undefined> = {
-				KeyT: browserKeys.current.reopenClosedTab,
-				KeyN: browserKeys.current.newSession,
-			};
-			const run = keys[e.code];
-			if (!run) return;
+			if (recorder.active) return;
+			const hit = matchShortcut(e, readBindings());
+			if (!hit || !shortcutActions.current[hit.id](hit.digit)) return;
 			e.preventDefault();
 			e.stopPropagation();
-			run();
 		};
 		window.addEventListener("keydown", onKeyDown, true);
 		return () => window.removeEventListener("keydown", onKeyDown, true);
 	}, []);
 
 	const paletteCommands: PaletteCommand[] = [
-		{ id: "session.new", label: t("New AI Session"), keys: "Ctrl+N", run: () => void (lastUsedSide() === "right" ? right : left).attach() },
-		{ id: "tab.reopen", label: t("Reopen Closed Tab"), keys: "Ctrl+T", run: reopenClosedTab },
+		{ id: "session.new", label: t("New AI Session"), keys: shortcutKeys("session.new"), run: () => void (lastUsedSide() === "right" ? right : left).attach() },
+		{ id: "tab.reopen", label: t("Reopen Closed Tab"), keys: shortcutKeys("tab.reopen"), run: reopenClosedTab },
 		...(project
 			? [{ id: "terminal.newTab", label: t("New Terminal Tab"), run: () => void newTerminalTab(lastUsedSide()) }]
 			: []),
-		{ id: "session.search", label: t("Search Sessions"), keys: "Ctrl+O", run: () => setSearchOpen(true) },
-		{ id: "session.nextWaiting", label: t("Go to Next Waiting Session"), keys: "Alt+J", run: jumpToWaiting },
+		{ id: "session.search", label: t("Search Sessions"), keys: shortcutKeys("session.search"), run: () => setSearchOpen(true) },
+		{ id: "session.nextWaiting", label: t("Go to Next Waiting Session"), keys: shortcutKeys("session.nextWaiting"), run: jumpToWaiting },
 		{
 			id: "view.explorer",
 			label: panel === "editor" ? t("Hide Explorer") : t("Show Explorer"),
@@ -1690,7 +1620,7 @@ export default function App() {
 		{
 			id: "view.terminal",
 			label: dockOpen ? t("Hide Terminal") : t("Show Terminal"),
-			keys: "Ctrl+`",
+			keys: shortcutKeys("view.terminal"),
 			run: toggleTerminal,
 		},
 		{
@@ -1743,8 +1673,8 @@ export default function App() {
 				onAskMode={changeAskMode}
 				notify={notify}
 				onNotify={(on) => void changeNotify(on)}
-				shortNames={shortNames}
-				onShortNames={changeShortNames}
+				latestPrompt={latestPrompt}
+				onLatestPrompt={changeLatestPrompt}
 				hideScrollbars={hideScrollbars}
 				onHideScrollbars={setHideScrollbars}
 				onClose={onClose}
@@ -1930,7 +1860,7 @@ export default function App() {
 					panelId={CHAT_PANEL_ID}
 					sessions={shown}
 					attention={attention}
-					shortNames={shortNames}
+					latestPrompt={latestPrompt}
 					pinned={pinned}
 					dirtyFiles={dirtyFiles}
 					onSelect={selectTab}
@@ -1965,7 +1895,7 @@ export default function App() {
 						panelId={SPLIT_PANEL_ID}
 						sessions={shown}
 						attention={attention}
-						shortNames={shortNames}
+						latestPrompt={latestPrompt}
 						pinned={pinned}
 						dirtyFiles={dirtyFiles}
 						onSelect={selectRight}
@@ -2074,7 +2004,7 @@ export default function App() {
 				}}
 				onRename={(s, name) => void renameSession(s, name)}
 				onAutoName={autoNameSession}
-				shortNames={shortNames}
+				latestPrompt={latestPrompt}
 				onSearch={() => setSearchOpen(true)}
 				project={project}
 			/>
@@ -2083,7 +2013,7 @@ export default function App() {
 				open={searchOpen}
 				project={project}
 				sessions={shown}
-				shortNames={shortNames}
+				latestPrompt={latestPrompt}
 				onSelect={(s) => {
 					focusSession(s.path);
 					setListOpen(false);

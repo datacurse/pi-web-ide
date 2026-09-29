@@ -30,7 +30,7 @@ export function EditorColumn({
 	panelId,
 	sessions,
 	attention,
-	shortNames,
+	latestPrompt,
 	pinned,
 	dirtyFiles,
 	onSelect,
@@ -60,7 +60,7 @@ export function EditorColumn({
 	panelId: string;
 	sessions: PiSessionInfo[];
 	attention: Map<string, Attention>;
-	shortNames: boolean;
+	latestPrompt: boolean;
 	pinned: string[];
 	dirtyFiles: Record<string, boolean>;
 	onSelect: (entry: string) => void;
@@ -133,7 +133,7 @@ export function EditorColumn({
 				onClose={onClose}
 				onToggleList={onToggleList}
 				onNew={onNewSession}
-				shortNames={shortNames}
+				latestPrompt={latestPrompt}
 				pinned={pinned}
 				focused={focused}
 				dirtyFiles={dirtyFiles}

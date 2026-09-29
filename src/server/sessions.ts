@@ -29,8 +29,8 @@ import { basename, join, resolve } from "node:path";
 import { createInterface } from "node:readline";
 import type { PiSessionInfo } from "../shared/types.js";
 
-/** Enough to fill the one-line preview in the list; the rest is dead weight. */
-const FIRST_MESSAGE_MAX = 200;
+/** Enough for a title wrapped to several lines in the list; the rest is dead weight. */
+const FIRST_MESSAGE_MAX = 500;
 
 /**
  * Concurrent open files. A busy project reaches hundreds of sessions and this
@@ -70,6 +70,8 @@ interface Parsed {
 	/** The session's display name, from the last `session_info` entry. */
 	title?: string;
 	firstMessage: string;
+	/** The newest user prompt's text. */
+	lastPrompt?: string;
 	messageCount: number;
 }
 
@@ -253,7 +255,11 @@ async function parse(
 					// Only user turns count: assistant and toolResult rows scale
 					// with tool use, not with how much the user said.
 					if ((entry.message as { role?: unknown } | undefined)?.role === "user") out.messageCount++;
-					if (!out.firstMessage) out.firstMessage = userText(entry.message);
+					const text = userText(entry.message);
+					if (text) {
+						if (!out.firstMessage) out.firstMessage = text;
+						out.lastPrompt = text;
+					}
 					// Last one wins: the entries are in file order, so this ends
 					// up as the newest real conversation activity.
 					if (typeof entry.timestamp === "string") out.lastMessage = entry.timestamp;
@@ -313,6 +319,7 @@ function project(file: string, p: Parsed): PiSessionInfo {
 		messageCount: p.messageCount,
 		firstMessage: p.firstMessage,
 	};
+	if (p.lastPrompt) info.lastPrompt = p.lastPrompt;
 	// Left unset when the session has never been named, because the UI falls
 	// back to `firstMessage` only for a falsy name.
 	if (p.title) info.name = p.title;

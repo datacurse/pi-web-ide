@@ -10,29 +10,21 @@ import { t } from "./i18n.js";
  * neither, a placeholder.
  */
 
-/** Precedence is fixed: an explicit name beats anything derived from content. */
+/**
+ * Precedence is fixed: an explicit name beats anything derived from content.
+ * Otherwise the first prompt, or the latest one when `latest` is on, whole:
+ * the row wraps or fades at its edge rather than cutting it short.
+ */
 export function sessionLabel(
-	info: { name?: string; firstMessage?: string } | undefined,
-	short: boolean,
+	info: { name?: string; firstMessage?: string; lastPrompt?: string } | undefined,
+	latest: boolean,
 ): string {
 	const name = info?.name?.trim();
 	if (name) return name;
 	// One line: this is raw prompt text, and a leading newline would render as
 	// an empty row.
-	const first = info?.firstMessage?.replace(/\s+/g, " ").trim();
-	if (first) return short ? shortName(first) : first.slice(0, 60);
-	return t("New session");
-}
-
-/**
- * What a row or tab shows: a name or short name as is, otherwise the whole
- * first prompt, which runs on to the edge and fades there.
- */
-export function sessionLine(info: { name?: string; firstMessage?: string } | undefined, short: boolean): string {
-	const label = sessionLabel(info, short);
-	if (short || info?.name?.trim()) return label;
-	const first = info?.firstMessage?.replace(/\s+/g, " ").trim() ?? "";
-	return label + first.slice(label.length);
+	const prompt = ((latest && info?.lastPrompt) || info?.firstMessage)?.replace(/\s+/g, " ").trim();
+	return prompt || t("New session");
 }
 
 /**
@@ -60,9 +52,7 @@ const SHORT_CHARS = 48;
  * words of pasted flags do not.
  *
  * Deliberately not a model call. This is the instant, free option in the row
- * menu, and it is also what the short-names preference renders for a session
- * nobody has named — it must not cost a token, a round trip, or change under
- * you on a re-render. Asking a model for a better name is the OTHER menu
+ * menu — it must not cost a token or a round trip. Asking a model for a better name is the OTHER menu
  * item, which hands the job to the server's one-shot naming child.
  */
 export function shortName(firstMessage: string): string {

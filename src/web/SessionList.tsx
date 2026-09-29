@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { ArrowsOut, CaretUpDown, ChatCircle, Clock, MagnifyingGlass, PushPin, X } from "@phosphor-icons/react";
 import type { PiSessionInfo } from "../shared/types.js";
 import { SESSION_SORTS, type SessionSort } from "./prefs.js";
-import { sessionLabel, sessionLine, shortName } from "./sessionName.js";
+import { sessionLabel, shortName } from "./sessionName.js";
 import { ATTENTION_UI, attentionRank, type Attention } from "./attention.js";
 import { highlight, useSessionSearch } from "./searchHits.js";
 import { Button, ContextMenu, IconButton, MenuItem, inputClass, sectionLabel, useBatches } from "./ui.js";
@@ -63,7 +63,7 @@ export function SessionList({
 	onSelect,
 	onRename,
 	onAutoName,
-	shortNames,
+	latestPrompt,
 	onSearch,
 	project,
 	width,
@@ -94,7 +94,7 @@ export function SessionList({
 	 */
 	onAutoName: (s: PiSessionInfo) => Promise<void>;
 	/** Label unnamed sessions by a short name from the first prompt. */
-	shortNames: boolean;
+	latestPrompt: boolean;
 	/** Open the search popup (also Ctrl+O). */
 	onSearch: () => void;
 	/** The project whose sessions the search box searches. */
@@ -272,7 +272,7 @@ export function SessionList({
 					{rows.slice(0, shown).map((s) => {
 						const snippet = searching ? snippets.get(s.path) : undefined;
 						const isOpen = openFiles.includes(s.path);
-						const label = sessionLabel(s, shortNames);
+						const label = sessionLabel(s, latestPrompt);
 						const state = attention.get(s.path) ?? null;
 
 						/*
@@ -368,7 +368,7 @@ export function SessionList({
 											title={t(ATTENTION_UI[state].label)}
 										/>
 									)}
-									{naming === s.path ? t("Naming…") : highlight(sessionLine(s, shortNames), terms)}
+									{naming === s.path ? t("Naming…") : highlight(sessionLabel(s, latestPrompt), terms)}
 								</div>
 								{/*
 								  The stamp shown is the one the list is sorted by, so the
@@ -412,7 +412,7 @@ export function SessionList({
 				<ContextMenu
 					x={menu.x}
 					y={menu.y}
-					label={t("Session {name}", { name: sessionLabel(menuSession, shortNames) })}
+					label={t("Session {name}", { name: sessionLabel(menuSession, latestPrompt) })}
 					onClose={() => setMenu(null)}
 				>
 					<MenuItem
@@ -428,7 +428,7 @@ export function SessionList({
 					<MenuItem
 						role="menuitem"
 						onClick={() => {
-							setDraft(sessionLabel(menuSession, shortNames));
+							setDraft(sessionLabel(menuSession, latestPrompt));
 							setRenaming(menuSession.path);
 							setMenu(null);
 						}}

@@ -16,9 +16,10 @@ import {
 } from "@phosphor-icons/react";
 import type { KeyboardEvent } from "react";
 import type { PiSessionInfo } from "../shared/types.js";
-import { sessionLabel, sessionLine, shortName } from "./sessionName.js";
+import { sessionLabel, shortName } from "./sessionName.js";
 import { ATTENTION_UI, type Attention } from "./attention.js";
 import { FileGlyph } from "./fileIcon.js";
+import { PiMark } from "./piMark.js";
 import { diffParts, isDiffTab, isSessionTab, isTermTab, tabLabel, tabPath } from "./tabs.js";
 import { ContextMenu, IconButton, MenuItem, MenuSeparator, inputClass, tabClass } from "./ui.js";
 import { t } from "./i18n.js";
@@ -98,7 +99,7 @@ export function SessionTabs({
 	onClose,
 	onToggleList,
 	onNew,
-	shortNames,
+	latestPrompt,
 	pinned,
 	focused = true,
 	dirtyFiles,
@@ -138,7 +139,7 @@ export function SessionTabs({
 	/** Distinguishes the two strips for a screen reader. */
 	label?: string;
 	/** Label unnamed sessions by a short name from the first prompt. */
-	shortNames: boolean;
+	latestPrompt: boolean;
 	/** Pinned session paths; App already sorts them to the front. */
 	pinned: string[];
 	/** False for the split column you are not in: its active tab dims. */
@@ -351,7 +352,7 @@ export function SessionTabs({
 					const isEdit = isFile && !isDiff && !isTerm;
 					const info = isFile ? undefined : byFile.get(file);
 					const state = isFile ? null : (attention.get(file) ?? null);
-					const label = isFile ? tabLabel(file) : sessionLabel(info, shortNames);
+					const label = isFile ? tabLabel(file) : sessionLabel(info, latestPrompt);
 					const isActive = file === active;
 					// Only an editable file can be dirty; a diff is read-only.
 					const dirty = isEdit && dirtyFiles[tabPath(file)] === true;
@@ -515,20 +516,15 @@ export function SessionTabs({
 								    for a question. Color alone still carries it under reduced
 								    motion. */}
 								{!isFile && (
-									<span
-										aria-hidden
-										className={`shrink-0 font-bold leading-none ${
-											state ? ATTENTION_UI[state].text : "text-neutral-500"
-										}`}
-									>
-										π
-									</span>
+									<PiMark
+										className={`size-3 shrink-0 ${state ? ATTENTION_UI[state].text : "text-neutral-500"}`}
+									/>
 								)}
 								{/* Same glyph the tree uses, so a tab and its row match. */}
 								{isEdit && <FileGlyph name={label} size={13} />}
 								{isTerm && <TerminalWindow size={13} className="shrink-0 text-neutral-400" />}
 								<span className={`fade-end ${isEdit || isDiff ? "font-mono" : ""}`}>
-									{naming === file ? t("Naming…") : isFile ? label : sessionLine(info, shortNames)}
+									{naming === file ? t("Naming…") : isFile ? label : sessionLabel(info, latestPrompt)}
 								</span>
 								{/* Unsaved. A dot rather than an asterisk in the label, so
 								    the name stays readable at a narrow width. */}
@@ -614,7 +610,7 @@ export function SessionTabs({
 				const closeOnly = menu.closeOnly || isDiff || isTermTab(file);
 				const isEdit = isFile && !isDiff && !isTermTab(file);
 				const info = isFile ? undefined : byFile.get(file);
-				const label = isFile ? tabLabel(file) : sessionLabel(info, shortNames);
+				const label = isFile ? tabLabel(file) : sessionLabel(info, latestPrompt);
 				const act = (fn: () => void) => () => {
 					setMenu(null);
 					fn();

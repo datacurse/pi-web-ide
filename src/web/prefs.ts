@@ -10,7 +10,7 @@
 
 import { EMPTY_LAYOUT, parseLayout, type TermLayout } from "./termLayout.js";
 
-function readStored(key: string): string | null {
+export function readStored(key: string): string | null {
 	try {
 		return localStorage.getItem(key);
 	} catch {
@@ -19,7 +19,7 @@ function readStored(key: string): string | null {
 	}
 }
 
-function writeStored(key: string, value: string): void {
+export function writeStored(key: string, value: string): void {
 	try {
 		localStorage.setItem(key, value);
 	} catch {
@@ -81,11 +81,10 @@ export function writeLanguage(lang: Language): void {
 const THINKING_KEY = "pwi:showThinking";
 const TOOL_KEY = "pwi:tools";
 const NOTIFY_KEY = "pwi:notify";
-const SHORT_NAMES_KEY = "pwi:shortNames";
+const LATEST_PROMPT_KEY = "pwi:latestPrompt";
 const HIDE_SCROLLBARS_KEY = "pwi:hideScrollbars";
 const GIT_AUTONAME_KEY = "pwi:gitAutoName";
 const GIT_NESTED_KEY = "pwi:gitNested";
-const BROWSER_KEYS_KEY = "pwi:browserKeys";
 
 export function readTheme(): ThemeId {
 	const stored = readStored(THEME_KEY);
@@ -126,21 +125,15 @@ export function writeThinkingMode(mode: ThinkingMode): void {
 }
 
 /**
- * Whether an unnamed session is labelled by a SHORT name derived from its
- * first prompt instead of by the prompt itself.
- *
- * Off by default, because the full first line is strictly more information
- * and the list truncates it anyway. On, the rows read like titles — see
- * sessionName.ts for the derivation. Either way a name pi holds (yours, via
- * rename, or one the naming child produced) wins: this only decides how a
- * session with NO name is described.
+ * Whether an unnamed session is titled by its latest prompt instead of its
+ * first. A name pi holds always wins.
  */
-export function readShortNames(): boolean {
-	return readStored(SHORT_NAMES_KEY) === "1";
+export function readLatestPrompt(): boolean {
+	return readStored(LATEST_PROMPT_KEY) === "1";
 }
 
-export function writeShortNames(on: boolean): void {
-	writeStored(SHORT_NAMES_KEY, on ? "1" : "0");
+export function writeLatestPrompt(on: boolean): void {
+	writeStored(LATEST_PROMPT_KEY, on ? "1" : "0");
 }
 
 /** Hidden scrollbars: panes still scroll by wheel, touch and keyboard. Read before first paint by index.html. */
@@ -439,18 +432,6 @@ export function readGitAutoName(): boolean {
 
 export function writeGitAutoName(on: boolean): void {
 	writeStored(GIT_AUTONAME_KEY, on ? "1" : "0");
-}
-
-/**
- * Whether pwi takes Ctrl+T, Ctrl+N, Ctrl+O and Ctrl+P from the browser.
- * On by default; read at keydown, so a change applies without a reload.
- */
-export function readBrowserKeys(): boolean {
-	return readStored(BROWSER_KEYS_KEY) !== "0";
-}
-
-export function writeBrowserKeys(on: boolean): void {
-	writeStored(BROWSER_KEYS_KEY, on ? "1" : "0");
 }
 
 /** Whether Source Control looks one folder down when the project is not a repository. */

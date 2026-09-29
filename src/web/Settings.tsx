@@ -1,6 +1,7 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { Bell, ChatText, GearSix, Keyboard, ListBullets, Palette } from "@phosphor-icons/react";
-import { Button, inputClass, NavItem, OptionRow, PanelHeader, Section } from "./ui.js";
+import { ArrowCounterClockwise, Bell, ChatText, GearSix, Keyboard, ListBullets, Palette, PencilSimple, X } from "@phosphor-icons/react";
+import { Button, IconButton, inputClass, NavItem, OptionRow, PanelHeader, Section } from "./ui.js";
+import { comboOf, formatCombo, isReserved, readBindings, recorder, SHORTCUTS, writeBinding, type ShortcutId } from "./shortcuts.js";
 import {
 	applyChatFade,
 	applyFooterLayout,
@@ -12,14 +13,12 @@ import {
 	CHAT_FADE_RANGES,
 	DEFAULT_CHAT_FADE,
 	readChatFade,
-	readBrowserKeys,
 	readChatFadeOn,
 	readFooterLayout,
 	readScrollPast,
 	readScrollPastOn,
 	readSettingsExpanded,
 	SCROLL_PAST_RANGE,
-	writeBrowserKeys,
 	writeChatFadeOn,
 	writeSettingsExpanded,
 	type ChatFade,
@@ -44,7 +43,7 @@ const CATEGORIES = [
 	{ id: "transcript", label: "Transcript", icon: <ChatText size={16} /> },
 	{ id: "sessions", label: "Sessions", icon: <ListBullets size={16} /> },
 	{ id: "notifications", label: "Notifications", icon: <Bell size={16} /> },
-	{ id: "keyboard", label: "Keyboard", icon: <Keyboard size={16} /> },
+	{ id: "shortcuts", label: "Shortcuts", icon: <Keyboard size={16} /> },
 ] as const;
 type Category = (typeof CATEGORIES)[number]["id"];
 
@@ -336,8 +335,8 @@ export function Settings({
 	onAskMode,
 	notify,
 	onNotify,
-	shortNames,
-	onShortNames,
+	latestPrompt,
+	onLatestPrompt,
 	hideScrollbars,
 	onHideScrollbars,
 	onClose,
@@ -356,8 +355,8 @@ export function Settings({
 	onAskMode: (mode: AskMode) => void;
 	notify: boolean;
 	onNotify: (on: boolean) => void;
-	shortNames: boolean;
-	onShortNames: (on: boolean) => void;
+	latestPrompt: boolean;
+	onLatestPrompt: (on: boolean) => void;
 	hideScrollbars: boolean;
 	onHideScrollbars: (on: boolean) => void;
 	onClose: () => void;
@@ -381,10 +380,40 @@ export function Settings({
 	const [expandDetails, setExpandDetails] = useState(readSettingsExpanded);
 	const [footer, setFooter] = useState(readFooterLayout);
 	const [sessionLines, setSessionLines] = useState(readSessionLines);
-	const [browserKeys, setBrowserKeys] = useState(readBrowserKeys);
-	const browserKeysHint = t(
-		"Ctrl+T reopens the last closed tab, Ctrl+N starts a new session, Ctrl+O searches sessions and Ctrl+P opens the command palette. Off, these keys do what the browser does. Chrome and Firefox keep Ctrl+T and Ctrl+N for themselves unless pwi runs as an installed app.",
-	);
+	const [bindings, setBindings] = useState(readBindings);
+	/** The shortcut whose new keys are being recorded. */
+	const [recording, setRecording] = useState<ShortcutId | null>(null);
+
+	/*
+	 * Record the next key press as the binding. Captured on window ahead of
+	 * everything but App's dispatcher, which stands down while `recorder` is
+	 * active. A key needs Ctrl, Alt or Meta, so a binding never eats typing;
+	 * Escape or a click anywhere cancels (the page stays mounted when closed,
+	 * and a recorder left running would swallow every key).
+	 */
+	useEffect(() => {
+		if (!recording) return;
+		recorder.active = true;
+		const onKey = (e: KeyboardEvent) => {
+			e.preventDefault();
+			e.stopPropagation();
+			const digits = recording === "tab.select";
+			const combo = comboOf(e, digits);
+			if (e.key === "Escape" && combo === "Escape") return setRecording(null);
+			if (!combo || !(e.ctrlKey || e.altKey || e.metaKey)) return;
+			if (digits && !combo.endsWith("+Digit")) return;
+			setBindings(writeBinding(recording, combo));
+			setRecording(null);
+		};
+		const cancel = () => setRecording(null);
+		window.addEventListener("keydown", onKey, true);
+		window.addEventListener("pointerdown", cancel, true);
+		return () => {
+			recorder.active = false;
+			window.removeEventListener("keydown", onKey, true);
+			window.removeEventListener("pointerdown", cancel, true);
+		};
+	}, [recording]);
 	const [query, setQuery] = useState("");
 	const results = useRef<HTMLDivElement>(null);
 
@@ -658,25 +687,32 @@ export function Settings({
 		},
 		{
 			category: "sessions",
-			label: t("Short names from the first prompt"),
-			text: `title rename ${t("Names an unnamed session by the opening words of your first message instead of showing the whole line. A name you set with the pencil in the session list always wins.")}`,
+			label: t("Session titles"),
+			text: `name first latest last recent prompt message ${t("First prompt")} ${t("Latest prompt")} ${t("A name you set with the pencil in the session list always wins.")}`,
 			node: (
-				<OptionRow>
-					<input
-						type="checkbox"
-						checked={shortNames}
-						onChange={(e) => onShortNames(e.target.checked)}
-						className="size-4 shrink-0 accent-amber-400"
-					/>
-					<span className="flex-1">
-						{t("Short names from the first prompt")}
+				<div role="radiogroup" aria-labelledby="session-titles-label">
+					<div id="session-titles-label" className="px-2 pt-1 pb-1 text-ui text-neutral-300">
+						{t("Session titles")}
 						<span className="block text-meta text-neutral-500">
-							{t(
-								"Names an unnamed session by the opening words of your first message instead of showing the whole line. A name you set with the pencil in the session list always wins.",
-							)}
+							{t("A name you set with the pencil in the session list always wins.")}
 						</span>
-					</span>
-				</OptionRow>
+					</div>
+					{[
+						{ latest: false, label: t("First prompt") },
+						{ latest: true, label: t("Latest prompt") },
+					].map((m) => (
+						<OptionRow key={m.label} selected={m.latest === latestPrompt}>
+							<input
+								type="radio"
+								name="sessionTitles"
+								checked={m.latest === latestPrompt}
+								onChange={() => onLatestPrompt(m.latest)}
+								className="size-3.5 shrink-0 accent-amber-400"
+							/>
+							<span className="flex-1">{m.label}</span>
+						</OptionRow>
+					))}
+				</div>
 			),
 		},
 		{
@@ -730,28 +766,48 @@ export function Settings({
 				</OptionRow>
 			),
 		},
-		{
-			category: "keyboard",
-			label: t("Override browser shortcuts"),
-			text: `keys shortcuts hotkeys ctrl ${browserKeysHint}`,
-			node: (
-				<OptionRow>
-					<input
-						type="checkbox"
-						checked={browserKeys}
-						onChange={(e) => {
-							setBrowserKeys(e.target.checked);
-							writeBrowserKeys(e.target.checked);
-						}}
-						className="size-4 shrink-0 accent-amber-400"
-					/>
-					<span className="flex-1">
-						{t("Override browser shortcuts")}
-						<span className="block text-meta text-neutral-500">{browserKeysHint}</span>
-					</span>
-				</OptionRow>
-			),
-		},
+		...SHORTCUTS.map((s) => {
+			const keys = bindings[s.id];
+			const shown = keys && formatCombo(keys);
+			const blocked = !!keys && isReserved(keys);
+			const chip = "shrink-0 rounded-sm px-1.5 py-0.5 font-mono text-meta";
+			let look = "bg-neutral-800 text-neutral-200";
+			if (blocked) look = "animate-pulse bg-red-500/20 text-red-400";
+			else if (!keys) look = "bg-neutral-800 text-neutral-500";
+			return {
+				category: "shortcuts" as const,
+				label: t(s.label),
+				text: `shortcut hotkey keys ${shown}`,
+				node: (
+					<div className={`flex items-center gap-1 rounded-sm py-1 pr-1 pl-2 text-ui hover:bg-neutral-900 ${recording === s.id ? "bg-neutral-900" : ""}`}>
+						<span className="flex-1">{t(s.label)}</span>
+						{recording === s.id ? (
+							<kbd className={`${chip} bg-amber-900/40 text-amber-200`}>{t("Press keys…")}</kbd>
+						) : (
+							<kbd
+								title={blocked ? t("Your browser keeps {keys} for itself, so this shortcut will not work.", { keys: shown }) : undefined}
+								className={`${chip} ${look}`}
+							>
+								{shown || t("Blank")}
+							</kbd>
+						)}
+						{keys !== s.keys && (
+							<IconButton size="sm" label={t("Restore default")} onClick={() => setBindings(writeBinding(s.id, s.keys))}>
+								<ArrowCounterClockwise size={14} />
+							</IconButton>
+						)}
+						{keys && (
+							<IconButton size="sm" label={t("Remove shortcut")} onClick={() => setBindings(writeBinding(s.id, ""))}>
+								<X size={14} />
+							</IconButton>
+						)}
+						<IconButton size="sm" label={t("Change shortcut")} onClick={() => setRecording(s.id)}>
+							<PencilSimple size={14} />
+						</IconButton>
+					</div>
+				),
+			};
+		}),
 	];
 
 	const searching = query.trim() !== "";

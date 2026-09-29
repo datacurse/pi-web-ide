@@ -76,8 +76,8 @@ fits none of the existing ones, and record it here.
 - Explorer names and session titles/snippets run to the panel's right edge (their
   rows have no right padding) and use `.fade-edge`: a fixed 2em fade at that edge,
   so any text reaching it fades whether it overflows or just fits.
-- Session rows and tabs show the name, or the short name when Short names is on, else
-  the whole first prompt (`sessionLine`), which runs on to the edge and fades there. Session
+- Session rows and tabs show the name, else the whole first prompt (or the latest,
+  Settings > Sessions > `Session titles`; `sessionLabel`), which runs on to the edge and fades there. Session
   rows have no right padding (`pl-3` only), so that fade sits on the panel's edge.
 - Session list titles (`.session-title`) wrap to Settings > Sessions > `Title lines`
   (1, 2, 3 or All; `pwi:sessionLines`, `data-session-lines` on `<html>`, default 1).
@@ -221,7 +221,7 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
 
 ## Tabs
 
-- Session (AI) tabs lead with a bold `π` (text, not the block mark) that is also the live signal (see Attention). File tabs use `FileGlyph`, diff tabs `GitDiff`.
+- Session (AI) tabs lead with pi's block mark (`PiMark`, `size-3`) that is also the live signal (see Attention). File tabs use `FileGlyph`, diff tabs `GitDiff`.
 - A tab's close ✕ shows only while the pointer is over that tab (or it has keyboard
   focus), active tab included. Touchscreens always show it (`.tab-close` in index.css).
   It floats over the label's end (no reserved padding, a short fade behind it), so
@@ -259,7 +259,7 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
 - "Seen" means on screen in either column while the window is visible and focused.
   Per-browser (`localStorage`), synced across pwi windows.
 - Window title: `N ● pwi` — N = ready + needs (omitted at 0), `●` while anything works. No brackets.
-- Favicon: the `π` breathes while anything works, turns `green-400` while a reply is
+- Favicon: the `π` breathes while anything works, turns mint `#5ec98b` (fits the pi.dev logo palette) while a reply is
   ready, and gets a red corner dot while anything needs you.
   It is pi's block mark (`piMark.tsx`, monochrome, never the colored pi.dev logo), white,
   no tile.
@@ -437,12 +437,19 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
   pwi extensions tab stays mounted (hidden) on the other tabs so an unsaved edit survives. Changes
   apply to sessions started afterwards. pwi's own plumbing (rewind, context) is not listed.
 - Settings has a `w-48` category nav on the left (`NavItem`s: Appearance, Transcript,
-  Sessions, Notifications, Keyboard), like Obsidian; the right side shows only the
+  Sessions, Notifications, Shortcuts), like Obsidian; the right side shows only the
   chosen category, `max-w-xl p-6`. Opens on Appearance.
-- Keyboard has one `OptionRow` checkbox, `Override browser shortcuts` (`pwi:browserKeys`,
-  on by default): Ctrl+T reopens the last tab closed in this page load, Ctrl+N starts a
-  session in the last-used column, Ctrl+O and Ctrl+P as before. Off, they reach the browser.
-  Its hint says Chrome and Firefox keep Ctrl+T/Ctrl+N unless pwi runs as an installed app.
+- Shortcuts lists every app-wide shortcut (`SHORTCUTS` in `shortcuts.ts`), one row each,
+  like Obsidian's Hotkeys: the name, the keys as a `kbd` chip (`rounded-sm bg-neutral-800
+  px-1.5 py-0.5 font-mono text-meta`, `Blank` in `neutral-500` when unset), then `sm`
+  `IconButton`s: restore default (only when changed), remove, change. Change records the
+  next key press with Ctrl, Alt or Meta (Escape or any click cancels; the chip reads
+  `Press keys…` on `amber-900/40`); keys taken from another shortcut leave it Blank.
+  A binding the browser keeps (Ctrl+T/N/W, Ctrl+Tab…, `RESERVED`) shows its chip
+  `bg-red-500/20 text-red-400 animate-pulse` with a tooltip saying it will not work.
+  Defaults avoid those keys: Alt+Shift+T reopens the last tab closed in this page load,
+  Alt+N starts a session in the last-used column, Ctrl+O, Ctrl+P, Ctrl+`, Alt+J, Alt+1–9.
+  Changes live in `pwi:shortcuts`; the palette shows the current keys.
 - Appearance has a `Language` radio group (English / Русский, each named in itself,
   `pwi:language`, per browser). Every interface string goes through `t("English text")`
   or `plural(n, one, other)` from `i18n.ts`; the Russian lives in `i18n.ru.ts`, and

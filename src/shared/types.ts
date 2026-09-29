@@ -166,6 +166,8 @@ export interface PiSessionInfo {
 	lastActive: string;
 	messageCount: number;
 	firstMessage: string;
+	/** The newest user prompt; absent until the session has one. */
+	lastPrompt?: string;
 	/** True if this session is currently streaming, even with no client attached. */
 	isStreaming?: boolean;
 	/** True if the session is blocked on a question (`ask`) only the user can answer. */

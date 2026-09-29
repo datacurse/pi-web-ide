@@ -49,14 +49,14 @@ const SCALE_DIP = 0.34;
 const ALPHA_DIP = 0.35;
 
 /**
- * "A session wants you": a reply turns the π green (`green-400`), a question
+ * "A session wants you": a reply turns the π mint green (#5ec98b, matched to the pi.dev logo's salmon, blue and mustard), a question
  * adds a red corner dot (`red-400`), drawn outside the breathing π so it holds
  * still, with a dark ring so it separates from the π at 16px.
  */
 export type Badge = "needs" | "ready" | null;
 
-/** The mark's scale at rest: public/favicon.svg's, 56 of the icon's 64 units. */
-const MARK_SCALE = 0.1;
+/** The mark fills the icon edge to edge, like pi.dev's: at 16px each block is exactly 4px, so its edges stay sharp. */
+const MARK_SCALE = 64 / 560;
 
 function frame(k: number, badge: Badge, tick: number): string {
 	const scale = MARK_SCALE * (1 - SCALE_DIP * k);
@@ -65,7 +65,7 @@ function frame(k: number, badge: Badge, tick: number): string {
 	const doc =
 		'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">' +
 		`<!--${tick}-->` +
-		`<path fill="${badge === "ready" ? "#4ade80" : "#fff"}" opacity="${(1 - ALPHA_DIP * k).toFixed(3)}"` +
+		`<path fill="${badge === "ready" ? "#5ec98b" : "#fff"}" opacity="${(1 - ALPHA_DIP * k).toFixed(3)}"` +
 		` transform="translate(32 32) scale(${scale.toFixed(4)}) translate(-280 -280)" d="${PI_MARK}"/>` +
 		(badge === "needs" ? '<circle cx="49" cy="15" r="13" fill="#f87171" stroke="#000" stroke-width="4"/>' : "") +
 		"</svg>";

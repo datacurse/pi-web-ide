@@ -18,14 +18,14 @@ export function SessionSearch({
 	open,
 	project,
 	sessions,
-	shortNames,
+	latestPrompt,
 	onSelect,
 	onClose,
 }: {
 	open: boolean;
 	project: string;
 	sessions: PiSessionInfo[];
-	shortNames: boolean;
+	latestPrompt: boolean;
 	onSelect: (s: PiSessionInfo) => void;
 	onClose: () => void;
 }) {
@@ -131,7 +131,7 @@ export function SessionSearch({
 					>
 						<ChatCircle size={18} className="shrink-0 text-neutral-500" />
 						<span className="max-w-[60%] shrink-0 fade-end text-body text-neutral-200">
-							{highlight(sessionLabel(s, shortNames), terms)}
+							{highlight(sessionLabel(s, latestPrompt), terms)}
 						</span>
 						<span className="min-w-0 flex-1 fade-end text-ui text-neutral-500">
 							{snippet && highlight(snippet, terms)}

@@ -460,14 +460,12 @@ prompt, and every discovery pass is pure latency on a click.
 no messages yet has nothing to summarise and is refused as such, and while
 the request is in flight the row reads `Naming…`.
 
-**Name from first prompt** is the same derivation as the short-names
-preference, written permanently instead of only displayed. It is deliberately
-not a model call: instant, free, and stable across re-renders.
+**Name from first prompt** writes a short name derived from the first prompt
+— `Not a fan of opening directory like this`, `For our favicon create orange
+brain icon`. It is deliberately not a model call: instant, free, and stable.
 
-**Short names** (settings, off by default) change only what an *unnamed*
-session is called: instead of the first 60 characters of the first prompt, the
-row reads like a title — `Not a fan of opening directory like this`, `For our
-favicon create orange brain icon`.
+An *unnamed* session is titled by its whole first prompt, or by its latest
+prompt when Settings > Sessions > Session titles is `Latest prompt`.
 
 The rules, all of which exist because a real prompt broke the previous
 version (`src/web/sessionName.test.ts` pins them):
@@ -707,7 +705,7 @@ everything that is a property of *this browser* rather than of the agent:
 | theme | `pwi:theme` | `mocha` |
 | show thinking | `pwi:showThinking` | on |
 | tool calls | `pwi:tools` | `live` |
-| short session names | `pwi:shortNames` | off |
+| session titles from latest prompt | `pwi:latestPrompt` | off |
 | notify when finished | `pwi:notify` | off |
 
 All of them live in `localStorage` via `src/web/prefs.ts`, which validates on
