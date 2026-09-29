@@ -407,7 +407,8 @@
 		border-radius: var(--radius-sm);
 	}
 
-	::-webkit-scrollbar-thumb:hover,
+	/* Hover only brightens a thumb already showing: passing over a hidden one must not pop it up. */
+	[data-scrolling]::-webkit-scrollbar-thumb:hover,
 	::-webkit-scrollbar-thumb:active {
 		background: var(--color-neutral-600);
 	}
@@ -604,7 +605,7 @@ body {
  * track, and no component needs a wrapper div to say so.
  */
 .chat-gutter {
-	padding-inline: max(1rem, (100% - var(--content-max)) / 2);
+	padding-inline: max(2.25rem, (100% - var(--content-max)) / 2);
 }
 
 /* Line height rises with the measure; 1.6 is the figure for ~66 characters. */
@@ -795,6 +796,13 @@ body {
 	to {
 		mask-image: linear-gradient(to right, #000 calc(100% - 2em), transparent);
 	}
+}
+
+/* A label stretched to its row's right edge: whatever reaches the last 2em fades, fitting or not. */
+.fade-edge {
+	overflow: hidden;
+	white-space: nowrap;
+	mask-image: linear-gradient(to right, #000 calc(100% - 2em), transparent);
 }
 
 /* Three lines, the last fading out at its end like `.fade-end`. Only set it when the text overflows. */
@@ -1031,13 +1039,13 @@ input[type="number"]::-webkit-outer-spin-button {
 
 /*
  * Soft wrap (wrapIndent() in codemirror.ts): continuation rows start at the
- * line's own indent plus a 2ch ↳ marker. 6px is CodeMirror's own .cm-line
- * left padding, which this rule replaces.
+ * line's own indent plus a 2ch ↳ marker. `hanging` indents only those rows;
+ * extra padding plus a negative text-indent shifts the tab stops and draws
+ * leading tabs short. 6px is CodeMirror's own .cm-line left padding.
  */
 .cm-content .cm-wrapIndent {
 	position: relative;
-	padding-left: calc(6px + var(--indent) + 2ch);
-	text-indent: calc(-1 * (var(--indent) + 2ch));
+	text-indent: calc(var(--indent) + 2ch) hanging;
 }
 
 .cm-content .cm-wrapIndent::before {

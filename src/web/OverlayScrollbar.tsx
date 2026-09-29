@@ -1,7 +1,9 @@
 import { forwardRef, useEffect, useRef, useState, type HTMLAttributes, type RefObject } from "react";
 
 /** How long a scrollbar stays after the last scroll before it fades. */
-const SHOW_MS = 1000;
+const SHOW_MS = 500;
+/** How long the pointer must rest on the track before it shows, so passing over it does not. */
+const HOVER_MS = 300;
 
 /**
  * Native scrollbars: marks whichever element scrolls with `data-scrolling`
@@ -40,6 +42,7 @@ export function OverlayScrollbar({ target }: { target: RefObject<HTMLElement | n
 	const [shown, setShown] = useState(false);
 	const hovered = useRef(false);
 	const hideTimer = useRef(0);
+	const hoverTimer = useRef(0);
 	const reveal = useRef(() => {});
 	reveal.current = () => {
 		setShown(true);
@@ -82,6 +85,7 @@ export function OverlayScrollbar({ target }: { target: RefObject<HTMLElement | n
 		return () => {
 			cancelAnimationFrame(frame);
 			clearTimeout(hideTimer.current);
+			clearTimeout(hoverTimer.current);
 			for (const type of inputs) el.removeEventListener(type, onInput);
 			el.removeEventListener("scroll", schedule);
 			resize.disconnect();
@@ -104,11 +108,12 @@ export function OverlayScrollbar({ target }: { target: RefObject<HTMLElement | n
 			className={`overlay-scrollbar absolute inset-y-0 right-0 w-2 transition-opacity ${shown ? "opacity-100 duration-100" : "opacity-0 duration-500"}`}
 			onPointerEnter={() => {
 				hovered.current = true;
-				reveal.current();
+				hoverTimer.current = window.setTimeout(() => reveal.current(), HOVER_MS);
 			}}
 			onPointerLeave={() => {
 				hovered.current = false;
-				reveal.current();
+				clearTimeout(hoverTimer.current);
+				if (shown) reveal.current();
 			}}
 			onPointerDown={(e) => {
 				// The track pages toward the click, like a native one.

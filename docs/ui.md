@@ -72,9 +72,13 @@ fits none of the existing ones, and record it here.
 - Anything that scrolls fades out over 2em at each edge it can still scroll past, so
   you can see there is more: `.scroll-fade-y` on every `ScrollPane` list, `.scroll-fade-x`
   on the tab strips. Each fade grows over the first 2em of scroll and goes over the last.
-- Text fades only where it meets an edge. Never fade text that fits.
+- Text fades only where it meets an edge. A label that ends mid-row never fades.
+- Explorer names and session titles/snippets run to the panel's right edge (their
+  rows have no right padding) and use `.fade-edge`: a fixed 2em fade at that edge,
+  so any text reaching it fades whether it overflows or just fits.
 - Session rows and tabs show the name followed by the rest of the first prompt
-  (`sessionLine`), so a shortened name runs on to the edge and fades there.
+  (`sessionLine`), so a shortened name runs on to the edge and fades there. Session
+  rows have no right padding (`pl-3` only), so that fade sits on the panel's edge.
 - Code (editor and diff tabs) soft-wraps; continuation rows keep the line's own
   indent and start with a dim `↳` marker (`wrapIndent()`, `.cm-wrapIndent`).
 
@@ -86,8 +90,8 @@ fits none of the existing ones, and record it here.
 
 They are spacing keys, so `h-control-sm`, `size-control-md` and `h-bar` all work.
 
-- Every scrollbar shows only while its pane scrolls (and while its thumb is hovered or
-  dragged), then fades out after 1s: `data-scrolling` (`showScrollbarsWhileScrolling`)
+- Every scrollbar shows only while its pane scrolls (and while its thumb is dragged, or the
+  overlay track is hovered for 300ms, so passing over it shows nothing), then fades out after 500ms: `data-scrolling` (`showScrollbarsWhileScrolling`)
   lights the thumb through `--scrollbar-thumb`. xterm's own scrollbar already fades.
 - Scrollbars (index.css): Chromium gets a hand-drawn 6px `neutral-700` thumb (the transcript's overlay size), `rounded-sm`,
   flush against the pane edge, no arrows. Firefox keeps `scrollbar-width: thin`.
@@ -114,7 +118,7 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
 - Primary text `neutral-100`/`200`; secondary `neutral-300`/`400`; hints `neutral-500`; disabled `neutral-600`.
 - Accent and primary action: `amber-*`. Errors: `red-*`. Success: `green-*`.
 - Every separator (panel edges, list row rules, table rows) is `border-neutral-800`; no fainter `neutral-900` rules.
-- The side panel's and the terminal's resize dividers are 1px `neutral-800` lines like any other edge; their hit area is an invisible 9px `after` box, `z-10` so neighbors cannot cover it; the side panel's leans 2px left / 6px right to stay off the panel's scrollbar.
+- The side panel's and the terminal's resize dividers are 1px `neutral-800` lines like any other edge; their hit area is an invisible 9px `after` box, `z-10` so neighbors cannot cover it; the side panel's leans 2px left / 6px right to stay off the panel's scrollbar. They use the scrollbar's timing: amber after 300ms of hover (100ms fade), so passing over them does not flash, then 1s after the pointer leaves they fade back over 500ms.
 - Settings lists themes in two groups, Dark then Light (`light` flag in `prefs.ts`).
 
 ## Composer
@@ -167,6 +171,8 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
   rejected: `0.2 + 0.8(1-t)^3` (entry too abrupt), linear / CIE L*-even (felt like it darkened faster and faster), Larsen's scrim
   (worse still), pure `(1-t)^3` (right start, but a near-black band above the box) and
   `0.8(1-t)^4 + 0.2(1-t^4)` (held dim, but still ended at zero).
+- In a narrow pane the box and the user pill keep 24px to the pane's sides, the same as the
+  box's gap to the bottom (`pb-6`): `.chat-gutter`'s minimum is `2.25rem` (24px + the 12px overhang).
 - The box overlaps the transcript by its radius (`-mt-3`), so text shows behind its
   corners, and sticks out of the reading column by its padding (`-mx-3`), so the typed
   text lines up with the response text, like Cursor. To keep that exact, the transcript
@@ -295,7 +301,7 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
 
 - Assistant replies carry no `ASSISTANT` label; the bubble vs. plain prose already says who spoke.
 - A `neutral-800` rule, full pane width, sits mid-gap above each prompt (`TurnSeparator`, `my-6`;
-  invisible above the first). It reaches both edges because the transcript's
+  hidden above the first, which instead sits `pt-6` below the tabs, the box's gap to the bottom). It reaches both edges because the transcript's
   scrollbar is `OverlayScrollbar`, drawn over the content (see Scrollbars). The user row has no bottom padding: the gap above your prompt (between turns)
   is wider than the one under it (to its own answer).
 - The pill has the composer's edge (inset `ring-1 ring-neutral-700`) and width: `-mx-3 p-3`

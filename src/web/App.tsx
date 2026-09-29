@@ -473,15 +473,17 @@ export default function App() {
 			const row = splitRow.current?.getBoundingClientRect();
 			if (!row || row.width === 0) return;
 			const divider = event.currentTarget;
+			// The panel's left edge, not the row's: the activity bar sits between them.
+			const left = divider.previousElementSibling?.getBoundingClientRect().left ?? row.left;
 			divider.setPointerCapture(event.pointerId);
 			// Or the browser starts a text selection across both panes instead.
 			event.preventDefault();
 			let latest = panelWidth;
 			const move = (moved: PointerEvent) => {
-				// The panel is on the LEFT, so its width grows from the row's left
+				// The panel is on the LEFT, so its width grows from its own left
 				// edge. This read `row.right - clientX` when the terminal was the
 				// only thing in this track and sat on the right.
-				latest = ((moved.clientX - row.left) / row.width) * 100;
+				latest = ((moved.clientX - left) / row.width) * 100;
 				resizePanel(latest);
 			};
 			const end = () => {
@@ -1790,7 +1792,7 @@ export default function App() {
 						// you miss, and there is nothing else to aim at. 9px, leaning
 						// right so it stays off the panel's scrollbar; z-10 so the
 						// editor beside it cannot paint over half of it.
-						className="relative z-10 w-px shrink-0 cursor-col-resize bg-neutral-800 transition-colors duration-150 ease-out after:absolute after:inset-y-0 after:-left-0.5 after:-right-1.5 after:content-[''] hover:bg-amber-600 focus-visible:bg-amber-500 focus-visible:outline-none motion-reduce:transition-none narrow:hidden"
+						className="relative z-10 w-px shrink-0 cursor-col-resize bg-neutral-800 transition-colors delay-1000 duration-500 ease-out after:absolute after:inset-y-0 after:-left-0.5 after:-right-1.5 after:content-[''] hover:bg-amber-600 hover:delay-300 hover:duration-100 focus-visible:bg-amber-500 focus-visible:outline-none motion-reduce:transition-none narrow:hidden"
 					/>
 				</>
 			)}
@@ -1895,7 +1897,7 @@ export default function App() {
 							tabIndex={0}
 							onPointerDown={startDockDrag}
 							onKeyDown={dockKeys}
-							className="relative z-10 h-px shrink-0 cursor-row-resize bg-neutral-800 transition-colors duration-150 ease-out after:absolute after:inset-x-0 after:-top-1 after:-bottom-1 after:content-[''] hover:bg-amber-600 focus-visible:bg-amber-500 focus-visible:outline-none motion-reduce:transition-none"
+							className="relative z-10 h-px shrink-0 cursor-row-resize bg-neutral-800 transition-colors delay-1000 duration-500 ease-out after:absolute after:inset-x-0 after:-top-1 after:-bottom-1 after:content-[''] hover:bg-amber-600 hover:delay-300 hover:duration-100 focus-visible:bg-amber-500 focus-visible:outline-none motion-reduce:transition-none"
 						/>
 						<div
 							className="flex min-h-0 min-w-0 flex-col [flex:0_0_var(--dock-h)]"

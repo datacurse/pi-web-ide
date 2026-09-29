@@ -331,7 +331,7 @@ export function SessionList({
 								aria-current={s.path === activeFile ? "true" : undefined}
 								aria-haspopup="menu"
 								title={s.name || s.firstMessage || s.path}
-								className={`block w-full border-b border-neutral-800 px-3 py-2 text-left transition-colors duration-150 ease-out hover:bg-neutral-900 motion-reduce:transition-none ${
+								className={`block w-full border-b border-neutral-800 py-2 pl-3 text-left transition-colors duration-150 ease-out hover:bg-neutral-900 motion-reduce:transition-none ${
 									// Three states worth telling apart: selected, open in a
 									// background tab, and not open at all.
 									s.path === activeFile
@@ -341,7 +341,7 @@ export function SessionList({
 											: ""
 								}`}
 							>
-								<div className="flex items-center gap-1.5 fade-end text-ui text-neutral-200">
+								<div className="flex items-center gap-1.5 text-ui text-neutral-200">
 									{/* The session's state, the same colors as its tab π: amber
 									    pulsing while it works, steady amber for a new reply, red
 									    for a question. */}
@@ -354,7 +354,7 @@ export function SessionList({
 											title={t(ATTENTION_UI[state].label)}
 										/>
 									)}
-									<span className="fade-end">
+									<span className="fade-edge min-w-0 flex-1">
 										{naming === s.path ? t("Naming…") : highlight(sessionLine(s, shortNames), terms)}
 									</span>
 								</div>
@@ -366,7 +366,7 @@ export function SessionList({
 								  sort mode exists to answer.
 								*/}
 								{snippet ? (
-									<div className="mt-0.5 fade-end text-meta text-neutral-500">
+									<div className="mt-0.5 fade-edge text-meta text-neutral-500">
 										{highlight(snippet, terms)}
 									</div>
 								) : (

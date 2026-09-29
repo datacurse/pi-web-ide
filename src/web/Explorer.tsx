@@ -221,14 +221,14 @@ function TreeDir({
 					muted={entry.hidden}
 					size="body"
 					aria-expanded={open}
-					style={{ paddingLeft: `${depth * 12 + 4}px` }}
+					style={{ paddingLeft: `${depth * 12 + 4}px`, paddingRight: 0 }}
 				>
 					{/* A 16px slot, the width of a file's icon, so names line up the way
 					    VS Code's do: Seti has no folder icons, the chevron stands in. */}
 					<span className="flex w-4 shrink-0 justify-center text-neutral-500" aria-hidden>
 						{open ? <CaretDown size={14} /> : <CaretRight size={14} />}
 					</span>
-					<span className="fade-end">{entry.name}</span>
+					<span className="fade-edge min-w-0 flex-1">{entry.name}</span>
 				</ListRow>
 			)}
 			{open && adding && <NameRow depth={depth + 1} dir={adding.kind === "folder"} initial="" />}
@@ -287,10 +287,10 @@ function TreeFile({
 			muted={entry.hidden}
 			size="body"
 			// Same indent as a sibling directory: the icon takes the chevron's slot.
-			style={{ paddingLeft: `${depth * 12 + 4}px` }}
+			style={{ paddingLeft: `${depth * 12 + 4}px`, paddingRight: 0 }}
 		>
 			<FileGlyph name={entry.name} />
-			<span className="fade-end">{entry.name}</span>
+			<span className="fade-edge min-w-0 flex-1">{entry.name}</span>
 		</ListRow>
 	);
 }

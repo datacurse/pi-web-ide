@@ -488,7 +488,7 @@ export function TerminalPane({
 										aria-orientation={tab.direction === "column" ? "horizontal" : "vertical"}
 										aria-label={t("Resize split")}
 										onPointerDown={startDrag(i - 1)}
-										className={`relative shrink-0 bg-neutral-800 hover:bg-amber-600 ${
+										className={`relative shrink-0 bg-neutral-800 transition-colors delay-1000 duration-500 hover:bg-amber-600 hover:delay-300 hover:duration-100 ${
 											tab.direction === "column"
 												? "h-1 cursor-row-resize after:absolute after:inset-x-0 after:-top-1 after:-bottom-1 after:content-['']"
 												: "w-1 cursor-col-resize after:absolute after:inset-y-0 after:-left-1 after:-right-1 after:content-['']"

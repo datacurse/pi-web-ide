@@ -951,7 +951,7 @@ function AnswerFooter({
  * spacing stays.
  */
 function TurnSeparator() {
-	return <hr aria-hidden className="my-6 border-neutral-800 group-first/turn:invisible" />;
+	return <hr aria-hidden className="my-6 border-neutral-800 group-first/turn:hidden" />;
 }
 
 /**
@@ -980,7 +980,7 @@ export function TranscriptRow({
 }) {
 	if (role === "user") {
 		return (
-			<div className="group/turn">
+			<div className="group/turn first:pt-6">
 				<TurnSeparator />
 				<div className="chat-gutter">
 					{/* The composer's width: it overhangs the reading column by its padding. */}
@@ -1121,7 +1121,7 @@ function EditMessage({
 	const [images, setImages] = useState(attached);
 	const canSend = draft.trim() !== "" || images.length > 0;
 	return (
-		<div className="group/turn">
+		<div className="group/turn first:pt-6">
 			<TurnSeparator />
 			<div className="chat-gutter">
 			<div className="chat-measure">
