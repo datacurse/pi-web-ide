@@ -82,6 +82,7 @@ const THINKING_KEY = "pwi:showThinking";
 const TOOL_KEY = "pwi:tools";
 const NOTIFY_KEY = "pwi:notify";
 const SHORT_NAMES_KEY = "pwi:shortNames";
+const HIDE_SCROLLBARS_KEY = "pwi:hideScrollbars";
 const GIT_AUTONAME_KEY = "pwi:gitAutoName";
 const GIT_NESTED_KEY = "pwi:gitNested";
 
@@ -139,6 +140,17 @@ export function readShortNames(): boolean {
 
 export function writeShortNames(on: boolean): void {
 	writeStored(SHORT_NAMES_KEY, on ? "1" : "0");
+}
+
+/** Hidden scrollbars: panes still scroll by wheel, touch and keyboard. Read before first paint by index.html. */
+export function readHideScrollbars(): boolean {
+	return readStored(HIDE_SCROLLBARS_KEY) === "1";
+}
+
+export function applyHideScrollbars(on: boolean): void {
+	if (on) document.documentElement.dataset.scrollbars = "hidden";
+	else delete document.documentElement.dataset.scrollbars;
+	writeStored(HIDE_SCROLLBARS_KEY, on ? "1" : "0");
 }
 
 /**

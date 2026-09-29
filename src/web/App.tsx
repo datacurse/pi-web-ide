@@ -50,11 +50,13 @@ import { EMPTY_LAYOUT, addTab, allTerminals, reconcile, type TermLayout } from "
 import { Settings } from "./Settings.js";
 import { Packages } from "./Packages.js";
 import {
+	applyHideScrollbars,
 	applyTheme,
 	type Language,
 	THEMES,
 	readDockHeight,
 	readDockOpen,
+	readHideScrollbars,
 	readNotify,
 	readPanel,
 	readPinnedSessions,
@@ -209,6 +211,7 @@ export default function App() {
 	const [userMode, setUserMode] = useState<UserMode>(readUserMode);
 	const [notify, setNotify] = useState(readNotify);
 	const [shortNames, setShortNames] = useState(readShortNames);
+	const [hideScrollbars, setHideScrollbars] = useState(readHideScrollbars);
 	/** This pwi's project list: its directories plus the cwd it was launched against. */
 	const [projects, setProjects] = useState<Projects>({ projects: [], seed: "" });
 	const [project, setProject] = useState<string>(() => readWindowProject() ?? "");
@@ -223,6 +226,7 @@ export default function App() {
 	 * something no longer recognised.
 	 */
 	useEffect(() => applyTheme(theme), [theme]);
+	useEffect(() => applyHideScrollbars(hideScrollbars), [hideScrollbars]);
 	useEffect(() => void (document.documentElement.lang = language), [language]);
 	const changeLanguage = useCallback((lang: Language) => {
 		setLanguage(lang);
@@ -1601,6 +1605,8 @@ export default function App() {
 				onNotify={(on) => void changeNotify(on)}
 				shortNames={shortNames}
 				onShortNames={changeShortNames}
+				hideScrollbars={hideScrollbars}
+				onHideScrollbars={setHideScrollbars}
 				onClose={onClose}
 			/>
 		);

@@ -347,11 +347,44 @@
  * enough on Chrome 121+/Firefox; `*` rather than a list of scroll containers
  * so CodeMirror, xterm and every future pane inherit it without a new rule.
  */
-* {
-	scrollbar-width: thin;
-	/* var(), not theme(): theme() inlines the default at build time and would
-	   ignore the active flavor. */
-	scrollbar-color: var(--color-neutral-700) transparent;
+@supports not selector(::-webkit-scrollbar) {
+	* {
+		scrollbar-width: thin;
+		/* var(), not theme(): theme() inlines the default at build time and would
+		   ignore the active flavor. */
+		scrollbar-color: var(--color-neutral-700) transparent;
+	}
+}
+
+/*
+ * Chromium draws the standard thin scrollbar as a narrow thumb centered in a
+ * wider track, which reads as padding to its right. Drawn by hand instead, the
+ * thumb sits flush against the pane's edge.
+ */
+@supports selector(::-webkit-scrollbar) {
+	::-webkit-scrollbar {
+		width: 8px;
+		height: 8px;
+		background: transparent;
+	}
+
+	::-webkit-scrollbar-thumb {
+		background: var(--color-neutral-700);
+		border-radius: var(--radius-sm);
+	}
+
+	::-webkit-scrollbar-thumb:hover {
+		background: var(--color-neutral-600);
+	}
+
+	::-webkit-scrollbar-corner {
+		background: transparent;
+	}
+}
+
+/* Settings > Hide scrollbars. The panes still scroll. */
+:root[data-scrollbars="hidden"] * {
+	scrollbar-width: none;
 }
 
 :root[data-theme="latte"],
@@ -587,6 +620,33 @@ body {
 @media (pointer: coarse) {
 	.tab-close {
 		opacity: 1;
+	}
+}
+
+/*
+ * A cut-off label fades out at its end instead of ending in "…". The mask
+ * rides a scroll timeline on the label itself, which is only active when the
+ * text overflows, so a label that fits keeps its last letters. Browsers
+ * without scroll timelines keep the ellipsis.
+ */
+.fade-end {
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+
+@supports (animation-timeline: scroll()) {
+	.fade-end {
+		text-overflow: clip;
+		animation: fade-end linear both;
+		animation-timeline: scroll(self inline);
+	}
+}
+
+@keyframes fade-end {
+	from,
+	to {
+		mask-image: linear-gradient(to right, #000 calc(100% - 2em), transparent);
 	}
 }
 

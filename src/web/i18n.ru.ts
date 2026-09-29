@@ -456,6 +456,8 @@ export const RU: Record<string, string> = {
 	"Always full": "Всегда целиком",
 	"Shown in full, no button.": "Видны целиком, без кнопки.",
 	"Short names from the first prompt": "Короткие названия по первому запросу",
+	"Hide scrollbars": "Скрыть полосы прокрутки",
+	"Panes still scroll with the wheel, touch and keyboard.": "Панели по-прежнему прокручиваются колесом, касанием и клавиатурой.",
 	"Names an unnamed session by the opening words of your first message instead of showing the whole line. A name you set with the pencil in the session list always wins.":
 		"Называет безымянную сессию по первым словам вашего первого сообщения, а не всей строкой. Название, заданное карандашом в списке сессий, всегда главнее.",
 	"Notify when a run finishes": "Уведомлять о завершении работы",

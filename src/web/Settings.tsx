@@ -83,6 +83,8 @@ export function Settings({
 	onNotify,
 	shortNames,
 	onShortNames,
+	hideScrollbars,
+	onHideScrollbars,
 	onClose,
 }: {
 	open: boolean;
@@ -100,6 +102,8 @@ export function Settings({
 	onNotify: (on: boolean) => void;
 	shortNames: boolean;
 	onShortNames: (on: boolean) => void;
+	hideScrollbars: boolean;
+	onHideScrollbars: (on: boolean) => void;
 	onClose: () => void;
 }) {
 	/*
@@ -334,6 +338,27 @@ export function Settings({
 						</OptionRow>
 					))}
 				</div>
+			),
+		},
+		{
+			category: "appearance",
+			label: t("Hide scrollbars"),
+			text: `scroll bar ${t("Panes still scroll with the wheel, touch and keyboard.")}`,
+			node: (
+				<OptionRow>
+					<input
+						type="checkbox"
+						checked={hideScrollbars}
+						onChange={(e) => onHideScrollbars(e.target.checked)}
+						className="size-4 shrink-0 accent-amber-400"
+					/>
+					<span className="flex-1">
+						{t("Hide scrollbars")}
+						<span className="block text-meta text-neutral-500">
+							{t("Panes still scroll with the wheel, touch and keyboard.")}
+						</span>
+					</span>
+				</OptionRow>
 			),
 		},
 		{

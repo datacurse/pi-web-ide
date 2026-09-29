@@ -22,6 +22,8 @@
 				// :root covers that.
 				document.documentElement.dataset.theme =
 					localStorage.getItem("pwi:theme") || "mocha";
+				if (localStorage.getItem("pwi:hideScrollbars") === "1")
+					document.documentElement.dataset.scrollbars = "hidden";
 			} catch {}
 		</script>
 	</head>

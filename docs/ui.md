@@ -62,6 +62,11 @@ fits none of the existing ones, and record it here.
 | `bar`            | 36px | `PanelHeader`: every panel and editor top row.   |
 
 They are spacing keys, so `h-control-sm`, `size-control-md` and `h-bar` all work.
+
+- Scrollbars (index.css): Chromium gets a hand-drawn 8px `neutral-700` thumb, `rounded-sm`,
+  flush against the pane edge, no arrows. Firefox keeps `scrollbar-width: thin`.
+  Settings > Appearance > `Hide scrollbars` (`pwi:hideScrollbars`, per browser, off by
+  default) hides them all via `data-scrollbars="hidden"` on `<html>`.
 Text and icon buttons of the same size share a height and line up in a row.
 
 ## Icons
@@ -129,6 +134,7 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
   It floats over the label's end (no reserved padding, a short fade behind it), so
   labels use the full tab width.
 - Tabs are split by a `neutral-800` rule on each tab's right edge.
+- A cut-off tab label fades out over its last 2em (`.fade-end` in index.css), no `…`.
 - Right-click any tab → `ContextMenu`, groups split by `MenuSeparator`:
   1. Session tabs: `Pin Tab` / `Unpin Tab` (the session list's pins), `Rename…`
      (`window.prompt`). File tabs: `Reveal in Explorer` (opens the Explorer, expands

@@ -232,7 +232,7 @@ export function SessionTabs({
 	};
 
 	return (
-		<div className="flex h-bar shrink-0 items-stretch gap-1 border-b border-neutral-800 bg-neutral-950 px-1">
+		<div className="flex h-bar shrink-0 items-stretch gap-1 border-b border-neutral-800 bg-neutral-950 pr-1">
 			{/*
 			  On a narrow viewport the session list is a drawer, so its toggle has
 			  to live somewhere permanent. The strip's left edge is where a tab bar
@@ -245,7 +245,7 @@ export function SessionTabs({
 				aria-controls="session-list"
 				label={listOpen ? t("Hide session list") : t("Show session list")}
 				title={t("Sessions")}
-				className="self-center wide:hidden"
+				className="ml-1 self-center wide:hidden"
 			>
 				<span aria-hidden>{"\u2261"}</span>
 			</IconButton>
@@ -471,7 +471,7 @@ export function SessionTabs({
 								{/* Same glyph the tree uses, so a tab and its row match. */}
 								{isEdit && <FileGlyph name={label} size={13} />}
 								{isTerm && <TerminalWindow size={13} className="shrink-0 text-neutral-400" />}
-								<span className={`truncate text-ellipsis ${isEdit || isDiff ? "font-mono" : ""}`}>
+								<span className={`fade-end ${isEdit || isDiff ? "font-mono" : ""}`}>
 									{label}
 								</span>
 								{/* Unsaved. A dot rather than an asterisk in the label, so
