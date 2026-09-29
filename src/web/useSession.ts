@@ -170,13 +170,20 @@ export function useSession({
 
 	const esRef = useRef<EventSource | null>(null);
 	/**
+	 * The turn error this attachment watched arrive. The server drops an error
+	 * once its turn has ended (`clearDeadError`), so the refetch right after
+	 * `idle` would wipe it off screen the moment it appeared. Kept until the
+	 * next send.
+	 */
+	const seenErrorRef = useRef<string | null>(null);
+	/**
 	 * Ticket for the newest attach. An attach whose ticket is no longer the
 	 * current one has been superseded by a later selection, and may not move
 	 * the selection or the pane; see attach().
 	 */
 	const attachSeq = useRef(0);
 	// attach() reconnects by calling itself; a useCallback cannot reference itself.
-	const attachRef = useRef<(file?: string) => Promise<void>>(async () => {});
+	const attachRef = useRef<(file?: string) => Promise<string | undefined>>(async () => undefined);
 
 	/**
 	 * The tab this hook is showing or opening. App's `sync` compares a
@@ -366,6 +373,7 @@ export function useSession({
 			// there is never a hole where streamed text should be.
 			setPartial(snap.partial ?? emptyPartial());
 			setBusy(snap.isStreaming);
+			seenErrorRef.current = null;
 
 			const es = new EventSource(`/api/sessions/${snap.id}/events`);
 			esRef.current = es;
@@ -393,7 +401,7 @@ export function useSession({
 				}
 				if (!rr.ok) return undefined;
 				const s = toSnapshot(await rr.json());
-				setSnapshot(s);
+				setSnapshot({ ...s, error: s.error ?? seenErrorRef.current });
 				setPartial(s.partial ?? emptyPartial());
 				setBusy(s.isStreaming);
 				return s;
@@ -493,6 +501,7 @@ export function useSession({
 							worked = false;
 							announce(snap.file, t("Failed: {error}", { error: e.message }));
 						}
+						seenErrorRef.current = e.message;
 						setSnapshot((s) => (s ? { ...s, error: e.message } : s));
 						break;
 				}
@@ -505,6 +514,7 @@ export function useSession({
 				if (es.readyState === EventSource.CLOSED) reattach();
 				else void refetch();
 			};
+			return key;
 		},
 		[refreshSessions, project, scope, commitTabs, closeRef, announce, side, tabsRef, opened, setPending],
 	);
@@ -561,6 +571,7 @@ export function useSession({
 	const send = useCallback(
 		async (text: string, images?: PiImage[], askOnly = false) => {
 			if (!snapshot) return;
+			seenErrorRef.current = null;
 			const trimmed = text.trim();
 			// pi's `/compact` is TUI-only; over RPC it would reach the model as text.
 			const compactCmd = /^\/compact(?:\s+([\s\S]*))?$/.exec(trimmed);
@@ -610,8 +621,13 @@ export function useSession({
 				return;
 			}
 
+			// The ack can beat pi's `message_end` for this message (images are
+			// processed first), so keep the optimistic copy until the server has it.
 			const rr = await api.sessions[":id"].$get({ param: { id: snapshot.id } });
-			if (rr.ok) setSnapshot(toSnapshot(await rr.json()));
+			if (!rr.ok) return;
+			const fresh = toSnapshot(await rr.json());
+			const landed = fresh.messages.length > snapshot.messages.length;
+			setSnapshot(optimistic && !landed ? { ...fresh, messages: [...fresh.messages, optimistic] } : fresh);
 		},
 		[snapshot, busy, compact],
 	);

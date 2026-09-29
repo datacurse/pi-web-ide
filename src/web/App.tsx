@@ -1509,6 +1509,14 @@ export default function App() {
 		[selectTab, selectRight, markSide],
 	);
 
+	/** Open a new session in `side` and focus its column and composer. */
+	const newSession = async (side: Side) => {
+		const key = await (side === "right" ? right : left).attach();
+		if (!key) return;
+		markSide(side);
+		setSessionFocus((f) => ({ side, entry: key, n: f.n + 1 }));
+	};
+
 	/**
 	 * Alt+J jumps to the next session waiting on you: questions first, then
 	 * the reply that has waited longest. Alt for the same reason as Alt+1..9,
@@ -1789,7 +1797,7 @@ export default function App() {
 					dirtyFiles={dirtyFiles}
 					onSelect={selectTab}
 					onClose={closeTab}
-					onNewSession={() => void left.attach()}
+					onNewSession={() => void newSession("left")}
 					onNewTerminal={project ? () => void newTerminalTab("left") : undefined}
 					onReorder={reorderTabs}
 					onMove={moveToGroup}
@@ -1822,7 +1830,7 @@ export default function App() {
 						dirtyFiles={dirtyFiles}
 						onSelect={selectRight}
 						onClose={closeRight}
-						onNewSession={() => void right.attach()}
+						onNewSession={() => void newSession("right")}
 						onNewTerminal={project ? () => void newTerminalTab("right") : undefined}
 						onReorder={reorderRight}
 						onMove={moveToGroup}
@@ -1910,9 +1918,10 @@ export default function App() {
 				onAutoName={autoNameSession}
 				shortNames={shortNames}
 				// Into the column last used, so "+" beside a split opens there.
-				onNew={() =>
-					void (lastSide.current === "right" && tabsRef.current.right ? right : left).attach()
-				}
+				onNew={() => {
+					void newSession(lastSide.current === "right" && tabsRef.current.right ? "right" : "left");
+					setListOpen(false);
+				}}
 				onSearch={() => setSearchOpen(true)}
 				project={project}
 			/>
