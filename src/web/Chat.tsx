@@ -17,6 +17,7 @@ import { ASK_MODES, type AskMode, type ThinkingMode, type ToolMode, type UserMod
 import { clearDraft, readDraft, writeDraftImages, writeDraftText } from "./drafts.js";
 import { completionOptions, parseCompletion, type CommandOption } from "./commands.js";
 import { AskPanel } from "./AskPanel.js";
+import { OverlayScrollbar } from "./OverlayScrollbar.js";
 import {
 	Attachments,
 	Lightbox,
@@ -761,6 +762,7 @@ export function Chat({
 				{/* The rows own their top spacing; the last one needs a floor under
 			    it, and the scroll container is the only thing that knows which
 			    row that is. */}
+				<div className="relative flex min-h-0 flex-1 flex-col">
 				<div
 					ref={viewport}
 					onScroll={(e) => {
@@ -772,7 +774,7 @@ export function Chat({
 						// otherwise, which React would coalesce but still has to diff.
 						setAtBottom((was) => (was === bottom ? was : bottom));
 					}}
-					className="fade-bottom min-h-0 flex-1 overflow-y-auto pb-12 pl-(--scrollbar) [scrollbar-gutter:stable]"
+					className="no-scrollbar fade-bottom min-h-0 flex-1 overflow-y-auto pb-12"
 				>
 					{snapshot.messages.length === 0 && !hasPartial && !busy && !command && (
 						<div className="flex h-full flex-col items-center justify-center gap-2 text-center select-none">
@@ -914,6 +916,8 @@ export function Chat({
 							</div>
 						</div>
 					)}
+				</div>
+				<OverlayScrollbar target={viewport} />
 				</div>
 
 				{/*

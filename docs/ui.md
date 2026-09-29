@@ -80,10 +80,17 @@ fits none of the existing ones, and record it here.
 
 They are spacing keys, so `h-control-sm`, `size-control-md` and `h-bar` all work.
 
-- Scrollbars (index.css): Chromium gets a hand-drawn 8px `neutral-700` thumb, `rounded-sm`,
+- Every scrollbar shows only while its pane scrolls (and while its thumb is hovered or
+  dragged), then fades out after 1s: `data-scrolling` (`showScrollbarsWhileScrolling`)
+  lights the thumb through `--scrollbar-thumb`. xterm's own scrollbar already fades.
+- Scrollbars (index.css): Chromium gets a hand-drawn 6px `neutral-700` thumb (the transcript's overlay size), `rounded-sm`,
   flush against the pane edge, no arrows. Firefox keeps `scrollbar-width: thin`.
   Settings > Appearance > `Hide scrollbars` (`pwi:hideScrollbars`, per browser, off by
   default) hides them all via `data-scrollbars="hidden"` on `<html>`.
+  The transcript hides its native one (`.no-scrollbar`) and draws a 6px thumb over its
+  content with `OverlayScrollbar` (drag it, or click the track to page), so nothing
+  reserves a strip at its edges. It shows only while you scroll (wheel, touch, keys),
+  hover its track or drag, then fades out after 1s idle; auto-scroll does not show it.
 Text and icon buttons of the same size share a height and line up in a row.
 
 ## Icons
@@ -98,6 +105,7 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
 - Primary text `neutral-100`/`200`; secondary `neutral-300`/`400`; hints `neutral-500`; disabled `neutral-600`.
 - Accent and primary action: `amber-*`. Errors: `red-*`. Success: `green-*`.
 - Every separator (panel edges, list row rules, table rows) is `border-neutral-800`; no fainter `neutral-900` rules.
+- The side panel's and the terminal's resize dividers are 1px `neutral-800` lines like any other edge; their hit area is an invisible 9px `after` box, `z-10` so neighbors cannot cover it; the side panel's leans 2px left / 6px right to stay off the panel's scrollbar.
 - Settings lists themes in two groups, Dark then Light (`light` flag in `prefs.ts`).
 
 ## Composer
@@ -161,7 +169,8 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
   - Header: a 56px ring with the % inside, `~used` in `text-title` over `/ window tokens`,
     then a `text-meta` line with what is free and the largest single piece.
   - A full-width `h-2` stacked bar of what the USED part is made of (not scaled to the
-    window, so small parts still show).
+    window, so small parts still show). Each segment is its own `rounded-full` pill,
+    `gap-0.5` apart, with no track behind them.
   - One `ListRow` per part: caret, `size-3` swatch, label, piece count, % of used, tokens.
     Colors are Cursor's, as `ctx-*` tokens in `@theme` (fixed, not themed): System prompt
     `ctx-system` gray, Tool definitions `ctx-tools` purple, Rules `ctx-rules` green, Skills
@@ -198,6 +207,9 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
   It floats over the label's end (no reserved padding, a short fade behind it), so
   labels use the full tab width.
 - Tabs are split by a `neutral-800` rule on each tab's right edge.
+- New session is a `Plus` at the right end of each column's strip, opening in that column:
+  a flat square cell the strip's full height, split off by a `neutral-800` rule on its left,
+  no radius, tab hover (`neutral-900`). The session list has no New session button.
 - Closing a tab never scrolls the strip: tabs to its left stay put and tabs to its right
   slide left. Closed width is kept as trailing space until the pointer leaves the strip.
 - A cut-off tab label fades out over its last 2em (`.fade-end`, see Overflowing text).
@@ -240,10 +252,12 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
 ## Session search
 
 - Two surfaces, one search (`useSessionSearch` in `searchHits.tsx`):
-  - The session list's search field (`inputClass.sm`, under `New session`) filters the
+  - The session list's search bar (the whole `h-bar` row, like the tab strips: a 16px
+    `MagnifyingGlass` left, a borderless `text-ui` input) filters the
     list in place, in relevance order; each hit's subline shows the matched excerpt
     instead of the date. The count label reads `Searching…` / `N matches`. Escape clears.
-  - The `ArrowsOut` `IconButton` beside it, or Ctrl+O from anywhere (captured before
+  - The `ArrowsOut` cell at its right end (flat, full height, `neutral-800` rule on its
+    left, like the tab strip's `+`), or Ctrl+O from anywhere (captured before
     the terminal and editors), opens the modal popup (`SessionSearch`).
 - While a query is in flight the previous results stay on screen (no empty flash).
 - Popup: top-anchored `<dialog>`, `rounded-md`, backdrop `bg-black/50` + `backdrop-blur-sm`.
@@ -268,8 +282,8 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
 
 - Assistant replies carry no `ASSISTANT` label; the bubble vs. plain prose already says who spoke.
 - A `neutral-800` rule, full pane width, sits mid-gap above each prompt (`TurnSeparator`, `my-6`;
-  invisible above the first). The transcript reserves the scrollbar gutter on the right
-  only and pads the left by `--scrollbar`, so the rule reaches the left edge (`-ml-(--scrollbar)`). The user row has no bottom padding: the gap above your prompt (between turns)
+  invisible above the first). It reaches both edges because the transcript's
+  scrollbar is `OverlayScrollbar`, drawn over the content (see Scrollbars). The user row has no bottom padding: the gap above your prompt (between turns)
   is wider than the one under it (to its own answer).
 - The pill has the composer's edge (inset `ring-1 ring-neutral-700`) and width: `-mx-3 p-3`
   inside `chat-measure`, so it overhangs the reading column like the box and its text
@@ -302,6 +316,9 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
   never under intermediate steps: `Copy` and `GitFork` ghost `IconButton size="sm"`
   with 14px icons, then `timeAgo` of when it finished (exact time in `title`) and
   `· 1m 15s`, question to answer. `text-meta neutral-500`, in `chat-measure`.
+- Settings → Transcript → `Message footer` (`pwi:messageFooter`, `data-footer` on `<html>`)
+  places the time (`.msg-footer-time`) in both footers: `Together` (default, right after
+  the buttons), `Time on the right`, or `Buttons on the right` (time left, buttons right).
 - Copy swaps to `Check` for 1.2s. Fork is disabled with the label `Forking…` while
   the new session spawns, then opens it as a tab in the same column.
 

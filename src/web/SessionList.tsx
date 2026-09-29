@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { ArrowsOut, CaretUpDown, Plus, PushPin, X } from "@phosphor-icons/react";
+import { ArrowsOut, CaretUpDown, MagnifyingGlass, PushPin, X } from "@phosphor-icons/react";
 import type { PiSessionInfo } from "../shared/types.js";
 import { SESSION_SORTS, type SessionSort } from "./prefs.js";
 import { sessionLabel, shortName } from "./sessionName.js";
@@ -61,7 +61,6 @@ export function SessionList({
 	onRename,
 	onAutoName,
 	shortNames,
-	onNew,
 	onSearch,
 	project,
 }: {
@@ -92,7 +91,6 @@ export function SessionList({
 	onAutoName: (s: PiSessionInfo) => Promise<void>;
 	/** Label unnamed sessions by a short name from the first prompt. */
 	shortNames: boolean;
-	onNew: () => void;
 	/** Open the search popup (also Ctrl+O). */
 	onSearch: () => void;
 	/** The project whose sessions the search box searches. */
@@ -187,36 +185,42 @@ export function SessionList({
 				  session jumped to the top just from being opened, so `active`
 				  reads the timestamp of the last message in the file instead.
 				*/}
-				<div className="flex gap-1 border-b border-neutral-800 px-2 py-1.5">
-					<Button variant="subtle" size="sm" onClick={onNew} className="flex-1">
-						<Plus size={12} />
-						{t("New session")}
-					</Button>
+				<div className="flex justify-end border-b border-neutral-800 px-2 py-1.5 wide:hidden">
 					<IconButton
 						onClick={onToggle}
 						label={t("Hide session list")}
 						title={t("Hide sessions")}
-						className="wide:hidden"
 					>
 						<X size={13} />
 					</IconButton>
 				</div>
 
-				<div className="flex items-center gap-1 border-b border-neutral-800 px-2 py-1.5">
-					<input
-						type="search"
-						value={query}
-						onChange={(e) => setQuery(e.target.value)}
-						onKeyDown={(e) => {
-							if (e.key === "Escape") setQuery("");
-						}}
-						placeholder={t("Search sessions")}
-						aria-label={t("Search sessions")}
-						className={`min-w-0 flex-1 ${inputClass.sm}`}
-					/>
-					<IconButton size="sm" onClick={onSearch} label={t("Open search window (Ctrl+O)")}>
-						<ArrowsOut size={13} />
-					</IconButton>
+				<div className="flex h-bar shrink-0 items-stretch border-b border-neutral-800">
+					<label className="flex min-w-0 flex-1 cursor-text items-center gap-2 px-3">
+						<MagnifyingGlass size={16} className="shrink-0 text-neutral-500" />
+						<input
+							data-custom="search field"
+							type="search"
+							value={query}
+							onChange={(e) => setQuery(e.target.value)}
+							onKeyDown={(e) => {
+								if (e.key === "Escape") setQuery("");
+							}}
+							placeholder={t("Search sessions")}
+							aria-label={t("Search sessions")}
+							className="min-w-0 flex-1 bg-transparent text-ui text-neutral-100 outline-none placeholder:text-neutral-500"
+						/>
+					</label>
+					<button
+						type="button"
+						data-custom="a strip cell like a tab: full height, flat, no radius"
+						onClick={onSearch}
+						aria-label={t("Open search window (Ctrl+O)")}
+						title={t("Open search window (Ctrl+O)")}
+						className="flex aspect-square shrink-0 items-center justify-center border-l border-neutral-800 text-neutral-400 transition-colors duration-150 ease-out hover:bg-neutral-900 hover:text-neutral-100 motion-reduce:transition-none"
+					>
+						<ArrowsOut size={16} />
+					</button>
 				</div>
 
 				<div className="flex items-center justify-between border-b border-neutral-800 px-2 py-1">

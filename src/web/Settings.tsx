@@ -3,11 +3,13 @@ import { Bell, ChatText, GearSix, ListBullets, Palette } from "@phosphor-icons/r
 import { Button, inputClass, NavItem, OptionRow, PanelHeader, Section } from "./ui.js";
 import {
 	applyChatFade,
+	applyFooterLayout,
 	chatFadeOpacity,
 	CHAT_FADE_RANGES,
 	DEFAULT_CHAT_FADE,
 	readChatFade,
 	readChatFadeOn,
+	readFooterLayout,
 	readSettingsExpanded,
 	writeChatFadeOn,
 	writeSettingsExpanded,
@@ -17,6 +19,7 @@ import {
 	THINKING_MODES,
 	TOOL_MODES,
 	USER_MODES,
+	FOOTER_LAYOUTS,
 	ASK_MODES,
 	type AskMode,
 	type Language,
@@ -326,6 +329,7 @@ export function Settings({
 
 	const [category, setCategory] = useState<Category>("appearance");
 	const [expandDetails, setExpandDetails] = useState(readSettingsExpanded);
+	const [footer, setFooter] = useState(readFooterLayout);
 	const [query, setQuery] = useState("");
 	const results = useRef<HTMLDivElement>(null);
 
@@ -521,6 +525,37 @@ export function Settings({
 								value={m.id}
 								checked={m.id === userMode}
 								onChange={() => onUserMode(m.id)}
+								className="size-3.5 shrink-0 accent-amber-400"
+							/>
+							<span className="flex-1">
+								{t(m.label)}
+								<span className="block text-meta text-neutral-500">{t(m.hint)}</span>
+							</span>
+						</OptionRow>
+					))}
+				</div>
+			),
+		},
+		{
+			category: "transcript",
+			label: t("Message footer"),
+			text: `copy edit fork time buttons right left align ${FOOTER_LAYOUTS.map((m) => `${t(m.label)} ${t(m.hint)}`).join(" ")}`,
+			node: (
+				<div role="radiogroup" aria-labelledby="footer-layout-label">
+					<div id="footer-layout-label" className="px-2 pt-1 pb-1 text-ui text-neutral-300">
+						{t("Message footer")}
+					</div>
+					{FOOTER_LAYOUTS.map((m) => (
+						<OptionRow key={m.id} selected={m.id === footer}>
+							<input
+								type="radio"
+								name="footerLayout"
+								value={m.id}
+								checked={m.id === footer}
+								onChange={() => {
+									setFooter(m.id);
+									applyFooterLayout(m.id);
+								}}
 								className="size-3.5 shrink-0 accent-amber-400"
 							/>
 							<span className="flex-1">

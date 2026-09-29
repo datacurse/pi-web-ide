@@ -675,13 +675,13 @@ export function ContextPanel({
 			</div>
 
 			{/* What the used part is made of, full width so small parts still show. */}
-			<div className="mx-3 mt-3 flex h-2 gap-px overflow-hidden rounded-full bg-neutral-800">
+			<div className="mx-3 mt-3 flex h-2 gap-0.5 overflow-hidden rounded-full">
 				{total > 0 &&
 					rows.map((p) => (
 						<span
 							key={p.key}
 							title={`${t(PARTS[p.key].label)}: ${popupTokens(p.tokens)}`}
-							className={`min-w-0.5 ${PARTS[p.key].color}`}
+							className={`min-w-0.5 rounded-full ${PARTS[p.key].color}`}
 							style={{ width: `${(p.tokens / total) * 100}%` }}
 						/>
 					))}
@@ -899,7 +899,7 @@ function UserFooter({ text, at, onEdit }: { text: string; at?: number; onEdit?: 
 				<PencilSimple size={14} />
 			</IconButton>
 			{at !== undefined && (
-				<span className="ml-1" title={new Date(at).toLocaleString(locale())}>
+				<span className="msg-footer-time ml-1" title={new Date(at).toLocaleString(locale())}>
 					{timeAgo(at)}
 				</span>
 			)}
@@ -937,10 +937,10 @@ function AnswerFooter({
 			>
 				<GitFork size={14} />
 			</IconButton>
-			<span className="ml-1" title={new Date(end).toLocaleString(locale())}>
-				{timeAgo(end)}
+			<span className="msg-footer-time ml-1">
+				<span title={new Date(end).toLocaleString(locale())}>{timeAgo(end)}</span>
+				{took >= 1000 && <span className="tabular-nums"> · {elapsed(took)}</span>}
 			</span>
-			{took >= 1000 && <span className="tabular-nums">· {elapsed(took)}</span>}
 		</div>
 	);
 }
@@ -951,7 +951,7 @@ function AnswerFooter({
  * spacing stays.
  */
 function TurnSeparator() {
-	return <hr aria-hidden className="my-6 -ml-(--scrollbar) border-neutral-800 group-first/turn:invisible" />;
+	return <hr aria-hidden className="my-6 border-neutral-800 group-first/turn:invisible" />;
 }
 
 /**

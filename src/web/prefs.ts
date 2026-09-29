@@ -314,6 +314,29 @@ export function writeUserMode(mode: UserMode): void {
 	writeStored(USER_KEY, mode);
 }
 
+/** Where the row under each message puts its buttons and its time. */
+export const FOOTER_LAYOUTS = [
+	{ id: "together", label: "Together", hint: "Buttons, then the time, on the left." },
+	{ id: "time-right", label: "Time on the right", hint: "Buttons on the left, the time at the far right." },
+	{ id: "buttons-right", label: "Buttons on the right", hint: "The time on the left, buttons at the far right." },
+] as const;
+
+export type FooterLayout = (typeof FOOTER_LAYOUTS)[number]["id"];
+
+const FOOTER_KEY = "pwi:messageFooter";
+
+export function readFooterLayout(): FooterLayout {
+	const stored = readStored(FOOTER_KEY);
+	return FOOTER_LAYOUTS.some((m) => m.id === stored) ? (stored as FooterLayout) : "together";
+}
+
+/** A `data-footer` attribute on <html>; index.css moves the time. */
+export function applyFooterLayout(layout: FooterLayout): void {
+	if (layout === "together") delete document.documentElement.dataset.footer;
+	else document.documentElement.dataset.footer = layout;
+	writeStored(FOOTER_KEY, layout);
+}
+
 /** Whether the composer's Ask only button stays on after a send. */
 export const ASK_MODES = [
 	{ id: "toggle", label: "Toggle", hint: "Stays on until you switch it off or change session." },
@@ -533,6 +556,8 @@ const TERM_WIDTH_KEY = "pwi:terminalWidth";
 
 export const TERMINAL_MIN_PERCENT = 15;
 export const TERMINAL_MAX_PERCENT = 85;
+/** The panel alone may go narrower than the dock: a file tree still reads at a sliver. */
+export const PANEL_MIN_PERCENT = 5;
 
 /** Wide enough for 80 columns on a laptop, narrow enough to keep the chat readable. */
 const DEFAULT_TERMINAL_PERCENT = 40;
@@ -544,7 +569,7 @@ export function readTerminalWidth(): number {
 	if (raw === null) return DEFAULT_TERMINAL_PERCENT;
 	const stored = Number(raw);
 	if (!Number.isFinite(stored)) return DEFAULT_TERMINAL_PERCENT;
-	return Math.min(TERMINAL_MAX_PERCENT, Math.max(TERMINAL_MIN_PERCENT, stored));
+	return Math.min(TERMINAL_MAX_PERCENT, Math.max(PANEL_MIN_PERCENT, stored));
 }
 
 export function writeTerminalWidth(percent: number): void {

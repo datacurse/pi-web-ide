@@ -51,6 +51,7 @@ import { Settings } from "./Settings.js";
 import { Packages } from "./Packages.js";
 import {
 	applyChatFade,
+	applyFooterLayout,
 	applyHideScrollbars,
 	applyTheme,
 	type Language,
@@ -58,6 +59,7 @@ import {
 	readDockHeight,
 	readDockOpen,
 	readChatFade,
+	readFooterLayout,
 	readHideScrollbars,
 	readNotify,
 	readPanel,
@@ -74,6 +76,7 @@ import {
 	readAskMode,
 	TERMINAL_MAX_PERCENT,
 	TERMINAL_MIN_PERCENT,
+	PANEL_MIN_PERCENT,
 	writeDockHeight,
 	writeDockOpen,
 	writeNotify,
@@ -145,7 +148,7 @@ function PanelEmpty({
  * cannot be grabbed back from.
  */
 const clampPanel = (percent: number): number =>
-	Math.min(TERMINAL_MAX_PERCENT, Math.max(TERMINAL_MIN_PERCENT, percent));
+	Math.min(TERMINAL_MAX_PERCENT, Math.max(PANEL_MIN_PERCENT, percent));
 
 export type { Panel } from "./prefs.js";
 
@@ -235,6 +238,7 @@ export default function App() {
 	useEffect(() => applyHideScrollbars(hideScrollbars), [hideScrollbars]);
 	// Settings owns later changes; this paints the stored fade once.
 	useEffect(() => applyChatFade(readChatFade()), []);
+	useEffect(() => applyFooterLayout(readFooterLayout()), []);
 	useEffect(() => void (document.documentElement.lang = language), [language]);
 	const changeLanguage = useCallback((lang: Language) => {
 		setLanguage(lang);
@@ -504,7 +508,7 @@ export default function App() {
 					: event.key === "ArrowLeft"
 						? panelWidth - step
 						: event.key === "Home"
-							? TERMINAL_MIN_PERCENT
+							? PANEL_MIN_PERCENT
 							: event.key === "End"
 								? TERMINAL_MAX_PERCENT
 								: undefined;
@@ -1773,14 +1777,16 @@ export default function App() {
 						aria-orientation="vertical"
 						aria-label={t("Resize panel")}
 						aria-valuenow={Math.round(panelWidth)}
-						aria-valuemin={TERMINAL_MIN_PERCENT}
+						aria-valuemin={PANEL_MIN_PERCENT}
 						aria-valuemax={TERMINAL_MAX_PERCENT}
 						tabIndex={0}
 						onPointerDown={startDrag}
 						onKeyDown={dividerKeys}
-						// The `after` box is the real hit area: a 4px line is a target
-						// you miss, and there is nothing else to aim at.
-						className="relative w-1 shrink-0 cursor-col-resize bg-neutral-800 transition-colors duration-150 ease-out after:absolute after:inset-y-0 after:-left-1 after:-right-1 after:content-[''] hover:bg-amber-600 focus-visible:bg-amber-500 focus-visible:outline-none motion-reduce:transition-none narrow:hidden"
+						// The `after` box is the real hit area: a 1px line is a target
+						// you miss, and there is nothing else to aim at. 9px, leaning
+						// right so it stays off the panel's scrollbar; z-10 so the
+						// editor beside it cannot paint over half of it.
+						className="relative z-10 w-px shrink-0 cursor-col-resize bg-neutral-800 transition-colors duration-150 ease-out after:absolute after:inset-y-0 after:-left-0.5 after:-right-1.5 after:content-[''] hover:bg-amber-600 focus-visible:bg-amber-500 focus-visible:outline-none motion-reduce:transition-none narrow:hidden"
 					/>
 				</>
 			)}
@@ -1885,7 +1891,7 @@ export default function App() {
 							tabIndex={0}
 							onPointerDown={startDockDrag}
 							onKeyDown={dockKeys}
-							className="relative h-1 shrink-0 cursor-row-resize bg-neutral-800 transition-colors duration-150 ease-out after:absolute after:inset-x-0 after:-top-1 after:-bottom-1 after:content-[''] hover:bg-amber-600 focus-visible:bg-amber-500 focus-visible:outline-none motion-reduce:transition-none"
+							className="relative z-10 h-px shrink-0 cursor-row-resize bg-neutral-800 transition-colors duration-150 ease-out after:absolute after:inset-x-0 after:-top-1 after:-bottom-1 after:content-[''] hover:bg-amber-600 focus-visible:bg-amber-500 focus-visible:outline-none motion-reduce:transition-none"
 						/>
 						<div
 							className="flex min-h-0 min-w-0 flex-col [flex:0_0_var(--dock-h)]"
@@ -1938,11 +1944,6 @@ export default function App() {
 				onRename={(s, name) => void renameSession(s, name)}
 				onAutoName={autoNameSession}
 				shortNames={shortNames}
-				// Into the column last used, so "+" beside a split opens there.
-				onNew={() => {
-					void newSession(lastSide.current === "right" && tabsRef.current.right ? "right" : "left");
-					setListOpen(false);
-				}}
 				onSearch={() => setSearchOpen(true)}
 				project={project}
 			/>

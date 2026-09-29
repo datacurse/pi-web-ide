@@ -88,7 +88,7 @@ export function EditorColumn({
 	onTogglePin: (file: string) => void;
 	onRename: (session: PiSessionInfo, name: string) => void;
 	onAutoName: (session: PiSessionInfo) => Promise<void>;
-	/** For the chat's right-click menu; both open in this column. */
+	/** For the strip's + and the chat's right-click menu; both open in this column. */
 	onNewSession: () => void;
 	/** Absent without a project: a shell has to start somewhere. */
 	onNewTerminal?: () => void;
@@ -132,6 +132,7 @@ export function EditorColumn({
 				onSelect={onSelect}
 				onClose={onClose}
 				onToggleList={onToggleList}
+				onNew={onNewSession}
 				shortNames={shortNames}
 				pinned={pinned}
 				focused={focused}

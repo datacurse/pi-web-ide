@@ -6,6 +6,7 @@ import {
 	GitDiff,
 	Path,
 	PencilSimple,
+	Plus,
 	PushPin,
 	Sparkle,
 	TerminalWindow,
@@ -95,6 +96,7 @@ export function SessionTabs({
 	onSelect,
 	onClose,
 	onToggleList,
+	onNew,
 	shortNames,
 	pinned,
 	focused = true,
@@ -125,6 +127,8 @@ export function SessionTabs({
 	 * button is gone exactly when the callback that makes it do anything is.
 	 */
 	onToggleList?: () => void;
+	/** Open a new session in this column. */
+	onNew?: () => void;
 	/**
 	 * Take a tab dropped from the OTHER column. Absent means this strip does
 	 * not accept them, which is the single-column case.
@@ -585,6 +589,19 @@ export function SessionTabs({
 				<p className="min-w-0 flex-1 self-center fade-end px-2 text-meta text-neutral-400">
 					{t("No open sessions. Press + or pick one from the list.")}
 				</p>
+			)}
+
+			{onNew && (
+				<button
+					type="button"
+					data-custom="a strip cell like a tab: full height, flat, no radius"
+					onClick={onNew}
+					aria-label={t("New session")}
+					title={t("New session")}
+					className="-mr-1 flex aspect-square shrink-0 items-center justify-center self-stretch border-l border-neutral-800 text-neutral-400 transition-colors duration-150 ease-out hover:bg-neutral-900 hover:text-neutral-100 motion-reduce:transition-none"
+				>
+					<Plus size={16} />
+				</button>
 			)}
 
 			{menu && (() => {

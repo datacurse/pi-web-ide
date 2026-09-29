@@ -351,6 +351,31 @@
 }
 
 /*
+ * Every scrollbar shows only while its pane scrolls, then fades out
+ * (`showScrollbarsWhileScrolling` in OverlayScrollbar.tsx sets `data-scrolling`).
+ * Each element sets its own thumb color so a pane never lights its children's;
+ * registered so the change transitions, and inherited so the thumb sees it.
+ */
+@property --scrollbar-thumb {
+	syntax: "<color>";
+	inherits: true;
+	initial-value: transparent;
+}
+
+@layer base {
+	/* In base, so Tailwind's transition-* utilities still win. */
+	* {
+		--scrollbar-thumb: transparent;
+		transition: --scrollbar-thumb 500ms;
+	}
+
+	[data-scrolling] {
+		--scrollbar-thumb: var(--color-neutral-700);
+		transition-duration: 100ms;
+	}
+}
+
+/*
  * One global thin scrollbar in theme colors. The standard properties are
  * enough on Chrome 121+/Firefox; `*` rather than a list of scroll containers
  * so CodeMirror, xterm and every future pane inherit it without a new rule.
@@ -360,7 +385,7 @@
 		scrollbar-width: thin;
 		/* var(), not theme(): theme() inlines the default at build time and would
 		   ignore the active flavor. */
-		scrollbar-color: var(--color-neutral-700) transparent;
+		scrollbar-color: var(--scrollbar-thumb) transparent;
 	}
 }
 
@@ -370,18 +395,20 @@
  * thumb sits flush against the pane's edge.
  */
 @supports selector(::-webkit-scrollbar) {
+	/* 6px: the same thumb OverlayScrollbar draws over the transcript. */
 	::-webkit-scrollbar {
-		width: 8px;
-		height: 8px;
+		width: 6px;
+		height: 6px;
 		background: transparent;
 	}
 
 	::-webkit-scrollbar-thumb {
-		background: var(--color-neutral-700);
+		background: var(--scrollbar-thumb);
 		border-radius: var(--radius-sm);
 	}
 
-	::-webkit-scrollbar-thumb:hover {
+	::-webkit-scrollbar-thumb:hover,
+	::-webkit-scrollbar-thumb:active {
 		background: var(--color-neutral-600);
 	}
 
@@ -390,23 +417,39 @@
 	}
 }
 
+/*
+ * Settings > Transcript > Message footer (FOOTER_LAYOUTS in prefs.ts). The
+ * default keeps the time right after the buttons. Unlayered, so it beats `ml-1`.
+ */
+:root[data-footer="time-right"] .msg-footer-time {
+	margin-left: auto;
+}
+
+:root[data-footer="buttons-right"] .msg-footer-time {
+	order: -1;
+	margin-left: 0;
+	margin-right: auto;
+}
+
 /* Settings > Hide scrollbars. The panes still scroll. */
 :root[data-scrollbars="hidden"] * {
 	scrollbar-width: none;
 }
 
 /*
- * The scrollbar's width, for the transcript: it reserves the scrollbar gutter
- * on the right only and pads the left by this much, so it stays centred while
- * a turn separator can still reach the left edge (a both-edges gutter is
- * space no content can paint in).
+ * A pane that draws its own scrollbar over its content (OverlayScrollbar.tsx):
+ * the native one reserves a strip at the edge that nothing can paint into.
  */
-:root {
-	--scrollbar: 8px;
+.no-scrollbar {
+	scrollbar-width: none;
 }
 
-:root[data-scrollbars="hidden"] {
-	--scrollbar: 0px;
+.no-scrollbar::-webkit-scrollbar {
+	display: none;
+}
+
+:root[data-scrollbars="hidden"] .overlay-scrollbar {
+	display: none;
 }
 
 :root[data-theme="latte"],
