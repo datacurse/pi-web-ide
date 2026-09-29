@@ -1,6 +1,7 @@
 import { type SyntheticEvent, useEffect, useMemo, useState } from "react";
 import { Star } from "@phosphor-icons/react";
 import { api } from "./api.js";
+import { t } from "./i18n.js";
 
 /**
  * Composer controls for the active session's model: one select for the model
@@ -71,7 +72,12 @@ export function ModelSelector({
 		const next = current === value ? null : value;
 		const r = await save(next);
 		if (r.ok) set(next);
-		else alert(`Could not save default: ${((await r.json().catch(() => ({}))) as { error?: string }).error ?? r.status}`);
+		else
+			alert(
+				t("Could not save default: {error}", {
+					error: ((await r.json().catch(() => ({}))) as { error?: string }).error ?? r.status,
+				}),
+			);
 	};
 
 	// Pills, not boxed inputs: these live INSIDE the composer, where a
@@ -86,13 +92,13 @@ export function ModelSelector({
 				data-custom="composer pill"
 				value={model ?? ""}
 				disabled={disabled || models.length === 0}
-				title={disabled ? "Cannot switch models while streaming" : (model ?? "Switch model")}
+				title={disabled ? t("Cannot switch models while streaming") : (model ?? t("Switch model"))}
 				onChange={(e) => onChange(e.target.value)}
 				className={`${cls} ${tone}`}
 			>
 				{/* The session's model may be missing from the list (not fetched
 				    yet, or auth changed); show it rather than a wrong one. */}
-				{(!model || !models.includes(model)) && <option value={model ?? ""}>{model?.split("/").pop() ?? "(no model)"}</option>}
+				{(!model || !models.includes(model)) && <option value={model ?? ""}>{model?.split("/").pop() ?? t("(no model)")}</option>}
 				{providers.map((p) => (
 					<optgroup key={p} label={p}>
 						{models
@@ -115,7 +121,7 @@ export function ModelSelector({
 				<select
 					data-custom="composer pill"
 					value={thinkingLevel ?? ""}
-					title="Reasoning effort — applies from the next turn"
+					title={t("Reasoning effort — applies from the next turn")}
 					onChange={(e) => onThinkingChange(e.target.value)}
 					className={`${cls} text-neutral-300 hover:bg-neutral-800`}
 				>
@@ -155,14 +161,30 @@ export function ModelSelector({
  * the click is cancelled where it is handled. Other browsers render options
  * as plain text, so there the star simply does not appear.
  */
-function DefaultStar({ what, saved, onToggle }: { what: string; saved: boolean; onToggle: () => void }) {
+function DefaultStar({
+	what,
+	saved,
+	onToggle,
+}: {
+	what: "model" | "reasoning level";
+	saved: boolean;
+	onToggle: () => void;
+}) {
 	const stop = (e: SyntheticEvent) => {
 		e.preventDefault();
 		e.stopPropagation();
 	};
 	return (
 		<span
-			title={saved ? `Startup default ${what} \u2014 click to clear` : `Make this the startup default ${what}`}
+			title={
+				what === "model"
+					? saved
+						? t("Startup default model \u2014 click to clear")
+						: t("Make this the startup default model")
+					: saved
+						? t("Startup default reasoning level \u2014 click to clear")
+						: t("Make this the startup default reasoning level")
+			}
 			onPointerDown={stop}
 			onPointerUp={stop}
 			onClick={(e) => {

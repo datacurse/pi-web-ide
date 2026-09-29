@@ -5,6 +5,7 @@ import { sessionLabel } from "./sessionName.js";
 import { timeAgo } from "./SessionList.js";
 import { highlight, useSessionSearch } from "./searchHits.js";
 import { IconButton } from "./ui.js";
+import { t } from "./i18n.js";
 
 const RECENT = 50;
 
@@ -64,7 +65,7 @@ export function SessionSearch({
 	return (
 		<dialog
 			ref={ref}
-			aria-label="Search sessions"
+			aria-label={t("Search sessions")}
 			onClose={onClose}
 			onClick={(e) => {
 				if (e.target === ref.current) onClose();
@@ -74,7 +75,7 @@ export function SessionSearch({
 		>
 			<div className="flex items-center gap-2 border-b border-neutral-800 px-3 py-2">
 				{pending ? (
-					<CircleNotch size={18} className="shrink-0 animate-spin text-neutral-500" aria-label="Searching" />
+					<CircleNotch size={18} className="shrink-0 animate-spin text-neutral-500" aria-label={t("Searching")} />
 				) : (
 					<MagnifyingGlass size={18} className="shrink-0 text-neutral-500" />
 				)}
@@ -93,16 +94,16 @@ export function SessionSearch({
 							pick(rows[active].session);
 						}
 					}}
-					placeholder="Search sessions in this project…"
-					aria-label="Search sessions"
+					placeholder={t("Search sessions in this project…")}
+					aria-label={t("Search sessions")}
 					className="min-w-0 flex-1 bg-transparent text-title text-neutral-100 outline-none placeholder:text-neutral-500"
 				/>
-				<IconButton onClick={onClose} label="Close search">
+				<IconButton onClick={onClose} label={t("Close search")}>
 					<X size={13} />
 				</IconButton>
 			</div>
 
-			<div ref={list} role="listbox" aria-label="Sessions" className="min-h-0 flex-1 overflow-y-auto p-1.5">
+			<div ref={list} role="listbox" aria-label={t("Sessions")} className="min-h-0 flex-1 overflow-y-auto p-1.5">
 				{error ? (
 					<p className="px-3 py-4 text-ui text-red-400" role="alert">
 						{error}
@@ -110,7 +111,7 @@ export function SessionSearch({
 				) : (
 					rows.length === 0 && (
 						<p className="px-3 py-4 text-ui text-neutral-400">
-							{terms.length ? "No sessions match." : "No sessions yet."}
+							{terms.length ? t("No sessions match.") : t("No sessions yet.")}
 						</p>
 					)
 				)}

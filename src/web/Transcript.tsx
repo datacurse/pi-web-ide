@@ -8,6 +8,7 @@ import { Button, IconButton, ListRow, sectionLabel } from "./ui.js";
 import { MarkdownText } from "./Markdown.js";
 import { timeAgo } from "./SessionList.js";
 import { Thumb } from "./Attachments.js";
+import { t, plural, locale, getLanguage } from "./i18n.js";
 
 /** Braille spinner, same visual language as the TUI. */
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
@@ -128,14 +129,14 @@ const SUMMARY_PHRASES = 3;
  * times" and "listed a directory" do not share a shape.
  */
 const TOOL_PHRASES: Record<string, (n: number) => string> = {
-	bash: (n) => (n === 1 ? "ran a command" : `ran ${n} commands`),
-	powershell: (n) => (n === 1 ? "ran a command" : `ran ${n} commands`),
-	read: (n) => (n === 1 ? "read a file" : `read ${n} files`),
-	edit: (n) => (n === 1 ? "edited a file" : `edited ${n} files`),
-	write: (n) => (n === 1 ? "wrote a file" : `wrote ${n} files`),
-	grep: (n) => (n === 1 ? "grepped" : `grepped ${n} times`),
-	find: (n) => (n === 1 ? "found files" : `found files ${n} times`),
-	ls: (n) => (n === 1 ? "listed a directory" : `listed ${n} directories`),
+	bash: (n) => plural(n, "ran a command", "ran {n} commands"),
+	powershell: (n) => plural(n, "ran a command", "ran {n} commands"),
+	read: (n) => plural(n, "read a file", "read {n} files"),
+	edit: (n) => plural(n, "edited a file", "edited {n} files"),
+	write: (n) => plural(n, "wrote a file", "wrote {n} files"),
+	grep: (n) => plural(n, "grepped", "grepped {n} times"),
+	find: (n) => plural(n, "found files", "found files {n} times"),
+	ls: (n) => plural(n, "listed a directory", "listed {n} directories"),
 };
 
 /**
@@ -152,7 +153,7 @@ function summarize(calls: ToolBlock[]): string {
 		([name, n]) => TOOL_PHRASES[name]?.(n) ?? (n === 1 ? name : `${name} ×${n}`),
 	);
 	const shown = phrases.slice(0, SUMMARY_PHRASES);
-	if (phrases.length > shown.length) shown.push(`+${phrases.length - shown.length} more`);
+	if (phrases.length > shown.length) shown.push(t("+{n} more", { n: phrases.length - shown.length }));
 	const text = shown.join(", ");
 	return text.charAt(0).toUpperCase() + text.slice(1);
 }
@@ -195,13 +196,9 @@ export function ToolGroup({ blocks, streaming }: { blocks: PiBlock[]; streaming?
 			? summarize(calls)
 			: thoughts > 0 && thoughts === blocks.length
 				? running
-					? "Thinking"
-					: thoughts === 1
-						? "Thought"
-						: `Thought ${thoughts} times`
-				: blocks.length === 1
-					? "1 step"
-					: `${blocks.length} steps`;
+					? t("Thinking")
+					: plural(thoughts, "Thought", "Thought {n} times")
+				: plural(blocks.length, "{n} step", "{n} steps");
 	return (
 		<div className="chat-wide my-1">
 			<button
@@ -217,7 +214,7 @@ export function ToolGroup({ blocks, streaming }: { blocks: PiBlock[]; streaming?
 				{running ? null : failed > 0 ? (
 					<span className="flex items-center gap-1 text-red-400">
 						<X size={11} weight="bold" />
-						{failed} failed
+						{t("{n} failed", { n: failed })}
 					</span>
 				) : (
 					<Check size={11} weight="bold" className="text-green-400" />
@@ -260,7 +257,7 @@ export function Block({
 		return (
 			<img
 				src={`data:${block.mimeType};base64,${block.data}`}
-				alt="attachment"
+				alt={t("attachment")}
 				className="chat-wide my-2 max-h-80 rounded-sm border border-neutral-800"
 			/>
 		);
@@ -312,7 +309,7 @@ function UserText({ text }: { text: string }) {
 					onClick={() => setOpen((o) => !o)}
 				>
 					{open ? <CaretUp size={12} /> : <CaretDown size={12} />}
-					{open ? "Show less" : "Show more"}
+					{open ? t("Show less") : t("Show more")}
 				</Button>
 			)}
 		</>
@@ -355,8 +352,12 @@ export function ContextMeter({
 		share >= 0.9 ? "text-red-400" : share >= 0.75 ? "text-amber-400" : "text-neutral-400";
 	const label =
 		limit > 0
-			? `Context: ${Math.round(share * 100)}% full (${tokens.toLocaleString()} of ${limit.toLocaleString()} tokens)`
-			: "Context usage";
+			? t("Context: {pct}% full ({tokens} of {limit} tokens)", {
+					pct: Math.round(share * 100),
+					tokens: tokens.toLocaleString(locale()),
+					limit: limit.toLocaleString(locale()),
+				})
+			: t("Context usage");
 	return (
 		<IconButton label={label} onClick={onToggle} aria-expanded={open} data-context-meter round>
 			<Ring share={share} className={`size-4 ${tone}`} />
@@ -404,7 +405,7 @@ function percentText(share: number): string {
 function itemLabel(key: ContextPart["key"], item: ContextItem): { name: string; detail?: string; mono: boolean } {
 	const tool = key === "conversation" && item.name.startsWith("tool:");
 	const n = item.count ?? 0;
-	const detail = !n ? undefined : tool ? `${n} call${n === 1 ? "" : "s"}` : String(n);
+	const detail = !n ? undefined : tool ? plural(n, "{n} call", "{n} calls") : String(n);
 	return { name: tool ? item.name.slice(5) : item.name, detail, mono: tool || key === "tools" || key === "skills" };
 }
 
@@ -519,18 +520,18 @@ export function ContextPanel({
 			className="absolute inset-x-0 bottom-full z-10 mb-2 overflow-y-auto rounded-md border border-neutral-800 bg-neutral-900 py-2"
 		>
 			<div className="flex items-center justify-between px-3 text-neutral-300">
-				Context Usage
+				{t("Context Usage")}
 				<div className="flex items-center gap-1">
 					{expandable.length > 0 && (
 						<IconButton
-							label={allOpen ? "Collapse all" : "Expand all"}
+							label={allOpen ? t("Collapse all") : t("Expand all")}
 							size="sm"
 							onClick={() => setOpen(new Set(allOpen ? [] : expandable))}
 						>
 							{allOpen ? <ArrowsInLineVertical size={14} /> : <ArrowsOutLineVertical size={14} />}
 						</IconButton>
 					)}
-					<IconButton label="Close" size="sm" onClick={onClose}>
+					<IconButton label={t("Close")} size="sm" onClick={onClose}>
 						<X size={14} />
 					</IconButton>
 				</div>
@@ -548,14 +549,14 @@ export function ContextPanel({
 						<span className="text-title text-neutral-100">~{popupTokens(total)}</span>
 						<span className="text-neutral-400">
 							{" "}
-							/ {limit > 0 ? popupTokens(limit) : "?"} tokens
+							/ {limit > 0 ? popupTokens(limit) : "?"} {t("tokens")}
 						</span>
 					</div>
 					<div className="text-meta text-neutral-500">
-						{limit > 0 && `${popupTokens(Math.max(0, limit - total))} free`}
+						{limit > 0 && t("{n} free", { n: popupTokens(Math.max(0, limit - total)) })}
 						{largest && total > 0 && (
 							<>
-								{" · largest: "}
+								{` · ${t("largest:")} `}
 								<span className="text-neutral-300">{itemLabel(largest.key, largest.item).name}</span>
 								{` (${percentText(largest.item.tokens / total)})`}
 							</>
@@ -570,7 +571,7 @@ export function ContextPanel({
 					rows.map((p) => (
 						<span
 							key={p.key}
-							title={`${PARTS[p.key].label}: ${popupTokens(p.tokens)}`}
+							title={`${t(PARTS[p.key].label)}: ${popupTokens(p.tokens)}`}
 							className={`min-w-0.5 ${PARTS[p.key].color}`}
 							style={{ width: `${(p.tokens / total) * 100}%` }}
 						/>
@@ -580,7 +581,7 @@ export function ContextPanel({
 			{error ? (
 				<div className="mt-2 px-3 text-meta text-red-400">{error}</div>
 			) : !parts ? (
-				<div className="mt-2 px-3 text-meta text-neutral-500">Measuring…</div>
+				<div className="mt-2 px-3 text-meta text-neutral-500">{t("Measuring…")}</div>
 			) : (
 				<div className="mt-2">
 					{rows.map((p) => {
@@ -598,7 +599,7 @@ export function ContextPanel({
 											(expanded ? <CaretDown size={12} /> : <CaretRight size={12} />)}
 									</span>
 									<span aria-hidden className={`size-3 shrink-0 rounded-sm ${PARTS[p.key].color}`} />
-									<span className="text-neutral-200">{PARTS[p.key].label}</span>
+									<span className="text-neutral-200">{t(PARTS[p.key].label)}</span>
 									{items.length > 0 && (
 										<span className="text-meta text-neutral-500">{items.length}</span>
 									)}
@@ -641,18 +642,18 @@ export function ContextPanel({
 
 			<div className="mt-2 flex items-center justify-between gap-3 px-3">
 				<span className="text-meta text-neutral-500">
-					The total is pi&apos;s count; parts are estimates (about 4 characters a token).
+					{t("The total is pi's count; parts are estimates (about 4 characters a token).")}
 				</span>
 				<Button
 					size="sm"
 					disabled={busy || tokens <= 0}
-					title={busy ? "Finish the turn to compact" : "Fold the conversation into a summary"}
+					title={busy ? t("Finish the turn to compact") : t("Fold the conversation into a summary")}
 					onClick={() => {
 						onClose();
 						onCompact();
 					}}
 				>
-					Compact
+					{t("Compact")}
 				</Button>
 			</div>
 		</div>
@@ -677,7 +678,7 @@ function Compacting() {
 			<span aria-hidden className="w-3 text-center text-amber-400">
 				{spinner}
 			</span>
-			compacting {elapsed(now - start)}
+			{t("compacting {time}", { time: elapsed(now - start) })}
 		</span>
 	);
 }
@@ -705,7 +706,18 @@ const VERBS = [
 	"Wandering", "Whirring", "Wibbling", "Wizarding", "Working", "Wrangling",
 ];
 const VERB_MS = 4000;
-const randomVerb = () => VERBS[Math.floor(Math.random() * VERBS.length)];
+/** Russian stand-ins: the English list is wordplay that does not translate word for word. */
+const VERBS_RU = [
+	"Думаю", "Размышляю", "Соображаю", "Колдую", "Вычисляю", "Прикидываю", "Мозгую",
+	"Кумекаю", "Варю", "Стряпаю", "Кручу", "Верчу", "Разбираюсь", "Копаю", "Творю",
+	"Химичу", "Мастерю", "Собираю", "Взвешиваю", "Обдумываю", "Смекаю", "Шаманю",
+	"Ворожу", "Паяю", "Настраиваю", "Распутываю", "Вникаю", "Сочиняю", "Выдумываю",
+	"Перевариваю", "Шуршу", "Жонглирую", "Медитирую", "Созерцаю", "Выстраиваю",
+];
+const randomVerb = () => {
+	const verbs = getLanguage() === "ru" ? VERBS_RU : VERBS;
+	return verbs[Math.floor(Math.random() * verbs.length)];
+};
 
 /**
  * When the running turn was asked: the first user message after the last
@@ -757,7 +769,7 @@ export function TurnStatus({ since }: { since: number | undefined }) {
 /** 75000 -> "1m 15s". */
 function elapsed(ms: number): string {
 	const secs = Math.floor(ms / 1000);
-	return secs < 60 ? `${secs}s` : `${Math.floor(secs / 60)}m ${secs % 60}s`;
+	return secs < 60 ? t("{s}s", { s: secs }) : t("{m}m {s}s", { m: Math.floor(secs / 60), s: secs % 60 });
 }
 
 /** What the bar under a turn's answer needs; see `rows` in Chat. */
@@ -797,12 +809,12 @@ function AnswerFooter({
 	const took = footer.endedAt && footer.asked ? footer.endedAt - footer.asked : 0;
 	return (
 		<div className="chat-measure mt-1 flex items-center gap-1 text-meta text-neutral-500">
-			<IconButton size="sm" label={copied ? "Copied" : "Copy"} onClick={() => void copy()}>
+			<IconButton size="sm" label={copied ? t("Copied") : t("Copy")} onClick={() => void copy()}>
 				{copied ? <Check size={14} /> : <Copy size={14} />}
 			</IconButton>
 			<IconButton
 				size="sm"
-				label={forking ? "Forking…" : "Fork from here"}
+				label={forking ? t("Forking…") : t("Fork from here")}
 				disabled={forking}
 				onClick={() => {
 					setForking(true);
@@ -811,7 +823,7 @@ function AnswerFooter({
 			>
 				<GitFork size={14} />
 			</IconButton>
-			<span className="ml-1" title={new Date(end).toLocaleString()}>
+			<span className="ml-1" title={new Date(end).toLocaleString(locale())}>
 				{timeAgo(end)}
 			</span>
 			{took >= 1000 && <span className="tabular-nums">· {elapsed(took)}</span>}
@@ -871,7 +883,7 @@ export function TranscriptRow({
 			    centred put the speaker's name nowhere near their words. */}
 			{labelled && (
 				<div className={`chat-measure mb-1 ${sectionLabel}`}>
-					{role}
+					{role === "assistant" ? t("assistant") : role}
 				</div>
 			)}
 			<div className="chat-prose">{children}</div>
@@ -922,9 +934,9 @@ export function Message({
 				text={text}
 				attached={attached}
 				onCancel={() => setEditing(false)}
-				onSend={(t) => {
+				onSend={(next) => {
 					setEditing(false);
-					onEdit(at, t, attached);
+					onEdit(at, next, attached);
 				}}
 			/>
 		);
@@ -935,7 +947,7 @@ export function Message({
 			labelled={labelled}
 			below={
 				isUser && onEdit && at !== undefined ? (
-					<IconButton size="sm" label="Edit" onClick={() => setEditing(true)}>
+					<IconButton size="sm" label={t("Edit")} onClick={() => setEditing(true)}>
 						<PencilSimple size={14} />
 					</IconButton>
 				) : undefined
@@ -945,7 +957,7 @@ export function Message({
 				<div className="mb-2 flex flex-wrap gap-2">
 					{images.map((b, i) =>
 						b.kind === "image" ? (
-							<Thumb key={i} image={b} label={`attachment ${i + 1}`} />
+							<Thumb key={i} image={b} label={t("attachment {n}", { n: i + 1 })} />
 						) : null,
 					)}
 				</div>
@@ -983,7 +995,7 @@ function EditMessage({
 				{attached.length > 0 && (
 					<div className="mb-2 flex flex-wrap gap-2">
 						{attached.map((image, i) => (
-							<Thumb key={i} image={image} label={`attachment ${i + 1}`} />
+							<Thumb key={i} image={image} label={t("attachment {n}", { n: i + 1 })} />
 						))}
 					</div>
 				)}
@@ -1000,15 +1012,15 @@ function EditMessage({
 							if (canSend) onSend(draft);
 						}
 					}}
-					title="Enter to send, Shift+Enter for newline, Escape to cancel"
+					title={t("Enter to send, Shift+Enter for newline, Escape to cancel")}
 					className="chat-prose field-sizing-content max-h-60 w-full resize-none bg-transparent outline-none"
 				/>
 				<div className="mt-2 flex justify-end gap-2">
 					<Button size="sm" onClick={onCancel}>
-						Cancel
+						{t("Cancel")}
 					</Button>
 					<Button size="sm" variant="primary" disabled={!canSend} onClick={() => onSend(draft)}>
-						Send
+						{t("Send")}
 					</Button>
 				</div>
 			</div>
@@ -1030,7 +1042,7 @@ export function CompactionRow({ text }: { text: string }) {
 		<details className="chat-gutter my-4">
 			<summary className={`flex cursor-pointer list-none items-center gap-3 ${sectionLabel} select-none`}>
 				<span className="h-px flex-1 bg-neutral-800" />
-				compacted — context starts here
+				{t("compacted — context starts here")}
 				<span className="h-px flex-1 bg-neutral-800" />
 			</summary>
 			<div className="chat-prose mt-3">
@@ -1088,7 +1100,7 @@ export function CommandRow({ command, running }: { command: string; running: boo
 				{running && (
 					<span className="flex items-center gap-1.5 font-mono text-meta text-amber-400">
 						<span>{spinner}</span>
-						<span className="font-sans">working…</span>
+						<span className="font-sans">{t("working…")}</span>
 					</span>
 				)}
 			</div>

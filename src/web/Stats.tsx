@@ -11,6 +11,7 @@ import type { StatsTurn, StatsView, UsageSample } from "../shared/types.js";
 import { Button, IconButton, PanelHeader, sectionLabel, useBatches } from "./ui.js";
 import { dayKey, duration, heatmapWeeks, LIMIT_WINDOW_MS, pace, percentile, span, streaks, type Pace } from "./stats.js";
 import { api } from "./api.js";
+import { locale, perLocale, plural, t } from "./i18n.js";
 
 const WEEKS = 52;
 const HEAT = ["bg-neutral-800", "bg-green-900", "bg-green-700", "bg-green-500", "bg-green-300"];
@@ -26,17 +27,20 @@ const BUCKETS: [number, string][] = [
 	[Infinity, "15m +"],
 ];
 
-const dayFmt = new Intl.DateTimeFormat(undefined, { weekday: "short", day: "numeric", month: "short", year: "numeric" });
-const monthFmt = new Intl.DateTimeFormat(undefined, { month: "short" });
-const weekdayFmt = new Intl.DateTimeFormat(undefined, { weekday: "short" });
-const stampFmt = new Intl.DateTimeFormat(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
-const num = new Intl.NumberFormat(undefined, { notation: "compact", maximumFractionDigits: 1 });
-const usd = new Intl.NumberFormat(undefined, { style: "currency", currency: "USD", maximumFractionDigits: 2 });
+const dayFmt = perLocale((l) => new Intl.DateTimeFormat(l, { weekday: "short", day: "numeric", month: "short", year: "numeric" }));
+const monthFmt = perLocale((l) => new Intl.DateTimeFormat(l, { month: "short" }));
+const weekdayFmt = perLocale((l) => new Intl.DateTimeFormat(l, { weekday: "short" }));
+const stampFmt = perLocale(
+	(l) => new Intl.DateTimeFormat(l, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }),
+);
+const num = perLocale((l) => new Intl.NumberFormat(l, { notation: "compact", maximumFractionDigits: 1 }));
+const usd = perLocale(
+	(l) => new Intl.NumberFormat(l, { style: "currency", currency: "USD", maximumFractionDigits: 2 }),
+);
 
 const projectName = (cwd: string) => cwd.split("/").filter(Boolean).pop() ?? cwd;
 /** Remote projects carry their machine: `~/code/foo` on two machines is two projects. */
 const projectOf = (t: StatsTurn) => (t.machine ? `${t.machine}:${projectName(t.cwd)}` : projectName(t.cwd));
-const THIS_PC = "This PC";
 
 function top(counts: Map<string, number>, n = 6): [string, number][] {
 	return [...counts].sort((a, b) => b[1] - a[1]).slice(0, n);
@@ -95,25 +99,28 @@ export function Stats({ open, revision, onClose }: { open: boolean; revision?: u
 	);
 	const remote = view?.machines ?? [];
 	const filters: [string | null, string, string | undefined][] = [
-		[null, "All", undefined],
-		["", THIS_PC, undefined],
+		[null, t("All"), undefined],
+		["", t("This PC"), undefined],
 		...remote.map(
 			(m): [string, string, string] => [
 				m.name,
 				m.name,
 				m.error
-					? `Unreachable: ${m.error}. Last synced ${stampFmt.format(new Date(m.synced))}`
-					: `Synced ${stampFmt.format(new Date(m.synced))}`,
+					? t("Unreachable: {error}. Last synced {when}", {
+							error: m.error,
+							when: stampFmt().format(new Date(m.synced)),
+						})
+					: t("Synced {when}", { when: stampFmt().format(new Date(m.synced)) }),
 			],
 		),
 	];
 
 	return (
 		<section
-			aria-label="Stats"
+			aria-label={t("Stats")}
 			className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-neutral-950 text-neutral-100"
 		>
-			<PanelHeader title="Stats" onClose={onClose}>
+			<PanelHeader title={t("Stats")} onClose={onClose}>
 				{/* Only once there is another machine: until then All and This PC are the same. */}
 				{remote.length > 0 && (
 					<div className="flex gap-1">
@@ -131,10 +138,10 @@ export function Stats({ open, revision, onClose }: { open: boolean; revision?: u
 						))}
 					</div>
 				)}
-				<IconButton size="sm" label="Refresh" onClick={() => void load(true)}>
+				<IconButton size="sm" label={t("Refresh")} onClick={() => void load(true)}>
 					<ArrowClockwise size={14} />
 				</IconButton>
-				{syncing && <span className="text-meta text-neutral-500">Syncing machines…</span>}
+				{syncing && <span className="text-meta text-neutral-500">{t("Syncing machines…")}</span>}
 			</PanelHeader>
 
 			{/* Laid out for the page dialog's width; the grids stack on a narrow window. */}
@@ -146,7 +153,7 @@ export function Stats({ open, revision, onClose }: { open: boolean; revision?: u
 						{view ? (
 							<Summary turns={turns} />
 						) : (
-							!error && <p className="text-meta text-neutral-500">Reading sessions…</p>
+							!error && <p className="text-meta text-neutral-500">{t("Reading sessions…")}</p>
 						)}
 					</div>
 				</div>
@@ -160,12 +167,12 @@ export function Stats({ open, revision, onClose }: { open: boolean; revision?: u
 						</div>
 						<div className={`grid gap-6 ${remote.length > 0 ? "md:grid-cols-4" : "md:grid-cols-3"}`}>
 							{remote.length > 0 && (
-								<Bars title="Machines" rows={top(tally(turns, (t) => t.machine || THIS_PC))} />
+								<Bars title={t("Machines")} rows={top(tally(turns, (turn) => turn.machine || t("This PC")))} />
 							)}
-							<Bars title="Models" rows={top(tally(turns, (t) => t.model))} />
-							<Bars title="Projects" rows={top(tally(turns, projectOf))} />
+							<Bars title={t("Models")} rows={top(tally(turns, (t) => t.model))} />
+							<Bars title={t("Projects")} rows={top(tally(turns, projectOf))} />
 							<Bars
-								title="Tools"
+								title={t("Tools")}
 								rows={top(
 									tally(
 										turns.flatMap((t) => Object.entries(t.tools)),
@@ -195,19 +202,19 @@ interface UsageLimit {
 }
 
 function limitLabel(l: UsageLimit): string {
-	if (l.kind === "session") return "Current session";
-	if (l.kind === "weekly_all") return "This week";
+	if (l.kind === "session") return t("Current session");
+	if (l.kind === "weekly_all") return t("This week");
 	const model = l.scope?.model?.display_name;
-	return model ? `${model} this week` : l.kind.replace(/_/g, " ");
+	return model ? t("{model} this week", { model }) : l.kind.replace(/_/g, " ");
 }
 
 function resetLabel(iso: string | null): string {
 	if (!iso) return "";
 	const d = new Date(iso);
-	const time = d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+	const time = d.toLocaleTimeString(locale(), { hour: "numeric", minute: "2-digit" });
 	return d.getTime() - Date.now() < 86_400_000
-		? `Resets at ${time}`
-		: `Resets ${d.toLocaleDateString([], { weekday: "long" })} ${time}`;
+		? t("Resets at {time}", { time })
+		: t("Resets {day} {time}", { day: d.toLocaleDateString(locale(), { weekday: "long" }), time });
 }
 
 /** From Anthropic's oauth/profile; it has no end date, only when the plan started. */
@@ -231,7 +238,9 @@ function nextRenewal(since: string, now = new Date()): Date | null {
 function SubscriptionLine({ sub }: { sub: Subscription }) {
 	const plan = (sub.plan ?? "Claude").replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 	if (sub.status && sub.status !== "active") {
-		return <p className="text-meta text-red-400">{plan} subscription {sub.status.replace(/_/g, " ")}</p>;
+		return <p className="text-meta text-red-400">
+				{t("{plan} subscription {status}", { plan, status: sub.status.replace(/_/g, " ") })}
+			</p>;
 	}
 	const next = sub.since ? nextRenewal(sub.since) : null;
 	if (!next) return null;
@@ -239,9 +248,14 @@ function SubscriptionLine({ sub }: { sub: Subscription }) {
 	return (
 		<p
 			className="text-meta text-neutral-500"
-			title={`Estimated from the start date (${new Date(sub.since!).toLocaleDateString()}), assuming monthly billing`}
+			title={t("Estimated from the start date ({date}), assuming monthly billing", {
+				date: new Date(sub.since!).toLocaleDateString(locale()),
+			})}
 		>
-			{`${plan} renews ${next.toLocaleDateString([], { day: "numeric", month: "short" })} (in ${days} day${days === 1 ? "" : "s"})`}
+			{plural(days, "{plan} renews {date} (in {n} day)", "{plan} renews {date} (in {n} days)", {
+				plan,
+				date: next.toLocaleDateString(locale(), { day: "numeric", month: "short" }),
+			})}
 		</p>
 	);
 }
@@ -271,7 +285,7 @@ function useUsage(reload: number): UsageState {
 					history: body.history ?? [],
 					error: null,
 				});
-			} else setState((s) => ({ ...s, error: body?.error ?? "could not load usage" }));
+			} else setState((s) => ({ ...s, error: body?.error ?? t("could not load usage") }));
 		})();
 	}, [reload]);
 	return state;
@@ -280,11 +294,11 @@ function useUsage(reload: number): UsageState {
 function Usage({ usage: { limits, subscription, error: usageError } }: { usage: UsageState }) {
 	return (
 		<div>
-			<h3 className={`mb-2 ${sectionLabel}`}>Usage remaining</h3>
+			<h3 className={`mb-2 ${sectionLabel}`}>{t("Usage remaining")}</h3>
 			{usageError ? (
 				<p className="text-meta text-red-400">{usageError}</p>
 			) : !limits ? (
-				<p className="text-meta text-neutral-500">loading…</p>
+				<p className="text-meta text-neutral-500">{t("loading…")}</p>
 			) : (
 				<div className="flex flex-col gap-3">
 					{limits.map((l) => {
@@ -293,11 +307,11 @@ function Usage({ usage: { limits, subscription, error: usageError } }: { usage: 
 							<div key={`${l.kind}-${limitLabel(l)}`} className="text-ui">
 								<div className="flex items-baseline justify-between gap-2">
 									<span>{limitLabel(l)}</span>
-									<span className="text-meta text-neutral-300">{left}% left</span>
+									<span className="text-meta text-neutral-300">{t("{n}% left", { n: left })}</span>
 								</div>
 								<div
 									role="meter"
-									aria-label={`${limitLabel(l)} remaining`}
+									aria-label={t("{limit} remaining", { limit: limitLabel(l) })}
 									aria-valuenow={left}
 									aria-valuemin={0}
 									aria-valuemax={100}
@@ -321,8 +335,10 @@ function Usage({ usage: { limits, subscription, error: usageError } }: { usage: 
 	);
 }
 
-const clockFmt = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" });
-const weekClockFmt = new Intl.DateTimeFormat(undefined, { weekday: "short", hour: "numeric", minute: "2-digit" });
+const clockFmt = perLocale((l) => new Intl.DateTimeFormat(l, { hour: "numeric", minute: "2-digit" }));
+const weekClockFmt = perLocale(
+	(l) => new Intl.DateTimeFormat(l, { weekday: "short", hour: "numeric", minute: "2-digit" }),
+);
 
 /** Every limit with a live window, extrapolated to its reset. */
 function Paces({ limits, history, turns }: { limits: UsageLimit[]; history: UsageSample[]; turns: StatsTurn[] }) {
@@ -336,7 +352,7 @@ function Paces({ limits, history, turns }: { limits: UsageLimit[]; history: Usag
 	if (!rows.length) return null;
 	return (
 		<div>
-			<h3 className={`mb-2 ${sectionLabel}`}>Pace</h3>
+			<h3 className={`mb-2 ${sectionLabel}`}>{t("Pace")}</h3>
 			<div className="grid gap-6 md:grid-cols-3">
 				{rows.map(({ l, p }) => (
 					<PaceCard key={`${l.kind}-${limitLabel(l)}`} limit={l} pace={p} history={history} turns={turns} now={now} />
@@ -366,9 +382,9 @@ function PaceCard({
 }) {
 	const model = limit.scope?.model?.display_name ?? null;
 	const weekly = limit.group === "weekly";
-	const fmt = weekly ? weekClockFmt : clockFmt;
+	const fmt = weekly ? weekClockFmt() : clockFmt();
 	const unitMs = weekly ? 86_400_000 : 3_600_000;
-	const unit = weekly ? "day" : "h";
+	const unit = weekly ? t("day") : t("h");
 	const used = limit.percent;
 
 	// Samples of this very window: the same limit, resetting at the same time.
@@ -447,19 +463,26 @@ function PaceCard({
 	const budget = `${((100 - used) / ((p.end - now) / unitMs)).toFixed(1)}%/${unit}`;
 	const [tone, verdict] =
 		used >= 100
-			? (["text-red-400", `Limit reached. Resets in ${span(p.end - now)}.`] as const)
+			? (["text-red-400", t("Limit reached. Resets in {span}.", { span: span(p.end - now) })] as const)
 			: p.early
-				? (["text-neutral-400", "Too early in the window to extrapolate."] as const)
+				? (["text-neutral-400", t("Too early in the window to extrapolate.")] as const)
 				: p.runsOut
 					? ([
 							"text-red-400",
-							`Runs out ${fmt.format(p.runsOut)}, ${span(p.end - p.runsOut)} before reset. Slow to ${Math.round(p.room * 100)}% of this pace.`,
+							t("Runs out {when}, {span} before reset. Slow to {pct}% of this pace.", {
+								when: fmt.format(p.runsOut),
+								span: span(p.end - p.runsOut),
+								pct: Math.round(p.room * 100),
+							}),
 						] as const)
 					: ([
 							"text-green-400",
 							p.room === Infinity
-								? "Nothing used yet."
-								: `On pace for ${Math.round(p.projected)}% at reset. Room for ${p.room.toFixed(1)}\u00d7 this pace.`,
+								? t("Nothing used yet.")
+								: t("On pace for {pct}% at reset. Room for {room}\u00d7 this pace.", {
+										pct: Math.round(p.projected),
+										room: p.room.toFixed(1),
+									}),
 						] as const);
 
 	return (
@@ -481,8 +504,8 @@ function PaceCard({
 					<canvas
 						ref={canvas}
 						role="img"
-						aria-label={`${limitLabel(limit)}: ${used}% used, ${verdict}`}
-						title="Solid: used so far. Dashed: this pace until the reset. Grey: an even pace to 100%."
+						aria-label={t("{limit}: {used}% used, {verdict}", { limit: limitLabel(limit), used, verdict })}
+						title={t("Solid: used so far. Dashed: this pace until the reset. Grey: an even pace to 100%.")}
 						className="block"
 						style={{ width: w / dpr, height: h / dpr }}
 					/>
@@ -494,8 +517,9 @@ function PaceCard({
 			</div>
 			<p className={`mt-1 text-meta ${tone}`}>{verdict}</p>
 			<p className="text-meta text-neutral-500">
-				Averaging {rate}, budget {budget}
-				{promptsLeft !== null && ` \u00b7 \u2248 ${num.format(promptsLeft)} more prompts`}
+				{t("Averaging {rate}, budget {budget}", { rate, budget })}
+				{promptsLeft !== null &&
+					` \u00b7 \u2248 ${plural(promptsLeft, "{count} more prompt", "{count} more prompts", { count: num().format(promptsLeft) })}`}
 			</p>
 		</div>
 	);
@@ -506,15 +530,18 @@ function Summary({ turns }: { turns: StatsTurn[] }) {
 	const { current, longest } = streaks(days);
 	const ms = turns.map((t) => t.ms).sort((a, b) => a - b);
 	const tiles: [string, string][] = [
-		["Prompts", num.format(turns.length)],
-		["Sessions", num.format(new Set(turns.map((t) => t.session)).size)],
-		["Active days", num.format(days.size)],
-		["Current streak", `${current}d`],
-		["Longest streak", `${longest}d`],
-		["Median answer", duration(percentile(ms, 0.5))],
-		["Output tokens", num.format(turns.reduce((s, t) => s + t.outputTokens, 0))],
-		["Tool calls", num.format(turns.reduce((s, t) => s + Object.values(t.tools).reduce((a, b) => a + b, 0), 0))],
-		["Cost", usd.format(turns.reduce((s, t) => s + t.cost, 0))],
+		[t("Prompts"), num().format(turns.length)],
+		[t("Sessions"), num().format(new Set(turns.map((turn) => turn.session)).size)],
+		[t("Active days"), num().format(days.size)],
+		[t("Current streak"), t("{n}d", { n: current })],
+		[t("Longest streak"), t("{n}d", { n: longest })],
+		[t("Median answer"), duration(percentile(ms, 0.5))],
+		[t("Output tokens"), num().format(turns.reduce((s, turn) => s + turn.outputTokens, 0))],
+		[
+			t("Tool calls"),
+			num().format(turns.reduce((s, turn) => s + Object.values(turn.tools).reduce((a, b) => a + b, 0), 0)),
+		],
+		[t("Cost"), usd().format(turns.reduce((s, turn) => s + turn.cost, 0))],
 	];
 	return (
 		<div className="grid grid-cols-3 gap-2">
@@ -595,7 +622,7 @@ function Heatmap({ turns }: { turns: StatsTurn[] }) {
 			Math.floor((e.nativeEvent.offsetY * dpr) / step)
 		];
 		const n = day ? (counts.get(dayKey(day)) ?? 0) : 0;
-		e.currentTarget.title = day ? `${dayFmt.format(day)}: ${n} prompt${n === 1 ? "" : "s"}` : "";
+		e.currentTarget.title = day ? `${dayFmt().format(day)}: ${plural(n, "{n} prompt", "{n} prompts")}` : "";
 	};
 
 	/*
@@ -609,7 +636,7 @@ function Heatmap({ turns }: { turns: StatsTurn[] }) {
 		const first = week.find((d) => d?.getDate() === 1) ?? (x === 0 ? week[0] : undefined);
 		if (!first) return;
 		const year = x === 0 || first.getMonth() === 0 ? ` ${first.getFullYear()}` : "";
-		months.push({ x, text: monthFmt.format(first) + year });
+		months.push({ x, text: monthFmt().format(first) + year });
 	});
 	const labels: typeof months = [];
 	let limit = Infinity;
@@ -622,7 +649,7 @@ function Heatmap({ turns }: { turns: StatsTurn[] }) {
 
 	return (
 		<div>
-			<h3 className={`mb-2 ${sectionLabel}`}>Last {WEEKS} weeks</h3>
+			<h3 className={`mb-2 ${sectionLabel}`}>{t("Last {n} weeks", { n: WEEKS })}</h3>
 			<div className="flex gap-2 text-caption text-neutral-500">
 				{/* Every weekday, each centred on its row. */}
 				<div className="w-8 shrink-0">
@@ -634,7 +661,7 @@ function Heatmap({ turns }: { turns: StatsTurn[] }) {
 								className="absolute right-0 -translate-y-1/2 leading-none"
 								style={{ top: (d * step + cell / 2) / dpr }}
 							>
-								{weeks[0]?.[d] && weekdayFmt.format(weeks[0][d])}
+								{weeks[0]?.[d] && weekdayFmt().format(weeks[0][d])}
 							</span>
 						))}
 					</div>
@@ -655,7 +682,7 @@ function Heatmap({ turns }: { turns: StatsTurn[] }) {
 						<canvas
 							ref={canvas}
 							role="img"
-							aria-label={`Prompts per day, last ${WEEKS} weeks`}
+							aria-label={t("Prompts per day, last {n} weeks", { n: WEEKS })}
 							onMouseMove={hover}
 							className="block"
 							style={{ width: w / dpr, height: h / dpr }}
@@ -664,11 +691,11 @@ function Heatmap({ turns }: { turns: StatsTurn[] }) {
 							ref={legend}
 							className="mt-1.5 flex items-center justify-end gap-1 text-caption text-neutral-500"
 						>
-							Less
+							{t("Less")}
 							{HEAT.map((c) => (
 								<span key={c} className={`size-2.5 ${c}`} />
 							))}
-							More
+							{t("More")}
 						</div>
 					</div>
 				</div>
@@ -683,11 +710,11 @@ function AnswerTimes({ turns }: { turns: StatsTurn[] }) {
 	const longest = turns.reduce<StatsTurn | undefined>((a, t) => (!a || t.ms > a.ms ? t : a), undefined);
 	const buckets = BUCKETS.map(([limit, label], i) => {
 		const lower = i === 0 ? 0 : (BUCKETS[i - 1]?.[0] ?? 0);
-		return [label, ms.filter((m) => m >= lower && m < limit).length] as [string, number];
+		return [t(label), ms.filter((m) => m >= lower && m < limit).length] as [string, number];
 	});
 	return (
 		<div>
-			<h3 className={`mb-2 ${sectionLabel}`}>Answer time</h3>
+			<h3 className={`mb-2 ${sectionLabel}`}>{t("Answer time")}</h3>
 			<dl className="mb-3 grid grid-cols-4 gap-2 text-meta">
 				{(
 					[
@@ -698,7 +725,7 @@ function AnswerTimes({ turns }: { turns: StatsTurn[] }) {
 					] as const
 				).map(([label, v]) => (
 					<div key={label} title={label === "Longest" ? longest?.prompt : undefined}>
-						<dt className="text-neutral-500">{label}</dt>
+						<dt className="text-neutral-500">{t(label)}</dt>
 						<dd className="text-ui text-neutral-200 tabular-nums">{duration(v)}</dd>
 					</div>
 				))}
@@ -754,12 +781,12 @@ function Hours({ turns }: { turns: StatsTurn[] }) {
 	const hover = (e: React.MouseEvent<HTMLCanvasElement>) => {
 		const i = Math.floor((e.nativeEvent.offsetX * dpr) / step);
 		const n = hours[i];
-		e.currentTarget.title = n === undefined ? "" : `${i}:00 – ${n} prompt${n === 1 ? "" : "s"}`;
+		e.currentTarget.title = n === undefined ? "" : `${i}:00 – ${plural(n, "{n} prompt", "{n} prompts")}`;
 	};
 
 	return (
 		<div>
-			<h3 className={`mb-2 ${sectionLabel}`}>By hour</h3>
+			<h3 className={`mb-2 ${sectionLabel}`}>{t("By hour")}</h3>
 			<div className="flex gap-2 text-caption text-neutral-500 tabular-nums">
 				<div className="relative w-8 shrink-0" style={{ height: h / dpr }}>
 					{ticks.map((v) => (
@@ -768,7 +795,7 @@ function Hours({ turns }: { turns: StatsTurn[] }) {
 							className="absolute right-0 translate-y-1/2 leading-none"
 							style={{ bottom: y(v) / dpr }}
 						>
-							{num.format(v)}
+							{num().format(v)}
 						</span>
 					))}
 				</div>
@@ -776,7 +803,7 @@ function Hours({ turns }: { turns: StatsTurn[] }) {
 					<canvas
 						ref={canvas}
 						role="img"
-						aria-label={`Prompts by hour of day: ${hours.map((n, i) => `${i}h ${n}`).join(", ")}`}
+						aria-label={t("Prompts by hour of day: {hours}", { hours: hours.map((n, i) => `${i}:00 ${n}`).join(", ") })}
 						onMouseMove={hover}
 						className="block"
 						style={{ width: w / dpr, height: h / dpr }}
@@ -806,7 +833,7 @@ function Bars({ title, rows }: { title?: string; rows: [string, number][] }) {
 	return (
 		<div>
 			{title && <h3 className={`mb-2 ${sectionLabel}`}>{title}</h3>}
-			{rows.length === 0 && <p className="text-meta text-neutral-500">None yet.</p>}
+			{rows.length === 0 && <p className="text-meta text-neutral-500">{t("None yet.")}</p>}
 			<div className="flex flex-col gap-1">
 				{rows.map(([label, n]) => (
 					<div key={label} className="flex items-center gap-2 text-meta">
@@ -817,7 +844,7 @@ function Bars({ title, rows }: { title?: string; rows: [string, number][] }) {
 							<div className="h-full rounded-full bg-amber-500" style={{ width: `${(n / max) * 100}%` }} />
 						</div>
 						<span className="w-10 shrink-0 text-right text-caption text-neutral-500 tabular-nums">
-							{num.format(n)}
+							{num().format(n)}
 						</span>
 					</div>
 				))}
@@ -831,30 +858,30 @@ function Answers({ turns }: { turns: StatsTurn[] }) {
 
 	return (
 		<div>
-			<h3 className={`mb-2 ${sectionLabel}`}>All answers ({turns.length})</h3>
+			<h3 className={`mb-2 ${sectionLabel}`}>{t("All answers ({n})", { n: turns.length })}</h3>
 			<ul className="flex flex-col">
-				{turns.slice(0, shown).map((t) => {
-					const tools = Object.values(t.tools).reduce((a, b) => a + b, 0);
+				{turns.slice(0, shown).map((turn) => {
+					const tools = Object.values(turn.tools).reduce((a, b) => a + b, 0);
 					return (
-						<li key={`${t.session}-${t.start}`} className="border-b border-neutral-900 py-1.5">
+						<li key={`${turn.session}-${turn.start}`} className="border-b border-neutral-900 py-1.5">
 							<div className="flex items-center gap-2">
-								<span className="min-w-0 flex-1 truncate text-neutral-200" title={t.prompt}>
-									{t.prompt || "(image)"}
+								<span className="min-w-0 flex-1 truncate text-neutral-200" title={turn.prompt}>
+									{turn.prompt || t("(image)")}
 								</span>
-								{(t.outcome === "error" || t.outcome === "aborted") && (
+								{(turn.outcome === "error" || turn.outcome === "aborted") && (
 									<span
-										className={`shrink-0 text-caption ${t.outcome === "error" ? "text-red-400" : "text-neutral-500"}`}
+										className={`shrink-0 text-caption ${turn.outcome === "error" ? "text-red-400" : "text-neutral-500"}`}
 									>
-										{t.outcome}
+										{turn.outcome === "error" ? t("error") : t("aborted")}
 									</span>
 								)}
-								{t.machine && <span className="shrink-0 text-caption text-neutral-400">{t.machine}</span>}
-								<span className="shrink-0 text-caption text-neutral-400 tabular-nums">{duration(t.ms)}</span>
+								{turn.machine && <span className="shrink-0 text-caption text-neutral-400">{turn.machine}</span>}
+								<span className="shrink-0 text-caption text-neutral-400 tabular-nums">{duration(turn.ms)}</span>
 							</div>
 							<div className="truncate text-meta text-neutral-500">
-								{stampFmt.format(new Date(t.start))} · {projectName(t.cwd)} · {t.model || "?"}
-								{tools > 0 && ` · ${tools} tool${tools === 1 ? "" : "s"}`}
-								{t.cost > 0 && ` · ${usd.format(t.cost)}`}
+								{stampFmt().format(new Date(turn.start))} · {projectName(turn.cwd)} · {turn.model || "?"}
+								{tools > 0 && ` · ${plural(tools, "{n} tool", "{n} tools")}`}
+								{turn.cost > 0 && ` · ${usd().format(turn.cost)}`}
 							</div>
 						</li>
 					);

@@ -42,6 +42,7 @@ import {
 import { readGitAutoName, readGitNested, writeGitAutoName, writeGitNested } from "./prefs.js";
 import { Button, IconButton, ListRow, PanelHeader, inputClass, sectionLabel } from "./ui.js";
 import { api, unwrap } from "./api.js";
+import { plural, t } from "./i18n.js";
 
 /** `/home/me/proj/src/web/App.tsx` → `src/web/App.tsx` when it is under `cwd`. */
 function shortPath(path: string, cwd: string): string {
@@ -109,7 +110,7 @@ function FileRow({
 	return (
 		<ListRow
 			onClick={onOpen}
-			title={`${short} — open diff`}
+			title={t("{path} — open diff", { path: short })}
 			style={{ paddingLeft: `${0.75 + depth}rem` }}
 		>
 			<FileGlyph name={name} size={13} />
@@ -124,6 +125,25 @@ function FileRow({
 	);
 }
 
+/** git's `%ar` ("1 year, 2 months ago") in the interface language, with or without "ago". */
+function gitAgo(when: string, ago: boolean): string {
+	const text = when
+		.replace(/ ago$/, "")
+		.replace(/(\d+) (second|minute|hour|day|week|month|year)s?/g, (_, n: string, unit: string) => {
+			const units: Record<string, string> = {
+				second: t("{n} sec", { n }),
+				minute: t("{n} min", { n }),
+				hour: t("{n} hr", { n }),
+				day: t("{n} d", { n }),
+				week: t("{n} wk", { n }),
+				month: t("{n} mo", { n }),
+				year: t("{n} yr", { n }),
+			};
+			return units[unit];
+		});
+	return ago ? t("{time} ago", { time: text }) : text;
+}
+
 /** The checkbox that turns on looking one folder down for repositories. */
 function NestedToggle({ on, onChange }: { on: boolean; onChange: (on: boolean) => void }) {
 	return (
@@ -134,7 +154,7 @@ function NestedToggle({ on, onChange }: { on: boolean; onChange: (on: boolean) =
 				onChange={(e) => onChange(e.target.checked)}
 				className="size-3.5 accent-amber-400"
 			/>
-			Find repositories one folder down
+			{t("Find repositories one folder down")}
 		</label>
 	);
 }
@@ -263,7 +283,7 @@ export function SourceControl({
 			onChanges={noop}
 			repos={
 				<div className="shrink-0 border-b border-neutral-800">
-					<p className={`px-3 py-1.5 ${sectionLabel}`}>Repositories</p>
+					<p className={`px-3 py-1.5 ${sectionLabel}`}>{t("Repositories")}</p>
 					{repos.map((r) => (
 						<RepoRow
 							key={r}
@@ -363,13 +383,13 @@ function RepoView({
 	 */
 	const requestName = async (): Promise<string | null> => {
 		setNaming(true);
-		setGitBusy(cwd, "Naming…");
+		setGitBusy(cwd, t("Naming…"));
 		setError(null);
 		try {
 			const r = await api.git.name.$post({ json: { cwd } });
 			const body = (await r.json().catch(() => ({}))) as { message?: string; error?: string };
 			if (!r.ok || !body.message) {
-				setError(body.error ?? "could not name this commit");
+				setError(body.error ?? t("could not name this commit"));
 				return null;
 			}
 			setMessage(body.message);
@@ -410,7 +430,7 @@ function RepoView({
 				json: { cwd, message: dirty ? text || state.suggestion : undefined, push: true },
 			});
 			const body = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string };
-			if (!body.ok) setError(body.error ?? "failed");
+			if (!body.ok) setError(body.error ?? t("failed"));
 			else setMessage("");
 		} catch (err) {
 			setError(err instanceof Error ? err.message : String(err));
@@ -425,7 +445,7 @@ function RepoView({
 			<div className="flex min-h-0 min-w-0 flex-1 flex-col bg-neutral-950">
 				<Header onClose={onClose} branch="" />
 				<p className="p-4 text-ui text-neutral-500">
-					Not a git repository. `git init` in a terminal and this fills in.
+					{t("Not a git repository. `git init` in a terminal and this fills in.")}
 				</p>
 				{notRepo}
 			</div>
@@ -448,7 +468,7 @@ function RepoView({
 						value={message}
 						onChange={(e) => setMessage(e.target.value)}
 						rows={2}
-						placeholder={state?.suggestion || "Message (Ctrl+Enter to commit)"}
+						placeholder={state?.suggestion || t("Message (Ctrl+Enter to commit)")}
 						onKeyDown={(e) => {
 							if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
 								e.preventDefault();
@@ -460,8 +480,8 @@ function RepoView({
 					<IconButton
 						onClick={() => void requestName()}
 						disabled={naming || running || !dirty}
-						label="Auto-name this commit"
-						title="Write the message with a model that reads the diff"
+						label={t("Auto-name this commit")}
+						title={t("Write the message with a model that reads the diff")}
 					>
 						<Sparkle size={14} className={naming ? "animate-pulse" : undefined} />
 					</IconButton>
@@ -475,8 +495,8 @@ function RepoView({
 					disabled={running || naming || (!dirty && ahead === 0 && behind === 0)}
 					title={
 						dirty
-							? `Commit ${state?.changed} file${state?.changed === 1 ? "" : "s"} and push`
-							: "Push what is already committed"
+							? plural(state?.changed ?? 0, "Commit {n} file and push", "Commit {n} files and push")
+							: t("Push what is already committed")
 					}
 					/*
 					 * The app's primary button, not a blue one: `amber-500` under
@@ -486,7 +506,7 @@ function RepoView({
 					 */
 				>
 					<ArrowsClockwise size={13} className={running ? "animate-spin" : undefined} />
-					{busyNow ?? (dirty ? `Commit & Push ${state?.changed}` : "Sync Changes")}
+					{busyNow ?? (dirty ? t("Commit & Push {n}", { n: state?.changed ?? 0 }) : t("Sync Changes"))}
 					{/* What a sync would actually move, the way git counts it. */}
 					{!dirty && (ahead > 0 || behind > 0) && (
 						// Dimmed against the button's OWN ground rather than given a
@@ -512,7 +532,7 @@ function RepoView({
 						// The accent every other checkbox in the app uses (Settings.tsx).
 						className="size-3.5 accent-amber-400"
 					/>
-					Auto-name commits
+					{t("Auto-name commits")}
 				</label>
 			</div>
 
@@ -527,13 +547,14 @@ function RepoView({
 			    halves (flex-1 basis-0) so neither list can starve the other. */}
 			<div className="min-h-0 flex-1 basis-0 overflow-auto">
 				<p className={`sticky top-0 z-10 bg-neutral-950 px-3 py-1.5 ${sectionLabel}`}>
-					Changes{dirty && <span className="ml-1 text-neutral-500">{state?.changed}</span>}
+					{t("Changes")}
+					{dirty && <span className="ml-1 text-neutral-500">{state?.changed}</span>}
 				</p>
 				{files === null ? (
-					<p className="px-3 py-2 text-meta text-neutral-500">Reading the working tree…</p>
+					<p className="px-3 py-2 text-meta text-neutral-500">{t("Reading the working tree…")}</p>
 				) : files.length === 0 ? (
 					<p className="px-3 py-2 text-meta text-neutral-500">
-						Nothing changed. Uncommitted edits — the agent's or your own — show up here.
+						{t("Nothing changed. Uncommitted edits — the agent's or your own — show up here.")}
 					</p>
 				) : (
 					files.map((f) => (
@@ -553,7 +574,7 @@ function RepoView({
 			    scan and only sometimes open. */}
 			<div className="min-h-0 flex-1 basis-0 overflow-auto border-t border-neutral-800">
 				<p className={`sticky top-0 z-10 bg-neutral-950 px-3 py-1.5 ${sectionLabel}`}>
-					Commits
+					{t("Commits")}
 				</p>
 				{commits.map((c) => {
 					const expanded = open[c.hash] === true;
@@ -562,7 +583,7 @@ function RepoView({
 							<ListRow
 								onClick={() => setOpen((o) => ({ ...o, [c.hash]: !expanded }))}
 								aria-expanded={expanded}
-								title={`${c.subject}\n${c.author} · ${c.when} · ${c.hash.slice(0, 7)}`}
+								title={`${c.subject}\n${c.author} · ${gitAgo(c.when, true)} · ${c.hash.slice(0, 7)}`}
 								className="gap-1 pl-1"
 							>
 								<span className="shrink-0 text-neutral-600">
@@ -578,7 +599,7 @@ function RepoView({
 								 * the sha are in the tooltip.
 								 */}
 								<span className="ml-auto shrink-0 pl-2 text-caption text-neutral-600">
-									{c.when.replace(/ ago$/, "")}
+									{gitAgo(c.when, false)}
 								</span>
 							</ListRow>
 							{expanded &&
@@ -602,13 +623,13 @@ function RepoView({
 /** The panel's title row. Its own component only because two returns use it. */
 function Header({ branch, onClose }: { branch: string; onClose: () => void }) {
 	return (
-		<PanelHeader title="Source Control" onClose={onClose}>
+		<PanelHeader title={t("Source Control")} onClose={onClose}>
 			{/* The branch is a LABEL, not an action: same dim mono the rest of the
 			    app uses for paths, rather than the accent, which in this window
 			    means "working" and would read as a live session. */}
 			{branch && (
 				<span
-					title={`On branch ${branch}`}
+					title={t("On branch {branch}", { branch })}
 					className="min-w-0 truncate font-mono text-meta text-neutral-500"
 				>
 					{branch}

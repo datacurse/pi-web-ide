@@ -217,6 +217,33 @@
 }
 
 /*
+ * Claude's light interface: ivory surfaces (#faf9f5 page, #f0eee6 chrome)
+ * under near-black warm text, with the clay darkened to #c96442 so it keeps
+ * its contrast on a light ground. Accents are the dark theme's, deepened the
+ * same way.
+ */
+[data-theme="claude-light"] {
+	--ct-base: #faf9f5;
+	--ct-mantle: #f0eee6;
+	--ct-surface0: #e3e1d7;
+	--ct-surface1: #d6d3c7;
+	--ct-overlay0: #a3a29b;
+	--ct-overlay1: #87867f;
+	--ct-overlay2: #73726c;
+	--ct-subtext0: #5e5d59;
+	--ct-subtext1: #3d3d3a;
+	--ct-text: #141413;
+	--ct-red: #b93d52;
+	--ct-peach: #c96442;
+	--ct-yellow: #a8781f;
+	--ct-green: #2f8a4f;
+	--ct-teal: #2a8078;
+	--ct-blue: #2c6cc0;
+	--ct-lavender: #5a7fc4;
+	--ct-mauve: #8a4fb8;
+}
+
+/*
  * Tailwind's palette, re-pointed at the active flavor.
  *
  * Unlayered on purpose: Tailwind emits its defaults into `@layer theme`, and
@@ -327,7 +354,8 @@
 	scrollbar-color: var(--color-neutral-700) transparent;
 }
 
-:root[data-theme="latte"] {
+:root[data-theme="latte"],
+:root[data-theme="claude-light"] {
 	color-scheme: light;
 }
 
@@ -391,7 +419,8 @@
 	line-height: 1;
 	color: var(--seti-dark);
 }
-:root[data-theme="latte"] .seti-icon {
+:root[data-theme="latte"] .seti-icon,
+:root[data-theme="claude-light"] .seti-icon {
 	color: var(--seti-light);
 }
 

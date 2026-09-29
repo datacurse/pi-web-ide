@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect } from "react";
 import { X } from "@phosphor-icons/react";
 import type { PiImage } from "../shared/types.js";
+import { t } from "./i18n.js";
 
 /** Mirrors the server's allowlist; see SUPPORTED_IMAGE_MIME in agent.ts. */
 export const SUPPORTED_IMAGE_MIME = [
@@ -20,11 +21,11 @@ export const SUPPORTED_IMAGE_MIME = [
 export function readImage(file: File): Promise<PiImage> {
 	return new Promise((resolve, reject) => {
 		const reader = new FileReader();
-		reader.onerror = () => reject(new Error(`could not read ${file.name || "image"}`));
+		reader.onerror = () => reject(new Error(t("could not read {name}", { name: file.name || t("image") })));
 		reader.onload = () => {
 			const result = String(reader.result ?? "");
 			const comma = result.indexOf(",");
-			if (comma < 0) return reject(new Error("unreadable image data"));
+			if (comma < 0) return reject(new Error(t("unreadable image data")));
 			resolve({ data: result.slice(comma + 1), mimeType: file.type });
 		};
 		reader.readAsDataURL(file);
@@ -40,7 +41,7 @@ export async function uploadFile(file: File): Promise<string> {
 	});
 	const body = (await r.json().catch(() => ({}))) as { path?: unknown; error?: unknown };
 	if (!r.ok || typeof body.path !== "string") {
-		throw new Error(typeof body.error === "string" ? body.error : `could not upload ${file.name}`);
+		throw new Error(typeof body.error === "string" ? body.error : t("could not upload {name}", { name: file.name }));
 	}
 	return body.path;
 }
@@ -82,7 +83,7 @@ export function Thumb({
 			<button
 				data-custom="image thumbnail"
 				onClick={() => zoom(src)}
-				title="Click to expand"
+				title={t("Click to expand")}
 				className="block size-14 overflow-hidden rounded-md border border-neutral-700 transition-colors duration-150 ease-out hover:border-neutral-500 motion-reduce:transition-none"
 			>
 				<img src={src} alt={label} className="size-full object-cover" />
@@ -91,7 +92,7 @@ export function Thumb({
 				<button
 					data-custom="thumbnail remove badge"
 					onClick={onRemove}
-					aria-label={`Remove ${label}`}
+					aria-label={t("Remove {name}", { name: label })}
 					className="absolute -top-1.5 -right-1.5 flex size-5 items-center justify-center rounded-full border border-neutral-700 bg-neutral-900 text-meta text-neutral-400 opacity-0 transition-opacity duration-150 ease-out group-hover:opacity-100 hover:text-neutral-100 focus:opacity-100 motion-reduce:transition-none"
 				>
 					<X size={13} />
@@ -124,7 +125,7 @@ export function Lightbox({ src, onClose }: { src: string; onClose: () => void })
 		<div
 			role="dialog"
 			aria-modal="true"
-			aria-label="Attachment"
+			aria-label={t("Attachment")}
 			onClick={onClose}
 			className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-6"
 		>
@@ -132,7 +133,7 @@ export function Lightbox({ src, onClose }: { src: string; onClose: () => void })
 			    right-clicking to save must not dismiss what you are looking at. */}
 			<img
 				src={src}
-				alt="Attachment, full size"
+				alt={t("Attachment, full size")}
 				onClick={(e) => e.stopPropagation()}
 				className="max-h-full max-w-full rounded-sm border border-neutral-700 object-contain"
 			/>
@@ -155,7 +156,7 @@ export function Attachments({
 				<Thumb
 					key={i}
 					image={img}
-					label={`attachment ${i + 1}`}
+					label={t("attachment {n}", { n: i + 1 })}
 					onRemove={() => onRemove(i)}
 				/>
 			))}

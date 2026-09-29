@@ -15,6 +15,7 @@ import { gitChanged } from "./GitActions.js";
 import { groupOf, sideOfTab, withGroup } from "./tabs.js";
 import type { Side } from "./tabs.js";
 import { api } from "./api.js";
+import { t } from "./i18n.js";
 
 const emptyPartial = (): PiPartial => ({ text: "", thinking: "", tools: [] });
 
@@ -83,7 +84,7 @@ function replyLine(snapshot: Snapshot | undefined): string {
 			.trim()
 			.split("\n")
 			.find((l) => l.trim()) ?? "";
-	if (!line) return "Finished.";
+	if (!line) return t("Finished.");
 	return line.length > 140 ? `${line.slice(0, 140)}…` : line;
 }
 
@@ -93,7 +94,7 @@ function replyLine(snapshot: Snapshot | undefined): string {
  * is blocked until it is answered.
  */
 function askLine(ask: PiAsk): string {
-	const line = (ask.message || ask.title || "pi is waiting for an answer").trim();
+	const line = (ask.message || ask.title || t("pi is waiting for an answer")).trim();
 	return line.length > 140 ? `${line.slice(0, 140)}…` : line;
 }
 
@@ -490,7 +491,7 @@ export function useSession({
 						setCommand((c) => (c ? { ...c, running: false } : c));
 						if (worked) {
 							worked = false;
-							announce(snap.file, `Failed: ${e.message}`);
+							announce(snap.file, t("Failed: {error}", { error: e.message }));
 						}
 						setSnapshot((s) => (s ? { ...s, error: e.message } : s));
 						break;
@@ -551,7 +552,7 @@ export function useSession({
 				return;
 			}
 			const body = await r.json().catch(() => ({}) as { error?: string });
-			setSnapshot((s) => (s ? { ...s, error: body.error ?? "could not compact" } : s));
+			setSnapshot((s) => (s ? { ...s, error: body.error ?? t("could not compact") } : s));
 		} finally {
 			setCompacting(false);
 		}
@@ -602,7 +603,7 @@ export function useSession({
 						? {
 								...s,
 								messages: s.messages.filter((m) => m !== optimistic),
-								error: body.error ?? `prompt failed (${r.status})`,
+								error: body.error ?? t("prompt failed ({status})", { status: r.status }),
 							}
 						: s,
 				);
@@ -649,7 +650,7 @@ export function useSession({
 			const rr = await api.sessions[":id"].$get({ param: { id: snapshot.id } });
 			if (rr.ok) setSnapshot(toSnapshot(await rr.json()));
 			if (!r?.ok) {
-				const reason = typeof body?.error === "string" ? body.error : "could not edit that message";
+				const reason = typeof body?.error === "string" ? body.error : t("could not edit that message");
 				setSnapshot((s) => (s ? { ...s, error: reason } : s));
 			}
 		},
@@ -666,7 +667,7 @@ export function useSession({
 				void attach(body.file);
 				return;
 			}
-			const reason = typeof body?.error === "string" ? body.error : "could not fork this session";
+			const reason = typeof body?.error === "string" ? body.error : t("could not fork this session");
 			setSnapshot((s) => (s ? { ...s, error: reason } : s));
 		},
 		[snapshot, attach],
@@ -688,7 +689,7 @@ export function useSession({
 		const reason =
 			body && typeof body === "object" && "error" in body && typeof body.error === "string"
 				? body.error
-				: "could not restart this session";
+				: t("could not restart this session");
 		setSnapshot((s) => (s ? { ...s, error: reason } : s));
 	}, [snapshot]);
 
@@ -757,7 +758,7 @@ export function useSession({
 			const r = await api.sessions[":id"].model.$post({ param: { id: snapshot.id }, json: { model } });
 			if (!r.ok) {
 				const body = (await r.json().catch(() => ({}))) as { error?: string };
-				setModelError(body.error ?? "failed to switch model");
+				setModelError(body.error ?? t("failed to switch model"));
 				return;
 			}
 			const rr = await api.sessions[":id"].$get({ param: { id: snapshot.id } });
@@ -778,7 +779,7 @@ export function useSession({
 			const r = await api.sessions[":id"].thinking.$post({ param: { id: snapshot.id }, json: { level } });
 			if (!r.ok) {
 				const body = (await r.json().catch(() => ({}))) as { error?: string };
-				setModelError(body.error ?? "failed to set thinking level");
+				setModelError(body.error ?? t("failed to set thinking level"));
 				return;
 			}
 			const rr = await api.sessions[":id"].$get({ param: { id: snapshot.id } });

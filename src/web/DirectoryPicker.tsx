@@ -3,6 +3,7 @@ import { Star, X } from "@phosphor-icons/react";
 import type { PiwDirListing } from "../shared/types.js";
 import { Button, IconButton, ListRow, inputClass } from "./ui.js";
 import { api } from "./api.js";
+import { t } from "./i18n.js";
 
 /**
  * The project directory picker: a folder explorer over the SERVER's
@@ -70,7 +71,7 @@ export function DirectoryPicker({
 		if (!r?.ok || !body?.entries) {
 			// Staying put on failure is the point: an unreadable directory must
 			// not blank the list you were successfully browsing a moment ago.
-			setError(body?.error ?? "could not read that directory");
+			setError(body?.error ?? t("could not read that directory"));
 			return;
 		}
 		setError(null);
@@ -119,7 +120,7 @@ export function DirectoryPicker({
 			error?: string;
 		} | null;
 		if (!r?.ok) {
-			setError(body?.error ?? "could not change the pinned folders");
+			setError(body?.error ?? t("could not change the pinned folders"));
 			return;
 		}
 		setError(null);
@@ -195,11 +196,11 @@ export function DirectoryPicker({
 		>
 			<div className="flex items-center justify-between border-b border-neutral-800 px-3 py-2">
 				<h2 id="picker-title" className="text-title font-semibold tracking-tight">
-					Add project
+					{t("Add project")}
 				</h2>
 				<IconButton
 					onClick={onClose}
-					label="Close directory picker"
+					label={t("Close directory picker")}
 				>
 					<X size={13} />
 				</IconButton>
@@ -222,7 +223,7 @@ export function DirectoryPicker({
 					size="sm"
 					type="button"
 					onClick={() => void go(listing?.home ?? "~")}
-					title="Home directory"
+					title={t("Home directory")}
 				>
 					{/* "~" rather than a house glyph: this row is a path field, the
 					    server expands it, and no font is missing it. */}
@@ -237,8 +238,8 @@ export function DirectoryPicker({
 					// reports no parent — not while a request is in flight, since
 					// that would make the button flicker under a fast clicker.
 					disabled={!listing?.parent}
-					title="Parent directory"
-					aria-label="Parent directory"
+					title={t("Parent directory")}
+					aria-label={t("Parent directory")}
 				>
 					<span aria-hidden>{"\u2191"}</span>
 				</Button>
@@ -247,8 +248,8 @@ export function DirectoryPicker({
 					size="sm"
 					onClick={() => current && void togglePin(current, pinned)}
 					disabled={!current}
-					title={pinned ? "Unpin this folder" : "Pin this folder"}
-					aria-label={pinned ? "Unpin this folder" : "Pin this folder"}
+					title={pinned ? t("Unpin this folder") : t("Pin this folder")}
+					aria-label={pinned ? t("Unpin this folder") : t("Pin this folder")}
 					aria-pressed={pinned}
 				>
 					<Star
@@ -262,17 +263,17 @@ export function DirectoryPicker({
 					onChange={(e) => setDraft(e.target.value)}
 					spellCheck={false}
 					autoComplete="off"
-					aria-label="Directory path"
-					placeholder="/absolute/path, ~/path, or type to filter"
+					aria-label={t("Directory path")}
+					placeholder={t("/absolute/path, ~/path, or type to filter")}
 					className={`min-w-0 flex-1 font-mono ${inputClass.sm}`}
 				/>
 				<Button
 					variant="subtle"
 					size="sm"
 					type="submit"
-					title="Go to this path"
+					title={t("Go to this path")}
 				>
-					Go
+					{t("Go")}
 				</Button>
 			</form>
 
@@ -317,8 +318,8 @@ export function DirectoryPicker({
 							<button
 								data-custom="pinned-folder chip"
 								onClick={() => void togglePin(path, true)}
-								aria-label={`Unpin ${path}`}
-								title="Unpin"
+								aria-label={t("Unpin {path}", { path })}
+								title={t("Unpin")}
 								className="rounded-r-sm px-1 py-0.5 text-neutral-600 transition-colors duration-150 ease-out hover:bg-neutral-800 hover:text-neutral-200 motion-reduce:transition-none"
 							>
 								<X size={9} />
@@ -334,8 +335,8 @@ export function DirectoryPicker({
 				{listing && entries.length === 0 && (
 					<p className="px-3 py-4 text-meta text-neutral-400">
 						{fragment
-							? `Nothing here matches “${fragment}”.`
-							: "No subdirectories here. Add this folder, or go up."}
+							? t("Nothing here matches “{fragment}”.", { fragment })
+							: t("No subdirectories here. Add this folder, or go up.")}
 					</p>
 				)}
 				{entries.map((e) => (
@@ -358,14 +359,14 @@ export function DirectoryPicker({
 						    is the one thing a row says beyond its name. */}
 						{e.repo && (
 							<span
-								title="Git repository"
+								title={t("Git repository")}
 								className="shrink-0 rounded-sm bg-neutral-800 px-1 text-caption text-amber-400/90"
 							>
 								git
 							</span>
 						)}
 						{projects.includes(e.path) && (
-							<span className="ml-auto shrink-0 text-caption text-neutral-500">added</span>
+							<span className="ml-auto shrink-0 text-caption text-neutral-500">{t("added")}</span>
 						)}
 					</ListRow>
 				))}
@@ -380,7 +381,7 @@ export function DirectoryPicker({
 					// the button says so instead of pretending to work.
 					disabled={!current || already || busy}
 				>
-					{already ? "Already added" : "Add this folder"}
+					{already ? t("Already added") : t("Add this folder")}
 				</Button>
 				<span className="min-w-0 flex-1 truncate font-mono text-meta text-neutral-500">
 					{error ? <span className="text-red-400">{error}</span> : current}

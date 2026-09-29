@@ -268,6 +268,10 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
 - Settings has a `w-48` category nav on the left (`NavItem`s: Appearance, Transcript,
   Sessions, Notifications, Personality), like Obsidian; the right side shows only the
   chosen category, `max-w-xl p-6`. Opens on Appearance.
+- Appearance has a `Language` radio group (English / Русский, each named in itself,
+  `pwi:language`, per browser). Every interface string goes through `t("English text")`
+  or `plural(n, one, other)` from `i18n.ts`; the Russian lives in `i18n.ru.ts`, and
+  `i18n.test.ts` fails when a literal key has no translation. Switching re-renders in place.
 - A `Search settings` field (`inputClass.sm`) tops the nav. A query shows every matching
   setting from all categories, grouped under their category's `Section`; categories
   without a hit fade to `opacity-50`. A setting matches when every word is in its

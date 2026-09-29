@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { t } from "./i18n.js";
 
 /** The rail's bottom group: places you visit, not work beside, so a popup rather than a tab. */
 export type PageId = "fleet" | "stats" | "packages" | "settings";
@@ -35,7 +36,7 @@ export function PageDialog({
 	return (
 		<dialog
 			ref={ref}
-			aria-label={page ? TITLE[page] : undefined}
+			aria-label={page ? t(TITLE[page]) : undefined}
 			onClose={onClose}
 			onClick={(e) => {
 				if (e.target === ref.current) onClose();

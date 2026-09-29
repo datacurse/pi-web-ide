@@ -14,6 +14,7 @@ import { Button, IconButton, IconLink, PanelHeader } from "./ui.js";
 import { timeAgo } from "./SessionList.js";
 import { Terminal } from "./Terminal.js";
 import { api } from "./api.js";
+import { t } from "./i18n.js";
 
 const PWI: Record<FleetPwi, { text: string; tone: string; hint: string }> = {
 	running: { text: "pwi running", tone: "text-green-400", hint: "Open its pwi" },
@@ -91,31 +92,31 @@ function Row({
 				<div className="min-w-0 flex-1">
 					<p className={`truncate ${m.online ? "text-neutral-100" : "text-neutral-500"}`}>
 						{m.name}
-						{m.self && <span className="ml-2 text-caption text-neutral-500">this PC</span>}
+						{m.self && <span className="ml-2 text-caption text-neutral-500">{t("this PC")}</span>}
 					</p>
 					<p className="truncate text-meta text-neutral-500">
 						{[m.os, m.ip, m.self ? null : `ssh ${m.ssh}`].filter(Boolean).join(" · ")}
 					</p>
 				</div>
-				<p className={`shrink-0 text-meta ${pwi?.tone ?? "text-neutral-500"}`} title={pwi?.hint}>
-					{pwi ? pwi.text : m.lastSeen ? `offline, seen ${timeAgo(m.lastSeen)}` : "offline"}
+				<p className={`shrink-0 text-meta ${pwi?.tone ?? "text-neutral-500"}`} title={pwi && t(pwi.hint)}>
+					{pwi ? t(pwi.text) : m.lastSeen ? t("offline, seen {ago}", { ago: timeAgo(m.lastSeen) }) : t("offline")}
 				</p>
 				{m.online && !m.self && m.pwi !== "running" && (
 					<Button size="sm" onClick={() => void start()} disabled={starting}>
-						{starting ? "Starting…" : "Start pwi"}
+						{starting ? t("Starting…") : t("Start pwi")}
 					</Button>
 				)}
 				<IconButton
 					size="sm"
 					variant={shown ? "outline" : "ghost"}
 					aria-pressed={shown}
-					label={m.self ? "Terminal on this PC" : `Terminal: ssh ${m.ssh}`}
+					label={m.self ? t("Terminal on this PC") : t("Terminal: ssh {alias}", { alias: m.ssh })}
 					onClick={onTerminal}
 					disabled={!m.online}
 				>
 					<TerminalWindow size={16} />
 				</IconButton>
-				<IconLink size="sm" href={m.url} label={`${pwi?.hint ?? "Open its pwi"}: ${m.url}`}>
+				<IconLink size="sm" href={m.url} label={`${pwi ? t(pwi.hint) : t("Open its pwi")}: ${m.url}`}>
 					<TailscaleLogo />
 				</IconLink>
 			</div>
@@ -180,7 +181,7 @@ export function Fleet({ open, onClose }: { open: boolean; onClose: () => void })
 		if (!shells[m.dns]) {
 			const r = await api.terminals.$post({ json: { fleet: true, ssh: m.self ? undefined : m.ssh } });
 			const body = (await r.json().catch(() => ({}))) as { id?: string; error?: string };
-			if (!r.ok || !body.id) return setError(body.error ?? `could not start a shell (${r.status})`);
+			if (!r.ok || !body.id) return setError(body.error ?? t("could not start a shell ({status})", { status: r.status }));
 			const id = body.id;
 			saveShells((s) => ({ ...s, [m.dns]: id }));
 		}
@@ -200,12 +201,12 @@ export function Fleet({ open, onClose }: { open: boolean; onClose: () => void })
 	const shownName = machines?.find((m) => m.dns === shown)?.name ?? shown;
 
 	return (
-		<section aria-label="Fleet" className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-neutral-950 text-neutral-100">
-			<PanelHeader title="Fleet" onClose={onClose}>
-				<IconButton size="sm" label="Refresh" onClick={() => void load()}>
+		<section aria-label={t("Fleet")} className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-neutral-950 text-neutral-100">
+			<PanelHeader title={t("Fleet")} onClose={onClose}>
+				<IconButton size="sm" label={t("Refresh")} onClick={() => void load()}>
 					<ArrowClockwise size={14} />
 				</IconButton>
-				{loading && <span className="text-meta text-neutral-500">Checking machines…</span>}
+				{loading && <span className="text-meta text-neutral-500">{t("Checking machines…")}</span>}
 			</PanelHeader>
 			<div className="max-h-1/2 shrink-0 overflow-y-auto">
 				{error && <p className="px-4 py-2 text-meta text-red-400">{error}</p>}
@@ -232,14 +233,14 @@ export function Fleet({ open, onClose }: { open: boolean; onClose: () => void })
 						if (e.key === "Escape") e.preventDefault();
 					}}
 				>
-					<PanelHeader title={shownName} onClose={() => closeShell(shown, shellId)} closeLabel="Close this shell" />
+					<PanelHeader title={shownName} onClose={() => closeShell(shown, shellId)} closeLabel={t("Close this shell")} />
 					<div className="min-h-0 flex-1">
 						<Terminal key={shellId} id={shellId} focused onExit={() => forget(shown)} />
 					</div>
 				</div>
 			) : (
 				<p className="flex flex-1 items-center justify-center text-meta text-neutral-500">
-					A machine's terminal button opens a shell on it here.
+					{t("A machine's terminal button opens a shell on it here.")}
 				</p>
 			)}
 		</section>

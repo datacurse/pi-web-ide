@@ -1,3 +1,4 @@
+import { t } from "./i18n.js";
 /** Pure helpers for the Stats panel. Days are LOCAL calendar days. */
 
 export function dayKey(ms: number | Date): string {
@@ -40,10 +41,10 @@ export function percentile(sorted: number[], p: number): number {
 
 export function duration(ms: number): string {
 	const s = Math.round(ms / 1000);
-	if (s < 60) return `${s}s`;
+	if (s < 60) return t("{s}s", { s });
 	const m = Math.floor(s / 60);
-	if (m < 60) return `${m}m ${s % 60}s`;
-	return `${Math.floor(m / 60)}h ${m % 60}m`;
+	if (m < 60) return t("{m}m {s}s", { m, s: s % 60 });
+	return t("{h}h {m}m", { h: Math.floor(m / 60), m: m % 60 });
 }
 
 /**
@@ -104,8 +105,8 @@ export function pace(percent: number, resetsAt: number, windowMs: number, now = 
 /** A coarse span: `2d 3h`, `3h 20m`, `45m`. */
 export function span(ms: number): string {
 	const m = Math.max(0, Math.round(ms / 60_000));
-	if (m < 60) return `${m}m`;
+	if (m < 60) return t("{m}m", { m });
 	const h = Math.floor(m / 60);
-	if (h < 24) return `${h}h ${m % 60}m`;
-	return `${Math.floor(h / 24)}d ${h % 24}h`;
+	if (h < 24) return t("{h}h {m}m", { h, m: m % 60 });
+	return t("{d}d {h}h", { d: Math.floor(h / 24), h: h % 24 });
 }

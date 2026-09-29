@@ -39,11 +39,14 @@ import {
 	TurnStatus,
 	turnStart,
 } from "./Transcript.js";
+import { t } from "./i18n.js";
 
 /** pi's `get_commands` omits its TUI-only `/compact`; `send` in useSession.ts runs it. */
 const COMPACT_COMMAND: PiCommand = {
 	name: "compact",
-	description: "Summarise older messages to free context (optional: focus instructions)",
+	get description() {
+		return t("Summarise older messages to free context (optional: focus instructions)");
+	},
 	source: "pwi",
 };
 
@@ -89,7 +92,7 @@ function CommandPicker({
 		<div
 			ref={list}
 			role="listbox"
-			aria-label="Slash commands"
+			aria-label={t("Slash commands")}
 			className="mb-2 max-h-64 overflow-y-auto rounded-sm border border-neutral-700 bg-neutral-900"
 		>
 			{options.map((o, i) => (
@@ -579,9 +582,9 @@ export function Chat({
 				  presentation and a state update per open is not.
 				*/}
 				{opening ? (
-					<span className="opening-label">Opening session…</span>
+					<span className="opening-label">{t("Opening session…")}</span>
 				) : (
-					"Select a session, or press + New."
+					t("Select a session, or press + New.")
 				)}
 			</main>
 		);
@@ -630,7 +633,7 @@ export function Chat({
 		if (files.length === 0) return;
 		const isImage = (f: File) => SUPPORTED_IMAGE_MIME.includes(f.type);
 		if (!canAttach && files.some(isImage)) {
-			setAttachError("This model does not accept images. Switch models to attach one.");
+			setAttachError(t("This model does not accept images. Switch models to attach one."));
 			return;
 		}
 
@@ -652,7 +655,7 @@ export function Chat({
 			 * and still send — they just will not come back after a reload, which
 			 * is better said than silently promised.
 			 */
-			setAttachError(kept ? null : "Attached, but too large to keep if the page reloads.");
+			setAttachError(kept ? null : t("Attached, but too large to keep if the page reloads."));
 		} catch (err) {
 			setAttachError(err instanceof Error ? err.message : String(err));
 		}
@@ -750,10 +753,10 @@ export function Chat({
 					{snapshot.messages.length === 0 && !hasPartial && !busy && !command && (
 						<div className="flex h-full flex-col items-center justify-center gap-2 text-center select-none">
 							<div className="text-display text-amber-400">π</div>
-							<div className="text-title text-neutral-200">New session</div>
+							<div className="text-title text-neutral-200">{t("New session")}</div>
 							<div className="text-ui text-neutral-500">
-								in <span className="font-mono text-neutral-400">{snapshot.cwd.split(/[\\/]/).filter(Boolean).at(-1) ?? snapshot.cwd}</span>
-								{" · "}type <kbd className="font-mono text-neutral-400">/</kbd> for commands
+								{t("in")} <span className="font-mono text-neutral-400">{snapshot.cwd.split(/[\\/]/).filter(Boolean).at(-1) ?? snapshot.cwd}</span>
+								{" · "}{t("type")} <kbd className="font-mono text-neutral-400">/</kbd> {t("for commands")}
 							</div>
 						</div>
 					)}
@@ -861,8 +864,9 @@ export function Chat({
 						<div className="chat-gutter my-3">
 							<div className="chat-measure flex items-center gap-3 rounded-sm border border-amber-900 bg-amber-950/30 px-3 py-2 text-body text-amber-300">
 								<span className="min-w-0 flex-1">
-									Packages changed since this session started. Its commands and skills are the
-									old set until it restarts.
+									{t(
+										"Packages changed since this session started. Its commands and skills are the old set until it restarts.",
+									)}
 								</span>
 								<Button
 									variant="warning"
@@ -871,11 +875,11 @@ export function Chat({
 									disabled={busy}
 									title={
 										busy
-											? "Finish the turn first — a restart mid-turn loses it"
-											: "Replace this session's pi process; the conversation is kept"
+											? t("Finish the turn first — a restart mid-turn loses it")
+											: t("Replace this session's pi process; the conversation is kept")
 									}
 								>
-									Restart session
+									{t("Restart session")}
 								</Button>
 							</div>
 						</div>
@@ -903,7 +907,7 @@ export function Chat({
 							{!atBottom && (
 								<IconButton
 									onClick={toBottom}
-									label="Jump to the latest message"
+									label={t("Jump to the latest message")}
 									variant="outline"
 									round
 								>
@@ -1033,11 +1037,11 @@ export function Chat({
 								// `rows` is the fallback; where `field-sizing: content` is
 								// supported the box starts at one line and grows to max-h-60.
 								rows={2}
-								placeholder="Message pi…"
+								placeholder={t("Message pi…")}
 								title={
 									canAttach
-										? "Enter to send, Shift+Enter for newline, Ctrl+V to paste a screenshot"
-										: "Enter to send, Shift+Enter for newline"
+										? t("Enter to send, Shift+Enter for newline, Ctrl+V to paste a screenshot")
+										: t("Enter to send, Shift+Enter for newline")
 								}
 								// Transparent and borderless: the BOX is the control now, and a
 								// second inset panel inside it was two edges for one field.
@@ -1049,7 +1053,7 @@ export function Chat({
 								<div className="flex min-w-0 items-center gap-1.5">
 									<IconButton
 										onClick={() => fileInput.current?.click()}
-										label="Attach a file"
+										label={t("Attach a file")}
 										round
 									>
 										<Plus size={14} />
@@ -1087,8 +1091,8 @@ export function Chat({
 									{busy && (
 										<IconButton
 											onClick={onAbort}
-											label="Stop"
-											title="Stop this turn"
+											label={t("Stop")}
+											title={t("Stop this turn")}
 											variant="outline"
 											round
 										>
@@ -1097,7 +1101,7 @@ export function Chat({
 									)}
 									<IconButton
 										onClick={() => setAskOnly((a) => !a)}
-										label={askOnly ? "Ask only: on (no code changes)" : "Ask only: off"}
+										label={askOnly ? t("Ask only: on (no code changes)") : t("Ask only: off")}
 										aria-pressed={askOnly}
 										variant={askOnly ? "on" : "ghost"}
 										round
@@ -1107,8 +1111,8 @@ export function Chat({
 									<IconButton
 										onClick={submit}
 										disabled={!text.trim() && images.length === 0}
-										label="Send"
-										title="Send (Enter)"
+										label={t("Send")}
+										title={t("Send (Enter)")}
 										variant="solid"
 										round
 										// `neutral-200` and not `white`: under a light theme the button

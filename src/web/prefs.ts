@@ -29,7 +29,7 @@ function writeStored(key: string, value: string): void {
 
 /**
  * Which palette the UI is painted in: the four Catppuccin flavors, plus
- * Claude's own dark interface.
+ * Claude's own dark and light interfaces.
  *
  * The palettes themselves live in index.css — this only decides which one is
  * active. Applying a theme is one attribute write on <html>; every color in
@@ -45,6 +45,7 @@ export const THEMES = [
 	{ id: "frappe", label: "Catppuccin Frappé" },
 	{ id: "latte", label: "Catppuccin Latte" },
 	{ id: "claude", label: "Claude" },
+	{ id: "claude-light", label: "Claude Light" },
 ] as const;
 
 export type ThemeId = (typeof THEMES)[number]["id"];
@@ -57,6 +58,25 @@ export const DEFAULT_THEME: ThemeId = "mocha";
  * module is even fetched so the first paint is already in the right flavor.
  */
 const THEME_KEY = "pwi:theme";
+
+/** Interface languages, each labelled in itself so it can be found by someone who cannot read the other. */
+export const LANGUAGES = [
+	{ id: "en", label: "English" },
+	{ id: "ru", label: "Русский" },
+] as const;
+
+export type Language = (typeof LANGUAGES)[number]["id"];
+
+const LANGUAGE_KEY = "pwi:language";
+
+export function readLanguage(): Language {
+	const stored = readStored(LANGUAGE_KEY);
+	return LANGUAGES.some((l) => l.id === stored) ? (stored as Language) : "en";
+}
+
+export function writeLanguage(lang: Language): void {
+	writeStored(LANGUAGE_KEY, lang);
+}
 
 const THINKING_KEY = "pwi:showThinking";
 const TOOL_KEY = "pwi:tools";

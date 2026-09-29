@@ -27,6 +27,7 @@ import type { EditorView } from "@codemirror/view";
 import { darkPlus, languageFor, loadCodeMirror } from "./codemirror.js";
 import { Button, PanelHeader } from "./ui.js";
 import { api, unwrap } from "./api.js";
+import { t } from "./i18n.js";
 
 /** `/home/me/proj/src/App.tsx` → `src/App.tsx` when it is under `cwd`. */
 function shortPath(path: string, cwd: string): string {
@@ -161,7 +162,9 @@ export function FileEditor({
 				const body = (await r.json()) as { error?: string };
 				throw new Error(
 					r.status === 409
-						? `${body.error ?? "conflict"} — Reload to get the newer version (your edits stay in the tab until you do).`
+						? t("{error} — Reload to get the newer version (your edits stay in the tab until you do).", {
+								error: body.error ?? t("conflict"),
+							})
 						: (body.error ?? `${r.status}`),
 				);
 			}
@@ -220,19 +223,19 @@ export function FileEditor({
 					className="ml-auto"
 					onClick={() => void save()}
 					disabled={!dirty || saving}
-					title="Save (Ctrl+S)"
+					title={t("Save (Ctrl+S)")}
 				>
 					<FloppyDisk size={13} />
-					Save
+					{t("Save")}
 				</Button>
 				<Button
 					variant="ghost"
 					size="sm"
 					onClick={() => void reload()}
-					title="Re-read from disk, discarding edits in this tab"
+					title={t("Re-read from disk, discarding edits in this tab")}
 				>
 					<ArrowClockwise size={13} />
-					Reload
+					{t("Reload")}
 				</Button>
 			</PanelHeader>
 

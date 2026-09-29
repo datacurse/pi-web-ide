@@ -24,6 +24,7 @@ import { fitHunk } from "../shared/hunks.js";
 import { darkPlus, languageFor, loadCodeMirror } from "./codemirror.js";
 import { Button, PanelHeader } from "./ui.js";
 import { api, unwrap } from "./api.js";
+import { t } from "./i18n.js";
 
 /** `/home/me/proj/src/web/App.tsx` → `src/web/App.tsx` when it is under `cwd`. */
 function shortPath(path: string, cwd: string): string {
@@ -128,9 +129,9 @@ export function HunkRow({
 			</span>
 
 			{gone ? (
-				<span className="text-meta text-amber-500">not in the file any more — nothing to revert</span>
+				<span className="text-meta text-amber-500">{t("not in the file any more — nothing to revert")}</span>
 			) : ambiguous ? (
-				<span className="text-meta text-amber-500">appears {fit.count}× — reverting the nearest</span>
+				<span className="text-meta text-amber-500">{t("appears {count}× — reverting the nearest", { count: fit.count })}</span>
 			) : null}
 
 			<div className="ml-auto flex items-center gap-1">
@@ -144,7 +145,7 @@ export function HunkRow({
 						>
 							<span className="flex items-center gap-1 text-green-400">
 								<Check size={12} weight="bold" />
-								Keep
+								{t("Keep")}
 							</span>
 						</Button>
 						<Button
@@ -158,7 +159,7 @@ export function HunkRow({
 						>
 							<span className="flex items-center gap-1 text-red-400">
 								<ArrowCounterClockwise size={12} weight="bold" />
-								Revert
+								{t("Revert")}
 							</span>
 						</Button>
 					</>
@@ -170,7 +171,7 @@ export function HunkRow({
 						onClick={() => onDecide("pending")}
 					>
 						<span className={hunk.state === "accepted" ? "text-green-400" : "text-neutral-500"}>
-							{hunk.state === "accepted" ? "Kept" : "Reverted"} · undo
+							{hunk.state === "accepted" ? t("Kept · undo") : t("Reverted · undo")}
 						</span>
 					</Button>
 				)}
@@ -264,7 +265,7 @@ export function DiffView({
 					{shortPath(path, cwd)}
 				</span>
 				<span className="shrink-0 text-meta text-neutral-500">
-					{refName ? `${refName.slice(0, 7)} ↔ parent` : "HEAD ↔ working tree"}
+					{refName ? t("{ref} ↔ parent", { ref: refName.slice(0, 7) }) : t("HEAD ↔ working tree")}
 				</span>
 			</PanelHeader>
 
@@ -285,7 +286,7 @@ export function DiffView({
 			))}
 
 			{file === null ? (
-				<p className="p-4 text-ui text-neutral-500">Reading…</p>
+				<p className="p-4 text-ui text-neutral-500">{t("Reading…")}</p>
 			) : file.skipped ? (
 				<p className="p-4 text-ui text-amber-500">{file.skipped}</p>
 			) : (

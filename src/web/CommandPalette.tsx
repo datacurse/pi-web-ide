@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Command, X } from "@phosphor-icons/react";
 import { matches } from "./Settings.js";
 import { IconButton } from "./ui.js";
+import { t } from "./i18n.js";
 
 export interface PaletteCommand {
 	id: string;
@@ -57,7 +58,7 @@ export function CommandPalette({
 	return (
 		<dialog
 			ref={ref}
-			aria-label="Command palette"
+			aria-label={t("Command palette")}
 			onClose={onClose}
 			onClick={(e) => {
 				if (e.target === ref.current) onClose();
@@ -82,17 +83,17 @@ export function CommandPalette({
 							pick(rows[active]);
 						}
 					}}
-					placeholder="Type a command…"
-					aria-label="Command"
+					placeholder={t("Type a command…")}
+					aria-label={t("Command")}
 					className="min-w-0 flex-1 bg-transparent text-title text-neutral-100 outline-none placeholder:text-neutral-500"
 				/>
-				<IconButton onClick={onClose} label="Close command palette">
+				<IconButton onClick={onClose} label={t("Close command palette")}>
 					<X size={13} />
 				</IconButton>
 			</div>
 
-			<div ref={list} role="listbox" aria-label="Commands" className="min-h-0 flex-1 overflow-y-auto p-1.5">
-				{rows.length === 0 && <p className="px-3 py-4 text-ui text-neutral-400">No matching commands.</p>}
+			<div ref={list} role="listbox" aria-label={t("Commands")} className="min-h-0 flex-1 overflow-y-auto p-1.5">
+				{rows.length === 0 && <p className="px-3 py-4 text-ui text-neutral-400">{t("No matching commands.")}</p>}
 				{rows.map((c, i) => (
 					<button
 						data-custom="search result"

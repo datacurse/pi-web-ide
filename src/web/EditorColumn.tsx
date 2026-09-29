@@ -11,6 +11,7 @@ import type { Side, TabGroup } from "./tabs.js";
 import { SplitZone } from "./SplitZone.js";
 import { type Attention } from "./attention.js";
 import { ContextMenu, MenuItem } from "./ui.js";
+import { t } from "./i18n.js";
 
 /**
  * One editor column: a tab strip, and whatever its selected tab shows.
@@ -115,7 +116,7 @@ export function EditorColumn({
 				attention={attention}
 				active={active}
 				panelId={panelId}
-				label={side === "left" ? "Open sessions" : "Open sessions, second column"}
+				label={side === "left" ? t("Open sessions") : t("Open sessions, second column")}
 				listOpen={listOpen}
 				onSelect={onSelect}
 				onClose={onClose}
@@ -207,13 +208,13 @@ export function EditorColumn({
 					{/* Nothing to show: an empty column says so rather than going blank. */}
 					{!showsDoc && !chat && (
 						<p className="m-auto px-4 text-center text-ui text-neutral-500">
-							Drag a tab here, or pick one above.
+							{t("Drag a tab here, or pick one above.")}
 						</p>
 					)}
 				</div>
 			</SplitZone>
 			{menu && (
-				<ContextMenu x={menu.x} y={menu.y} label="New tab" onClose={() => setMenu(null)}>
+				<ContextMenu x={menu.x} y={menu.y} label={t("New tab")} onClose={() => setMenu(null)}>
 					<MenuItem
 						icon={<Plus size={16} />}
 						role="menuitem"
@@ -223,7 +224,7 @@ export function EditorColumn({
 							onNewSession();
 						}}
 					>
-						New AI Session
+						{t("New AI Session")}
 					</MenuItem>
 					<MenuItem
 						icon={<TerminalWindow size={16} />}
@@ -234,7 +235,7 @@ export function EditorColumn({
 							onNewTerminal?.();
 						}}
 					>
-						New Terminal Tab
+						{t("New Terminal Tab")}
 					</MenuItem>
 				</ContextMenu>
 			)}

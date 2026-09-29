@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { AskAnswer, PiAsk } from "../shared/types.js";
 import { Button, inputClass } from "./ui.js";
+import { t } from "./i18n.js";
 
 /**
  * Text written for a terminal, made safe for a browser.
@@ -96,9 +97,9 @@ export function AskPanel({
 				{ask.kind === "confirm" && (
 					<div className="mt-3 flex gap-2">
 						<Button variant="primary" onClick={() => onAnswer(ask.id, { confirmed: true })}>
-							Yes
+							{t("Yes")}
 						</Button>
-						<Button onClick={() => onAnswer(ask.id, { confirmed: false })}>No</Button>
+						<Button onClick={() => onAnswer(ask.id, { confirmed: false })}>{t("No")}</Button>
 					</div>
 				)}
 
@@ -129,10 +130,10 @@ export function AskPanel({
 						/>
 						<div className="mt-2 flex items-center gap-2">
 							<Button type="submit" variant="primary">
-								Answer
+								{t("Answer")}
 							</Button>
 							<span className="text-meta text-neutral-500">
-								{ask.multiline ? "Ctrl+Enter to send" : "Enter to send"}
+								{ask.multiline ? t("Ctrl+Enter to send") : t("Enter to send")}
 							</span>
 						</div>
 					</form>
@@ -144,7 +145,7 @@ export function AskPanel({
 					className="mt-3"
 					onClick={() => onAnswer(ask.id, { cancelled: true })}
 				>
-					Cancel — fails the tool call and ends the turn
+					{t("Cancel — fails the tool call and ends the turn")}
 				</Button>
 			</div>
 		</div>

@@ -1,3 +1,4 @@
+import { t } from "./i18n.js";
 /**
  * tabs.ts — what an entry in the tab strip is.
  *
@@ -76,12 +77,12 @@ export const tabPath = (entry: string): string =>
  * identical tabs.
  */
 export const tabLabel = (entry: string): string => {
-	if (isTermTab(entry)) return "Terminal";
+	if (isTermTab(entry)) return t("Terminal");
 	const path = tabPath(entry);
 	const name = path.split("/").pop() || path;
 	if (!isDiffTab(entry)) return name;
 	const { ref } = diffParts(entry);
-	return ref ? `${name} (${ref.slice(0, 7)})` : `${name} ↔ working tree`;
+	return ref ? `${name} (${ref.slice(0, 7)})` : t("{name} ↔ working tree", { name });
 };
 
 /**

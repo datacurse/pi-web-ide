@@ -51,6 +51,7 @@ import { Settings } from "./Settings.js";
 import { Packages } from "./Packages.js";
 import {
 	applyTheme,
+	type Language,
 	THEMES,
 	readDockHeight,
 	readDockOpen,
@@ -88,6 +89,7 @@ import { setFavicon } from "./favicon.js";
 import { attentionOf, attentionTitle, nextWaiting, type Attention } from "./attention.js";
 import { Button, IconButton, PanelHeader } from "./ui.js";
 import { api, unwrap } from "./api.js";
+import { getLanguage, setLanguage, t } from "./i18n.js";
 
 /**
  * The stand-in for "no session, so no hunks".
@@ -197,6 +199,7 @@ export default function App() {
 	/** The row holding the panel, the chat and the divider between them. */
 	const splitRow = useRef<HTMLDivElement | null>(null);
 	const [theme, setTheme] = useState<ThemeId>(readTheme);
+	const [language, setLanguageState] = useState<Language>(getLanguage);
 	const [showThinking, setShowThinking] = useState(readShowThinking);
 	const [toolMode, setToolMode] = useState<ToolMode>(readToolMode);
 	const [notify, setNotify] = useState(readNotify);
@@ -215,6 +218,11 @@ export default function App() {
 	 * something no longer recognised.
 	 */
 	useEffect(() => applyTheme(theme), [theme]);
+	useEffect(() => void (document.documentElement.lang = language), [language]);
+	const changeLanguage = useCallback((lang: Language) => {
+		setLanguage(lang);
+		setLanguageState(lang);
+	}, []);
 
 	const changeShowThinking = useCallback((show: boolean) => {
 		setShowThinking(show);
@@ -399,7 +407,7 @@ export default function App() {
 	const startShell = async (dir: string): Promise<string> => {
 		const r = await api.terminals.$post({ json: { cwd: project, dir } });
 		const body = (await r.json().catch(() => ({}))) as { id?: string; error?: string };
-		if (!r.ok || !body.id) throw new Error(body.error ?? `could not start a shell (${r.status})`);
+		if (!r.ok || !body.id) throw new Error(body.error ?? t("could not start a shell ({status})", { status: r.status }));
 		return body.id;
 	};
 	const openTerminalAt = async (dir: string) => {
@@ -572,7 +580,7 @@ export default function App() {
 	const loadProjects = useCallback(async (): Promise<void> => {
 		const r = await api.projects.$get().catch(() => null);
 		if (!r?.ok) {
-			setProjects({ projects: [], seed: "", error: r ? `HTTP ${r.status}` : "not answering" });
+			setProjects({ projects: [], seed: "", error: r ? `HTTP ${r.status}` : t("not answering") });
 			return;
 		}
 		const body: unknown = await r.json().catch(() => null);
@@ -630,7 +638,7 @@ export default function App() {
 				projects?: string[];
 			};
 			if (!r?.ok) {
-				alert(body?.error ?? "could not add project");
+				alert(body?.error ?? t("could not add project"));
 				return;
 			}
 			const list = body.projects ?? [];
@@ -669,7 +677,7 @@ export default function App() {
 		if (!r?.ok) {
 			// Said out loud, not left as an empty list: no sessions and no answer
 			// look the same in a list, and only one of them is the machine's fault.
-			setListError(r ? `HTTP ${r.status}` : "pwi is not answering");
+			setListError(r ? `HTTP ${r.status}` : t("pwi is not answering"));
 			return;
 		}
 		setListError(null);
@@ -698,7 +706,7 @@ export default function App() {
 				.catch(() => null);
 			if (!r?.ok) {
 				const body = (await r?.json().catch(() => null)) as { error?: string } | null;
-				alert(body?.error ?? "could not rename this session");
+				alert(body?.error ?? t("could not rename this session"));
 			}
 			await refreshSessions();
 		},
@@ -724,7 +732,7 @@ export default function App() {
 				error?: string;
 			} | null;
 			if (!r?.ok) {
-				alert(body?.error ?? "could not name this session");
+				alert(body?.error ?? t("could not name this session"));
 				return;
 			}
 			if (body?.name) {
@@ -1454,8 +1462,8 @@ export default function App() {
 			const was = polled.current.get(s.path);
 			polled.current.set(s.path, s);
 			if (!was || attached.includes(s.path)) continue;
-			if (s.needsInput && !was.needsInput) announce(s.path, "Needs your answer");
-			else if (was.isStreaming && !s.isStreaming && !s.needsInput) announce(s.path, "Finished");
+			if (s.needsInput && !was.needsInput) announce(s.path, t("Needs your answer"));
+			else if (was.isStreaming && !s.isStreaming && !s.needsInput) announce(s.path, t("Finished"));
 		}
 	}, [shown, tabs.active, tabs.right?.active, announce]);
 
@@ -1511,43 +1519,43 @@ export default function App() {
 	/** Everything the Ctrl+P palette can run. */
 	const lastUsedSide = (): Side => (lastSide.current === "right" && tabsRef.current.right ? "right" : "left");
 	const paletteCommands: PaletteCommand[] = [
-		{ id: "session.new", label: "New AI Session", run: () => void (lastUsedSide() === "right" ? right : left).attach() },
+		{ id: "session.new", label: t("New AI Session"), run: () => void (lastUsedSide() === "right" ? right : left).attach() },
 		...(project
-			? [{ id: "terminal.newTab", label: "New Terminal Tab", run: () => void newTerminalTab(lastUsedSide()) }]
+			? [{ id: "terminal.newTab", label: t("New Terminal Tab"), run: () => void newTerminalTab(lastUsedSide()) }]
 			: []),
-		{ id: "session.search", label: "Search Sessions", keys: "Ctrl+O", run: () => setSearchOpen(true) },
-		{ id: "session.nextWaiting", label: "Go to Next Waiting Session", keys: "Alt+J", run: jumpToWaiting },
+		{ id: "session.search", label: t("Search Sessions"), keys: "Ctrl+O", run: () => setSearchOpen(true) },
+		{ id: "session.nextWaiting", label: t("Go to Next Waiting Session"), keys: "Alt+J", run: jumpToWaiting },
 		{
 			id: "view.explorer",
-			label: panel === "editor" ? "Hide Explorer" : "Show Explorer",
+			label: panel === "editor" ? t("Hide Explorer") : t("Show Explorer"),
 			run: () => selectPanel("editor"),
 		},
 		{
 			id: "view.sourceControl",
-			label: panel === "review" ? "Hide Source Control" : "Show Source Control",
+			label: panel === "review" ? t("Hide Source Control") : t("Show Source Control"),
 			run: () => selectPanel("review"),
 		},
 		{
 			id: "view.terminal",
-			label: dockOpen ? "Hide Terminal" : "Show Terminal",
+			label: dockOpen ? t("Hide Terminal") : t("Show Terminal"),
 			keys: "Ctrl+`",
 			run: toggleTerminal,
 		},
 		{
 			id: "view.thinking",
-			label: showThinking ? "Hide Thinking" : "Show Thinking",
+			label: showThinking ? t("Hide Thinking") : t("Show Thinking"),
 			run: () => changeShowThinking(!showThinking),
 		},
-		{ id: "page.fleet", label: "Open Fleet", run: () => setPage("fleet") },
-		{ id: "page.stats", label: "Open Stats", run: () => setPage("stats") },
-		{ id: "page.packages", label: "Open Packages", run: () => setPage("packages") },
-		{ id: "page.settings", label: "Open Settings", run: () => setPage("settings") },
-		...THEMES.filter((t) => t.id !== theme).map((t) => ({
-			id: `theme.${t.id}`,
-			label: `Theme: ${t.label}`,
-			run: () => setTheme(t.id),
+		{ id: "page.fleet", label: t("Open Fleet"), run: () => setPage("fleet") },
+		{ id: "page.stats", label: t("Open Stats"), run: () => setPage("stats") },
+		{ id: "page.packages", label: t("Open Packages"), run: () => setPage("packages") },
+		{ id: "page.settings", label: t("Open Settings"), run: () => setPage("settings") },
+		...THEMES.filter((th) => th.id !== theme).map((th) => ({
+			id: `theme.${th.id}`,
+			label: t("Theme: {name}", { name: th.label }),
+			run: () => setTheme(th.id),
 		})),
-		{ id: "window.reload", label: "Reload Window", run: () => location.reload() },
+		{ id: "window.reload", label: t("Reload Window"), run: () => location.reload() },
 	];
 
 	/** A page's content inside the page dialog. */
@@ -1571,6 +1579,8 @@ export default function App() {
 				open={active}
 				theme={theme}
 				onTheme={setTheme}
+				language={language}
+				onLanguage={changeLanguage}
 				showThinking={showThinking}
 				onShowThinking={changeShowThinking}
 				toolMode={toolMode}
@@ -1620,11 +1630,11 @@ export default function App() {
 			*/}
 			{restarted && (
 				<div className="fixed inset-x-0 top-0 z-50 flex items-center justify-center gap-3 border-b border-amber-800 bg-amber-950/95 px-3 py-1.5 text-ui text-amber-200">
-					<span>pwi restarted — this page is running the previous build.</span>
+					<span>{t("pwi restarted — this page is running the previous build.")}</span>
 					<Button variant="warning" size="sm" onClick={() => location.reload()}>
-						Reload
+						{t("Reload")}
 					</Button>
-					<IconButton size="sm" onClick={() => setRestarted(false)} label="Dismiss">
+					<IconButton size="sm" onClick={() => setRestarted(false)} label={t("Dismiss")}>
 						<X size={13} className="text-amber-400" />
 					</IconButton>
 				</div>
@@ -1683,8 +1693,8 @@ export default function App() {
 									/>
 								</Explorer>
 							) : (
-								<PanelEmpty title="Explorer" onClose={() => showPanel(null)}>
-									Pick a project first — the file tree is rooted at it.
+								<PanelEmpty title={t("Explorer")} onClose={() => showPanel(null)}>
+									{t("Pick a project first — the file tree is rooted at it.")}
 								</PanelEmpty>
 							))}
 
@@ -1707,8 +1717,8 @@ export default function App() {
 									onChanges={setUncommitted}
 								/>
 							) : (
-								<PanelEmpty title="Source Control" onClose={() => showPanel(null)}>
-									Pick a project first — a working tree belongs to a repository.
+								<PanelEmpty title={t("Source Control")} onClose={() => showPanel(null)}>
+									{t("Pick a project first — a working tree belongs to a repository.")}
 								</PanelEmpty>
 							))}
 					</div>
@@ -1717,7 +1727,7 @@ export default function App() {
 					<div
 						role="separator"
 						aria-orientation="vertical"
-						aria-label="Resize panel"
+						aria-label={t("Resize panel")}
 						aria-valuenow={Math.round(panelWidth)}
 						aria-valuemin={TERMINAL_MIN_PERCENT}
 						aria-valuemax={TERMINAL_MAX_PERCENT}
@@ -1820,7 +1830,7 @@ export default function App() {
 						<div
 							role="separator"
 							aria-orientation="horizontal"
-							aria-label="Resize terminal"
+							aria-label={t("Resize terminal")}
 							aria-valuenow={Math.round(dockHeight)}
 							aria-valuemin={TERMINAL_MIN_PERCENT}
 							aria-valuemax={TERMINAL_MAX_PERCENT}
@@ -1843,8 +1853,8 @@ export default function App() {
 									onToEditor={termToEditor}
 								/>
 							) : (
-								<PanelEmpty title="Terminal" onClose={closeTerminal}>
-									Pick a project first: a shell has to start somewhere.
+								<PanelEmpty title={t("Terminal")} onClose={closeTerminal}>
+									{t("Pick a project first: a shell has to start somewhere.")}
 								</PanelEmpty>
 							)}
 						</div>

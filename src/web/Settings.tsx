@@ -1,8 +1,9 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { Bell, ChatText, ListBullets, Palette, UserCircle } from "@phosphor-icons/react";
 import { Button, inputClass, NavItem, OptionRow, PanelHeader, Section } from "./ui.js";
-import { THEMES, TOOL_MODES, type ThemeId, type ToolMode } from "./prefs.js";
+import { LANGUAGES, THEMES, TOOL_MODES, type Language, type ThemeId, type ToolMode } from "./prefs.js";
 import { api } from "./api.js";
+import { t } from "./i18n.js";
 
 /** What GET/PUT /api/personality answer with. */
 interface Personality {
@@ -59,6 +60,8 @@ export function Settings({
 	open,
 	theme,
 	onTheme,
+	language,
+	onLanguage,
 	showThinking,
 	onShowThinking,
 	toolMode,
@@ -72,6 +75,8 @@ export function Settings({
 	open: boolean;
 	theme: ThemeId;
 	onTheme: (theme: ThemeId) => void;
+	language: Language;
+	onLanguage: (language: Language) => void;
 	showThinking: boolean;
 	onShowThinking: (show: boolean) => void;
 	toolMode: ToolMode;
@@ -92,10 +97,10 @@ export function Settings({
 	const supported = typeof Notification !== "undefined";
 	const notifyBlocked = !supported || Notification.permission === "denied";
 	const notifyHint = !supported
-		? "This browser does not support notifications."
+		? t("This browser does not support notifications.")
 		: Notification.permission === "denied"
-			? "Blocked — allow notifications for this site in your browser."
-			: "Only when the page is in the background. Shows the first line of the answer.";
+			? t("Blocked — allow notifications for this site in your browser.")
+			: t("Only when the page is in the background. Shows the first line of the answer.");
 
 	/*
 	 * Personality lives on the server, so unlike every other control here it
@@ -139,8 +144,8 @@ export function Settings({
 			if (!loaded || typeof loaded.content !== "string") {
 				setLoadError(
 					r && !r.ok
-						? `could not read it (HTTP ${r.status})`
-						: "could not read it — is this pwi older than the field? restart it",
+						? t("could not read it (HTTP {status})", { status: r.status })
+						: t("could not read it — is this pwi older than the field? restart it"),
 				);
 				return;
 			}
@@ -159,7 +164,7 @@ export function Settings({
 	const saveRemind = async (remind: boolean) => {
 		const r = await api.personality.remind.$put({ json: { remind } }).catch(() => null);
 		if (!r?.ok) {
-			setSaveError("could not save the reminder setting");
+			setSaveError(t("could not save the reminder setting"));
 			return;
 		}
 		setPersonality((p) => (p ? { ...p, remind } : p));
@@ -175,7 +180,7 @@ export function Settings({
 		};
 		if (!r?.ok) {
 			setSaveState("idle");
-			setSaveError(body.error ?? "could not save");
+			setSaveError(body.error ?? t("could not save"));
 			return;
 		}
 		// The server answers with what it wrote (a trailing newline may have
@@ -200,25 +205,25 @@ export function Settings({
 	const items: { category: Category; label: string; text: string; node: ReactNode }[] = [
 		{
 			category: "appearance",
-			label: "Theme",
-			text: `color colour palette dark light ${THEMES.map((t) => t.label).join(" ")}`,
+			label: t("Theme"),
+			text: `color colour palette dark light ${THEMES.map((th) => th.label).join(" ")}`,
 			node: (
 				// Real radios, visually hidden: the group gets arrow-key navigation,
 				// roving focus and the right screen reader announcement for free.
-				<div role="radiogroup" aria-label="Theme" className="flex flex-col gap-0.5">
-					{THEMES.map((t) => (
-						<OptionRow key={t.id} selected={t.id === theme}>
+				<div role="radiogroup" aria-label={t("Theme")} className="flex flex-col gap-0.5">
+					{THEMES.map((th) => (
+						<OptionRow key={th.id} selected={th.id === theme}>
 							<input
 								type="radio"
 								name="theme"
-								value={t.id}
-								checked={t.id === theme}
-								onChange={() => onTheme(t.id)}
+								value={th.id}
+								checked={th.id === theme}
+								onChange={() => onTheme(th.id)}
 								className="sr-only"
 							/>
-							<Swatch theme={t.id} />
-							<span className="flex-1">{t.label}</span>
-							<span aria-hidden className={t.id === theme ? "text-amber-400" : "invisible"}>
+							<Swatch theme={th.id} />
+							<span className="flex-1">{th.label}</span>
+							<span aria-hidden className={th.id === theme ? "text-amber-400" : "invisible"}>
 								{"\u2713"}
 							</span>
 						</OptionRow>
@@ -227,9 +232,36 @@ export function Settings({
 			),
 		},
 		{
+			category: "appearance",
+			label: t("Language"),
+			text: `language interface english russian ${LANGUAGES.map((l) => l.label).join(" ")}`,
+			node: (
+				<div role="radiogroup" aria-labelledby="language-label">
+					<div id="language-label" className="px-2 pt-1 pb-1 text-ui text-neutral-300">
+						{t("Language")}
+					</div>
+					{LANGUAGES.map((l) => (
+						<OptionRow key={l.id} selected={l.id === language}>
+							<input
+								type="radio"
+								name="language"
+								value={l.id}
+								checked={l.id === language}
+								onChange={() => onLanguage(l.id)}
+								className="size-3.5 shrink-0 accent-amber-400"
+							/>
+							<span lang={l.id} className="flex-1">
+								{l.label}
+							</span>
+						</OptionRow>
+					))}
+				</div>
+			),
+		},
+		{
 			category: "transcript",
-			label: "Show thinking",
-			text: "Reasoning blocks in assistant messages, as they stream and in history.",
+			label: t("Show thinking"),
+			text: t("Reasoning blocks in assistant messages, as they stream and in history."),
 			node: (
 				// A real checkbox, visible rather than sr-only: there is no swatch
 				// to carry the state, so the box itself is the affordance.
@@ -241,9 +273,9 @@ export function Settings({
 						className="size-4 shrink-0 accent-amber-400"
 					/>
 					<span className="flex-1">
-						Show thinking
+						{t("Show thinking")}
 						<span className="block text-meta text-neutral-500">
-							Reasoning blocks in assistant messages, as they stream and in history.
+							{t("Reasoning blocks in assistant messages, as they stream and in history.")}
 						</span>
 					</span>
 				</OptionRow>
@@ -251,14 +283,14 @@ export function Settings({
 		},
 		{
 			category: "transcript",
-			label: "Tool calls",
-			text: `tools collapse expand ${TOOL_MODES.map((m) => `${m.label} ${m.hint}`).join(" ")}`,
+			label: t("Tool calls"),
+			text: `tools collapse expand ${TOOL_MODES.map((m) => `${t(m.label)} ${t(m.hint)}`).join(" ")}`,
 			node: (
 				// Radios, not a second checkbox: "collapsed" and "hidden" are
 				// different answers to one question.
 				<div role="radiogroup" aria-labelledby="tool-mode-label">
 					<div id="tool-mode-label" className="px-2 pt-1 pb-1 text-ui text-neutral-300">
-						Tool calls
+						{t("Tool calls")}
 					</div>
 					{TOOL_MODES.map((m) => (
 						<OptionRow key={m.id} selected={m.id === toolMode}>
@@ -271,8 +303,8 @@ export function Settings({
 								className="size-3.5 shrink-0 accent-amber-400"
 							/>
 							<span className="flex-1">
-								{m.label}
-								<span className="block text-meta text-neutral-500">{m.hint}</span>
+								{t(m.label)}
+								<span className="block text-meta text-neutral-500">{t(m.hint)}</span>
 							</span>
 						</OptionRow>
 					))}
@@ -281,8 +313,8 @@ export function Settings({
 		},
 		{
 			category: "sessions",
-			label: "Short names from the first prompt",
-			text: "title rename Names an unnamed session by the opening words of your first message instead of showing the whole line.",
+			label: t("Short names from the first prompt"),
+			text: `title rename ${t("Names an unnamed session by the opening words of your first message instead of showing the whole line. A name you set with the pencil in the session list always wins.")}`,
 			node: (
 				<OptionRow>
 					<input
@@ -292,11 +324,11 @@ export function Settings({
 						className="size-4 shrink-0 accent-amber-400"
 					/>
 					<span className="flex-1">
-						Short names from the first prompt
+						{t("Short names from the first prompt")}
 						<span className="block text-meta text-neutral-500">
-							Names an unnamed session by the opening words of your first message instead
-							of showing the whole line. A name you set with the pencil in the session list
-							always wins.
+							{t(
+								"Names an unnamed session by the opening words of your first message instead of showing the whole line. A name you set with the pencil in the session list always wins.",
+							)}
 						</span>
 					</span>
 				</OptionRow>
@@ -304,7 +336,7 @@ export function Settings({
 		},
 		{
 			category: "notifications",
-			label: "Notify when a run finishes",
+			label: t("Notify when a run finishes"),
 			text: `alert desktop done ${notifyHint}`,
 			node: (
 				<OptionRow disabled={notifyBlocked}>
@@ -316,7 +348,7 @@ export function Settings({
 						className="size-4 shrink-0 accent-amber-400"
 					/>
 					<span className="flex-1">
-						Notify when a run finishes
+						{t("Notify when a run finishes")}
 						<span className="block text-meta text-neutral-500">{notifyHint}</span>
 					</span>
 				</OptionRow>
@@ -324,8 +356,8 @@ export function Settings({
 		},
 		{
 			category: "personality",
-			label: "Personality",
-			text: "system prompt instructions Appended to every new session's system prompt",
+			label: t("Personality"),
+			text: `system prompt instructions ${t("Appended to every new session's system prompt")}`,
 			/*
 			  The one control here that is not browser-local: it edits this
 			  server's own personality.md, in the state directory. The path is
@@ -338,15 +370,15 @@ export function Settings({
 				<>
 					<label className="block px-2">
 						<span className="text-ui text-neutral-300">
-							Appended to every new session's system prompt
+							{t("Appended to every new session's system prompt")}
 						</span>
 						<span className="mt-0.5 block font-mono text-meta break-all text-neutral-500">
 							{loadError ? (
 								<span className="text-red-400">{loadError}</span>
 							) : (
 								<>
-									{personality?.path ?? "loading…"}
-									{personality && !personality.exists && " (not created yet)"}
+									{personality?.path ?? t("loading…")}
+									{personality && !personality.exists && ` ${t("(not created yet)")}`}
 								</>
 							)}
 						</span>
@@ -359,7 +391,7 @@ export function Settings({
 							disabled={draft === null}
 							rows={10}
 							spellCheck={false}
-							placeholder={loadError ? "Unavailable." : "Empty means nothing is appended."}
+							placeholder={loadError ? t("Unavailable.") : t("Empty means nothing is appended.")}
 							className={`mt-2 block w-full resize-y font-mono ${inputClass.sm}`}
 						/>
 					</label>
@@ -370,17 +402,17 @@ export function Settings({
 							onClick={() => void savePersonality()}
 							disabled={!dirty || saveState === "saving"}
 						>
-							{saveState === "saving" ? "Saving…" : "Save"}
+							{saveState === "saving" ? t("Saving…") : t("Save")}
 						</Button>
 						<span className="min-w-0 flex-1 text-meta text-neutral-500">
 							{saveError ? (
 								<span className="text-red-400">{saveError}</span>
 							) : dirty ? (
-								"Unsaved changes."
+								t("Unsaved changes.")
 							) : saveState === "saved" ? (
-								"Saved. Applies to sessions started from now on."
+								t("Saved. Applies to sessions started from now on.")
 							) : (
-								"Read from disk each time Settings is shown."
+								t("Read from disk each time Settings is shown.")
 							)}
 						</span>
 					</div>
@@ -389,8 +421,8 @@ export function Settings({
 		},
 		{
 			category: "personality",
-			label: "Repeat before every reply",
-			text: "remind tokens drift Also adds the text to the end of each of your messages on every model request",
+			label: t("Repeat before every reply"),
+			text: `remind tokens drift ${t("Also adds the text to the end of each of your messages on every model request, so long sessions do not drift from it. Costs its length in tokens per message, mostly at the cache-read rate. Applies to sessions started from now on.")}`,
 			node: (
 				<OptionRow>
 					<input
@@ -401,11 +433,11 @@ export function Settings({
 						className="size-4 shrink-0 accent-amber-400"
 					/>
 					<span className="flex-1">
-						Repeat before every reply
+						{t("Repeat before every reply")}
 						<span className="block text-meta text-neutral-500">
-							Also adds the text to the end of each of your messages on every model request,
-							so long sessions do not drift from it. Costs its length in tokens per message,
-							mostly at the cache-read rate. Applies to sessions started from now on.
+							{t(
+								"Also adds the text to the end of each of your messages on every model request, so long sessions do not drift from it. Costs its length in tokens per message, mostly at the cache-read rate. Applies to sessions started from now on.",
+							)}
 						</span>
 					</span>
 				</OptionRow>
@@ -418,7 +450,7 @@ export function Settings({
 		.map((i) => ({
 			...i,
 			hit: searching
-				? matches(query, i.label, `${CATEGORIES.find((c) => c.id === i.category)?.label} ${i.text}`)
+				? matches(query, i.label, `${t(CATEGORIES.find((c) => c.id === i.category)?.label ?? "")} ${i.text}`)
 				: i.category === category && ("none" as const),
 		}))
 		.filter((i) => i.hit);
@@ -438,13 +470,13 @@ export function Settings({
 
 	return (
 		<section
-			aria-label="Settings"
+			aria-label={t("Settings")}
 			className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-neutral-950 text-neutral-100"
 		>
-			<PanelHeader title="Settings" onClose={onClose} />
+			<PanelHeader title={t("Settings")} onClose={onClose} />
 			<div className="flex min-h-0 flex-1">
 				<nav
-					aria-label="Settings categories"
+					aria-label={t("Settings categories")}
 					className="flex w-48 shrink-0 flex-col gap-0.5 overflow-y-auto border-r border-neutral-800 p-2"
 				>
 					<input
@@ -459,8 +491,8 @@ export function Settings({
 							e.stopPropagation();
 							setQuery("");
 						}}
-						placeholder="Search settings"
-						aria-label="Search settings"
+						placeholder={t("Search settings")}
+						aria-label={t("Search settings")}
 						className={`mb-2 w-full ${inputClass.sm}`}
 					/>
 					{CATEGORIES.map((c) => (
@@ -476,17 +508,17 @@ export function Settings({
 								setCategory(c.id);
 							}}
 						>
-							{c.label}
+							{t(c.label)}
 						</NavItem>
 					))}
 				</nav>
 				<div className="min-h-0 min-w-0 flex-1 overflow-y-auto">
 					<div ref={results} className="mx-auto w-full max-w-xl p-6">
 						{searching && !shown.length && (
-							<p className="px-2 text-ui text-neutral-500">No settings match “{query.trim()}”.</p>
+							<p className="px-2 text-ui text-neutral-500">{t("No settings match “{query}”.", { query: query.trim() })}</p>
 						)}
 						{CATEGORIES.filter((c) => hitCategories.has(c.id)).map((c, n) => (
-							<Section key={c.id} title={c.label} className={n ? "mt-6" : ""}>
+							<Section key={c.id} title={t(c.label)} className={n ? "mt-6" : ""}>
 								<div className="flex flex-col gap-2">
 									{shown
 										.filter((i) => i.category === c.id)

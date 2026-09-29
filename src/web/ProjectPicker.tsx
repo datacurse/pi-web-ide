@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { FolderPlus, X } from "@phosphor-icons/react";
 import { DirectoryPicker } from "./DirectoryPicker.js";
 import { Button, inputClass } from "./ui.js";
+import { t } from "./i18n.js";
 
 /**
  * The project list this pwi reports: every directory, plus the cwd it was
@@ -73,7 +74,7 @@ export function ProjectPicker({
 				value={project}
 				onChange={(e) => onProject(e.target.value)}
 				title={project}
-				aria-label="Project"
+				aria-label={t("Project")}
 				className={`min-w-0 flex-1 truncate ${inputClass.sm}`}
 			>
 				{options.map((p) => (
@@ -88,8 +89,8 @@ export function ProjectPicker({
 				size="sm"
 				onClick={() => setPickerOpen(true)}
 				disabled={!!projects.error}
-				aria-label="Add project directory"
-				title="Add project directory"
+				aria-label={t("Add project directory")}
+				title={t("Add project directory")}
 			>
 				<FolderPlus size={13} />
 			</Button>
@@ -105,14 +106,17 @@ export function ProjectPicker({
 					onClick={() => {
 						if (
 							confirm(
-								`Remove ${project} from the project list?\n\nThe directory and its sessions stay on disk — this only hides them here.`,
+								t(
+									"Remove {project} from the project list?\n\nThe directory and its sessions stay on disk — this only hides them here.",
+									{ project },
+								),
 							)
 						) {
 							onRemoveProject(project);
 						}
 					}}
-					aria-label={`Remove ${project} from the list`}
-					title="Remove this project from the list (keeps sessions on disk)"
+					aria-label={t("Remove {project} from the list", { project })}
+					title={t("Remove this project from the list (keeps sessions on disk)")}
 				>
 					<X size={13} />
 				</Button>

@@ -6,6 +6,7 @@ import { sessionLabel, shortName } from "./sessionName.js";
 import { ATTENTION_UI, attentionRank, type Attention } from "./attention.js";
 import { highlight, useSessionSearch } from "./searchHits.js";
 import { Button, ContextMenu, IconButton, MenuItem, inputClass, sectionLabel, useBatches } from "./ui.js";
+import { perLocale, plural, t } from "./i18n.js";
 
 /** The timestamp a row shows, which is always the one it is sorted by. */
 function stamp(s: PiSessionInfo, sort: SessionSort): string {
@@ -14,22 +15,25 @@ function stamp(s: PiSessionInfo, sort: SessionSort): string {
 
 export function timeAgo(iso: string | number): string {
 	const s = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
-	if (s < 60) return "just now";
+	if (s < 60) return t("just now");
 	const m = Math.floor(s / 60);
-	if (m < 60) return `${m}m ago`;
+	if (m < 60) return t("{n}m ago", { n: m });
 	const h = Math.floor(m / 60);
-	if (h < 24) return `${h}h ago`;
+	if (h < 24) return t("{n}h ago", { n: h });
 	const d = Math.floor(h / 24);
-	if (d < 30) return `${d}d ago`;
+	if (d < 30) return t("{n}d ago", { n: d });
 	const mo = Math.floor(d / 30);
-	if (mo < 12) return `${mo}mo ago`;
-	return `${Math.floor(mo / 12)}y ago`;
+	if (mo < 12) return t("{n}mo ago", { n: mo });
+	return t("{n}y ago", { n: Math.floor(mo / 12) });
 }
 
-const dateFmt = new Intl.DateTimeFormat(undefined, {
-	day: "numeric",
-	month: "long",
-});
+const dateFmt = perLocale(
+	(l) =>
+		new Intl.DateTimeFormat(l, {
+			day: "numeric",
+			month: "long",
+		}),
+);
 
 /**
  * Left panel: flat, read-only list of EVERY session in the project.
@@ -165,7 +169,7 @@ export function SessionList({
 			*/}
 			<aside
 				id="session-list"
-				aria-label="All sessions"
+				aria-label={t("All sessions")}
 				// Right edge now, opposite the activity rail: `border-l` and the
 				// drawer anchored to `right-0`, or it would slide in from the side it
 				// no longer lives on.
@@ -186,12 +190,12 @@ export function SessionList({
 				<div className="flex gap-1 border-b border-neutral-800 px-2 py-1.5">
 					<Button variant="subtle" size="sm" onClick={onNew} className="flex-1">
 						<Plus size={12} />
-						New session
+						{t("New session")}
 					</Button>
 					<IconButton
 						onClick={onToggle}
-						label="Hide session list"
-						title="Hide sessions"
+						label={t("Hide session list")}
+						title={t("Hide sessions")}
 						className="wide:hidden"
 					>
 						<X size={13} />
@@ -206,11 +210,11 @@ export function SessionList({
 						onKeyDown={(e) => {
 							if (e.key === "Escape") setQuery("");
 						}}
-						placeholder="Search sessions"
-						aria-label="Search sessions"
+						placeholder={t("Search sessions")}
+						aria-label={t("Search sessions")}
 						className={`min-w-0 flex-1 ${inputClass.sm}`}
 					/>
-					<IconButton size="sm" onClick={onSearch} label="Open search window (Ctrl+O)">
+					<IconButton size="sm" onClick={onSearch} label={t("Open search window (Ctrl+O)")}>
 						<ArrowsOut size={13} />
 					</IconButton>
 				</div>
@@ -218,10 +222,10 @@ export function SessionList({
 				<div className="flex items-center justify-between border-b border-neutral-800 px-2 py-1">
 					<span className={sectionLabel}>
 						{pending
-							? "Searching…"
+							? t("Searching…")
 							: searching
-								? `${rows.length} ${rows.length === 1 ? "match" : "matches"}`
-								: `${sessions.length} ${sessions.length === 1 ? "session" : "sessions"}`}
+								? plural(rows.length, "{n} match", "{n} matches")
+								: plural(sessions.length, "{n} session", "{n} sessions")}
 					</span>
 					{/* Bordered, with an up/down caret: unstyled text on a row that
 					    reads as a table header looks like a column title, not a
@@ -229,9 +233,9 @@ export function SessionList({
 					<Button
 						size="sm"
 						onClick={() => onSort(sort === "created" ? "active" : "created")}
-						title="Switch between newest-created and most-recently-active"
+						title={t("Switch between newest-created and most-recently-active")}
 					>
-						{SESSION_SORTS.find((s) => s.id === sort)?.label}
+						{t(SESSION_SORTS.find((s) => s.id === sort)?.label ?? "")}
 						<CaretUpDown size={10} />
 					</Button>
 				</div>
@@ -248,7 +252,7 @@ export function SessionList({
 					) : (
 						rows.length === 0 && (
 							<p className="px-3 py-4 text-meta text-neutral-400">
-								{searching ? "No sessions match." : "No sessions yet."}
+								{searching ? t("No sessions match.") : t("No sessions yet.")}
 							</p>
 						)
 					)}
@@ -287,11 +291,11 @@ export function SessionList({
 											if (e.key === "Escape") setRenaming(null);
 										}}
 										onBlur={() => setRenaming(null)}
-										aria-label={`Rename ${label}`}
+										aria-label={t("Rename {name}", { name: label })}
 										className={`w-full ${inputClass.sm}`}
 									/>
 									<p className="mt-0.5 text-meta text-neutral-500">
-										Enter to save, Escape to cancel
+										{t("Enter to save, Escape to cancel")}
 									</p>
 								</form>
 							);
@@ -337,16 +341,16 @@ export function SessionList({
 									    pulsing while it works, steady amber for a new reply, red
 									    for a question. */}
 									{pins.includes(s.path) && (
-										<PushPin size={12} weight="fill" className="shrink-0 text-amber-400" aria-label="Pinned" />
+										<PushPin size={12} weight="fill" className="shrink-0 text-amber-400" aria-label={t("Pinned")} />
 									)}
 									{state && (
 										<span
 											className={`size-1.5 shrink-0 rounded-full ${ATTENTION_UI[state].dot}`}
-											title={ATTENTION_UI[state].label}
+											title={t(ATTENTION_UI[state].label)}
 										/>
 									)}
 									<span className="truncate">
-										{naming === s.path ? "Naming…" : highlight(label, terms)}
+										{naming === s.path ? t("Naming…") : highlight(label, terms)}
 									</span>
 								</div>
 								{/*
@@ -363,12 +367,14 @@ export function SessionList({
 								) : (
 								<div
 									className="mt-0.5 text-meta text-neutral-400"
-									title={`Created ${dateFmt.format(new Date(s.created))}, ${timeAgo(
-										s.created,
-									)} · last active ${timeAgo(s.lastActive)}`}
+									title={t("Created {date}, {ago} · last active {active}", {
+										date: dateFmt().format(new Date(s.created)),
+										ago: timeAgo(s.created),
+										active: timeAgo(s.lastActive),
+									})}
 								>
-									{dateFmt.format(new Date(stamp(s, sort)))}, {timeAgo(stamp(s, sort))} ·{" "}
-									{s.messageCount} msg
+									{dateFmt().format(new Date(stamp(s, sort)))}, {timeAgo(stamp(s, sort))} ·{" "}
+									{t("{n} msg", { n: s.messageCount })}
 								</div>
 								)}
 							</button>
@@ -383,7 +389,7 @@ export function SessionList({
 				<ContextMenu
 					x={menu.x}
 					y={menu.y}
-					label={`Session ${sessionLabel(menuSession, shortNames)}`}
+					label={t("Session {name}", { name: sessionLabel(menuSession, shortNames) })}
 					onClose={() => setMenu(null)}
 				>
 					<MenuItem
@@ -394,7 +400,7 @@ export function SessionList({
 							setMenu(null);
 						}}
 					>
-						{pins.includes(menuSession.path) ? "Unpin" : "Pin to top"}
+						{pins.includes(menuSession.path) ? t("Unpin") : t("Pin to top")}
 					</MenuItem>
 					<MenuItem
 						role="menuitem"
@@ -404,7 +410,7 @@ export function SessionList({
 							setMenu(null);
 						}}
 					>
-						Rename…
+						{t("Rename…")}
 					</MenuItem>
 					{/*
 					  The two automatic options, cheapest first. Naming from the
@@ -420,7 +426,7 @@ export function SessionList({
 							if (next) onRename(menuSession, next);
 						}}
 					>
-						Name from first prompt
+						{t("Name from first prompt")}
 					</MenuItem>
 					<MenuItem
 						role="menuitem"
@@ -430,9 +436,9 @@ export function SessionList({
 							void onAutoName(menuSession).finally(() => setNaming(null));
 						}}
 					>
-						Summarise with pi
+						{t("Summarise with pi")}
 						<span className="block text-meta text-neutral-500">
-							Asks pi to title the conversation
+							{t("Asks pi to title the conversation")}
 						</span>
 					</MenuItem>
 				</ContextMenu>

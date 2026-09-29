@@ -1,3 +1,4 @@
+import { t } from "./i18n.js";
 /**
  * What a session is CALLED, in one place.
  *
@@ -20,7 +21,7 @@ export function sessionLabel(
 	// an empty row.
 	const first = info?.firstMessage?.replace(/\s+/g, " ").trim();
 	if (first) return short ? shortName(first) : first.slice(0, 60);
-	return NEW_SESSION;
+	return t("New session");
 }
 
 /**
@@ -32,8 +33,6 @@ export function sessionLabel(
  * read alike; they are told apart by position until the first message names
  * them, which is a second or two later.
  */
-const NEW_SESSION = "New session";
-
 /** How many words a generated name may run to before it stops being a name. */
 const SHORT_WORDS = 8;
 /** And the hard ceiling, for eight words of `--enable-something-long`. */

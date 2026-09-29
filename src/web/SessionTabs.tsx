@@ -17,6 +17,7 @@ import { ATTENTION_UI, type Attention } from "./attention.js";
 import { FileGlyph } from "./fileIcon.js";
 import { diffParts, isDiffTab, isSessionTab, isTermTab, tabLabel, tabPath } from "./tabs.js";
 import { ContextMenu, IconButton, MenuItem, MenuSeparator, tabClass } from "./ui.js";
+import { t } from "./i18n.js";
 
 /**
  * A diff tab's tooltip: the long form VS Code puts in the tab itself.
@@ -26,7 +27,7 @@ import { ContextMenu, IconButton, MenuItem, MenuSeparator, tabClass } from "./ui
  */
 const diffTitle = (entry: string): string => {
 	const { ref, path } = diffParts(entry);
-	return ref ? `${path} — ${ref.slice(0, 7)} ↔ parent` : `${path} — HEAD ↔ working tree`;
+	return `${path} — ${ref ? t("{ref} ↔ parent", { ref: ref.slice(0, 7) }) : t("HEAD ↔ working tree")}`;
 };
 
 /**
@@ -101,7 +102,7 @@ export function SessionTabs({
 	onReveal,
 	onTogglePin,
 	onRename,
-	label = "Open sessions",
+	label = t("Open sessions"),
 }: {
 	/** Open session files, in strip order. */
 	tabs: string[];
@@ -242,8 +243,8 @@ export function SessionTabs({
 				onClick={onToggleList}
 				aria-expanded={listOpen}
 				aria-controls="session-list"
-				label={listOpen ? "Hide session list" : "Show session list"}
-				title="Sessions"
+				label={listOpen ? t("Hide session list") : t("Show session list")}
+				title={t("Sessions")}
 				className="self-center wide:hidden"
 			>
 				<span aria-hidden>{"\u2261"}</span>
@@ -450,7 +451,7 @@ export function SessionTabs({
 									<GitDiff size={13} weight="bold" className="shrink-0 text-neutral-400" />
 								)}
 								{!isFile && pinned.includes(file) && (
-									<PushPin size={12} weight="fill" className="shrink-0 text-amber-400" aria-label="Pinned" />
+									<PushPin size={12} weight="fill" className="shrink-0 text-amber-400" aria-label={t("Pinned")} />
 								)}
 								{/* Marks an AI session so it never reads as a code tab, and
 								    doubles as its live signal: grey when idle, amber and
@@ -478,25 +479,25 @@ export function SessionTabs({
 								{dirty && (
 									<span aria-hidden className="size-1.5 shrink-0 rounded-full bg-amber-400" />
 								)}
-								{dirty && <span className="sr-only">, unsaved changes</span>}
+								{dirty && <span className="sr-only">, {t("unsaved changes")}</span>}
 								{/* Waiting on you: the same dot as unsaved, in the state's color. */}
 								{(state === "ready" || state === "needs") && (
 									<span aria-hidden className={`size-1.5 shrink-0 rounded-full ${ATTENTION_UI[state].dot}`} />
 								)}
-								{state && <span className="sr-only">, {ATTENTION_UI[state].label}</span>}
+								{state && <span className="sr-only">, {t(ATTENTION_UI[state].label)}</span>}
 							</button>
 							<button
 								data-custom="tab close"
 								onClick={() => onClose(file)}
-								aria-label={`Close tab ${label}`}
+								aria-label={t("Close tab {name}", { name: label })}
 								title={
 									isTerm
-										? "Close tab (the shell keeps running in the terminal dock)"
+										? t("Close tab (the shell keeps running in the terminal dock)")
 										: isFile
 										? dirty
-											? "Close tab — unsaved edits will be lost"
-											: "Close tab"
-										: "Close tab (the session keeps running)"
+											? t("Close tab — unsaved edits will be lost")
+											: t("Close tab")
+										: t("Close tab (the session keeps running)")
 								}
 								className={`tab-close absolute top-1/2 right-1.5 flex size-6 -translate-y-1/2 items-center justify-center rounded-sm text-ui leading-none text-neutral-400 transition-opacity duration-150 ease-out after:absolute after:-inset-1 after:content-[''] hover:bg-neutral-800 hover:text-neutral-50 focus-visible:opacity-100 motion-reduce:transition-none ${
 									isActive
@@ -522,7 +523,7 @@ export function SessionTabs({
 
 			{tabs.length === 0 && (
 				<p className="min-w-0 flex-1 self-center truncate px-2 text-meta text-neutral-400">
-					No open sessions. Press + or pick one from the list.
+					{t("No open sessions. Press + or pick one from the list.")}
 				</p>
 			)}
 
@@ -541,10 +542,10 @@ export function SessionTabs({
 					fn();
 				};
 				return (
-					<ContextMenu x={menu.x} y={menu.y} label={`Tab ${label}`} onClose={() => setMenu(null)}>
+					<ContextMenu x={menu.x} y={menu.y} label={t("Tab {name}", { name: label })} onClose={() => setMenu(null)}>
 						{!isFile && onTogglePin && (
 							<MenuItem icon={<PushPin size={16} />} role="menuitem" autoFocus onClick={act(() => onTogglePin(file))}>
-								{pinned.includes(file) ? "Unpin Tab" : "Pin Tab"}
+								{pinned.includes(file) ? t("Unpin Tab") : t("Pin Tab")}
 							</MenuItem>
 						)}
 						{!isFile && onRename && (
@@ -553,16 +554,16 @@ export function SessionTabs({
 								role="menuitem"
 								disabled={!info}
 								onClick={act(() => {
-									const next = window.prompt("Rename session", label)?.trim();
+									const next = window.prompt(t("Rename session"), label)?.trim();
 									if (info && next && next !== info.name) onRename(info, next);
 								})}
 							>
-								Rename…
+								{t("Rename…")}
 							</MenuItem>
 						)}
 						{isEdit && onReveal && (
 							<MenuItem icon={<Crosshair size={16} />} role="menuitem" autoFocus onClick={act(() => onReveal(tabPath(file)))}>
-								Reveal in Explorer
+								{t("Reveal in Explorer")}
 							</MenuItem>
 						)}
 						{isEdit && (
@@ -571,12 +572,12 @@ export function SessionTabs({
 								role="menuitem"
 								onClick={act(() => void navigator.clipboard.writeText(tabPath(file)).catch(() => {}))}
 							>
-								Copy Path
+								{t("Copy Path")}
 							</MenuItem>
 						)}
 						{!closeOnly && <MenuSeparator />}
 						<MenuItem icon={<X size={16} />} role="menuitem" autoFocus={closeOnly} onClick={act(() => onClose(file))}>
-							Close
+							{t("Close")}
 						</MenuItem>
 						<MenuItem
 							icon={<XCircle size={16} />}
@@ -586,7 +587,7 @@ export function SessionTabs({
 								for (const f of tabs) if (f !== file) onClose(f);
 							})}
 						>
-							Close Others
+							{t("Close Others")}
 						</MenuItem>
 						<MenuItem
 							icon={<ArrowLineRight size={16} />}
@@ -596,7 +597,7 @@ export function SessionTabs({
 								for (const f of tabs.slice(index + 1)) onClose(f);
 							})}
 						>
-							Close to the Right
+							{t("Close to the Right")}
 						</MenuItem>
 					</ContextMenu>
 				);

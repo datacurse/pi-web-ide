@@ -13,6 +13,7 @@ import {
 	type ReactNode,
 } from "react";
 import { X } from "@phosphor-icons/react";
+import { t } from "./i18n.js";
 
 const EASE = "transition-colors duration-150 ease-out motion-reduce:transition-none";
 
@@ -374,7 +375,7 @@ export function OptionRow({
 export function PanelHeader({
 	title,
 	onClose,
-	closeLabel = `Close ${title?.toLowerCase() ?? "panel"}`,
+	closeLabel = title ? t("Close {name}", { name: title.toLowerCase() }) : t("Close panel"),
 	children,
 }: {
 	title?: string;

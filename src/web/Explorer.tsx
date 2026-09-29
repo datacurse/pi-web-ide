@@ -34,6 +34,7 @@ import { FileGlyph } from "./fileIcon.js";
 import { readExplorerOpen, writeExplorerOpen } from "./prefs.js";
 import { ContextMenu, IconButton, ListRow, MenuItem, MenuSeparator, PanelHeader, inputClass } from "./ui.js";
 import { api, unwrap } from "./api.js";
+import { t } from "./i18n.js";
 
 /*
  * Directory listings, kept for the life of the page.
@@ -115,7 +116,7 @@ function NameRow({ depth, dir, initial }: { depth: number; dir: boolean; initial
 			<input
 				ref={field}
 				autoFocus
-				aria-label={dir ? "Folder name" : "File name"}
+				aria-label={dir ? t("Folder name") : t("File name")}
 				value={value}
 				onChange={(e) => setValue(e.target.value)}
 				onKeyDown={(e) => {
@@ -446,7 +447,7 @@ export function Explorer({
 	const refresh = () => setManual((n) => n + 1);
 	const fail = (err: unknown) => setError(err instanceof Error ? err.message : String(err));
 	const guard = (path: string) => {
-		if (hasUnsaved(path)) throw new Error("Save or discard the unsaved edits under it first.");
+		if (hasUnsaved(path)) throw new Error(t("Save or discard the unsaved edits under it first."));
 	};
 
 	/** Start a new file or folder in `parent`, opening it so the field shows. */
@@ -497,7 +498,7 @@ export function Explorer({
 
 	const trash = async (entry: PiwFileEntry) => {
 		guard(entry.path);
-		if (!window.confirm(`Move "${entry.name}" to the Trash?`)) return;
+		if (!window.confirm(t("Move \"{name}\" to the Trash?", { name: entry.name }))) return;
 		await unwrap(api.files.trash.$post({ json: { path: entry.path } }));
 		onPathChange(entry.path, null);
 		if (clip && (clip.path === entry.path || clip.path.startsWith(`${entry.path}/`))) setClip(null);
@@ -523,11 +524,11 @@ export function Explorer({
 
 	return (
 		<section
-			aria-label="Explorer"
+			aria-label={t("Explorer")}
 			className="flex min-h-0 min-w-0 flex-1 flex-col bg-neutral-950"
 		>
-			<PanelHeader title="Explorer" onClose={onClose}>
-				<IconButton size="sm" className="ml-auto" onClick={refresh} label="Refresh explorer">
+			<PanelHeader title={t("Explorer")} onClose={onClose}>
+				<IconButton size="sm" className="ml-auto" onClick={refresh} label={t("Refresh explorer")}>
 					<ArrowClockwise size={16} />
 				</IconButton>
 			</PanelHeader>
@@ -589,23 +590,23 @@ export function Explorer({
 						{m.dir ? (
 							<>
 								<MenuItem icon={<FilePlus size={16} />} role="menuitem" autoFocus onClick={act(() => startNew("file", m.path))}>
-									New File…
+									{t("New File…")}
 								</MenuItem>
 								<MenuItem icon={<FolderPlus size={16} />} role="menuitem" onClick={act(() => startNew("folder", m.path))}>
-									New Folder…
+									{t("New Folder…")}
 								</MenuItem>
 							</>
 						) : (
 							<>
 								<MenuItem icon={<FileIcon size={16} />} role="menuitem" autoFocus onClick={act(() => onOpen(m.path))}>
-									Open
+									{t("Open")}
 								</MenuItem>
 								<MenuItem icon={<SquareSplitHorizontal size={16} />} role="menuitem" onClick={act(() => onOpenSide(m.path))}>
-									Open to the Side
+									{t("Open to the Side")}
 								</MenuItem>
 								{changed.has(relativePath(cwd, m.path)) && (
 									<MenuItem icon={<GitDiff size={16} />} role="menuitem" onClick={act(() => onOpenDiff("", relativePath(cwd, m.path)))}>
-										Open Changes
+										{t("Open Changes")}
 									</MenuItem>
 								)}
 							</>
@@ -615,14 +616,14 @@ export function Explorer({
 							<MenuItem icon={<ChatText size={16} />}
 								role="menuitem"
 								disabled={!onAddToChat}
-								title={onAddToChat ? undefined : "Open a session first"}
+								title={onAddToChat ? undefined : t("Open a session first")}
 								onClick={act(() => onAddToChat?.(relativePath(cwd, m.path)))}
 							>
-								Add to Chat
+								{t("Add to Chat")}
 							</MenuItem>
 						)}
 						<MenuItem icon={<TerminalWindow size={16} />} role="menuitem" disabled={!onOpenTerminal} onClick={act(() => onOpenTerminal?.(dir))}>
-							Open in Terminal
+							{t("Open in Terminal")}
 						</MenuItem>
 						{!m.dir && (
 							<MenuItem icon={<DownloadSimple size={16} />}
@@ -634,39 +635,39 @@ export function Explorer({
 									a.click();
 								})}
 							>
-								Download
+								{t("Download")}
 							</MenuItem>
 						)}
 						<MenuSeparator />
 						<MenuItem icon={<Path size={16} />} role="menuitem" onClick={act(() => navigator.clipboard.writeText(m.path))}>
-							Copy Path
+							{t("Copy Path")}
 						</MenuItem>
 						{!menu.root && (
 							<MenuItem icon={<ArrowElbowDownRight size={16} />}
 								role="menuitem"
 								onClick={act(() => navigator.clipboard.writeText(relativePath(cwd, m.path)))}
 							>
-								Copy Relative Path
+								{t("Copy Relative Path")}
 							</MenuItem>
 						)}
 						<MenuSeparator />
 						{!menu.root && (
 							<>
 								<MenuItem icon={<Scissors size={16} />} role="menuitem" onClick={act(() => setClip({ path: m.path, cut: true }))}>
-									Cut
+									{t("Cut")}
 								</MenuItem>
 								<MenuItem icon={<Copy size={16} />} role="menuitem" onClick={act(() => setClip({ path: m.path, cut: false }))}>
-									Copy
+									{t("Copy")}
 								</MenuItem>
 							</>
 						)}
 						<MenuItem icon={<Clipboard size={16} />}
 							role="menuitem"
 							disabled={!clip}
-							title={clip ? `Paste ${clip.path.slice(clip.path.lastIndexOf("/") + 1)} into ${relativePath(cwd, dir)}` : undefined}
+							title={clip ? t("Paste {name} into {dir}", { name: clip.path.slice(clip.path.lastIndexOf("/") + 1), dir: relativePath(cwd, dir) }) : undefined}
 							onClick={act(() => paste(dir))}
 						>
-							Paste
+							{t("Paste")}
 						</MenuItem>
 						{!menu.root && (
 							<>
@@ -678,10 +679,10 @@ export function Explorer({
 										setEdit({ kind: "rename", path: m.path, name: m.name, dir: m.dir });
 									})}
 								>
-									Rename…
+									{t("Rename…")}
 								</MenuItem>
 								<MenuItem icon={<Trash size={16} />} role="menuitem" onClick={act(() => trash(m))}>
-									Delete
+									{t("Delete")}
 								</MenuItem>
 							</>
 						)}

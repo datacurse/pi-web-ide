@@ -4,6 +4,7 @@ import Markdown, { RuleType, type MarkdownToJSX } from "markdown-to-jsx";
 import { extractMath, PLACEHOLDER, type MathSpan } from "./math.js";
 import { Math } from "./Math.js";
 import { Button } from "./ui.js";
+import { t } from "./i18n.js";
 
 /**
  * Renders one fenced code block with a copy-to-clipboard button.
@@ -37,7 +38,7 @@ function CodeBlock({ lang, text }: { lang?: string; text: string }) {
 				className="absolute top-1 right-1 opacity-0 focus-visible:opacity-100 group-hover:opacity-100"
 				onClick={copy}
 			>
-				{copied ? "Copied" : "Copy"}
+				{copied ? t("Copied") : t("Copy")}
 			</Button>
 			<pre className="chat-code overflow-x-auto rounded-sm bg-neutral-900 p-2 pt-7 text-neutral-300">
 				<code>{text}</code>
