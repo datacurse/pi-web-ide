@@ -411,8 +411,8 @@ export function ContextMeter({
 				})
 			: t("Context usage");
 	return (
-		<IconButton label={label} onClick={onToggle} aria-expanded={open} data-context-meter round>
-			<Ring share={share} stroke={1.5} className={`size-8 shrink-0 ${tone}`} />
+		<IconButton label={label} onClick={onToggle} aria-expanded={open} data-context-meter round size="sm">
+			<Ring share={share} stroke={1.5} className={`size-7 shrink-0 ${tone}`} />
 		</IconButton>
 	);
 }

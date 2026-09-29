@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowDown, ArrowUp, Check, Paperclip, QuestionMark, Square } from "@phosphor-icons/react";
+import { ArrowDown, Check, PaperPlaneTilt, Paperclip, QuestionMark, Square } from "@phosphor-icons/react";
 import type {
 	AskAnswer,
 	PiBlock,
@@ -1070,9 +1070,11 @@ export function Chat({
 									<IconButton
 										onClick={() => fileInput.current?.click()}
 										label={t("Attach a file")}
+										variant="bare"
+										size="sm"
 										round
 									>
-										<Paperclip size={28} />
+										<Paperclip size={24} />
 									</IconButton>
 									<input
 										ref={fileInput}
@@ -1109,10 +1111,11 @@ export function Chat({
 											onClick={onAbort}
 											label={t("Stop")}
 											title={t("Stop this turn")}
+										size="sm"
 											variant="outline"
 											round
 										>
-											<Square size={11} weight="fill" />
+											<Square size={10} weight="fill" />
 										</IconButton>
 									)}
 									<IconButton
@@ -1123,10 +1126,15 @@ export function Chat({
 										}}
 										label={askOnly ? t("Ask only: on (no code changes)") : t("Ask only: off")}
 										aria-pressed={askOnly}
-										variant={askOnly ? "on" : "outline"}
+										variant="bare"
+										size="sm"
 										round
 									>
-										<QuestionMark size={14} weight={askOnly ? "bold" : "regular"} />
+										<QuestionMark
+											size={24}
+											weight={askOnly ? "bold" : "regular"}
+											className={askOnly ? "text-amber-400" : undefined}
+										/>
 									</IconButton>
 									{askMenu && (
 										<ContextMenu x={askMenu.x} y={askMenu.y} label={t("Ask only button")} onClose={() => setAskMenu(null)}>
@@ -1152,14 +1160,14 @@ export function Chat({
 										disabled={!text.trim() && images.length === 0}
 										label={t("Send")}
 										title={t("Send (Enter)")}
-										variant="solid"
+										variant="bare"
+										size="sm"
 										round
-										// `neutral-200` and not `white`: under a light theme the button
-										// is dark text on a light page, and hovering to white would
-										// erase it. One step along the ramp moves in a useful direction
-										// whichever way the theme runs.
 									>
-										<ArrowUp size={14} weight="bold" />
+										<PaperPlaneTilt
+											size={24}
+											className={!text.trim() && images.length === 0 ? undefined : "text-neutral-100"}
+										/>
 									</IconButton>
 								</div>
 							</div>

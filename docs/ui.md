@@ -100,12 +100,13 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
 
 ## Composer
 
-- Only Send is a filled disc (`solid`); it greys out while there is nothing to send.
-  `?` and Stop are `outline` round `IconButton`s; the star is `ghost`. Attach is a ghost round
-  `IconButton` whose `Paperclip` fills it (28px, no outline), like Cursor's.
+- Attach, `?` and Send are `bare` round `IconButton`s whose icon fills the button (24px, `size="sm"`,
+  no outline or disc, no background even on hover; hover only brightens the icon), like Cursor's. Stop is an `outline` round `sm` `IconButton`; the star is `ghost`.
+- Send is a `PaperPlaneTilt`: `neutral-100` when there is something to send, the ghost
+  button's disabled `neutral-600` otherwise.
 - The `?` button (directly left of Send, so Stop never shifts it) toggles "Ask only":
-  a 14px `QuestionMark`, `aria-pressed`. When on it uses the `on` variant (amber disc, dark
-  bold icon) so the state reads at a glance. Right-click it (or Settings > Sessions >
+  a `QuestionMark`, `aria-pressed`. When on, the icon turns `amber-400` and bold so the
+  state reads at a glance. Right-click it (or Settings > Sessions >
   `Ask only button`, `pwi:askMode`) to pick `Toggle` (default: stays on until switched
   off) or `One shot` (switches off after each send). The menu marks the current mode
   with a `Check`.
@@ -140,7 +141,7 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
   text lines up with the response text, like Cursor. To keep that exact, the transcript
   reserves its scrollbar on both sides (`scrollbar-gutter: stable both-edges`) and the
   box's edge is an inset `ring-1`, not a border. The git row's right edge follows the box,
-  `mb-2` above it (the same gap as between its buttons), every button `control-md` tall. It is a ring in a ghost round `IconButton`, as wide as the outlined buttons (28px outer edge, 3px stroke: a `size-8 shrink-0` SVG with `stroke={1.5}`, so the flex button cannot shrink it)
+  `mb-2` above it (the same gap as between its buttons), every button `control-md` tall. It is a ring in a ghost round `IconButton`, `size="sm"`, as wide as the other composer buttons (~24px outer edge: a `size-7 shrink-0` SVG with `stroke={1.5}`, so the flex button cannot shrink it)
   (`neutral-700` track, `neutral-400` fill, amber from 75%, red from 90%), drawn empty
   before the first turn instead of hidden.
 - Clicking the ring opens `ContextPanel` above the box (`rounded-md`, like Cursor's):
