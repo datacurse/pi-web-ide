@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { ArrowsOut, CaretUpDown, MagnifyingGlass, PushPin, X } from "@phosphor-icons/react";
+import { ArrowsOut, CaretUpDown, ChatCircle, Clock, MagnifyingGlass, PushPin, X } from "@phosphor-icons/react";
 import type { PiSessionInfo } from "../shared/types.js";
 import { SESSION_SORTS, type SessionSort } from "./prefs.js";
 import { sessionLabel, sessionLine, shortName } from "./sessionName.js";
@@ -14,18 +14,20 @@ function stamp(s: PiSessionInfo, sort: SessionSort): string {
 	return sort === "created" ? s.created : s.lastActive;
 }
 
-export function timeAgo(iso: string | number): string {
+/** `short` drops "ago" ("20m", "now") for the session list's icon line. */
+export function timeAgo(iso: string | number, short = false): string {
 	const s = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
-	if (s < 60) return t("just now");
+	if (s < 60) return short ? t("now") : t("just now");
 	const m = Math.floor(s / 60);
-	if (m < 60) return t("{n}m ago", { n: m });
+	if (m < 60) return short ? t("{n}m", { n: m }) : t("{n}m ago", { n: m });
 	const h = Math.floor(m / 60);
-	if (h < 24) return t("{n}h ago", { n: h });
+	if (h < 24) return short ? t("{n}h", { n: h }) : t("{n}h ago", { n: h });
 	const d = Math.floor(h / 24);
-	if (d < 30) return t("{n}d ago", { n: d });
+	if (d < 30) return short ? t("{n}d", { n: d }) : t("{n}d ago", { n: d });
 	const mo = Math.floor(d / 30);
-	if (mo < 12) return t("{n}mo ago", { n: mo });
-	return t("{n}y ago", { n: Math.floor(mo / 12) });
+	if (mo < 12) return short ? t("{n}mo", { n: mo }) : t("{n}mo ago", { n: mo });
+	const y = Math.floor(mo / 12);
+	return short ? t("{n}y", { n: y }) : t("{n}y ago", { n: y });
 }
 
 const dateFmt = perLocale(
@@ -371,15 +373,21 @@ export function SessionList({
 									</div>
 								) : (
 								<div
-									className="mt-0.5 text-meta text-neutral-400"
+									className="mt-0.5 flex items-center gap-3 text-meta text-neutral-400"
 									title={t("Created {date}, {ago} · last active {active}", {
 										date: dateFmt().format(new Date(s.created)),
 										ago: timeAgo(s.created),
 										active: timeAgo(s.lastActive),
 									})}
 								>
-									{dateFmt().format(new Date(stamp(s, sort)))}, {timeAgo(stamp(s, sort))} ·{" "}
-									{t("{n} msg", { n: s.messageCount })}
+									<span className="inline-flex items-center gap-1">
+										<Clock size={12} className="shrink-0 text-neutral-500" aria-hidden />
+										{timeAgo(stamp(s, sort), true)}
+									</span>
+									<span className="inline-flex items-center gap-1">
+										<ChatCircle size={12} className="shrink-0 text-neutral-500" aria-hidden />
+										{s.messageCount}
+									</span>
 								</div>
 								)}
 							</button>

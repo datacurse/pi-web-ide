@@ -183,7 +183,7 @@ assert.deepEqual(
 
 // (b) The torn session survives with its intact lines counted.
 const tornInfo = a[0];
-assert.equal(tornInfo.messageCount, 2, "torn trailing line is skipped, not counted");
+assert.equal(tornInfo.messageCount, 1, "only user messages count");
 assert.equal(tornInfo.firstMessage, "padded and very", "first text block, trimmed");
 assert.equal(tornInfo.name, undefined, "a session nobody named has no name");
 assert.equal(tornInfo.lastActive, "2026-09-14T11:10:00.000Z", "last message, not last line");
@@ -191,7 +191,7 @@ assert.equal(tornInfo.lastActive, "2026-09-14T11:10:00.000Z", "last message, not
 // Noise entries are not messages, and the LAST `session_info` is the live
 // name: pi appends one per rename rather than rewriting a slot, so a reader
 // that took the first would show the name the session used to have.
-assert.equal(a[1].messageCount, 2, "only message entries count");
+assert.equal(a[1].messageCount, 1, "only user message entries count");
 assert.equal(a[1].name, "renamed once more", "the last session_info wins");
 assert.equal(a[1].id, "00000000-0000-0000-0000-00000000000a", "id from the session header");
 assert.equal(a[1].created, "2026-09-14T09:00:00.000Z", "created from session.timestamp");
@@ -241,7 +241,7 @@ assert.equal(
 );
 
 // A growing session is re-read: the memo is keyed on size+mtime, not path.
-appendFileSync(oldest, `${assistantMsg("2026-09-18T09:00:00.000Z")}\n`);
+appendFileSync(oldest, `${userMsg("again", false, "2026-09-18T09:00:00.000Z")}\n`);
 utimesSync(oldest, 4000, 4000);
 const grown = await listSessions(projectA);
 const grownOldest = grown.find((s) => s.path === oldest);
@@ -264,7 +264,7 @@ utimesSync(misfiled, 5000, 5000);
 await sessionHeaderCwd(misfiled);
 assert.equal(
 	(await listSessions(projectA))[0].messageCount,
-	2,
+	1,
 	"header-only read does not poison the memo",
 );
 

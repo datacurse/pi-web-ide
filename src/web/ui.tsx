@@ -230,9 +230,12 @@ export function ContextMenu({
 	useLayoutEffect(() => {
 		const el = box.current;
 		if (!el) return;
+		const gap = 6;
+		const place = (p: number, size: number, max: number) =>
+			Math.max(8, Math.min(p + gap + size <= max - 8 ? p + gap : p - gap - size, max - size - 8));
 		setPos({
-			left: Math.max(8, Math.min(x, window.innerWidth - el.offsetWidth - 8)),
-			top: Math.max(8, Math.min(y, window.innerHeight - el.offsetHeight - 8)),
+			left: place(x, el.offsetWidth, window.innerWidth),
+			top: place(y, el.offsetHeight, window.innerHeight),
 		});
 	}, [x, y]);
 
@@ -262,7 +265,7 @@ export function ContextMenu({
 			// The dismiss listener is on the window, so keep the menu's own clicks.
 			onPointerDown={(e) => e.stopPropagation()}
 			style={{ ...pos, width }}
-			className="fixed z-40 overflow-hidden rounded-md border border-neutral-700 bg-neutral-900 shadow-2xl"
+			className="fixed z-40 overflow-hidden rounded-md border border-neutral-700 bg-neutral-900 shadow-2xl [&>button]:px-2 [&>button]:py-2 [&>[role=separator]]:my-0"
 		>
 			{children}
 		</div>

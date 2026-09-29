@@ -250,12 +250,9 @@ async function parse(
 					if (typeof entry.name === "string" && entry.name) out.title = entry.name;
 					break;
 				case "message": {
-					// Every `message` entry counts, `toolResult` rows included.
-					// The badge is a "how big is this session" signal, not a
-					// rendered-row count — it cannot be the latter anyway, since
-					// the chat panel folds tool results into their originating
-					// tool call.
-					out.messageCount++;
+					// Only user turns count: assistant and toolResult rows scale
+					// with tool use, not with how much the user said.
+					if ((entry.message as { role?: unknown } | undefined)?.role === "user") out.messageCount++;
 					if (!out.firstMessage) out.firstMessage = userText(entry.message);
 					// Last one wins: the entries are in file order, so this ends
 					// up as the newest real conversation activity.

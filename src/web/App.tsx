@@ -718,7 +718,11 @@ export default function App() {
 			return;
 		}
 		setListError(null);
-		setSessions((await r.json()).sessions);
+		const body = await r.json();
+		// Live but not on disk yet (an unprompted `+ New`): not deleted, so a
+		// reload must not prune its tab.
+		for (const f of body.live) opened.current.add(f);
+		setSessions(body.sessions);
 		setListedProject(scope);
 	}, [project, scope]);
 

@@ -48,6 +48,7 @@ export function sessionsRoutes({ cwd: CWD, registry }: Deps) {
 						isStreaming: streamingIds.has(s.id),
 						needsInput: askingIds.has(s.id),
 					})),
+					live: registry.liveFiles(),
 				}, 200);
 			} catch (err) {
 				return c.json({ error: err instanceof Error ? err.message : String(err) }, 500);

@@ -706,6 +706,19 @@ export class Registry {
 	}
 
 	/**
+	 * Files of the live sessions a client has claimed (spares excluded). The
+	 * list poll sends these so a reloaded page can keep a `+ New` tab whose
+	 * JSONL is not on disk yet instead of pruning it as deleted.
+	 */
+	liveFiles(): string[] {
+		const files: string[] = [];
+		for (const entry of this.entries.values()) {
+			if (entry.spareFor === null && entry.session.file) files.push(entry.session.file);
+		}
+		return files;
+	}
+
+	/**
 	 * IDs of sessions currently streaming, cached or not. Lets the session list
 	 * show a live indicator for background work — the one thing a tab title
 	 * cannot convey when you're looking at a *different* session in the same

@@ -263,6 +263,10 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
 
 ## Session list
 
+- A row's subline is two icon + value pairs, `gap-3` apart: a 12px `Clock` with the short
+  `timeAgo` of the sort's stamp (`20m`, `now`, no "ago") and a 12px `ChatCircle` with the
+  count of user messages. Icons `neutral-500`, values `neutral-400`. The full date lives
+  only in the tooltip.
 - Right-click a row → `Pin to top` / `Unpin`. Pinned rows sort first (in either sort mode)
   and lead with a 12px filled amber `PushPin`. Pins are per-browser (`localStorage`).
 - The same pins apply to the tab strips: a pinned session's tab moves to the front of
@@ -512,7 +516,7 @@ New UI uses these; convert raw markup when you touch it. Tune styles in
 | `IconButton`    | `label` (required; aria-label + tooltip), `variant`: ghost / outline / solid, `size`: sm 24px / md 28px, `round` | Icon-only buttons. `round` only in the composer toolbar. |
 | `MenuItem`      | button props, `icon?` (16px Phosphor, fixed slot, greys with the row) | Rows in dropdown and context menus. Context-menu items carry an icon; give every item in one menu an icon or none. |
 | `MenuSeparator` | —                                                           | Rule between groups of `MenuItem`s. |
-| `ContextMenu`   | `x`, `y`, `label`, `width` (220), `onClose`                 | Right-click menu at the pointer: fixed, clamped on screen, closes on outside click, Escape, scroll, resize. Items call `onClose` after acting. No vertical padding: item hovers run flush to its top and bottom edges. |
+| `ContextMenu`   | `x`, `y`, `label`, `width` (220), `onClose`                 | Right-click menu 6px off the pointer (right and below, flipped to the other side where it would not fit): fixed, clamped on screen, closes on outside click, Escape, scroll, resize. Items call `onClose` after acting. No vertical padding: item hovers run flush to its top and bottom edges; its items are `px-2 py-2` (edge to icon = icon to text; dropdown items stay `px-3 py-1.5`) and its separators have no margin. |
 | `NavItem`       | `icon` (16px Phosphor), `selected`, button props            | Category row in a page's left nav (Settings): `control-md`, `rounded-sm`, `neutral-800` fill when current. |
 | `Section`       | `title`                                                     | Settings group (fieldset + uppercase legend). |
 | `OptionRow`     | `selected`, `disabled`                                      | Clickable row wrapping a radio or checkbox. |
