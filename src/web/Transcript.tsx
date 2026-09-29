@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { ArrowsInLineVertical, ArrowsOutLineVertical, CaretDown, CaretRight, CaretUp, Check, Copy, GitFork, PencilSimple, X } from "@phosphor-icons/react";
+import { ArrowsInLineVertical, ArrowsOutLineVertical, CaretDown, CaretRight, CaretUp, Check, Copy, GitFork, PaperPlaneTilt, PencilSimple, X } from "@phosphor-icons/react";
 import { AnsiHtml } from "fancy-ansi/react";
 import { hasAnsi, stripAnsi } from "fancy-ansi";
 import type { ContextBreakdown, ContextItem, ContextPart, PiBlock, PiImage, PiMessage, PiNotice } from "../shared/types.js";
@@ -7,7 +7,7 @@ import { api, unwrap } from "./api.js";
 import { Button, IconButton, ListRow, sectionLabel } from "./ui.js";
 import { MarkdownText } from "./Markdown.js";
 import { timeAgo } from "./SessionList.js";
-import { Thumb } from "./Attachments.js";
+import { Attachments, Thumb } from "./Attachments.js";
 import { t, plural, locale, getLanguage } from "./i18n.js";
 import type { UserMode } from "./prefs.js";
 
@@ -888,18 +888,16 @@ function CopyButton({ text }: { text: string }) {
 }
 
 /**
- * Under your prompt: copy it, edit it (absent while a turn runs), and when it
+ * Under your prompt: copy it, edit it (disabled while a turn runs), and when it
  * was sent. The answer footer's shape, with Edit in Fork's place.
  */
 function UserFooter({ text, at, onEdit }: { text: string; at?: number; onEdit?: () => void }) {
 	return (
 		<div className="chat-measure mt-1 flex items-center gap-1 text-meta text-neutral-500">
 			<CopyButton text={text} />
-			{onEdit && (
-				<IconButton size="sm" label={t("Edit")} onClick={onEdit}>
-					<PencilSimple size={14} />
-				</IconButton>
-			)}
+			<IconButton size="sm" label={t("Edit")} disabled={!onEdit} onClick={onEdit}>
+				<PencilSimple size={14} />
+			</IconButton>
 			{at !== undefined && (
 				<span className="ml-1" title={new Date(at).toLocaleString(locale())}>
 					{timeAgo(at)}
@@ -948,6 +946,15 @@ function AnswerFooter({
 }
 
 /**
+ * The line between one turn and the next, above your prompt, across the whole
+ * pane (outside the gutter). Kept but invisible above the first prompt, so its
+ * spacing stays.
+ */
+function TurnSeparator() {
+	return <hr aria-hidden className="my-6 -ml-(--scrollbar) border-neutral-800 group-first/turn:invisible" />;
+}
+
+/**
  * The chrome every transcript row shares: the gutter, the speaker label, the
  * prose column. Shared by settled messages, a collapsed run of tool calls,
  * and the streaming row — three things that must line up exactly.
@@ -973,11 +980,17 @@ export function TranscriptRow({
 }) {
 	if (role === "user") {
 		return (
-			<div className="chat-gutter mt-2 pt-6">
-				<div className="chat-measure chat-prose rounded-lg bg-neutral-900 px-4 py-3">
-					{children}
+			<div className="group/turn">
+				<TurnSeparator />
+				<div className="chat-gutter">
+					{/* The composer's width: it overhangs the reading column by its padding. */}
+					<div className="chat-measure">
+						<div className="-mx-3 chat-prose rounded-lg bg-neutral-900 p-3 ring-1 ring-neutral-700 ring-inset">
+							{children}
+						</div>
+					</div>
+					{below}
 				</div>
-				{below}
 			</div>
 		);
 	}
@@ -1053,9 +1066,9 @@ export function Message({
 				text={text}
 				attached={attached}
 				onCancel={() => setEditing(false)}
-				onSend={(next) => {
+				onSend={(next, kept) => {
 					setEditing(false);
-					onEdit(at, next, attached);
+					onEdit(at, next, kept);
 				}}
 			/>
 		);
@@ -1089,8 +1102,9 @@ export function Message({
 }
 
 /**
- * A user message being edited, in the pill's place. Sending drops everything
- * after it and asks again; the attachments go along unchanged.
+ * A user message being edited, in the pill's place, drawn as the composer:
+ * the same box, field and send button, plus Cancel. Sending drops everything
+ * after it and asks again with the attachments that are left.
  */
 function EditMessage({
 	text,
@@ -1101,44 +1115,53 @@ function EditMessage({
 	text: string;
 	attached: PiImage[];
 	onCancel: () => void;
-	onSend: (text: string) => void;
+	onSend: (text: string, images: PiImage[]) => void;
 }) {
 	const [draft, setDraft] = useState(text);
-	const canSend = draft.trim() !== "" || attached.length > 0;
+	const [images, setImages] = useState(attached);
+	const canSend = draft.trim() !== "" || images.length > 0;
 	return (
-		<div className="chat-gutter mt-2 pt-6">
-			<div className="chat-measure rounded-lg border border-neutral-700 bg-neutral-900 px-4 py-3">
-				{attached.length > 0 && (
-					<div className="mb-2 flex flex-wrap gap-2">
-						{attached.map((image, i) => (
-							<Thumb key={i} image={image} label={t("attachment {n}", { n: i + 1 })} />
-						))}
+		<div className="group/turn">
+			<TurnSeparator />
+			<div className="chat-gutter">
+			<div className="chat-measure">
+				<div className="-mx-3 rounded-lg bg-neutral-900 p-3 ring-1 ring-neutral-700 ring-inset">
+					<Attachments images={images} onRemove={(i) => setImages(images.filter((_, n) => n !== i))} />
+					<textarea
+						data-custom="composer"
+						autoFocus
+						value={draft}
+						onChange={(e) => setDraft(e.target.value)}
+						onFocus={(e) => e.currentTarget.setSelectionRange(draft.length, draft.length)}
+						onKeyDown={(e) => {
+							if (e.key === "Escape") onCancel();
+							if (e.key === "Enter" && !e.shiftKey) {
+								e.preventDefault();
+								if (canSend) onSend(draft, images);
+							}
+						}}
+						placeholder={t("Message pi…")}
+						title={t("Enter to send, Shift+Enter for newline, Escape to cancel")}
+						className="chat-prose field-sizing-content max-h-60 w-full resize-none bg-transparent outline-none placeholder:text-neutral-600"
+					/>
+					<div className="mt-4 flex items-center justify-end gap-1.5">
+						<Button size="sm" onClick={onCancel}>
+							{t("Cancel")}
+						</Button>
+						<IconButton
+							onClick={() => onSend(draft, images)}
+							disabled={!canSend}
+							label={t("Send")}
+							title={t("Send (Enter)")}
+							variant="bare"
+							size="sm"
+							round
+						>
+							<PaperPlaneTilt size={24} className={canSend ? "text-neutral-100" : undefined} />
+						</IconButton>
 					</div>
-				)}
-				<textarea
-					data-custom="composer"
-					autoFocus
-					value={draft}
-					onChange={(e) => setDraft(e.target.value)}
-					onFocus={(e) => e.currentTarget.setSelectionRange(draft.length, draft.length)}
-					onKeyDown={(e) => {
-						if (e.key === "Escape") onCancel();
-						if (e.key === "Enter" && !e.shiftKey) {
-							e.preventDefault();
-							if (canSend) onSend(draft);
-						}
-					}}
-					title={t("Enter to send, Shift+Enter for newline, Escape to cancel")}
-					className="chat-prose field-sizing-content max-h-60 w-full resize-none bg-transparent outline-none"
-				/>
-				<div className="mt-2 flex justify-end gap-2">
-					<Button size="sm" onClick={onCancel}>
-						{t("Cancel")}
-					</Button>
-					<Button size="sm" variant="primary" disabled={!canSend} onClick={() => onSend(draft)}>
-						{t("Send")}
-					</Button>
 				</div>
+			</div>
 			</div>
 		</div>
 	);

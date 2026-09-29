@@ -395,6 +395,20 @@
 	scrollbar-width: none;
 }
 
+/*
+ * The scrollbar's width, for the transcript: it reserves the scrollbar gutter
+ * on the right only and pads the left by this much, so it stays centred while
+ * a turn separator can still reach the left edge (a both-edges gutter is
+ * space no content can paint in).
+ */
+:root {
+	--scrollbar: 8px;
+}
+
+:root[data-scrollbars="hidden"] {
+	--scrollbar: 0px;
+}
+
 :root[data-theme="latte"],
 :root[data-theme="claude-light"] {
 	color-scheme: light;

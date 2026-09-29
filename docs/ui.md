@@ -130,7 +130,12 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
   last line clear). No gap between the transcript and the box: the transcript fades from 8px
   (the buttons' gap to the box) above the top of the git buttons to 0.2 opacity at the box's top edge (`.fade-bottom`), along
   `0.2 + 0.8(1-t^1.5)^3`: it eases in, dims fast, and settles at 0.2, never black.
-  Settings > Appearance > `Chat fade` (`pwi:chatFade`, per browser) tunes it live with
+  Settings > Appearance > `Chat fade` is a checkbox row (`pwi:chatFadeOn`, on by default;
+  off removes the mask and hides its controls). While on, a `GearSix` (20px) button beside it,
+  square and as tall as the row (`self-stretch aspect-square`, the row's hover fill,
+  `neutral-800` while open), collapses or expands its controls, with `Reset` shown while expanded; `Expand setting
+  details` (`pwi:settingsExpanded`, on by default) sets whether such panels start
+  expanded, and flipping it applies at once. The controls (`pwi:chatFade`, per browser) tune it live with
   sliders for Length, End opacity, Ease in and Drop, plus `Reset`; `applyChatFade` in
   `prefs.ts` builds the gradient into `--chat-fade`. The fields share one
   `grid-cols-[auto_1fr]`: names in the first column so every description (`text-meta
@@ -147,7 +152,8 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
   corners, and sticks out of the reading column by its padding (`-mx-3`), so the typed
   text lines up with the response text, like Cursor. To keep that exact, the transcript
   reserves its scrollbar on both sides (`scrollbar-gutter: stable both-edges`) and the
-  box's edge is an inset `ring-1`, not a border. The git row's right edge follows the box,
+  box's edge is an inset `ring-1 ring-neutral-700` (Commit & Push's border colour, the same
+  focused or not), not a border. The git row's right edge follows the box,
   `mb-2` above it (the same gap as between its buttons), every button `control-md` tall. It is a ring in a ghost round `IconButton`, `size="sm"`, as wide as the other composer buttons (~24px outer edge: a `size-7 shrink-0` SVG with `stroke={1.5}`, so the flex button cannot shrink it)
   (`neutral-700` track, `neutral-400` fill, amber from 75%, red from 90%), drawn empty
   before the first turn instead of hidden.
@@ -261,20 +267,25 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
 ## User message bubble
 
 - Assistant replies carry no `ASSISTANT` label; the bubble vs. plain prose already says who spoke.
-- The user row is `mt-2 pt-6` (32px) with no bottom padding: the gap above your prompt (between turns)
+- A `neutral-800` rule, full pane width, sits mid-gap above each prompt (`TurnSeparator`, `my-6`;
+  invisible above the first). The transcript reserves the scrollbar gutter on the right
+  only and pads the left by `--scrollbar`, so the rule reaches the left edge (`-ml-(--scrollbar)`). The user row has no bottom padding: the gap above your prompt (between turns)
   is wider than the one under it (to its own answer).
+- The pill has the composer's edge (inset `ring-1 ring-neutral-700`) and width: `-mx-3 p-3`
+  inside `chat-measure`, so it overhangs the reading column like the box and its text
+  lines up with the answer's.
 - Under the pill, always shown: the answer footer's shape — `Copy`, `Edit` (`PencilSimple`,
-  in Fork's slot, absent while a turn runs), then `timeAgo` of when it was sent.
+  in Fork's slot, disabled but still shown while a turn runs), then `timeAgo` of when it was sent.
 
 - Text is clamped to 3 lines (`.fade-clamp`, the last line fades). When it overflows, a ghost
   `Button size="sm"` below it toggles `Show more` / `Show less` with a 12px caret.
   Settings → Transcript → `Your messages` picks Collapsed (default), Expanded (starts
   open, `Show less` still shown) or Always full (no clamp, no button); `pwi:userMessages`.
-- `Edit` swaps the pill for a textarea in the same
-  `rounded-lg` card (plus a `neutral-700` border) with `Cancel` / primary `Send`
-  (`Button sm`). Enter sends, Escape cancels. Sending rewinds the session in place to
-  before that message (pi's `/tree`; the old branch stays in the file) and asks again,
-  attachments unchanged.
+- `Edit` swaps the pill for a copy of the composer box: same ring, field, placeholder and
+  removable `Attachments`, then a bottom row with `Cancel` (`Button sm`) and the round
+  `PaperPlaneTilt` send. No attach, context or model controls. Enter sends, Escape
+  cancels. Sending rewinds the session in place to before that message (pi's `/tree`;
+  the old branch stays in the file) and asks again with the remaining attachments.
 
 ## Reasoning
 
@@ -492,7 +503,7 @@ New UI uses these; convert raw markup when you touch it. Tune styles in
   (chat question options, package search hits), `session card`, `transcript
   disclosure`, `context meter`, `image thumbnail`, `thumbnail remove badge`,
   `pinned-folder chip`, `activity bar item`, `search field`, `search result`,
-  `range slider`.
+  `range slider`, `settings gear`.
 - xterm reads `--text-body` at mount (Terminal.tsx); it cannot take a class.
 - Buttons default to `type="button"`; pass `type="submit"` explicitly.
 - Number inputs have no spin arrows (index.css); they are typed into.

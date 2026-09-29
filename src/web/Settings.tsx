@@ -1,5 +1,5 @@
-import { useId, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { Bell, ChatText, ListBullets, Palette } from "@phosphor-icons/react";
+import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { Bell, ChatText, GearSix, ListBullets, Palette } from "@phosphor-icons/react";
 import { Button, inputClass, NavItem, OptionRow, PanelHeader, Section } from "./ui.js";
 import {
 	applyChatFade,
@@ -7,6 +7,10 @@ import {
 	CHAT_FADE_RANGES,
 	DEFAULT_CHAT_FADE,
 	readChatFade,
+	readChatFadeOn,
+	readSettingsExpanded,
+	writeChatFadeOn,
+	writeSettingsExpanded,
 	type ChatFade,
 	LANGUAGES,
 	THEMES,
@@ -64,34 +68,78 @@ const CHAT_FADE_FIELDS: { key: keyof ChatFade; label: string; hint: string }[] =
 ];
 
 /** Sliders for the transcript's fade above the composer, applied live. */
-function ChatFadeControl() {
+function ChatFadeControl({ expandByDefault }: { expandByDefault: boolean }) {
 	const [fade, setFade] = useState(readChatFade);
+	const [on, setOn] = useState(readChatFadeOn);
+	const [open, setOpen] = useState(expandByDefault);
+	// Flipping the default shows its effect right away.
+	useEffect(() => setOpen(expandByDefault), [expandByDefault]);
 	const change = (next: ChatFade) => {
 		setFade(next);
 		applyChatFade(next);
 	};
 	return (
-		<div className="flex flex-col gap-2 px-2">
-			<div className="flex items-center justify-between gap-2">
-				<span className="text-ui text-neutral-300">{t("Chat fade")}</span>
-				<Button size="sm" variant="ghost" onClick={() => change(DEFAULT_CHAT_FADE)}>
-					{t("Reset")}
-				</Button>
-			</div>
-			{/* One grid for all fields: names share a column, so every description starts at the same edge. */}
-			<div className="grid grid-cols-[auto_1fr] items-center gap-x-3 gap-y-1">
-				{CHAT_FADE_FIELDS.map((f) => (
-					<FadeField
-						key={f.key}
-						label={t(f.label)}
-						hint={t(f.hint)}
-						range={CHAT_FADE_RANGES[f.key]}
-						value={fade[f.key]}
-						onChange={(v) => change({ ...fade, [f.key]: v })}
+		<div className="flex flex-col gap-2">
+			<div className="flex items-center gap-1">
+				<OptionRow className="flex-1">
+					<input
+						type="checkbox"
+						checked={on}
+						onChange={(e) => {
+							setOn(e.target.checked);
+							writeChatFadeOn(e.target.checked);
+						}}
+						className="size-4 shrink-0 accent-amber-400"
 					/>
-				))}
+					<span className="flex-1">
+						{t("Chat fade")}
+						<span className="block text-meta text-neutral-500">
+							{t("Fade the chat out above the message box.")}
+						</span>
+					</span>
+				</OptionRow>
+				{on && open && (
+					<Button size="sm" variant="ghost" onClick={() => change(DEFAULT_CHAT_FADE)}>
+						{t("Reset")}
+					</Button>
+				)}
+				{on && (
+					// As tall as the checkbox row, square, with the row's own hover and selected fills.
+					<button
+						type="button"
+						data-custom="settings gear"
+						aria-label={open ? t("Collapse") : t("Expand")}
+						title={open ? t("Collapse") : t("Expand")}
+						aria-expanded={open}
+						onClick={() => setOpen((o) => !o)}
+						className={`flex aspect-square items-center justify-center self-stretch rounded-sm transition-colors duration-150 ease-out motion-reduce:transition-none ${
+							open
+								? "bg-neutral-800 text-neutral-100"
+								: "text-neutral-400 hover:bg-neutral-900 hover:text-neutral-100"
+						}`}
+					>
+						<GearSix size={20} />
+					</button>
+				)}
 			</div>
-			<ChatFadePreview fade={fade} />
+			{on && open && (
+				<div className="flex flex-col gap-2 px-2">
+					{/* One grid for all fields: names share a column, so every description starts at the same edge. */}
+					<div className="grid grid-cols-[auto_1fr] items-center gap-x-3 gap-y-1">
+						{CHAT_FADE_FIELDS.map((f) => (
+							<FadeField
+								key={f.key}
+								label={t(f.label)}
+								hint={t(f.hint)}
+								range={CHAT_FADE_RANGES[f.key]}
+								value={fade[f.key]}
+								onChange={(v) => change({ ...fade, [f.key]: v })}
+							/>
+						))}
+					</div>
+					<ChatFadePreview fade={fade} />
+				</div>
+			)}
 		</div>
 	);
 }
@@ -277,6 +325,7 @@ export function Settings({
 			: t("Only when the page is in the background. Shows the first line of the answer.");
 
 	const [category, setCategory] = useState<Category>("appearance");
+	const [expandDetails, setExpandDetails] = useState(readSettingsExpanded);
 	const [query, setQuery] = useState("");
 	const results = useRef<HTMLDivElement>(null);
 
@@ -429,7 +478,31 @@ export function Settings({
 			category: "appearance",
 			label: t("Chat fade"),
 			text: `gradient mask composer message box ${CHAT_FADE_FIELDS.map((f) => `${t(f.label)} ${t(f.hint)}`).join(" ")}`,
-			node: <ChatFadeControl />,
+			node: <ChatFadeControl expandByDefault={expandDetails} />,
+		},
+		{
+			category: "appearance",
+			label: t("Expand setting details"),
+			text: `collapse open default ${t("Settings with details, like Chat fade, start expanded.")}`,
+			node: (
+				<OptionRow>
+					<input
+						type="checkbox"
+						checked={expandDetails}
+						onChange={(e) => {
+							setExpandDetails(e.target.checked);
+							writeSettingsExpanded(e.target.checked);
+						}}
+						className="size-4 shrink-0 accent-amber-400"
+					/>
+					<span className="flex-1">
+						{t("Expand setting details")}
+						<span className="block text-meta text-neutral-500">
+							{t("Settings with details, like Chat fade, start expanded.")}
+						</span>
+					</span>
+				</OptionRow>
+			),
 		},
 		{
 			category: "transcript",

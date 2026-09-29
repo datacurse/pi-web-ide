@@ -193,7 +193,35 @@ export function chatFadeOpacity(fade: ChatFade, u: number): number {
 	return fade.floor + (1 - fade.floor) * (1 - u ** fade.easeIn) ** fade.drop;
 }
 
+const CHAT_FADE_ON_KEY = "pwi:chatFadeOn";
+
+/** On by default; off, the transcript has no mask at all. */
+export function readChatFadeOn(): boolean {
+	return readStored(CHAT_FADE_ON_KEY) !== "0";
+}
+
+export function writeChatFadeOn(on: boolean): void {
+	writeStored(CHAT_FADE_ON_KEY, on ? "1" : "0");
+	applyChatFade(readChatFade());
+}
+
+const SETTINGS_EXPANDED_KEY = "pwi:settingsExpanded";
+
+/** Whether settings with a details panel (Chat fade) start expanded. On by default. */
+export function readSettingsExpanded(): boolean {
+	return readStored(SETTINGS_EXPANDED_KEY) !== "0";
+}
+
+export function writeSettingsExpanded(on: boolean): void {
+	writeStored(SETTINGS_EXPANDED_KEY, on ? "1" : "0");
+}
+
 export function applyChatFade(fade: ChatFade): void {
+	writeStored(CHAT_FADE_KEY, JSON.stringify(fade));
+	if (!readChatFadeOn()) {
+		document.documentElement.style.removeProperty("--chat-fade");
+		return;
+	}
 	const stops = ["#000 calc(100% - " + (0.75 + fade.length) + "rem)"];
 	for (let i = 1; i <= 24; i++) {
 		const u = i / 24;
@@ -201,7 +229,6 @@ export function applyChatFade(fade: ChatFade): void {
 		stops.push(`rgb(0 0 0 / ${a.toFixed(3)}) calc(100% - ${(0.75 + (1 - u) * fade.length).toFixed(3)}rem)`);
 	}
 	document.documentElement.style.setProperty("--chat-fade", `linear-gradient(to bottom, ${stops.join(", ")})`);
-	writeStored(CHAT_FADE_KEY, JSON.stringify(fade));
 }
 
 /**

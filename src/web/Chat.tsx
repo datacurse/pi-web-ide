@@ -138,6 +138,9 @@ type Row =
 	  }
 	| { kind: "tools"; blocks: PiBlock[]; labelled: boolean };
 
+/** Page-wide: with two columns, only the first composer to show takes the load focus. */
+let focusedOnLoad = false;
+
 export function Chat({
 	snapshot,
 	partial,
@@ -299,6 +302,13 @@ export function Chat({
 		setAttachError(null);
 		setAskOnly(false);
 	}, [draftKey, draftRev]);
+
+	// A reload lands in the composer, unless something else already took focus.
+	useEffect(() => {
+		if (focusedOnLoad || !draftKey || !composer.current) return;
+		focusedOnLoad = true;
+		if (document.activeElement === document.body) composer.current.focus();
+	}, [draftKey]);
 
 	const seenFocus = useRef(focus?.n);
 	useEffect(() => {
@@ -762,7 +772,7 @@ export function Chat({
 						// otherwise, which React would coalesce but still has to diff.
 						setAtBottom((was) => (was === bottom ? was : bottom));
 					}}
-					className="fade-bottom min-h-0 flex-1 overflow-y-auto pb-12 [scrollbar-gutter:stable_both-edges]"
+					className="fade-bottom min-h-0 flex-1 overflow-y-auto pb-12 pl-(--scrollbar) [scrollbar-gutter:stable]"
 				>
 					{snapshot.messages.length === 0 && !hasPartial && !busy && !command && (
 						<div className="flex h-full flex-col items-center justify-center gap-2 text-center select-none">
@@ -966,7 +976,7 @@ export function Chat({
 						 * widgets that happened to be adjacent rather than as one thing
 						 * you are about to send.
 						 */}
-						<div className="-mx-3 rounded-lg bg-neutral-900 p-3 ring-1 ring-neutral-800 ring-inset focus-within:ring-neutral-700">
+						<div className="-mx-3 rounded-lg bg-neutral-900 p-3 ring-1 ring-neutral-700 ring-inset">
 							<Attachments
 								images={images}
 								onRemove={(i) => void changeImages(images.filter((_, n) => n !== i))}
