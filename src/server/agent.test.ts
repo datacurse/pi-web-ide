@@ -28,23 +28,21 @@ const here = dirname(fileURLToPath(import.meta.url));
 // silently loads none of the project's own extensions, skills or prompt
 // templates.
 // ---------------------------------------------------------------------------
-// Every child loads the rewind extension that "edit message" runs on, and the
-// context extension behind the context popup.
-const REWIND = spawnArgs({})[4]!;
-const CONTEXT = spawnArgs({})[6]!;
+// Every child loads the tool-metrics collector (first, so it sees results
+// before other packages' hooks), the rewind extension that "edit message"
+// runs on, and the context extension behind the context popup.
+const METRICS = spawnArgs({})[4]!;
+const REWIND = spawnArgs({})[6]!;
+const CONTEXT = spawnArgs({})[8]!;
+assert.equal(METRICS.endsWith("/tool-metrics/collector.ts"), true);
 assert.equal(REWIND.endsWith("/rewind-extension.ts"), true);
 assert.equal(CONTEXT.endsWith("/context-extension.ts"), true);
-assert.deepEqual(spawnArgs({}), ["--mode", "rpc", "--approve", "-e", REWIND, "-e", CONTEXT]);
+const BASE = ["--mode", "rpc", "--approve", "-e", METRICS, "-e", REWIND, "-e", CONTEXT];
+assert.deepEqual(spawnArgs({}), BASE);
 assert.deepEqual(
 	spawnArgs({ file: "/s/x.jsonl", model: "anthropic/claude-opus-5", personality: "/p.md" }),
 	[
-		"--mode",
-		"rpc",
-		"--approve",
-		"-e",
-		REWIND,
-		"-e",
-		CONTEXT,
+		...BASE,
 		"--session",
 		"/s/x.jsonl",
 		"--model",
@@ -54,7 +52,7 @@ assert.deepEqual(
 	],
 );
 // The reminder repeats the personality file, so without one it adds nothing.
-assert.deepEqual(spawnArgs({ remind: true }), ["--mode", "rpc", "--approve", "-e", REWIND, "-e", CONTEXT]);
+assert.deepEqual(spawnArgs({ remind: true }), BASE);
 {
 	const args = spawnArgs({ personality: "/p.md", remind: true });
 	assert.equal(args[args.lastIndexOf("-e") + 1]!.endsWith("/remind-extension.ts"), true);

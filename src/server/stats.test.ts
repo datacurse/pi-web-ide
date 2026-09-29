@@ -74,5 +74,85 @@ test("tool calls cost their size and their wait, split across a batch", async ()
 	assert.equal(bash?.ms, 2000);
 	assert.equal(bash?.tokens, Math.ceil((4 + JSON.stringify({ command: "cd x && git status" }).length + 400) / 4));
 	assert.equal(t?.costs.read?.ms, 2000);
+	assert.equal(t?.costs.read?.measured, 0);
 	assert.equal(t?.outliers[0]?.preview, "cd x && git status");
+});
+
+test("measured calls use the collector's time instead of the estimate", async () => {
+	const p = await parseLines(
+		[
+			msg("2026-01-01T00:00:00Z", { role: "user", content: "go", timestamp: Date.parse("2026-01-01T00:00:00Z") }),
+			msg("2026-01-01T00:00:02Z", {
+				role: "assistant",
+				stopReason: "toolUse",
+				content: [
+					{ type: "toolCall", id: "a", name: "edit", arguments: { path: "f" } },
+					{ type: "toolCall", id: "b", name: "read", arguments: { path: "g" } },
+				],
+			}),
+			msg("2026-01-01T00:00:06Z", { role: "toolResult", toolCallId: "a", content: [], timestamp: Date.parse("2026-01-01T00:00:06Z") }),
+			msg("2026-01-01T00:00:06Z", { role: "toolResult", toolCallId: "b", content: [], timestamp: Date.parse("2026-01-01T00:00:06Z") }),
+			msg("2026-01-01T00:00:08Z", { role: "assistant", stopReason: "stop", content: [] }),
+		],
+		{
+			calls: new Map([["a", { v: 1, toolCallId: "a", tool: "edit", ms: 3900, hookMs: 3800, at: 0 }]]),
+			background: new Map(),
+		},
+	);
+	const [t] = p.turns;
+	assert.deepEqual(
+		{ ms: t?.costs.edit?.ms, hookMs: t?.costs.edit?.hookMs, measured: t?.costs.edit?.measured },
+		{ ms: 3900, hookMs: 3800, measured: 1 },
+	);
+	assert.equal(t?.costs.read?.ms, 2000);
+});
+
+test("a measured bash call counts per command, the shell's own time apart", async () => {
+	const command = "cd x && cat f; sleep 1 &";
+	const p = await parseLines(
+		[
+			msg("2026-01-01T00:00:00Z", { role: "user", content: "go", timestamp: Date.parse("2026-01-01T00:00:00Z") }),
+			msg("2026-01-01T00:00:02Z", {
+				role: "assistant",
+				stopReason: "toolUse",
+				content: [{ type: "toolCall", id: "a", name: "bash", arguments: { command } }],
+			}),
+			msg("2026-01-01T00:00:03Z", {
+				role: "toolResult",
+				toolCallId: "a",
+				content: [{ type: "text", text: "y".repeat(400) }],
+				timestamp: Date.parse("2026-01-01T00:00:03Z"),
+			}),
+			msg("2026-01-01T00:00:04Z", { role: "assistant", stopReason: "stop", content: [] }),
+		],
+		{
+			calls: new Map([
+				[
+					"a",
+					{
+						v: 1,
+						toolCallId: "a",
+						tool: "bash",
+						ms: 120,
+						hookMs: 2,
+						at: 0,
+						steps: [
+							{ text: "cd x", ms: 0.1, exit: 0, bytes: 0, shown: 0 },
+							{ text: "cat f", ms: 19.9, exit: 0, bytes: 400, shown: 400 },
+							{ text: "sleep 1", ms: 0.5, exit: 0, bytes: 0, shown: 0 },
+						],
+					},
+				],
+			]),
+			background: new Map([["a", [{ v: 1, type: "background", toolCallId: "a", tool: "bash", pid: 9, step: 2, ms: 1000, at: 0 }]]]),
+		},
+	);
+	const [t] = p.turns;
+	assert.deepEqual(Object.keys(t?.costs ?? {}).sort(), ["bash: (shell)", "bash: cat", "bash: cd", "bash: sleep"]);
+	assert.equal(t?.costs["bash: cat"]?.ms, 19.9);
+	assert.ok((t?.costs["bash: cat"]?.tokens ?? 0) > 95);
+	assert.equal(t?.costs["bash: (shell)"]?.ms, 120 - 20.5);
+	assert.equal(t?.costs["bash: (shell)"]?.hookMs, 2);
+	assert.deepEqual(t?.background, [{ text: "sleep 1", ms: 1000 }]);
+	assert.equal(t?.outliers.find((o) => o.ms === 19.9)?.preview, "cat f");
 });

@@ -495,8 +495,10 @@ export const RU: Record<string, string> = {
 	"Slowest calls": "Самые долгие вызовы",
 	"Largest calls": "Самые объёмные вызовы",
 	"{n}ms": "{n} мс",
-	"Tokens are arguments plus result, about 4 characters each. Time is the wait for the result; calls sent together split their wait evenly.":
-		"Токены — аргументы плюс результат, примерно 4 символа на токен. Время — ожидание результата; вызовы, отправленные вместе, делят его поровну.",
+	"Hooks": "Хуки",
+	"Tokens are arguments plus result, about 4 characters each. Time is measured for {pct}% of calls; the rest is estimated from session timestamps, with calls sent together splitting their wait evenly. Hooks is the part of Time other extensions (pi-lens) spent on the result. A measured bash call counts per command; bash: (shell) is its time outside them.":
+		"Токены — аргументы плюс результат, примерно 4 символа на токен. Время измерено для {pct}% вызовов; для остальных оно оценено по меткам времени сессии, и вызовы, отправленные вместе, делят ожидание поровну. Хуки — часть времени, которую другие расширения (pi-lens) тратят на результат. Измеренный вызов bash считается по командам; bash: (shell) — его время вне них.",
+	"Background jobs": "Фоновые задачи",
 	"Current session": "Текущая сессия",
 	"This week": "Эта неделя",
 	"{model} this week": "{model} за неделю",

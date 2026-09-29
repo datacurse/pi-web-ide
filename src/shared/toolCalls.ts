@@ -82,6 +82,16 @@ export function contentChars(content: unknown): number {
 	return n;
 }
 
+/**
+ * A bash call's size shared out over its measured steps (tool-metrics), by
+ * what each put in context: its own text and its output the model was shown.
+ */
+export function splitBySteps(total: number, steps: { text: string; shown?: number }[]): number[] {
+	const weights = steps.map((s) => s.text.length + (s.shown ?? 0));
+	const sum = weights.reduce((a, b) => a + b, 0);
+	return weights.map((w) => (sum ? (total * w) / sum : total / steps.length));
+}
+
 /** One line saying what a call did, for lists of single calls. */
 export function preview(tool: string, args: unknown): string {
 	const a = (args ?? {}) as Record<string, unknown>;

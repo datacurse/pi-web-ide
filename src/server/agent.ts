@@ -63,7 +63,7 @@ import { fileURLToPath } from "node:url";
 import { personalityPath, readRemind } from "./personality.js";
 import { repairSessionFile } from "./repair.js";
 import { sessionHeaderCwd } from "./sessions.js";
-import { stateDir } from "./state.js";
+import { stateDir, statePath } from "./state.js";
 import { ASK_ONLY, type ContextBreakdown, type ContextItem, type ContextPart } from "../shared/types.js";
 import type {
 	AskAnswer,
@@ -581,7 +581,8 @@ class RpcChild {
 				// model catalog from it. Except `node --watch`'s marker (dev server):
 				// it makes pi's worker threads post `watch:import` messages, which pi's
 				// image-resize worker takes as its reply, dropping every pasted image.
-				env: { ...process.env, WATCH_REPORT_DEPENDENCIES: undefined },
+				// PWI_TOOL_METRICS_DIR: where the tool-metrics collector writes.
+				env: { ...process.env, WATCH_REPORT_DEPENDENCIES: undefined, PWI_TOOL_METRICS_DIR: statePath("tool-metrics") },
 			});
 		} finally {
 			closeSync(out);
@@ -1026,6 +1027,7 @@ const REWIND_EXTENSION = fileURLToPath(new URL("./rewind-extension.ts", import.m
 const REWIND_COMMAND = "pwi-rewind";
 const CONTEXT_EXTENSION = fileURLToPath(new URL("./context-extension.ts", import.meta.url));
 const CONTEXT_COMMAND = "pwi-context";
+const TOOL_METRICS_EXTENSION = fileURLToPath(new URL("../tool-metrics/collector.ts", import.meta.url));
 const CONTEXT_KEYS: ContextPart["key"][] = ["system", "tools", "rules", "skills", "personality", "conversation"];
 
 export function spawnArgs(opts: {
@@ -1043,7 +1045,8 @@ export function spawnArgs(opts: {
 	// question on, and a browser client that opens a project has already
 	// decided to run its code.
 	args.push("--approve");
-	args.push("-e", REWIND_EXTENSION, "-e", CONTEXT_EXTENSION);
+	// First among extensions, so it sees each result before other packages' hooks.
+	args.push("-e", TOOL_METRICS_EXTENSION, "-e", REWIND_EXTENSION, "-e", CONTEXT_EXTENSION);
 	if (opts.file) args.push("--session", opts.file);
 	else if (opts.fork) args.push("--fork", opts.fork);
 	if (opts.model) args.push("--model", opts.model);

@@ -117,7 +117,9 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
     a `w-16` share bar. The largest part starts open.
   - A tool opens further, with a caret left of its name: bash by program (`git status`,
     `grep`, see `shared/toolCalls.ts`), read/edit/write by file, `pl-16`, each bar a share
-    of its tool. Expand all opens these too.
+    of its tool. Expand all opens these too. A bash call the tool-metrics collector split
+    into commands counts under each command's program, by its text and the output of it
+    the model was shown; other calls count under their first program.
   - Footer: an estimates note and `Compact` (`Button sm`). ✕, Escape or a click
     outside closes it.
   - Beside ✕, an `IconButton sm` expands or collapses every part
@@ -325,15 +327,19 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
   Escape inside it goes to the shell, not the dialog.
 - Stats uses the dialog's width: usage beside the summary tiles (1/3 + 2/3), a 52-week
   heatmap full width, answer time beside by-hour, Machines (when there are others) /
-  Models / Projects / Tools in columns, then Tool calls, then Slowest calls beside Largest
-  calls, then every answer (50 at a time, more as the end scrolls into view). The grids
-  stack below `md`.
+  Models / Projects / Tools in columns, then Tool calls, then Slowest calls, Largest calls
+  and Background jobs in three columns, then every answer (50 at a time, more as the end
+  scrolls into view). The grids stack below `md`.
 - Tool calls ranks the top 15 tools, bash split by program (`bash: git status`), by
   Tokens / Time / Calls (header `Button sm`, `subtle`/`ghost`, `aria-pressed`). Mono name,
-  an `amber-500` bar of the chosen metric, then calls, tokens, total time and per call;
-  the chosen column is `neutral-200`, the rest `neutral-500`. A `text-meta` note says how
-  both are measured. Slowest and Largest calls list single calls (tool, command or path,
-  value); the `title` adds when, the project and the prompt.
+  an `amber-500` bar of the chosen metric, then calls, tokens, total time, per call and
+  Hooks (other extensions' share of the time, `–` when nothing was measured); the chosen
+  column is `neutral-200`, the rest `neutral-500`. A `text-meta` note says how both are
+  measured and what share of calls the tool-metrics collector timed. A measured bash call
+  counts per command (`bash: cat`, `bash: pnpm typecheck`), its time outside them as
+  `bash: (shell)`. Slowest and Largest calls list single calls, or a measured bash call's
+  commands (tool, command or path, value); Background jobs lists what `&` left running,
+  longest first, with how long it ran. The `title` adds when, the project and the prompt.
 - Stats covers other machines too: every concrete `Host` in `~/.ssh/config` with pi
   sessions is mirrored over rsync (`server/machines.ts`), no config of its own. The
   header filters All / This PC / one button per machine (ssh alias), the same way as

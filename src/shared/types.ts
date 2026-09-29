@@ -192,8 +192,10 @@ export interface StatsTurn {
 	tools: Record<string, number>;
 	/** Tool, bash split by program (`bash: git status`) \u2192 what its calls cost. */
 	costs: Record<string, ToolCost>;
-	/** This turn's slowest and largest calls. */
+	/** This turn's slowest and largest calls (a measured bash call's commands in its place). */
 	outliers: ToolOutlier[];
+	/** Background jobs this turn's commands started, and how long they ran (tool-metrics). */
+	background: { text: string; ms: number }[];
 	outputTokens: number;
 	cost: number;
 	/** The last assistant message's `stopReason`: `stop`, `error`, `aborted`\u2026 */
@@ -279,12 +281,17 @@ export interface ContextItem {
 
 /**
  * Tool calls in a turn: tokens are arguments plus result (chars / 4), ms is
- * the wait for the result. Calls sent together share one wait, split evenly.
+ * the wait for the result. `measured` calls were timed by the tool-metrics
+ * collector; the rest are estimated from session timestamps, where calls sent
+ * together share one wait, split evenly.
  */
 export interface ToolCost {
 	calls: number;
 	tokens: number;
 	ms: number;
+	/** Of `ms`, what other extensions' result hooks took (pi-lens), in measured calls. */
+	hookMs: number;
+	measured: number;
 }
 
 export interface ToolOutlier {

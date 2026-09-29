@@ -12,8 +12,11 @@
  * prompt has none and counts as system prompt whole.
  */
 
-// With `.ts`: pi's loader, not tsx, resolves this.
-import { contentChars, subKey } from "../shared/toolCalls.ts";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+// With `.ts`: pi's loader, not tsx, resolves these.
+import { contentChars, program, splitBySteps, subKey } from "../shared/toolCalls.ts";
+import { parseMetrics, type Step } from "../tool-metrics/format.ts";
 
 type Block = { type: string; text?: string; thinking?: string; id?: string; name?: string; arguments?: unknown };
 type Message = {
@@ -38,7 +41,7 @@ interface Pi {
 				args: string,
 				ctx: {
 					getSystemPrompt(): string;
-					sessionManager: { buildSessionProjection(): { messages: Message[] } };
+					sessionManager: { buildSessionProjection(): { messages: Message[] }; getSessionId(): string };
 					ui: { setStatus(key: string, text: string | undefined): void };
 				},
 			) => Promise<void>;
@@ -100,11 +103,13 @@ function items(tallies: Map<string, Tally>): Item[] {
  * Conversation chars by kind, and tool calls plus their results by tool, and
  * within a tool by program or file (toolCalls.ts).
  */
-function conversation(messages: Message[]): Item[] {
+function conversation(messages: Message[], measured: Map<string, Step[]>): Item[] {
 	const kinds = new Map<string, Tally>();
 	const home = process.env.HOME;
 	/** A call's sub-item, for its result to land in. */
 	const subs = new Map<string, string>();
+	/** A measured bash call's own chars, split over its commands once its result is in. */
+	const split = new Map<string, number>();
 	const add = (name: string, chars: number, count = 0, sub?: string) => {
 		const k = bump(kinds, name, chars, count);
 		if (sub !== undefined) bump(k.subs, sub, chars, count);
@@ -115,13 +120,25 @@ function conversation(messages: Message[]): Item[] {
 			for (const b of m.content) {
 				if (b.type === "text") add("Replies", b.text?.length ?? 0);
 				else if (b.type === "thinking") add("Thinking", b.thinking?.length ?? 0);
-				else if (b.type === "toolCall") {
+				else if (b.type === "toolCall" && b.id && measured.has(b.id)) {
+					const chars = (b.name?.length ?? 0) + JSON.stringify(b.arguments ?? {}).length;
+					split.set(b.id, chars);
+					add(`tool:${b.name}`, chars, 1);
+				} else if (b.type === "toolCall") {
 					let sub = subKey(b.name ?? "", b.arguments);
 					if (sub && home && home !== "/" && sub.startsWith(home)) sub = `~${sub.slice(home.length)}`;
 					if (sub !== undefined && b.id) subs.set(b.id, sub);
 					add(`tool:${b.name}`, (b.name?.length ?? 0) + JSON.stringify(b.arguments ?? {}).length, 1, sub);
 				}
 			}
+		} else if (m.role === "toolResult" && split.has(m.toolCallId ?? "")) {
+			const id = m.toolCallId ?? "";
+			const chars = contentChars(m.content);
+			const k = bump(kinds, `tool:${m.toolName ?? "?"}`, chars, 0);
+			const steps = measured.get(id) ?? [];
+			const shares = splitBySteps((split.get(id) ?? 0) + chars, steps);
+			steps.forEach((s, i) => bump(k.subs, program(s.text), shares[i] ?? 0, s.runs ?? 1));
+			split.delete(id);
 		} else if (m.role === "toolResult")
 			add(`tool:${m.toolName ?? "?"}`, contentChars(m.content), 0, subs.get(m.toolCallId ?? ""));
 		else if (m.role === "compactionSummary" || m.role === "branchSummary")
@@ -130,6 +147,20 @@ function conversation(messages: Message[]): Item[] {
 		else add("Other", contentChars(m.content));
 	}
 	return items(kinds);
+}
+
+/** This session's bash calls the tool-metrics collector split into commands, by call id. */
+function measuredSteps(sessionId: string): Map<string, Step[]> {
+	const out = new Map<string, Step[]>();
+	const dir = process.env.PWI_TOOL_METRICS_DIR;
+	if (!dir || !/^[\w-]+$/.test(sessionId)) return out;
+	try {
+		for (const r of parseMetrics(readFileSync(join(dir, `${sessionId}.jsonl`), "utf8")))
+			if (!r.type && r.steps?.length) out.set(r.toolCallId, r.steps);
+	} catch {
+		// None measured yet.
+	}
+	return out;
 }
 
 export default function context(pi: Pi) {
@@ -168,7 +199,10 @@ export default function context(pi: Pi) {
 				},
 				{ key: "personality", tokens: tokens(personality.length) },
 			];
-			const convo = conversation(ctx.sessionManager.buildSessionProjection().messages);
+			const convo = conversation(
+				ctx.sessionManager.buildSessionProjection().messages,
+				measuredSteps(ctx.sessionManager.getSessionId()),
+			);
 			parts.push({ key: "conversation", tokens: convo.reduce((n, c) => n + c.tokens, 0), items: convo });
 			ctx.ui.setStatus(COMMAND, JSON.stringify(parts));
 			ctx.ui.setStatus(COMMAND, undefined);

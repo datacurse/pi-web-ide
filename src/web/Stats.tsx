@@ -184,9 +184,10 @@ export function Stats({ open, revision, onClose }: { open: boolean; revision?: u
 							/>
 						</div>
 						<ToolCosts turns={turns} />
-						<div className="grid gap-6 md:grid-cols-2">
+						<div className="grid gap-6 md:grid-cols-3">
 							<Outliers title={t("Slowest calls")} by="ms" turns={turns} />
 							<Outliers title={t("Largest calls")} by="tokens" turns={turns} />
+							<Background turns={turns} />
 						</div>
 						<Answers turns={turns} />
 					</>
@@ -858,7 +859,7 @@ function Bars({ title, rows }: { title?: string; rows: [string, number][] }) {
 	);
 }
 
-type Metric = keyof ToolCost;
+type Metric = "tokens" | "ms" | "calls";
 const METRICS: [Metric, string][] = [
 	["tokens", "Tokens"],
 	["ms", "Time"],
@@ -873,14 +874,19 @@ function ToolCosts({ turns }: { turns: StatsTurn[] }) {
 		const m = new Map<string, ToolCost>();
 		for (const turn of turns)
 			for (const [k, c] of Object.entries(turn.costs)) {
-				const a = m.get(k) ?? { calls: 0, tokens: 0, ms: 0 };
+				const a = m.get(k) ?? { calls: 0, tokens: 0, ms: 0, hookMs: 0, measured: 0 };
 				a.calls += c.calls;
 				a.tokens += c.tokens;
 				a.ms += c.ms;
+				a.hookMs += c.hookMs;
+				a.measured += c.measured;
 				m.set(k, a);
 			}
 		return m;
 	}, [turns]);
+	const all = [...costs.values()];
+	const calls = all.reduce((n, c) => n + c.calls, 0);
+	const measured = calls ? Math.round((all.reduce((n, c) => n + c.measured, 0) / calls) * 100) : 0;
 	const rows = [...costs].sort((a, b) => b[1][by] - a[1][by]).slice(0, TOOL_ROWS);
 	const max = Math.max(1, ...rows.map(([, c]) => c[by]));
 	const cell = (m: Metric | "avg") =>
@@ -913,6 +919,7 @@ function ToolCosts({ turns }: { turns: StatsTurn[] }) {
 						<span className="w-14 shrink-0 text-right">{t("Tokens")}</span>
 						<span className="w-14 shrink-0 text-right">{t("Time")}</span>
 						<span className="w-14 shrink-0 text-right">{t("Per call")}</span>
+						<span className="w-14 shrink-0 text-right">{t("Hooks")}</span>
 					</div>
 					{rows.map(([key, c]) => (
 						<div key={key} className="flex items-center gap-2">
@@ -929,13 +936,15 @@ function ToolCosts({ turns }: { turns: StatsTurn[] }) {
 							<span className={cell("tokens")}>{num().format(c.tokens)}</span>
 							<span className={cell("ms")}>{callDuration(c.ms)}</span>
 							<span className={cell("avg")}>{callDuration(c.ms / c.calls)}</span>
+							<span className={cell("avg")}>{c.measured ? callDuration(c.hookMs) : "\u2013"}</span>
 						</div>
 					))}
 				</div>
 			)}
 			<p className="mt-2 text-meta text-neutral-500">
 				{t(
-					"Tokens are arguments plus result, about 4 characters each. Time is the wait for the result; calls sent together split their wait evenly.",
+					"Tokens are arguments plus result, about 4 characters each. Time is measured for {pct}% of calls; the rest is estimated from session timestamps, with calls sent together splitting their wait evenly. Hooks is the part of Time other extensions (pi-lens) spent on the result. A measured bash call counts per command; bash: (shell) is its time outside them.",
+					{ pct: measured },
 				)}
 			</p>
 		</div>
@@ -970,6 +979,36 @@ function Outliers({ title, by, turns }: { title: string; by: "ms" | "tokens"; tu
 						<span className="w-14 shrink-0 text-right tabular-nums text-neutral-200">
 							{by === "ms" ? callDuration(o.ms) : num().format(o.tokens)}
 						</span>
+					</li>
+				))}
+			</ul>
+		</div>
+	);
+}
+
+/** The longest-lived jobs commands left running with `&`, measured by the tool-metrics collector. */
+function Background({ turns }: { turns: StatsTurn[] }) {
+	const rows = useMemo(
+		() =>
+			turns
+				.flatMap((turn) => turn.background.map((b) => ({ ...b, turn })))
+				.sort((a, b) => b.ms - a.ms)
+				.slice(0, OUTLIER_ROWS),
+		[turns],
+	);
+	return (
+		<div>
+			<h3 className={`mb-2 ${sectionLabel}`}>{t("Background jobs")}</h3>
+			{rows.length === 0 && <p className="text-meta text-neutral-500">{t("None yet.")}</p>}
+			<ul className="flex flex-col gap-1 text-meta">
+				{rows.map((b, i) => (
+					<li
+						key={i}
+						className="flex items-center gap-2"
+						title={`${b.text}\n${stampFmt().format(new Date(b.turn.start))} \u00b7 ${projectName(b.turn.cwd)} \u00b7 ${b.turn.prompt}`}
+					>
+						<span className="min-w-0 flex-1 truncate font-mono text-neutral-300">{b.text}</span>
+						<span className="w-14 shrink-0 text-right tabular-nums text-neutral-200">{callDuration(b.ms)}</span>
 					</li>
 				))}
 			</ul>

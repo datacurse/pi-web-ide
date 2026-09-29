@@ -28,6 +28,8 @@ export interface Machine {
 	name: string;
 	/** The mirror of its `~/.pi/agent/sessions`. */
 	root: string;
+	/** The mirror of its pwi's tool metrics (tool-metrics/FORMAT.md), kept apart so it is never read as sessions. */
+	metrics: string;
 	/** When its mirror last synced, ISO. */
 	synced: string;
 	/** Why the last sync did not reach it. */
@@ -70,6 +72,9 @@ function readIndex(): Index {
 }
 
 const mirror = (id: string) => join(statePath("machines"), id.replace(/[^\w.-]/g, "_"));
+const metricsMirror = (id: string) => join(statePath("machine-metrics"), id.replace(/[^\w.-]/g, "_"));
+/** Where pwi keeps them on the other machine, assuming its default state dir. */
+const REMOTE_METRICS = ".config/pi-web-ide/tool-metrics/";
 
 function localId(): string {
 	let id = "";
@@ -97,7 +102,7 @@ async function probe(host: string): Promise<{ id: string; pi: boolean }> {
 	return { id: lines[0] ?? "", pi: lines.includes("pi") };
 }
 
-async function rsync(host: string, dest: string): Promise<void> {
+async function rsync(host: string, dest: string, from = ".pi/agent/sessions/"): Promise<void> {
 	mkdirSync(dest, { recursive: true });
 	await run(
 		"rsync",
@@ -110,7 +115,7 @@ async function rsync(host: string, dest: string): Promise<void> {
 			"--exclude=*",
 			"-e",
 			`ssh ${SSH.join(" ")}`,
-			`${host}:.pi/agent/sessions/`,
+			`${host}:${from}`,
 			`${dest}/`,
 		],
 		{ timeout: 10 * 60_000, maxBuffer: 16 * 1024 * 1024 },
@@ -157,8 +162,10 @@ async function sync(): Promise<void> {
 	await Promise.all(
 		jobs.map((p) =>
 			rsync(p.host, mirror(p.id)).then(
-				() => {
+				async () => {
 					index.synced[p.id] = new Date().toISOString();
+					// Only machines that run pwi have them; without, it has estimates only.
+					await rsync(p.host, metricsMirror(p.id), REMOTE_METRICS).catch(() => {});
 				},
 				(err: unknown) => {
 					errors.set(p.id, reason(err));
@@ -185,7 +192,7 @@ export function machines(): Machine[] {
 		const synced = id && index.synced[id];
 		if (!id || !synced || seen.has(id)) continue;
 		seen.add(id);
-		out.push({ name: host, root: mirror(id), synced, error: errors.get(id) });
+		out.push({ name: host, root: mirror(id), metrics: metricsMirror(id), synced, error: errors.get(id) });
 	}
 	return out;
 }
