@@ -75,6 +75,8 @@ const BUTTON_VARIANT = {
 	/* An action inside an amber notice or banner. */
 	warning:
 		"border border-amber-700 text-amber-200 hover:bg-amber-900/40 disabled:opacity-50 disabled:hover:bg-transparent",
+	/* A text `StripCell`: with `size="bar"`, a flat full-height cell at a row's end. */
+	cell: "border-l border-neutral-800 text-neutral-400 hover:bg-neutral-900 hover:text-neutral-100 disabled:text-neutral-600 disabled:hover:bg-transparent",
 	/* Low-emphasis actions in toolbars. */
 	ghost:
 		"text-neutral-400 hover:bg-neutral-800 hover:text-neutral-100 disabled:text-neutral-600 disabled:hover:bg-transparent",

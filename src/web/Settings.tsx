@@ -9,6 +9,8 @@ import {
 	applySessionLines,
 	readSessionLines,
 	SESSION_LINES,
+	SESSION_SORTS,
+	type SessionSort,
 	chatFadeOpacity,
 	CHAT_FADE_RANGES,
 	DEFAULT_CHAT_FADE,
@@ -337,6 +339,8 @@ export function Settings({
 	onNotify,
 	latestPrompt,
 	onLatestPrompt,
+	sessionSort,
+	onSessionSort,
 	hideScrollbars,
 	onHideScrollbars,
 	onClose,
@@ -357,6 +361,8 @@ export function Settings({
 	onNotify: (on: boolean) => void;
 	latestPrompt: boolean;
 	onLatestPrompt: (on: boolean) => void;
+	sessionSort: SessionSort;
+	onSessionSort: (sort: SessionSort) => void;
 	hideScrollbars: boolean;
 	onHideScrollbars: (on: boolean) => void;
 	onClose: () => void;
@@ -680,6 +686,31 @@ export function Settings({
 								{t(m.label)}
 								<span className="block text-meta text-neutral-500">{t(m.hint)}</span>
 							</span>
+						</OptionRow>
+					))}
+				</div>
+			),
+		},
+		{
+			category: "sessions",
+			label: t("Session order"),
+			text: `sort order list ${SESSION_SORTS.map((s) => t(s.label)).join(" ")}`,
+			node: (
+				<div role="radiogroup" aria-labelledby="session-sort-label">
+					<div id="session-sort-label" className="px-2 pt-1 pb-1 text-ui text-neutral-300">
+						{t("Session order")}
+					</div>
+					{SESSION_SORTS.map((s) => (
+						<OptionRow key={s.id} selected={s.id === sessionSort}>
+							<input
+								type="radio"
+								name="sessionSort"
+								value={s.id}
+								checked={s.id === sessionSort}
+								onChange={() => onSessionSort(s.id)}
+								className="size-3.5 shrink-0 accent-amber-400"
+							/>
+							<span className="flex-1">{t(s.label)}</span>
 						</OptionRow>
 					))}
 				</div>

@@ -20,7 +20,6 @@ import {
 	type MouseEvent,
 } from "react";
 import {
-	ArrowClockwise,
 	ArrowElbowDownRight,
 	ArrowsInLineVertical,
 	ArrowsOutLineVertical,
@@ -476,7 +475,7 @@ export function Explorer({
 }) {
 	const [roots, setRoots] = useState<PiwFileEntry[]>(() => listings.get(cwd) ?? []);
 	const [error, setError] = useState<string | null>(null);
-	/** Bumped by the refresh button. */
+	/** Bumped after a file operation, to re-read the tree. */
 	const [manual, setManual] = useState(0);
 	const rev = `${revision}:${manual}`;
 	/** Bumped after a commit or push, which changes git's view but not the files. */
@@ -874,9 +873,6 @@ export function Explorer({
 			className="flex min-h-0 min-w-0 flex-1 flex-col bg-neutral-950"
 		>
 			<PanelHeader title={t("Explorer")} onClose={onClose} cells>
-				<StripCell onClick={refresh} label={t("Refresh explorer")}>
-					<ArrowClockwise size={16} />
-				</StripCell>
 				<StripCell onClick={() => void expandAll().catch(fail)} label={t("Expand all folders")}>
 					<ArrowsOutLineVertical size={16} />
 				</StripCell>

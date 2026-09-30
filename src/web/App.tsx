@@ -285,6 +285,10 @@ export default function App() {
 		setLatestPrompt(on);
 		writeLatestPrompt(on);
 	}, []);
+	const changeSessionSort = useCallback((next: SessionSort) => {
+		setSessionSort(next);
+		writeSessionSort(next);
+	}, []);
 
 	/**
 	 * Turning notifications on is what asks the browser for permission: the
@@ -1686,6 +1690,8 @@ export default function App() {
 				onNotify={(on) => void changeNotify(on)}
 				latestPrompt={latestPrompt}
 				onLatestPrompt={changeLatestPrompt}
+				sessionSort={sessionSort}
+				onSessionSort={changeSessionSort}
 				hideScrollbars={hideScrollbars}
 				onHideScrollbars={setHideScrollbars}
 				onClose={onClose}
@@ -2001,10 +2007,7 @@ export default function App() {
 				sort={sessionSort}
 				pinned={pinned}
 				onTogglePin={togglePin}
-				onSort={(next) => {
-					setSessionSort(next);
-					writeSessionSort(next);
-				}}
+				onSort={changeSessionSort}
 				open={listOpen}
 				onToggle={() => setListOpen((o) => !o)}
 				onSelect={(s) => {

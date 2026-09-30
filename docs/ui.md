@@ -265,6 +265,10 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
   no tile.
   The empty-session mark is the same block mark in `amber-400`.
 - The session list sorts needs, then ready, right after pinned rows.
+- Under the search bar, an `h-bar` row: the count (`sectionLabel`, `pl-3`) left and the sort
+  toggle right as a `Button variant="cell" size="bar"` with a 14px `neutral-500` `CaretUpDown`.
+  It cycles `Created` → `Last active` → `Last asked` (last user prompt; moves only when you
+  act). The same choice is a radio group in Settings > Sessions > `Session order`.
 - Alt+J jumps to the next waiting session: needs first, then the longest-waiting reply.
 
 ## Session list
@@ -275,6 +279,11 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
   only in the tooltip.
 - Right-click a row → `Pin to top` / `Unpin`. Pinned rows sort first (in either sort mode)
   and lead with a 12px filled amber `PushPin`. Pins are per-browser (`localStorage`).
+- Right-click a row → `Hide from list` drops it from the list and its search (per browser,
+  `pwi:hiddenSessions`; tabs and the search popup are unaffected). While any are hidden, an
+  `EyeSlash` `StripCell` at the count row's left of the sort toggle shows them (`Eye` in
+  `amber-400`, `aria-pressed`): hidden rows at `opacity-50` with a 12px `neutral-500`
+  `EyeSlash` in the subline, and `Unhide` in their menu.
 - The same pins apply to the tab strips: a pinned session's tab moves to the front of
   its column and shows the same `PushPin` before the `π`.
 
@@ -357,14 +366,14 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
 ## Explorer
 
 - The header's buttons are `StripCell`s (`PanelHeader cells`), running to the right edge
-  with the close ✕ last: refresh (`ArrowClockwise`),
-  `Expand all folders` (`ArrowsOutLineVertical`; level by level, at most 200 folders,
+  with the close ✕ last: `Expand all folders` (`ArrowsOutLineVertical`; level by level, at most 200 folders,
   hidden ones stay shut) and `Collapse all folders` (`ArrowsInLineVertical`).
   Under it, the project row is the same `h-bar` height: the project `<select>` is the whole
   row (borderless, `pl-3`, `text-ui`, `neutral-900` on hover; the native arrow is hidden and a
   14px `neutral-500` `CaretDown` sits `right-3`, the same inset as the text), then `StripCell`s for
   `FolderPlus` (add) and, for any project but the startup one, `X` (remove).
-  Refresh re-reads the root and every expanded folder. The tree also re-reads each time
+  No refresh button: needing one means a missed update, which is a bug to fix. The tree
+  re-reads the root and every expanded folder after a file operation, each time
   the agent finishes a reply, and when anything changes on disk directly inside the
   project folder or an expanded one (`/api/files/watch`, one non-recursive watch each).
 - Git status colours the names with Source Control's tones (`statusStyle`): a file
@@ -608,7 +617,7 @@ New UI uses these; convert raw markup when you touch it. Tune styles in
 
 | Primitive       | Props                                                       | Use |
 | --------------- | ----------------------------------------------------------- | --- |
-| `Button`        | `variant`: primary / secondary (default) / subtle / ghost / warning (inside amber notices); `size`: sm (12px) / md (13px) / bar (13px, flat, `h-bar`, flush with the panel's edges) | Text buttons. One `primary` per dialog or panel. Cancel is `secondary`. |
+| `Button`        | `variant`: primary / secondary (default) / subtle / ghost / warning (inside amber notices) / cell (with `size="bar"`: a text `StripCell`, full height, `neutral-800` rule on its left); `size`: sm (12px) / md (13px) / bar (13px, flat, `h-bar`, flush with the panel's edges) | Text buttons. One `primary` per dialog or panel. Cancel is `secondary`. |
 | `IconButton`    | `label` (required; aria-label + tooltip), `variant`: ghost / outline / solid, `size`: sm 24px / md 28px, `round` | Icon-only buttons. `round` only in the composer toolbar. |
 | `MenuItem`      | button props, `icon?` (16px Phosphor, fixed slot, greys with the row) | Rows in dropdown and context menus. Context-menu items carry an icon; give every item in one menu an icon or none. A description goes under the label (`block text-meta text-neutral-500` span), never beside it. |
 | `MenuSeparator` | —                                                           | Rule between groups of `MenuItem`s. |

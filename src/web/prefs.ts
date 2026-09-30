@@ -456,7 +456,7 @@ export function writeGitNested(on: boolean): void {
 export const SESSION_SORTS = [
 	{ id: "created", label: "Created" },
 	{ id: "active", label: "Last active" },
-	{ id: "response", label: "Last response" },
+	{ id: "asked", label: "Last asked" },
 ] as const;
 
 export type SessionSort = (typeof SESSION_SORTS)[number]["id"];
@@ -476,7 +476,11 @@ const PINNED_SESSIONS_KEY = "pwi:pinnedSessions";
 
 /** Session file paths pinned to the top of the list, in either sort. */
 export function readPinnedSessions(): string[] {
-	const raw = readStored(PINNED_SESSIONS_KEY);
+	return readPathList(PINNED_SESSIONS_KEY);
+}
+
+function readPathList(key: string): string[] {
+	const raw = readStored(key);
 	if (!raw) return [];
 	try {
 		const parsed: unknown = JSON.parse(raw);
@@ -488,6 +492,17 @@ export function readPinnedSessions(): string[] {
 
 export function writePinnedSessions(paths: string[]): void {
 	writeStored(PINNED_SESSIONS_KEY, JSON.stringify(paths));
+}
+
+const HIDDEN_SESSIONS_KEY = "pwi:hiddenSessions";
+
+/** Session file paths left out of the session list unless it shows hidden ones. */
+export function readHiddenSessions(): string[] {
+	return readPathList(HIDDEN_SESSIONS_KEY);
+}
+
+export function writeHiddenSessions(paths: string[]): void {
+	writeStored(HIDDEN_SESSIONS_KEY, JSON.stringify(paths));
 }
 
 const SEEN_SESSIONS_KEY = "pwi:seenSessions";

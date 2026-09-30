@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
-import { ArrowsOut, CaretUpDown, ChatCircle, Clock, MagnifyingGlass, PushPin, X } from "@phosphor-icons/react";
+import { ArrowsOut, CaretUpDown, ChatCircle, Clock, Eye, EyeSlash, MagnifyingGlass, PushPin, X } from "@phosphor-icons/react";
 import type { PiSessionInfo } from "../shared/types.js";
-import { SESSION_SORTS, type SessionSort } from "./prefs.js";
+import { SESSION_SORTS, readHiddenSessions, writeHiddenSessions, type SessionSort } from "./prefs.js";
 import { sessionLabel, shortName } from "./sessionName.js";
 import { ATTENTION_UI, attentionRank, type Attention } from "./attention.js";
 import { highlight, useSessionSearch } from "./searchHits.js";
@@ -11,7 +11,7 @@ import { ScrollPane } from "./OverlayScrollbar.js";
 
 /** The timestamp a row shows, which is always the one it is sorted by. */
 function stamp(s: PiSessionInfo, sort: SessionSort): string {
-	if (sort === "response") return s.lastResponse ?? s.created;
+	if (sort === "asked") return s.lastAsked ?? s.created;
 	return sort === "created" ? s.created : s.lastActive;
 }
 
@@ -131,9 +131,23 @@ export function SessionList({
 	const { hits, terms, pending, error: searchError } = useSessionSearch(project, query);
 	const searching = terms.length > 0;
 	const snippets = new Map(hits.map((h) => [h.session.path, h.snippet]));
-	const rows = searching
-		? hits.map((h) => sessions.find((s) => s.path === h.session.path) ?? h.session)
-		: ordered;
+	/*
+	 * Hidden sessions (per browser) drop out of the list and its search. The
+	 * eye cell in the count row shows them again, dimmed, so they can be
+	 * unhidden from the same right-click menu.
+	 */
+	const [hidden, setHidden] = useState(readHiddenSessions);
+	const [showHidden, setShowHidden] = useState(false);
+	const hiddenCount = sessions.filter((s) => hidden.includes(s.path)).length;
+	const toggleHidden = (path: string) => {
+		const next = hidden.includes(path) ? hidden.filter((p) => p !== path) : [...hidden, path];
+		setHidden(next);
+		writeHiddenSessions(next);
+		if (!sessions.some((s) => next.includes(s.path))) setShowHidden(false);
+	};
+	const rows = (
+		searching ? hits.map((h) => sessions.find((s) => s.path === h.session.path) ?? h.session) : ordered
+	).filter((s) => showHidden || !hidden.includes(s.path));
 	const { shown, end, more } = useBatches(rows.length);
 
 	/*
@@ -226,27 +240,41 @@ export function SessionList({
 					</StripCell>
 				</div>
 
-				<div className="flex items-center justify-between border-b border-neutral-800 px-2 py-1">
-					<span className={sectionLabel}>
+				<div className="flex h-bar shrink-0 items-stretch border-b border-neutral-800">
+					<span className={`min-w-0 flex-1 self-center pl-3 ${sectionLabel}`}>
 						{pending
 							? t("Searching…")
 							: searching
 								? plural(rows.length, "{n} match", "{n} matches")
-								: plural(sessions.length, "{n} session", "{n} sessions")}
+								: plural(rows.length, "{n} session", "{n} sessions")}
 					</span>
-					{/* Bordered, with an up/down caret: unstyled text on a row that
+					{hiddenCount > 0 && (
+						<StripCell
+							onClick={() => setShowHidden((v) => !v)}
+							aria-pressed={showHidden}
+							label={
+								showHidden
+									? t("Leave out hidden sessions")
+									: plural(hiddenCount, "Show {n} hidden session", "Show {n} hidden sessions")
+							}
+						>
+							{showHidden ? <Eye size={16} className="text-amber-400" /> : <EyeSlash size={16} />}
+						</StripCell>
+					)}
+					{/* A cell with an up/down caret: unstyled text on a row that
 					    reads as a table header looks like a column title, not a
 					    control. */}
 					<Button
-						size="sm"
+						variant="cell"
+						size="bar"
 						onClick={() => {
 							const i = SESSION_SORTS.findIndex((s) => s.id === sort);
 							onSort(SESSION_SORTS[(i + 1) % SESSION_SORTS.length].id);
 						}}
-						title={t("Switch between newest-created, most-recently-active and latest response")}
+						title={t("Switch between newest-created, most-recently-active and last-asked")}
 					>
 						{t(SESSION_SORTS.find((s) => s.id === sort)?.label ?? "")}
-						<CaretUpDown size={10} />
+						<CaretUpDown size={14} className="text-neutral-500" />
 					</Button>
 				</div>
 
@@ -271,6 +299,7 @@ export function SessionList({
 						const isOpen = openFiles.includes(s.path);
 						const label = sessionLabel(s, latestPrompt);
 						const state = attention.get(s.path) ?? null;
+						const isHidden = hidden.includes(s.path);
 
 						/*
 						 * Renaming replaces the row rather than opening a dialog: the
@@ -344,7 +373,7 @@ export function SessionList({
 										: isOpen
 											? "bg-neutral-900/60"
 											: ""
-								}`}
+								} ${isHidden ? "opacity-50" : ""}`}
 							>
 								<div className="session-title text-ui text-neutral-200">
 									{/* The session's state, the same colors as its tab π: amber
@@ -390,6 +419,9 @@ export function SessionList({
 									{pins.includes(s.path) && (
 										<PushPin size={12} weight="fill" className="shrink-0 text-amber-400" aria-label={t("Pinned")} />
 									)}
+									{isHidden && (
+										<EyeSlash size={12} className="shrink-0 text-neutral-500" aria-label={t("Hidden session")} />
+									)}
 								</div>
 								)}
 							</button>
@@ -426,6 +458,15 @@ export function SessionList({
 						}}
 					>
 						{t("Rename…")}
+					</MenuItem>
+					<MenuItem
+						role="menuitem"
+						onClick={() => {
+							toggleHidden(menuSession.path);
+							setMenu(null);
+						}}
+					>
+						{hidden.includes(menuSession.path) ? t("Unhide") : t("Hide from list")}
 					</MenuItem>
 					{/*
 					  The two automatic options, cheapest first. Naming from the

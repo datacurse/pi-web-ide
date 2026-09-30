@@ -64,7 +64,7 @@ export default defineConfig({
 		host: "127.0.0.1",
 		proxy: {
 			"/api": {
-				target: `http://127.0.0.1:${process.env.PWI_PORT ?? 8890}`,
+				target: `http://127.0.0.1:${process.env.PWI_PORT ?? 8891}`,
 				changeOrigin: true,
 				// `changeOrigin` rewrites Host but NOT Origin, so the server sees
 				// Origin: <vite> against Host: <server> and refuses the terminal's
@@ -75,7 +75,7 @@ export default defineConfig({
 				// which origin it claims to be, so the client works against a
 				// server started either way. Dev-only, and no wider than PWI_DEV
 				// already is — both are this same loopback port.
-				headers: { Origin: `http://127.0.0.1:${process.env.PWI_PORT ?? 8890}` },
+				headers: { Origin: `http://127.0.0.1:${process.env.PWI_PORT ?? 8891}` },
 				// The terminal is a WebSocket on /api/terminal/socket, and a proxy
 				// entry without this answers its upgrade with a 200 and no socket
 				// — which in the browser is a terminal that connects, says

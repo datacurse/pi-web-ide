@@ -164,8 +164,8 @@ export interface PiSessionInfo {
 	 * an mtime-ordered list reshuffles itself just from being looked at.
 	 */
 	lastActive: string;
-	/** Timestamp of the last assistant message; absent until pi has replied. */
-	lastResponse?: string;
+	/** Timestamp of the last user prompt; absent until the session has one. */
+	lastAsked?: string;
 	messageCount: number;
 	firstMessage: string;
 	/** The newest user prompt; absent until the session has one. */
