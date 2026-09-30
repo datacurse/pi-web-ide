@@ -226,6 +226,8 @@ export interface StatsView {
 /** The switchable pi extensions pwi loads into the sessions it starts (server/pwiExtensions.ts). */
 export interface PwiExtensions {
 	toolMetrics: boolean;
+	/** Ask for 10 pushups or situps before each prompt goes out (web/Workout.tsx). */
+	workout: boolean;
 }
 
 /** SoL-Pi's four mechanisms and their knobs, as `sol-pi.json` holds them. */

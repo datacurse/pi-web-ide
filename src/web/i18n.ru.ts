@@ -544,6 +544,13 @@ export const RU: Record<string, string> = {
 	"Tool metrics": "Метрики инструментов",
 	"Times every tool call, and each command inside a bash call with its output size, for Stats and the context panel. Nothing reaches the model.":
 		"Замеряет время каждого вызова инструмента и каждой команды внутри вызова bash вместе с объёмом её вывода — для статистики и панели контекста. Модель ничего из этого не видит.",
+	"Workout": "Разминка",
+	"Asks for 10 pushups or 10 situps before each prompt goes out; Done unlocks after 15 seconds. Applies at once.":
+		"Перед отправкой каждого запроса просит сделать 10 отжиманий или 10 скручиваний; «Готово» открывается через 15 секунд. Действует сразу.",
+	"Do 10 pushups or 10 situps": "Сделайте 10 отжиманий или 10 скручиваний",
+	"Your prompt goes out when you press Done.": "Запрос уйдёт, когда вы нажмёте «Готово».",
+	"Done in {n}s": "Готово через {n} с",
+	"Done": "Готово",
 	"pwi extensions": "Расширения pwi",
 	"Built into pwi and loaded only into the sessions it starts, not into pi in a terminal. A change applies to sessions started from now on.":
 		"Встроены в pwi и загружаются только в сессии, которые он запускает, а не в pi в терминале. Изменение действует для сессий, запущенных после него.",

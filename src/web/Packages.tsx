@@ -426,7 +426,13 @@ function PwiExtensionsSection({ open }: { open: boolean }) {
 		const r = await api["pwi-extensions"]["tool-metrics"].$put({ json: { on } }).catch(() => null);
 		if (!r?.ok) return setError(t("could not save the setting"));
 		setError(null);
-		setState({ toolMetrics: on });
+		setState(await r.json());
+	};
+	const setWorkout = async (on: boolean) => {
+		const r = await api["pwi-extensions"].workout.$put({ json: { on } }).catch(() => null);
+		if (!r?.ok) return setError(t("could not save the setting"));
+		setError(null);
+		setState(await r.json());
 	};
 	return (
 		<div>
@@ -451,6 +457,23 @@ function PwiExtensionsSection({ open }: { open: boolean }) {
 						<span className="block text-meta text-neutral-500">
 							{t(
 								"Times every tool call, and each command inside a bash call with its output size, for Stats and the context panel. Nothing reaches the model.",
+							)}
+						</span>
+					</span>
+				</OptionRow>
+				<OptionRow disabled={!state}>
+					<input
+						type="checkbox"
+						checked={state?.workout ?? false}
+						disabled={!state}
+						onChange={(e) => void setWorkout(e.target.checked)}
+						className="size-4 shrink-0 accent-amber-400"
+					/>
+					<span className="flex-1">
+						{t("Workout")}
+						<span className="block text-meta text-neutral-500">
+							{t(
+								"Asks for 10 pushups or 10 situps before each prompt goes out; Done unlocks after 15 seconds. Applies at once.",
 							)}
 						</span>
 					</span>

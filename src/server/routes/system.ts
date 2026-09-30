@@ -14,7 +14,7 @@ import {
 	removeProject,
 } from "../projects.js";
 import { readPersonality, writePersonality, writeRemind } from "../personality.js";
-import { pwiExtensions, writeToolMetrics } from "../pwiExtensions.js";
+import { pwiExtensions, writePwiExtension } from "../pwiExtensions.js";
 import { PRODUCT } from "../../shared/types.js";
 import { query, json, type Deps, type Env } from "../http.js";
 
@@ -217,7 +217,14 @@ export function systemRoutes({ cwd: CWD, model: MODEL, registry, piVersion: PI_V
 		.put("/pwi-extensions/tool-metrics", json<{ on: boolean }>(), async (c) => {
 			const b = c.req.valid("json");
 			if (typeof b.on !== "boolean") return c.json({ error: "on must be a boolean" }, 400);
-			return c.json(writeToolMetrics(b.on), 200);
+			return c.json(writePwiExtension("toolMetrics", b.on), 200);
+		})
+
+		/** The workout gate. The browser reads it on each send. */
+		.put("/pwi-extensions/workout", json<{ on: boolean }>(), async (c) => {
+			const b = c.req.valid("json");
+			if (typeof b.on !== "boolean") return c.json({ error: "on must be a boolean" }, 400);
+			return c.json(writePwiExtension("workout", b.on), 200);
 		})
 
 		/** The "Repeat before every reply" toggle. Applies to sessions started after it. */

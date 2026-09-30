@@ -433,7 +433,10 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
   is on: the reducer model as one `<select>` of pi's models grouped by provider, saved on
   pick (first option `Built-in: …`, or a disabled `Not selected` when pi cannot reach the
   built-in model; no warning), and the compact's cost ratio as a `w-24` input with `Save`. Tool metrics is an `OptionRow` checkbox (on by default) with
-  a `text-meta` line saying what it does. Under it, Personality (`Personality.tsx`, moved
+  a `text-meta` line saying what it does. Workout (off by default, applies at once) is one too: each
+  send, and each Edit resend, first opens a small centered `<dialog>` (`Workout.tsx`: amber `Barbell`,
+  `text-title` "Do 10 pushups or 10 situps", `Cancel` and a `primary` `Done` that reads
+  `Done in 15s` counting down and stays disabled until 0). Done sends; Cancel or Escape keeps the text. Under it, Personality (`Personality.tsx`, moved
   from Settings): a `text-ui` heading, the file's path, a mono `textarea` with `Save`
   (`Button sm subtle`) and a status line, then the `Repeat before every reply` checkbox.
   It is re-read each time the page is shown unless there are unsaved edits, and the
