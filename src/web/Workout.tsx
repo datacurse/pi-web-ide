@@ -1,22 +1,39 @@
 import { useEffect, useRef, useState } from "react";
-import { EXERCISES, WORKOUT_KINDS, type WorkoutKind } from "../shared/types.js";
+import { EXERCISES, type Muscle, type WorkoutKind } from "../shared/types.js";
 import { Button } from "./ui.js";
 import { t } from "./i18n.js";
 import { api } from "./api.js";
 import { WorkoutFigure } from "./workoutFigures.js";
 
 /**
- * A random exercise among those switched on (Packages > pwi extensions), or
- * null when the workout gate is off or the server cannot say.
+ * The next exercise among those switched on, rotating muscle groups
+ * (shared/rotation.ts), or null when the gate is off or the server cannot say.
  */
 export async function pickWorkout(): Promise<WorkoutKind | null> {
-	const r = await api["pwi-extensions"].$get().catch(() => null);
+	const r = await api.workouts.next.$get().catch(() => null);
 	if (!r?.ok) return null;
-	const s = await r.json();
-	const on = WORKOUT_KINDS.filter((k) => !s.workoutOff.includes(k));
-	if (!s.workout || on.length === 0) return null;
-	return on[Math.floor(Math.random() * on.length)];
+	return (await r.json()).kind;
 }
+
+export function muscleName(m: Muscle): string {
+	switch (m) {
+		case "chest":
+			return t("chest");
+		case "arms":
+			return t("arms");
+		case "core":
+			return t("core");
+		case "legs":
+			return t("legs");
+		case "glutes":
+			return t("glutes");
+		case "calves":
+			return t("calves");
+	}
+}
+
+/** "chest · arms · core" */
+export const musclesText = (kind: WorkoutKind) => EXERCISES[kind].muscles.map(muscleName).join(" · ");
 
 /** The exercise's name (Stats) and what the dialog asks for. */
 export function exerciseText(kind: WorkoutKind): { name: string; task: string } {
@@ -85,6 +102,7 @@ export function Workout({ kind, onDone }: { kind: WorkoutKind; onDone: () => voi
 		>
 			<WorkoutFigure kind={kind} className="w-full text-amber-400" />
 			<p className="text-center text-title">{exerciseText(kind).task}</p>
+			<p className="-mt-3 text-meta text-neutral-400">{musclesText(kind)}</p>
 			<p className="text-meta text-neutral-500">{t("pi is already answering.")}</p>
 			<Button variant="primary" disabled={left > 0} onClick={done}>
 				{left > 0 ? t("Done in {n}s", { n: left }) : t("Done")}

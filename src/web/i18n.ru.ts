@@ -554,9 +554,15 @@ export const RU: Record<string, string> = {
 	"Times every tool call, and each command inside a bash call with its output size, for Stats and the context panel. Nothing reaches the model.":
 		"Замеряет время каждого вызова инструмента и каждой команды внутри вызова bash вместе с объёмом её вывода — для статистики и панели контекста. Модель ничего из этого не видит.",
 	"Workout": "Разминка",
-	"After each prompt goes out, asks for a short exercise (pwi picks one of ten: pushups, squats, a plank…) while pi answers; Done unlocks when the set is over. Sets show in Stats > Workouts. Applies at once.":
-		"После отправки каждого запроса просит сделать короткое упражнение (pwi выбирает одно из десяти: отжимания, приседания, планка…), пока pi отвечает; «Готово» открывается, когда подход закончен. Подходы видны в «Статистика > Тренировки». Действует сразу.",
+	"After each prompt goes out, asks for a short exercise while pi answers, rotating muscle groups so the ones just worked rest; Done unlocks when the set is over. Sets show in Stats > Workouts. Applies at once.":
+		"После отправки каждого запроса просит сделать короткое упражнение, пока pi отвечает, чередуя группы мышц, чтобы только что нагруженные отдыхали; «Готово» открывается, когда подход закончен. Подходы видны в «Статистика > Тренировки». Действует сразу.",
 	"Pushups": "Отжимания",
+	"chest": "грудь",
+	"arms": "руки",
+	"core": "пресс",
+	"legs": "ноги",
+	"glutes": "ягодицы",
+	"calves": "икры",
 	"pwi picks only from the exercises ticked here.": "pwi выбирает только из отмеченных здесь упражнений.",
 	"Keep at least one exercise": "Оставьте хотя бы одно упражнение",
 	"Situps": "Скручивания",

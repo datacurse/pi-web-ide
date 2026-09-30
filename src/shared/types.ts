@@ -243,23 +243,27 @@ export interface PwiExtensions {
  * of Physical Activities (calisthenics light 2.8, moderate 3.8, vigorous 8.0),
  * with situps, squats, lunges and burpees tuned to common per-rep figures
  * (situps ~0.25 kcal, squats and lunges ~0.35, burpees ~1), and `rep`, the
- * seconds one rep takes.
+ * seconds one rep takes. `muscles`: the groups it mainly works, which the
+ * next pick rotates around (shared/rotation.ts).
  */
 export const EXERCISES = {
-	pushups: { amount: 10, unit: "reps", wait: 15, met: 8, rep: 2 },
-	situps: { amount: 10, unit: "reps", wait: 15, met: 5, rep: 2.5 },
-	squats: { amount: 10, unit: "reps", wait: 15, met: 7, rep: 2.5 },
-	lunges: { amount: 10, unit: "reps", wait: 20, met: 6, rep: 3 },
-	burpees: { amount: 5, unit: "reps", wait: 20, met: 12, rep: 5 },
-	jumpingJacks: { amount: 20, unit: "reps", wait: 15, met: 8, rep: 1 },
-	calfRaises: { amount: 15, unit: "reps", wait: 15, met: 2.8, rep: 1.5 },
-	gluteBridges: { amount: 10, unit: "reps", wait: 20, met: 3.8, rep: 2.5 },
-	plank: { amount: 20, unit: "seconds", wait: 30, met: 3.8, rep: 1 },
-	wallSit: { amount: 20, unit: "seconds", wait: 30, met: 3.8, rep: 1 },
+	pushups: { amount: 10, unit: "reps", wait: 15, met: 8, rep: 2, muscles: ["chest", "arms", "core"] },
+	situps: { amount: 10, unit: "reps", wait: 15, met: 5, rep: 2.5, muscles: ["core"] },
+	squats: { amount: 10, unit: "reps", wait: 15, met: 7, rep: 2.5, muscles: ["legs", "glutes"] },
+	lunges: { amount: 10, unit: "reps", wait: 20, met: 6, rep: 3, muscles: ["legs", "glutes"] },
+	burpees: { amount: 5, unit: "reps", wait: 20, met: 12, rep: 5, muscles: ["chest", "arms", "legs", "core"] },
+	jumpingJacks: { amount: 20, unit: "reps", wait: 15, met: 8, rep: 1, muscles: ["calves", "arms"] },
+	calfRaises: { amount: 15, unit: "reps", wait: 15, met: 2.8, rep: 1.5, muscles: ["calves"] },
+	gluteBridges: { amount: 10, unit: "reps", wait: 20, met: 3.8, rep: 2.5, muscles: ["glutes", "core"] },
+	plank: { amount: 20, unit: "seconds", wait: 30, met: 3.8, rep: 1, muscles: ["core", "arms"] },
+	wallSit: { amount: 20, unit: "seconds", wait: 30, met: 3.8, rep: 1, muscles: ["legs"] },
 } as const satisfies Record<
 	string,
-	{ amount: number; unit: "reps" | "seconds"; wait: number; met: number; rep: number }
+	{ amount: number; unit: "reps" | "seconds"; wait: number; met: number; rep: number; muscles: readonly Muscle[] }
 >;
+
+export const MUSCLES = ["chest", "arms", "core", "legs", "glutes", "calves"] as const;
+export type Muscle = (typeof MUSCLES)[number];
 
 /** The body calories are estimated for (Packages > pwi extensions > Workout). */
 export interface WorkoutProfile {

@@ -1085,6 +1085,16 @@ export default function App() {
 			const from: Side = to === "left" ? "right" : "left";
 			const target = groupOf(current, to);
 
+			// Dropped on the left half of an unsplit column: the tab gets the left
+			// column to itself and the rest move to a new right one.
+			if (to === "left" && !current.right && index === undefined) {
+				const rest = withoutTab(target, entry);
+				if (rest && rest.files.length > 0) {
+					commitTabs({ ...current, files: [entry], active: entry, right: rest });
+					return;
+				}
+			}
+
 			// Already there: focus it, and do not disturb the other column.
 			const pruned = withoutTab(groupOf(current, from), entry);
 			if (!pruned) {

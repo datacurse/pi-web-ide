@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { listModels, readSettings, setDefaultModel, setDefaultThinkingLevel } from "../models.js";
 import { stats } from "../stats.js";
-import { syncMachines } from "../machines.js";
+import { machines, syncMachines } from "../machines.js";
 import { fetchUsage, readHistory } from "../usage.js";
 import { fleet, startPwi, validTarget } from "../fleet.js";
 import {
@@ -15,8 +15,9 @@ import {
 } from "../projects.js";
 import { readPersonality, writePersonality, writeRemind } from "../personality.js";
 import { pwiExtensions, writePwiExtension, writeWorkoutOff, writeWorkoutProfile } from "../pwiExtensions.js";
-import { addWorkout, isWorkoutKind } from "../workouts.js";
-import { PRODUCT, type WorkoutProfile } from "../../shared/types.js";
+import { addWorkout, isWorkoutKind, readWorkouts } from "../workouts.js";
+import { pickNext } from "../../shared/rotation.js";
+import { PRODUCT, WORKOUT_KINDS, type WorkoutProfile } from "../../shared/types.js";
 import { query, json, type Deps, type Env } from "../http.js";
 
 /** Machine-level routes: health, models, usage, stats, fleet, projects, favourites, personality. */
@@ -219,6 +220,18 @@ export function systemRoutes({ cwd: CWD, model: MODEL, registry, piVersion: PI_V
 			const b = c.req.valid("json");
 			if (typeof b.on !== "boolean") return c.json({ error: "on must be a boolean" }, 400);
 			return c.json(writePwiExtension("toolMetrics", b.on), 200);
+		})
+
+		/**
+		 * The exercise the dialog asks for next, rotating muscle groups over this
+		 * machine's sets and the mirrored ones (shared/rotation.ts); null while the gate is off.
+		 */
+		.get("/workouts/next", (c) => {
+			const s = pwiExtensions();
+			if (!s.workout) return c.json({ kind: null }, 200);
+			const sets = [...readWorkouts(), ...machines().flatMap((m) => readWorkouts(m.workouts))];
+			const on = WORKOUT_KINDS.filter((k) => !s.workoutOff.includes(k));
+			return c.json({ kind: pickNext(sets, on) }, 200);
 		})
 
 		/** Log a set done for the workout gate; Stats reads them with /stats. */

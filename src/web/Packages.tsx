@@ -22,7 +22,7 @@ import type {
 import { Button, IconButton, OptionRow, PanelHeader, inputClass, sectionLabel } from "./ui.js";
 import { Personality } from "./Personality.js";
 import { Nested, SolPiSettings } from "./SolPiSettings.js";
-import { exerciseText } from "./Workout.js";
+import { exerciseText, musclesText } from "./Workout.js";
 import { WorkoutFigure } from "./workoutFigures.js";
 import { EXERCISES, WORKOUT_KINDS, type WorkoutKind, type WorkoutProfile } from "../shared/types.js";
 import { setKcal } from "../shared/calories.js";
@@ -486,7 +486,7 @@ function PwiExtensionsSection({ open }: { open: boolean }) {
 						{t("Workout")}
 						<span className="block text-meta text-neutral-500">
 							{t(
-								"After each prompt goes out, asks for a short exercise (pwi picks one of ten: pushups, squats, a plank…) while pi answers; Done unlocks when the set is over. Sets show in Stats > Workouts. Applies at once.",
+								"After each prompt goes out, asks for a short exercise while pi answers, rotating muscle groups so the ones just worked rest; Done unlocks when the set is over. Sets show in Stats > Workouts. Applies at once.",
 							)}
 						</span>
 					</span>
@@ -518,6 +518,7 @@ function PwiExtensionsSection({ open }: { open: boolean }) {
 											/>
 											{exerciseText(kind).name}
 										</span>
+										<span className="text-center text-neutral-500">{musclesText(kind)}</span>
 										{state.workoutProfile && (
 											<span className="text-neutral-500">
 												{t("≈{n} kcal a set", {

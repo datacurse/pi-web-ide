@@ -14,7 +14,10 @@ export function readWorkouts(file = statePath(FILE)): WorkoutSet[] {
 		const all = JSON.parse(readStateFile(file) ?? "[]");
 		if (!Array.isArray(all)) return [];
 		// The first sets were logged as `reps` before timed exercises existed.
-		return all.map((s) => ({ at: s.at, kind: s.kind, amount: s.amount ?? s.reps }));
+		// A newer pwi elsewhere may log exercises this one does not know.
+		return all
+			.filter((s) => isWorkoutKind(s?.kind) && typeof s.at === "string")
+			.map((s) => ({ at: s.at, kind: s.kind, amount: s.amount ?? s.reps }));
 	} catch {
 		return [];
 	}

@@ -459,14 +459,14 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
   built-in model; no warning), and the compact's cost ratio as a `w-24` input with `Save`. Tool metrics is an `OptionRow` checkbox (on by default) with
   a `text-meta` line saying what it does. Workout (off by default, applies at once) is one too: each
   send, and each Edit resend, goes out at once and then opens a small centered `<dialog>` (`Workout.tsx`):
-  one of ten exercises picked at random (`EXERCISES` in `shared/types.ts`: amount in reps or seconds
+  the next of ten exercises, rotating muscle groups (`GET /api/workouts/next`, `shared/rotation.ts`: each set tires its groups, halving every 45 min; the pick is the exercise whose most tired group is freshest, near ties random, never the same twice running) (`EXERCISES` in `shared/types.ts`: amount in reps or seconds
   held, and the wait before Done unlocks), drawn as an amber stick figure that flips between its start
   and end poses every 900ms (`workoutFigures.tsx`, hand-drawn SVG polylines, no fetched images; holds
-  have one pose), the task in `text-title`, a `pi is already answering.` hint and a `primary` `Done`
+  have one pose), the task in `text-title`, its muscle groups (`chest · arms · core`, `text-meta neutral-400`) under it, a `pi is already answering.` hint and a `primary` `Done`
   that reads `Done in 15s` counting down and stays disabled until 0. No Cancel; Escape does nothing.
   Done logs the set (`workouts.json`, `server/workouts.ts`). While Workout is on, a nested grid under it
   (`Nested`, `grid-cols-2 sm:grid-cols-5`) shows every exercise as a `rounded-sm` bordered card: its
-  animated figure (amber when on, `neutral-700` when off), then a `size-3` checkbox and the name. The
+  animated figure (amber when on, `neutral-700` when off), then a `size-3` checkbox and the name, and its muscle groups in `neutral-500`. The
   dialog picks only from ticked ones (`workoutOff` in `pwi-extensions.json`, so new exercises start on);
   the last ticked card's checkbox is disabled. With a body saved, each card adds `≈N kcal a set` in
   `neutral-500`. Under the grid, "Your body": Sex `<select>` (`w-24`), Age, `Height, cm`, `Weight, kg`
