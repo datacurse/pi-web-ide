@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
-import { FolderPlus, X } from "@phosphor-icons/react";
+import { CaretDown, FolderPlus, X } from "@phosphor-icons/react";
 import { DirectoryPicker } from "./DirectoryPicker.js";
-import { Button, inputClass } from "./ui.js";
+import { StripCell } from "./ui.js";
 import { t } from "./i18n.js";
 
 /**
@@ -69,13 +69,15 @@ export function ProjectPicker({
 	const [pickerOpen, setPickerOpen] = useState(false);
 
 	return (
-		<div className="flex items-center gap-1 border-b border-neutral-800 px-2 py-1.5">
+		<div className="flex h-bar shrink-0 items-stretch border-b border-neutral-800">
+			<div className="relative flex min-w-0 flex-1">
 			<select
+				data-custom="the whole row, like the session search field"
 				value={project}
 				onChange={(e) => onProject(e.target.value)}
 				title={project}
 				aria-label={t("Project")}
-				className={`min-w-0 flex-1 truncate ${inputClass.sm}`}
+				className="min-w-0 flex-1 cursor-pointer appearance-none bg-neutral-950 pr-8 pl-3 text-ui text-neutral-100 outline-none transition-colors duration-150 ease-out hover:bg-neutral-900 motion-reduce:transition-none"
 			>
 				{options.map((p) => (
 					<option key={p} value={p}>
@@ -83,26 +85,23 @@ export function ProjectPicker({
 					</option>
 				))}
 			</select>
+			<CaretDown size={14} className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-neutral-500" />
+			</div>
 			{/* A folder icon, not a bare `+`: `+` elsewhere makes a session. */}
-			<Button
-				variant="subtle"
-				size="sm"
+			<StripCell
 				onClick={() => setPickerOpen(true)}
 				disabled={!!projects.error}
-				aria-label={t("Add project directory")}
-				title={t("Add project directory")}
+				label={t("Add project directory")}
 			>
-				<FolderPlus size={13} />
-			</Button>
+				<FolderPlus size={16} />
+			</StripCell>
 			{/*
 			  Not offered for the seed: the server re-adds it on every read, so the
 			  button would appear to do nothing. Confirmed, and the wording says
 			  what is NOT happening, since "remove project" usually means the files.
 			*/}
 			{project && !projects.error && project !== projects.seed && (
-				<Button
-					variant="subtle"
-					size="sm"
+				<StripCell
 					onClick={() => {
 						if (
 							confirm(
@@ -115,11 +114,10 @@ export function ProjectPicker({
 							onRemoveProject(project);
 						}
 					}}
-					aria-label={t("Remove {project} from the list", { project })}
-					title={t("Remove this project from the list (keeps sessions on disk)")}
+					label={t("Remove {project} from the list", { project })}
 				>
-					<X size={13} />
-				</Button>
+					<X size={16} />
+				</StripCell>
 			)}
 			{/* `open` drives showModal(), so an unopened picker never fetches. */}
 			<DirectoryPicker

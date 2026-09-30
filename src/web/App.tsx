@@ -15,6 +15,7 @@ import type { Hunk } from "../shared/hunks.js";
 import { SessionList } from "./SessionList.js";
 import { SessionSearch } from "./SessionSearch.js";
 import { CommandPalette, type PaletteCommand } from "./CommandPalette.js";
+import { WorkoutCard } from "./Workout.js";
 import { ProjectPicker, type Projects } from "./ProjectPicker.js";
 import { ActivityBar } from "./ActivityBar.js";
 import { Stats } from "./Stats.js";
@@ -2032,6 +2033,8 @@ export default function App() {
 			/>
 
 			<CommandPalette open={paletteOpen} commands={paletteCommands} onClose={() => setPaletteOpen(false)} />
+
+			<WorkoutCard busy={working} />
 
 			<PageDialog page={page} onClose={() => setPage(null)} render={renderPage} />
 		</div>

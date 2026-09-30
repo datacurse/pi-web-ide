@@ -80,8 +80,10 @@ const BUTTON_VARIANT = {
 		"text-neutral-400 hover:bg-neutral-800 hover:text-neutral-100 disabled:text-neutral-600 disabled:hover:bg-transparent",
 };
 const BUTTON_SIZE = {
-	sm: "h-control-sm gap-1 px-2 text-meta",
-	md: "h-control-md gap-1.5 px-3 text-ui",
+	sm: "h-control-sm gap-1 rounded-sm px-2 text-meta",
+	md: "h-control-md gap-1.5 rounded-sm px-3 text-ui",
+	/* A panel-wide action flush with the panel's edges: flat, `bar` tall. */
+	bar: "h-bar gap-1.5 px-3 text-ui",
 };
 
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
@@ -99,7 +101,7 @@ export function Button({
 	return (
 		<button
 			type={type}
-			className={`inline-flex shrink-0 items-center justify-center rounded-sm ${BUTTON_SIZE[size]} ${BUTTON_VARIANT[variant]} ${EASE} ${className}`}
+			className={`inline-flex shrink-0 items-center justify-center ${BUTTON_SIZE[size]} ${BUTTON_VARIANT[variant]} ${EASE} ${className}`}
 			{...rest}
 		/>
 	);
@@ -143,6 +145,24 @@ export function IconButton({
 			aria-label={label}
 			title={label}
 			className={`flex shrink-0 items-center justify-center ${ICON_SIZE[size]} ${round ? "rounded-full" : "rounded-sm"} ${ICON_VARIANT[variant]} ${EASE} ${className}`}
+			{...rest}
+		/>
+	);
+}
+
+/* A flat square cell the full height of its row, split off by a rule on its left: the tab strip's `+`. */
+export function StripCell({
+	label,
+	type = "button",
+	className = "",
+	...rest
+}: ButtonHTMLAttributes<HTMLButtonElement> & { label: string }) {
+	return (
+		<button
+			type={type}
+			aria-label={label}
+			title={label}
+			className={`flex aspect-square shrink-0 items-center justify-center self-stretch border-l border-neutral-800 text-neutral-400 hover:bg-neutral-900 hover:text-neutral-100 disabled:text-neutral-600 disabled:hover:bg-transparent ${EASE} ${className}`}
 			{...rest}
 		/>
 	);
@@ -422,12 +442,28 @@ export function PanelHeader({
 	onClose,
 	closeLabel = title ? t("Close {name}", { name: title.toLowerCase() }) : t("Close panel"),
 	children,
+	cells = false,
 }: {
 	title?: string;
 	onClose?: () => void;
 	closeLabel?: string;
 	children?: ReactNode;
+	/** Children are `StripCell`s: they and the close run to the right edge. */
+	cells?: boolean;
 }) {
+	if (cells) {
+		return (
+			<div className="flex h-bar shrink-0 items-center border-b border-neutral-800 pl-3 [&>button:first-of-type]:ml-auto">
+				{title && <span className="mr-2 shrink-0 text-ui text-neutral-300">{title}</span>}
+				{children}
+				{onClose && (
+					<StripCell onClick={onClose} label={closeLabel}>
+						<X size={16} />
+					</StripCell>
+				)}
+			</div>
+		);
+	}
 	return (
 		<div className="flex h-bar shrink-0 items-center gap-2 border-b border-neutral-800 px-3">
 			{title && <span className="shrink-0 text-ui text-neutral-300">{title}</span>}

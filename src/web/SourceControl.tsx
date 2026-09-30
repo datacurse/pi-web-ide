@@ -40,7 +40,7 @@ import {
 	useGitState,
 } from "./GitActions.js";
 import { readGitAutoName, readGitNested, writeGitAutoName, writeGitNested } from "./prefs.js";
-import { Button, IconButton, ListRow, PanelHeader, inputClass, sectionLabel } from "./ui.js";
+import { Button, ListRow, PanelHeader, StripCell, sectionLabel } from "./ui.js";
 import { api, unwrap } from "./api.js";
 import { plural, t } from "./i18n.js";
 import { ScrollPane } from "./OverlayScrollbar.js";
@@ -466,11 +466,10 @@ function RepoView({
 		return (
 			<div className="flex min-h-0 min-w-0 flex-1 flex-col bg-neutral-950">
 				<Header onClose={onClose} branch="" />
-				<p className="p-4 pb-2 text-ui text-neutral-500">{t("This folder is not a git repository.")}</p>
+				<p className="p-3 text-ui text-neutral-500">{t("This folder is not a git repository.")}</p>
 				<Button
 					variant="primary"
-					size="sm"
-					className="mx-4 mb-4"
+					size="bar"
 					onClick={() => void initRepo()}
 					disabled={running}
 					title={cwd}
@@ -494,8 +493,8 @@ function RepoView({
 
 			{/* TOP HALF: the working tree, and what to call it. */}
 			<div className="flex min-h-0 shrink-0 flex-col border-b border-neutral-800">
-				<div className="flex p-2 pb-1">
 					<textarea
+						data-custom="the whole row, like the session search field"
 						value={message}
 						onChange={(e) => setMessage(e.target.value)}
 						rows={2}
@@ -506,22 +505,13 @@ function RepoView({
 								void sync();
 							}
 						}}
-						className={`min-w-0 flex-1 resize-none ${inputClass.sm}`}
+						className="block h-[calc(var(--spacing-bar)*2)] resize-none border-b border-neutral-800 bg-neutral-950 px-3 py-2 text-ui text-neutral-100 outline-none transition-colors duration-150 ease-out placeholder:text-neutral-500 hover:bg-neutral-900 focus:bg-neutral-900 motion-reduce:transition-none"
 					/>
-				</div>
 
-				<div className="flex items-center justify-between px-2 pb-2">
-					<IconButton
-						onClick={() => void requestName()}
-						disabled={naming || running || !dirty}
-						label={t("Auto-name this commit")}
-						title={t("Write the message with a model that reads the diff")}
-					>
-						<Sparkle size={14} className={naming ? "animate-pulse" : undefined} />
-					</IconButton>
+				<div className="flex h-bar items-stretch border-b border-neutral-800">
 					{/* Auto-name is shared with GitActions' menu: one preference, so
 					    flipping it in either place changes both. */}
-					<label className="flex cursor-pointer items-center gap-2 text-meta text-neutral-500 hover:text-neutral-300">
+					<label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 pl-3 text-ui text-neutral-400 hover:text-neutral-200">
 						<input
 							type="checkbox"
 							checked={autoName}
@@ -534,12 +524,19 @@ function RepoView({
 						/>
 						{t("Auto-name commits")}
 					</label>
+					<StripCell
+						onClick={() => void requestName()}
+						disabled={naming || running || !dirty}
+						label={t("Auto-name this commit")}
+						title={t("Write the message with a model that reads the diff")}
+					>
+						<Sparkle size={16} className={naming ? "animate-pulse" : undefined} />
+					</StripCell>
 				</div>
 
 				<Button
 					variant="primary"
-					size="sm"
-					className="mx-2 mb-2"
+					size="bar"
 					onClick={() => void sync()}
 					disabled={running || naming || (!dirty && ahead === 0 && behind === 0)}
 					title={
@@ -656,7 +653,7 @@ function RepoView({
 /** The panel's title row. Its own component only because two returns use it. */
 function Header({ branch, onClose }: { branch: string; onClose: () => void }) {
 	return (
-		<PanelHeader title={t("Source Control")} onClose={onClose}>
+		<PanelHeader title={t("Source Control")} onClose={onClose} cells>
 			{/* The branch is a LABEL, not an action: same dim mono the rest of the
 			    app uses for paths, rather than the accent, which in this window
 			    means "working" and would read as a live session. */}

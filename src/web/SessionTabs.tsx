@@ -21,7 +21,7 @@ import { ATTENTION_UI, type Attention } from "./attention.js";
 import { FileGlyph } from "./fileIcon.js";
 import { PiMark } from "./piMark.js";
 import { diffParts, isDiffTab, isSessionTab, isTermTab, tabLabel, tabPath } from "./tabs.js";
-import { ContextMenu, IconButton, MenuItem, MenuSeparator, inputClass, tabClass } from "./ui.js";
+import { ContextMenu, IconButton, MenuItem, MenuSeparator, StripCell, inputClass, tabClass } from "./ui.js";
 import { t } from "./i18n.js";
 
 /**
@@ -589,16 +589,9 @@ export function SessionTabs({
 			)}
 
 			{onNew && (
-				<button
-					type="button"
-					data-custom="a strip cell like a tab: full height, flat, no radius"
-					onClick={onNew}
-					aria-label={t("New session")}
-					title={t("New session")}
-					className="-mr-1 flex aspect-square shrink-0 items-center justify-center self-stretch border-l border-neutral-800 text-neutral-400 transition-colors duration-150 ease-out hover:bg-neutral-900 hover:text-neutral-100 motion-reduce:transition-none"
-				>
+				<StripCell onClick={onNew} label={t("New session")} className="-mr-1">
 					<Plus size={16} />
-				</button>
+				</StripCell>
 			)}
 
 			{menu && (() => {

@@ -5,7 +5,7 @@ import { SESSION_SORTS, type SessionSort } from "./prefs.js";
 import { sessionLabel, shortName } from "./sessionName.js";
 import { ATTENTION_UI, attentionRank, type Attention } from "./attention.js";
 import { highlight, useSessionSearch } from "./searchHits.js";
-import { Button, ContextMenu, IconButton, MenuItem, inputClass, sectionLabel, useBatches } from "./ui.js";
+import { Button, ContextMenu, IconButton, MenuItem, StripCell, inputClass, sectionLabel, useBatches } from "./ui.js";
 import { perLocale, plural, t } from "./i18n.js";
 import { ScrollPane } from "./OverlayScrollbar.js";
 
@@ -221,16 +221,9 @@ export function SessionList({
 							className="min-w-0 flex-1 bg-transparent text-ui text-neutral-100 outline-none placeholder:text-neutral-500"
 						/>
 					</label>
-					<button
-						type="button"
-						data-custom="a strip cell like a tab: full height, flat, no radius"
-						onClick={onSearch}
-						aria-label={t("Open search window (Ctrl+O)")}
-						title={t("Open search window (Ctrl+O)")}
-						className="flex aspect-square shrink-0 items-center justify-center border-l border-neutral-800 text-neutral-400 transition-colors duration-150 ease-out hover:bg-neutral-900 hover:text-neutral-100 motion-reduce:transition-none"
-					>
+					<StripCell onClick={onSearch} label={t("Open search window (Ctrl+O)")}>
 						<ArrowsOut size={16} />
-					</button>
+					</StripCell>
 				</div>
 
 				<div className="flex items-center justify-between border-b border-neutral-800 px-2 py-1">

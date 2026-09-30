@@ -356,9 +356,14 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
 
 ## Explorer
 
-- The header has `sm` `IconButton`s left of the close ✕: refresh (`ArrowClockwise`),
+- The header's buttons are `StripCell`s (`PanelHeader cells`), running to the right edge
+  with the close ✕ last: refresh (`ArrowClockwise`),
   `Expand all folders` (`ArrowsOutLineVertical`; level by level, at most 200 folders,
   hidden ones stay shut) and `Collapse all folders` (`ArrowsInLineVertical`).
+  Under it, the project row is the same `h-bar` height: the project `<select>` is the whole
+  row (borderless, `pl-3`, `text-ui`, `neutral-900` on hover; the native arrow is hidden and a
+  14px `neutral-500` `CaretDown` sits `right-3`, the same inset as the text), then `StripCell`s for
+  `FolderPlus` (add) and, for any project but the startup one, `X` (remove).
   Refresh re-reads the root and every expanded folder. The tree also re-reads each time
   the agent finishes a reply, and when anything changes on disk directly inside the
   project folder or an expanded one (`/api/files/watch`, one non-recursive watch each).
@@ -407,8 +412,13 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
 
 ## Source Control
 
-- The commit message box is full width. Under it, one row: the `Sparkle` auto-name
-  `IconButton` left, the `Auto-name commits` checkbox right. Then `Commit & Push`.
+- The header is `PanelHeader cells` like the Explorer's: title, branch, then the close
+  `StripCell` flush right (a cell header pushes its first button right).
+- Everything above Changes runs edge to edge, rows split by `neutral-800` rules, no inner
+  boxes: the commit message textarea (borderless, `px-3 py-2`, `text-ui`, `neutral-900` on
+  hover and focus, two `bar`s tall: `h-[calc(var(--spacing-bar)*2)]`); an `h-bar` row with the `Auto-name commits` checkbox (`text-ui`, `pl-3`)
+  and the `Sparkle` auto-name `StripCell` at its right end; then `Commit & Push` as a
+  `Button size="bar"` (flat, full width). `Initialize Repository` is one too.
 - When the project folder is not a git repository, a checkbox (same style as
   `Auto-name commits`) reads `Find repositories one folder down` (`pwi:gitNested`,
   per browser, off by default). On, a `Repositories` section under the header lists
@@ -457,18 +467,26 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
   is on: the reducer model as one `<select>` of pi's models grouped by provider, saved on
   pick (first option `Built-in: …`, or a disabled `Not selected` when pi cannot reach the
   built-in model; no warning), and the compact's cost ratio as a `w-24` input with `Save`. Tool metrics is an `OptionRow` checkbox (on by default) with
-  a `text-meta` line saying what it does. Workout (off by default, applies at once) is one too: each
-  send, and each Edit resend, goes out at once and then opens a small centered `<dialog>` (`Workout.tsx`):
-  the next of ten exercises, rotating muscle groups (`GET /api/workouts/next`, `shared/rotation.ts`: each set tires its groups, halving every 45 min; the pick is the exercise whose most tired group is freshest, near ties random, never the same twice running) (`EXERCISES` in `shared/types.ts`: amount in reps or seconds
-  held, and the wait before Done unlocks), drawn as an amber stick figure that flips between its start
-  and end poses every 900ms (`workoutFigures.tsx`, hand-drawn SVG polylines, no fetched images; holds
-  have one pose), the task in `text-title`, its muscle groups (`chest · arms · core`, `text-meta neutral-400`) under it, a `pi is already answering.` hint and a `primary` `Done`
-  that reads `Done in 15s` counting down and stays disabled until 0. No Cancel; Escape does nothing.
-  Done logs the set (`workouts.json`, `server/workouts.ts`). While Workout is on, a nested grid under it
+  a `text-meta` line saying what it does. Workout (off by default, applies at once) is one too. It is not tied to
+  prompts (tried first: a set after each send made prompting feel like a cost). A set is due `Every, min`
+  after the last one done or skipped, only between `From, h` and `To, h` (`workoutSchedule`, default 30 min,
+  9–22). `GET /api/workouts/plan` (`server/workouts.ts`, `shared/rotation.ts` `plan`) lays out the rest of
+  the day: each set tires its muscle groups, halving every 45 min, and the next is the exercise whose most
+  tired group is freshest (near ties by a generator seeded from the last set, so the plan holds still
+  between polls; never the same twice running). Once a set is due, `WorkoutCard` (mounted in `App`, polls
+  every 30s) shows while pi is busy on a turn, or after 10 min (or the interval, if shorter) regardless,
+  only in a visible window: a fixed `top-14 right-6 w-72` card, `rounded-md` neutral-950 surface,
+  `shadow-2xl`, not modal. In it: the amber figure (`w-40`) flipping between its start and end poses every
+  900ms (`workoutFigures.tsx`, hand-drawn SVG polylines; holds have one pose), the task in `text-body`,
+  its muscle groups (`chest · arms · core`, `text-meta neutral-400`), then `Skip` (ghost), `Snooze 10 min`
+  (secondary) and a `primary` `Done` that reads `Done in 15s` until the exercise's wait is over (all
+  `Button sm`); Enter is Done while focus is in the card. Skip and Snooze are kept in
+  `workout-state.json` and move the next set like a Done. Done logs the set (`workouts.json`, `server/workouts.ts`). While Workout is on, a nested grid under it
   (`Nested`, `grid-cols-2 sm:grid-cols-5`) shows every exercise as a `rounded-sm` bordered card: its
   animated figure (amber when on, `neutral-700` when off), then a `size-3` checkbox and the name, and its muscle groups in `neutral-500`. The
-  dialog picks only from ticked ones (`workoutOff` in `pwi-extensions.json`, so new exercises start on);
-  the last ticked card's checkbox is disabled. With a body saved, each card adds `≈N kcal a set` in
+  plan picks only from ticked ones (`workoutOff` in `pwi-extensions.json`, so new exercises start on);
+  the last ticked card's checkbox is disabled. Under the grid, the schedule: `Every, min`, `From, h`,
+  `To, h` (`w-20` mono inputs) and one `Save`, laid out like "Your body". With a body saved, each card adds `≈N kcal a set` in
   `neutral-500`. Under the grid, "Your body": Sex `<select>` (`w-24`), Age, `Height, cm`, `Weight, kg`
   (`w-20` mono inputs), one `Save` (`Button sm subtle`, enabled while changed), labels above the fields in
   `text-meta neutral-500`, a red line when the server refuses (`workoutProfile` in `pwi-extensions.json`;
@@ -531,7 +549,11 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
   name, today, this week, total; seconds shown as `20s`). With a body saved: a second row of tiles
   (kcal today, this week, in total, per active day), a `kcal` column in the table, and a Sets / kcal
   toggle (`Button sm`, `subtle`/`ghost`, `aria-pressed`) beside the chart's label that restacks the
-  columns by kcal. Without one, a `text-meta` line says where to enter it.
+  columns by kcal. Without one, a `text-meta` line says where to enter it. Today's planned sets sit on
+  top of today's column in `neutral-700` (`+N planned` in its tooltip). Under the chart, side by side:
+  `Up next` (the next 8 planned: time or `now`, colour dot, name, muscle groups, then `+N more planned
+  today`) and `Muscle load now` (`Bars` of each group's current load, with a `text-meta` line on how
+  it decays).
 - Stats uses the dialog's width: usage beside the summary tiles (1/3 + 2/3), a 52-week
   heatmap full width, answer time beside by-hour, Machines (when there are others) /
   Models / Projects / Tools in columns, then Tool calls, then Slowest calls, Largest calls
@@ -585,7 +607,7 @@ New UI uses these; convert raw markup when you touch it. Tune styles in
 
 | Primitive       | Props                                                       | Use |
 | --------------- | ----------------------------------------------------------- | --- |
-| `Button`        | `variant`: primary / secondary (default) / subtle / ghost / warning (inside amber notices); `size`: sm (12px) / md (13px) | Text buttons. One `primary` per dialog or panel. Cancel is `secondary`. |
+| `Button`        | `variant`: primary / secondary (default) / subtle / ghost / warning (inside amber notices); `size`: sm (12px) / md (13px) / bar (13px, flat, `h-bar`, flush with the panel's edges) | Text buttons. One `primary` per dialog or panel. Cancel is `secondary`. |
 | `IconButton`    | `label` (required; aria-label + tooltip), `variant`: ghost / outline / solid, `size`: sm 24px / md 28px, `round` | Icon-only buttons. `round` only in the composer toolbar. |
 | `MenuItem`      | button props, `icon?` (16px Phosphor, fixed slot, greys with the row) | Rows in dropdown and context menus. Context-menu items carry an icon; give every item in one menu an icon or none. A description goes under the label (`block text-meta text-neutral-500` span), never beside it. |
 | `MenuSeparator` | —                                                           | Rule between groups of `MenuItem`s. |
@@ -600,7 +622,8 @@ New UI uses these; convert raw markup when you touch it. Tune styles in
 | `tabClass(active)` | class string; caller adds `pr-3` (the close button overlays the label) | Session/editor tabs and terminal tabs: flat, full `bar` height, amber 2px underline when active, no fill. The strip is `h-bar` with a hidden scrollbar (`.tab-strip`). |
 | `tabClassVertical(active)` | class string | Tabs in a vertical list (terminal dock): full width, `control-md` tall, amber 2px left edge when active. |
 | `useBatches(total)` | returns `{ shown, end, more }`                           | Long lists (session list, Stats answers): render `rows.slice(0, shown)`, then `{more && <div ref={end} className="h-4" />}`; 50 more mount when it scrolls into view. |
-| `PanelHeader`   | `title?`, `onClose?`, `closeLabel?`, children               | Top row of a side panel or editor tab. Children go after the title. |
+| `PanelHeader`   | `title?`, `onClose?`, `closeLabel?`, `cells?`, children     | Top row of a side panel or editor tab. Children go after the title. `cells`: children are `StripCell`s and the close is one too, flush to the right edge. |
+| `StripCell`     | `label` (aria-label + tooltip), button props                | Flat square icon cell the row's full height, `neutral-800` rule on its left, no radius, `neutral-900` hover: the tab strip's `+`, session search's `ArrowsOut`, the Explorer header and project row. 16px icons. |
 
 - Body text defaults to `text-ui`; set a size only when it differs.
 - A state color on an icon goes on the icon (`<Star className="text-amber-400">`), not on the button.
@@ -616,7 +639,8 @@ New UI uses these; convert raw markup when you touch it. Tune styles in
   (chat question options, package search hits), `session card`, `transcript
   disclosure`, `context meter`, `image thumbnail`, `thumbnail remove badge`,
   `pinned-folder chip`, `activity bar item`, `search field`, `search result`,
-  `range slider`, `settings gear`.
+  `range slider`, `settings gear`, `the whole row, like the session search field`
+  (the Explorer's project select).
 - xterm reads `--text-body` at mount (Terminal.tsx); it cannot take a class.
 - Buttons default to `type="button"`; pass `type="submit"` explicitly.
 - Number inputs have no spin arrows (index.css); they are typed into.

@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { listModels, readSettings, setDefaultModel, setDefaultThinkingLevel } from "../models.js";
 import { stats } from "../stats.js";
-import { machines, syncMachines } from "../machines.js";
+import { syncMachines } from "../machines.js";
 import { fetchUsage, readHistory } from "../usage.js";
 import { fleet, startPwi, validTarget } from "../fleet.js";
 import {
@@ -14,10 +14,15 @@ import {
 	removeProject,
 } from "../projects.js";
 import { readPersonality, writePersonality, writeRemind } from "../personality.js";
-import { pwiExtensions, writePwiExtension, writeWorkoutOff, writeWorkoutProfile } from "../pwiExtensions.js";
-import { addWorkout, isWorkoutKind, readWorkouts } from "../workouts.js";
-import { pickNext } from "../../shared/rotation.js";
-import { PRODUCT, WORKOUT_KINDS, type WorkoutProfile } from "../../shared/types.js";
+import {
+	pwiExtensions,
+	writePwiExtension,
+	writeWorkoutOff,
+	writeWorkoutProfile,
+	writeWorkoutSchedule,
+} from "../pwiExtensions.js";
+import { addWorkout, isWorkoutKind, skipWorkout, snoozeWorkout, workoutPlan } from "../workouts.js";
+import { PRODUCT, type WorkoutProfile } from "../../shared/types.js";
 import { query, json, type Deps, type Env } from "../http.js";
 
 /** Machine-level routes: health, models, usage, stats, fleet, projects, favourites, personality. */
@@ -222,16 +227,29 @@ export function systemRoutes({ cwd: CWD, model: MODEL, registry, piVersion: PI_V
 			return c.json(writePwiExtension("toolMetrics", b.on), 200);
 		})
 
-		/**
-		 * The exercise the dialog asks for next, rotating muscle groups over this
-		 * machine's sets and the mirrored ones (shared/rotation.ts); null while the gate is off.
-		 */
-		.get("/workouts/next", (c) => {
-			const s = pwiExtensions();
-			if (!s.workout) return c.json({ kind: null }, 200);
-			const sets = [...readWorkouts(), ...machines().flatMap((m) => readWorkouts(m.workouts))];
-			const on = WORKOUT_KINDS.filter((k) => !s.workoutOff.includes(k));
-			return c.json({ kind: pickNext(sets, on) }, 200);
+		/** The sets coming up and each muscle group's load, for the corner card and Stats (server/workouts.ts). */
+		.get("/workouts/plan", (c) => c.json(workoutPlan(), 200))
+
+		/** Skip the set that is due; the next one counts from now. */
+		.post("/workouts/skip", (c) => {
+			skipWorkout();
+			return c.json(workoutPlan(), 200);
+		})
+
+		.post("/workouts/snooze", json<{ minutes: number }>(), async (c) => {
+			const { minutes } = c.req.valid("json");
+			if (!Number.isInteger(minutes) || minutes < 1 || minutes > 240) {
+				return c.json({ error: "minutes must be a whole number from 1 to 240" }, 400);
+			}
+			snoozeWorkout(minutes);
+			return c.json(workoutPlan(), 200);
+		})
+
+		/** How often a set is due and in which hours. */
+		.put("/pwi-extensions/workout-schedule", json<{ every: number; from: number; to: number }>(), async (c) => {
+			const next = writeWorkoutSchedule(c.req.valid("json"));
+			if (!next) return c.json({ error: "every 1–240 minutes, from < to in whole hours 0–24" }, 400);
+			return c.json(next, 200);
 		})
 
 		/** Log a set done for the workout gate; Stats reads them with /stats. */

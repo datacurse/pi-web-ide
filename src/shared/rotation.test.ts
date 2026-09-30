@@ -27,3 +27,32 @@ assert.equal(pickNext([ago(600, "plank")], ["plank", "situps"], now, () => 0), "
 assert.equal(pickNext([ago(1, "plank")], ["plank"], now), "plank");
 assert.equal(pickNext([], [], now), null);
 console.log("rotation: ok");
+
+// Planning, in UTC so the working hours are plain.
+process.env.TZ = "UTC";
+const { plan } = await import("./rotation.ts");
+const day = { every: 30, from: 9, to: 18 };
+const at = (h: number, m = 0) => Date.parse(`2025-01-01T${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:00Z`);
+const kinds = [...WORKOUT_KINDS];
+
+// Last set at 12:00: next due 12:30, then every 30 minutes until 18:00.
+const p1 = plan([ago(0, "pushups")], kinds, day, now, 0, now);
+assert.equal(p1[0]!.at, new Date(at(12, 30)).toISOString());
+assert.equal(p1.at(-1)!.at, new Date(at(17, 30)).toISOString());
+assert.equal(p1.length, 11);
+// The same inputs give the same plan: it holds still between polls.
+assert.deepEqual(plan([ago(0, "pushups")], kinds, day, now, 0, now), p1);
+// Consecutive planned sets never repeat an exercise.
+for (let i = 1; i < p1.length; i++) assert.notEqual(p1[i]!.kind, p1[i - 1]!.kind);
+// A snooze past the due time moves the first set.
+assert.equal(plan([], kinds, day, now, at(13), now)[0]!.at, new Date(at(13)).toISOString());
+// Overdue: the first keeps its time, the rest count from now.
+const late = plan([], kinds, day, at(10), 0, at(11));
+assert.equal(late[0]!.at, new Date(at(10, 30)).toISOString());
+assert.equal(late[1]!.at, new Date(at(11, 30)).toISOString());
+// After hours: the next set is tomorrow at 9, and today's window is not continued.
+const night = plan([], kinds, day, at(17, 50), 0, at(17, 55));
+assert.equal(night[0]!.at, "2025-01-02T09:00:00.000Z");
+// Nothing on, nothing planned.
+assert.deepEqual(plan([], [], day, 0, 0, now), []);
+console.log("plan: ok");

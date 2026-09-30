@@ -7,9 +7,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowClockwise } from "@phosphor-icons/react";
-import { EXERCISES, WORKOUT_KINDS, type StatsTurn, type StatsView, type ToolCost, type UsageSample, type WorkoutKind, type WorkoutProfile, type WorkoutSet } from "../shared/types.js";
+import { EXERCISES, MUSCLES, WORKOUT_KINDS, type StatsTurn, type StatsView, type ToolCost, type UsageSample, type WorkoutKind, type WorkoutPlan, type WorkoutPlanned, type WorkoutProfile, type WorkoutSet } from "../shared/types.js";
 import { setKcal } from "../shared/calories.js";
-import { exerciseText } from "./Workout.js";
+import { exerciseText, muscleName, musclesText } from "./Workout.js";
 import { WorkoutFigure } from "./workoutFigures.js";
 import { Button, IconButton, PanelHeader, sectionLabel, useBatches } from "./ui.js";
 import { addDays, callDuration, dayKey, duration, heatmapWeeks, LIMIT_WINDOW_MS, pace, percentile, span, streaks, type Pace } from "./stats.js";
@@ -101,6 +101,11 @@ export function Stats({ open, revision, onClose }: { open: boolean; revision?: u
 		() => (view?.turns ?? []).filter((t) => machine === null || t.machine === machine),
 		[view, machine],
 	);
+	// Memoised like `turns`: Workouts re-reads the body whenever this array changes.
+	const workouts = useMemo(
+		() => (view?.workouts ?? []).filter((s) => machine === null || s.machine === machine),
+		[view, machine],
+	);
 	const remote = view?.machines ?? [];
 	const filters: [string | null, string, string | undefined][] = [
 		[null, t("All"), undefined],
@@ -167,7 +172,7 @@ export function Stats({ open, revision, onClose }: { open: boolean; revision?: u
 			</PanelHeader>
 
 			{tab === "workouts" && view && (
-				<Workouts sets={view.workouts.filter((s) => machine === null || s.machine === machine)} />
+				<Workouts sets={workouts} />
 			)}
 			{/* Laid out for the page dialog's width; the grids stack on a narrow window. */}
 			<div className={`${tab === "overview" ? "flex" : "hidden"} min-h-0 flex-1 flex-col gap-6 overflow-y-auto p-4`}>
@@ -588,15 +593,22 @@ function Summary({ turns }: { turns: StatsTurn[] }) {
 
 /** The sets done for the workout gate (web/Workout.tsx), filtered like Overview by machine. */
 function Workouts({ sets }: { sets: WorkoutSet[] }) {
-	// The body for calorie estimates, re-read whenever Stats reloads.
+	// The body for calorie estimates and the plan, re-read whenever Stats reloads.
 	const [profile, setProfile] = useState<WorkoutProfile | null>(null);
+	const [plan, setPlan] = useState<WorkoutPlan | null>(null);
 	useEffect(() => {
 		void api["pwi-extensions"]
 			.$get()
 			.then((r) => (r.ok ? r.json() : null))
 			.then((x) => setProfile(x?.workoutProfile ?? null))
 			.catch(() => setProfile(null));
+		void api.workouts.plan
+			.$get()
+			.then((r) => (r.ok ? r.json() : null))
+			.then(setPlan)
+			.catch(() => setPlan(null));
 	}, [sets]);
+	const plannedToday = (plan?.planned ?? []).filter((p) => dayKey(new Date(p.at)) === dayKey(new Date()));
 	const kcal = (list: WorkoutSet[]) => (profile ? list.reduce((n, s) => n + setKcal(s.kind, s.amount, profile), 0) : 0);
 	const day = (s: WorkoutSet) => dayKey(new Date(s.at));
 	const today = dayKey(new Date());
@@ -641,7 +653,21 @@ function Workouts({ sets }: { sets: WorkoutSet[] }) {
 					{t("Enter your sex, age, height and weight under Packages > pwi extensions > Workout to see calories.")}
 				</p>
 			)}
-			<WorkoutDays sets={sets} profile={profile} />
+			<WorkoutDays sets={sets} profile={profile} planned={plannedToday} />
+			{plan && (
+				<div className="grid gap-6 md:grid-cols-2">
+					<UpNext plan={plan} />
+					<div>
+						<Bars
+							title={t("Muscle load now")}
+							rows={MUSCLES.map((m) => [muscleName(m), Math.round(plan.fatigue[m] * 10) / 10])}
+						/>
+						<p className="mt-2 text-meta text-neutral-500">
+							{t("Each set adds 1 to the groups it works, halving every 45 minutes. The next set works the freshest.")}
+						</p>
+					</div>
+				</div>
+			)}
 			<div className="max-w-2xl">
 				<h3 className={`mb-2 ${sectionLabel}`}>{t("Exercises")}</h3>
 				<table className="w-full text-meta tabular-nums">
@@ -683,6 +709,37 @@ function Workouts({ sets }: { sets: WorkoutSet[] }) {
 	);
 }
 
+const UP_NEXT = 8;
+const timeFmt = perLocale((l) => new Intl.DateTimeFormat(l, { hour: "2-digit", minute: "2-digit" }));
+
+/** The next sets the schedule has planned, with when and what they work. */
+function UpNext({ plan }: { plan: WorkoutPlan }) {
+	const today = dayKey(new Date());
+	const rest = plan.planned.filter((p) => dayKey(new Date(p.at)) === today).length - UP_NEXT;
+	const when = (at: string) => {
+		const d = new Date(at);
+		if (d.getTime() <= Date.now()) return t("now");
+		return dayKey(d) === today ? timeFmt().format(d) : stampFmt().format(d);
+	};
+	return (
+		<div>
+			<h3 className={`mb-2 ${sectionLabel}`}>{t("Up next")}</h3>
+			{!plan.on && <p className="text-meta text-neutral-500">{t("Workout is off. Turn it on under Packages > pwi extensions.")}</p>}
+			<div className="flex flex-col gap-1 text-meta">
+				{plan.planned.slice(0, UP_NEXT).map((p) => (
+					<div key={p.at} className="flex items-center gap-2">
+						<span className="w-24 shrink-0 text-neutral-500 tabular-nums">{when(p.at)}</span>
+						<span className={`inline-block size-2.5 shrink-0 rounded-full ${EX_COLOR[p.kind]}`} />
+						<span className="text-neutral-200">{exerciseText(p.kind).name}</span>
+						<span className="text-neutral-500">{musclesText(p.kind)}</span>
+					</div>
+				))}
+			</div>
+			{rest > 0 && <p className="mt-1 text-meta text-neutral-500">{t("+{n} more planned today", { n: rest })}</p>}
+		</div>
+	);
+}
+
 const CHART_DAYS = 30;
 /** Literal classes so Tailwind emits them; the chart reads the colours back through bgColor. */
 const EX_COLOR: Record<WorkoutKind, string> = {
@@ -703,7 +760,16 @@ const shortDayFmt = perLocale((l) => new Intl.DateTimeFormat(l, { day: "numeric"
  * Sets, or kcal once a body is entered, per day for the last CHART_DAYS days:
  * one column a day stacked by exercise, like By hour.
  */
-function WorkoutDays({ sets, profile }: { sets: WorkoutSet[]; profile: WorkoutProfile | null }) {
+function WorkoutDays({
+	sets,
+	profile,
+	planned,
+}: {
+	sets: WorkoutSet[];
+	profile: WorkoutProfile | null;
+	/** Today's sets still to come, drawn on top of today's column in `neutral-700`. */
+	planned: WorkoutPlanned[];
+}) {
 	const [by, setBy] = useState<"sets" | "kcal">("sets");
 	const metric = profile ? by : "sets";
 	const days = useMemo(
@@ -723,7 +789,11 @@ function WorkoutDays({ sets, profile }: { sets: WorkoutSet[]; profile: WorkoutPr
 	}, [sets, days, metric, profile]);
 	const format = (n: number) => (metric === "kcal" ? t("{n} kcal", { n: num().format(n) }) : String(n));
 	const totals = perDay.map((k) => [...k.values()].reduce((a, b) => a + b, 0));
-	const { unit, top, ticks } = axis(Math.max(1, ...totals));
+	const ahead = planned.reduce(
+		(n, p) => n + (metric === "kcal" && profile ? setKcal(p.kind, EXERCISES[p.kind].amount, profile) : 1),
+		0,
+	);
+	const { unit, top, ticks } = axis(Math.max(1, ...totals, (totals.at(-1) ?? 0) + ahead));
 
 	const box = useRef<HTMLDivElement>(null);
 	const canvas = useRef<HTMLCanvasElement>(null);
@@ -758,7 +828,13 @@ function WorkoutDays({ sets, profile }: { sets: WorkoutSet[]; profile: WorkoutPr
 				below += n;
 			}
 		});
-	}, [perDay, totals, width, w, h, step, bar, line, top, unit]);
+		if (ahead > 0) {
+			const i = CHART_DAYS - 1;
+			const y0 = y(totals[i] ?? 0);
+			ctx.fillStyle = bgColor(box.current, "bg-neutral-700");
+			ctx.fillRect(i * step, h - y(ahead + (totals[i] ?? 0)), bar, y(ahead + (totals[i] ?? 0)) - y0 - (y0 > 0 ? line : 0));
+		}
+	}, [perDay, totals, ahead, width, w, h, step, bar, line, top, unit]);
 
 	const hover = (e: React.MouseEvent<HTMLCanvasElement>) => {
 		const i = Math.floor((e.nativeEvent.offsetX * dpr) / step);
@@ -767,9 +843,10 @@ function WorkoutDays({ sets, profile }: { sets: WorkoutSet[]; profile: WorkoutPr
 		if (!day || !kinds) return void (e.currentTarget.title = "");
 		const parts = WORKOUT_KINDS.filter((k) => kinds.get(k)).map((k) => `${exerciseText(k).name} ${format(kinds.get(k)!)}`);
 		const total = totals[i] ?? 0;
+		const more = i === CHART_DAYS - 1 && ahead > 0 ? `\n${t("+{n} planned", { n: format(ahead) })}` : "";
 		e.currentTarget.title = `${dayFmt().format(day)}: ${metric === "kcal" ? format(total) : plural(total, "{n} set", "{n} sets")}${
 			parts.length ? `\n${parts.join("\n")}` : ""
-		}`;
+		}${more}`;
 	};
 
 	return (

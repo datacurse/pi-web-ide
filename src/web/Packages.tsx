@@ -24,7 +24,7 @@ import { Personality } from "./Personality.js";
 import { Nested, SolPiSettings } from "./SolPiSettings.js";
 import { exerciseText, musclesText } from "./Workout.js";
 import { WorkoutFigure } from "./workoutFigures.js";
-import { EXERCISES, WORKOUT_KINDS, type WorkoutKind, type WorkoutProfile } from "../shared/types.js";
+import { EXERCISES, WORKOUT_KINDS, type WorkoutKind, type WorkoutProfile, type WorkoutSchedule } from "../shared/types.js";
 import { setKcal } from "../shared/calories.js";
 import { parseResponse } from "hono/client";
 import { api } from "./api.js";
@@ -486,7 +486,7 @@ function PwiExtensionsSection({ open }: { open: boolean }) {
 						{t("Workout")}
 						<span className="block text-meta text-neutral-500">
 							{t(
-								"After each prompt goes out, asks for a short exercise while pi answers, rotating muscle groups so the ones just worked rest; Done unlocks when the set is over. Sets show in Stats > Workouts. Applies at once.",
+								"A short exercise every so often, on its own schedule rather than your prompts: a card in the corner shows while pi is busy on a turn, rotating muscle groups so the ones just worked rest. Done, Snooze or Skip; nothing blocks. Sets and the plan show in Stats > Workouts.",
 							)}
 						</span>
 					</span>
@@ -530,6 +530,7 @@ function PwiExtensionsSection({ open }: { open: boolean }) {
 								);
 							})}
 						</div>
+						<WorkoutScheduleForm schedule={state.workoutSchedule} onSaved={setState} />
 						<WorkoutBody profile={state.workoutProfile} onSaved={setState} />
 					</Nested>
 				)}
@@ -540,6 +541,53 @@ function PwiExtensionsSection({ open }: { open: boolean }) {
 }
 
 const kcalFmt = perLocale((l) => new Intl.NumberFormat(l, { maximumFractionDigits: 1 }));
+
+/** How often a set is due and in which hours; saved together with one button. */
+function WorkoutScheduleForm({
+	schedule,
+	onSaved,
+}: {
+	schedule: WorkoutSchedule;
+	onSaved: (s: PwiExtensions) => void;
+}) {
+	const text = (s: WorkoutSchedule) => ({ every: String(s.every), from: String(s.from), to: String(s.to) });
+	const [draft, setDraft] = useState(() => text(schedule));
+	const [error, setError] = useState<string | null>(null);
+	const dirty = JSON.stringify(draft) !== JSON.stringify(text(schedule));
+	const save = async () => {
+		const json = { every: Number(draft.every), from: Number(draft.from), to: Number(draft.to) };
+		const r = await api["pwi-extensions"]["workout-schedule"].$put({ json }).catch(() => null);
+		if (!r?.ok) return setError(t("Every 1–240 minutes, between whole hours 0–24 with From before To."));
+		setError(null);
+		onSaved(await r.json());
+	};
+	const field = (key: "every" | "from" | "to", label: string) => (
+		<label className="flex flex-col gap-1">
+			{label}
+			<input
+				value={draft[key]}
+				onChange={(e) => setDraft({ ...draft, [key]: e.target.value })}
+				onKeyDown={(e) => e.key === "Enter" && void save()}
+				inputMode="numeric"
+				className={`w-20 font-mono ${inputClass.sm}`}
+			/>
+		</label>
+	);
+	return (
+		<div className="mt-3 text-meta text-neutral-500">
+			<p>{t("A set is due this often after the last one, only between these hours:")}</p>
+			<div className="mt-1 flex flex-wrap items-end gap-2">
+				{field("every", t("Every, min"))}
+				{field("from", t("From, h"))}
+				{field("to", t("To, h"))}
+				<Button variant="subtle" size="sm" onClick={() => void save()} disabled={!dirty}>
+					{t("Save")}
+				</Button>
+			</div>
+			{error && <p className="mt-1 text-red-400">{error}</p>}
+		</div>
+	);
+}
 
 /** Sex, age, height and weight for the calorie estimates; saved together with one button. */
 function WorkoutBody({ profile, onSaved }: { profile: WorkoutProfile | null; onSaved: (s: PwiExtensions) => void }) {

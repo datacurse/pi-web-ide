@@ -44,7 +44,7 @@ import {
 import type { PiwFileEntry } from "../shared/types.js";
 import { FileGlyph } from "./fileIcon.js";
 import { readExplorerOpen, writeExplorerOpen } from "./prefs.js";
-import { ContextMenu, IconButton, ListRow, MenuItem, MenuSeparator, PanelHeader, inputClass } from "./ui.js";
+import { ContextMenu, ListRow, MenuItem, MenuSeparator, PanelHeader, StripCell, inputClass } from "./ui.js";
 import { api, unwrap } from "./api.js";
 import { locale, plural, t } from "./i18n.js";
 import { ScrollPane } from "./OverlayScrollbar.js";
@@ -873,16 +873,16 @@ export function Explorer({
 			aria-label={t("Explorer")}
 			className="flex min-h-0 min-w-0 flex-1 flex-col bg-neutral-950"
 		>
-			<PanelHeader title={t("Explorer")} onClose={onClose}>
-				<IconButton size="sm" className="ml-auto" onClick={refresh} label={t("Refresh explorer")}>
+			<PanelHeader title={t("Explorer")} onClose={onClose} cells>
+				<StripCell onClick={refresh} label={t("Refresh explorer")}>
 					<ArrowClockwise size={16} />
-				</IconButton>
-				<IconButton size="sm" onClick={() => void expandAll().catch(fail)} label={t("Expand all folders")}>
+				</StripCell>
+				<StripCell onClick={() => void expandAll().catch(fail)} label={t("Expand all folders")}>
 					<ArrowsOutLineVertical size={16} />
-				</IconButton>
-				<IconButton size="sm" onClick={collapseAll} label={t("Collapse all folders")}>
+				</StripCell>
+				<StripCell onClick={collapseAll} label={t("Collapse all folders")}>
 					<ArrowsInLineVertical size={16} />
-				</IconButton>
+				</StripCell>
 			</PanelHeader>
 			{children}
 

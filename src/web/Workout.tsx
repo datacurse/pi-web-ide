@@ -1,19 +1,9 @@
-import { useEffect, useRef, useState } from "react";
-import { EXERCISES, type Muscle, type WorkoutKind } from "../shared/types.js";
+import { useCallback, useEffect, useState } from "react";
+import { EXERCISES, type Muscle, type WorkoutKind, type WorkoutPlan } from "../shared/types.js";
 import { Button } from "./ui.js";
 import { t } from "./i18n.js";
 import { api } from "./api.js";
 import { WorkoutFigure } from "./workoutFigures.js";
-
-/**
- * The next exercise among those switched on, rotating muscle groups
- * (shared/rotation.ts), or null when the gate is off or the server cannot say.
- */
-export async function pickWorkout(): Promise<WorkoutKind | null> {
-	const r = await api.workouts.next.$get().catch(() => null);
-	if (!r?.ok) return null;
-	return (await r.json()).kind;
-}
 
 export function muscleName(m: Muscle): string {
 	switch (m) {
@@ -62,51 +52,92 @@ export function exerciseText(kind: WorkoutKind): { name: string; task: string } 
 	}
 }
 
+/** Minutes a due set waits for pi to get busy (you are waiting anyway) before it shows regardless. */
+const GRACE_MIN = 10;
+const SNOOZE_MIN = 10;
+const POLL_MS = 30_000;
+
 /**
- * Shown right after a prompt goes out, so pi answers while you exercise.
- * Only Done closes it, once the exercise's wait is over; the set is logged for Stats.
+ * The workout card: a set on its own schedule (server/workouts.ts), not tied
+ * to prompts. Once one is due it shows while pi is busy on a turn, or after
+ * GRACE_MIN (or the interval, if shorter) regardless, and only in a window
+ * you are looking at. It never blocks: Done (after the exercise's wait),
+ * Snooze or Skip. Another window's Done hides it here on the next poll.
  */
-export function Workout({ kind, onDone }: { kind: WorkoutKind; onDone: () => void }) {
-	const ref = useRef<HTMLDialogElement>(null);
-	const wait = EXERCISES[kind].wait;
-	const [left, setLeft] = useState<number>(wait);
+export function WorkoutCard({ busy }: { busy: boolean }) {
+	const [plan, setPlan] = useState<WorkoutPlan | null>(null);
+	const [now, setNow] = useState(() => Date.now());
+	const [visible, setVisible] = useState(() => document.visibilityState === "visible");
+	/** The due set the card is showing, and since when (its Done countdown). */
+	const [shown, setShown] = useState<{ at: string; since: number } | null>(null);
 
+	const load = useCallback(async () => {
+		const r = await api.workouts.plan.$get().catch(() => null);
+		if (r?.ok) setPlan(await r.json());
+	}, []);
 	useEffect(() => {
-		ref.current?.showModal();
-		const start = Date.now();
-		const id = setInterval(() => {
-			const next = Math.max(0, wait - Math.floor((Date.now() - start) / 1000));
-			setLeft(next);
-			if (next === 0) clearInterval(id);
-		}, 250);
-		return () => clearInterval(id);
-	}, [wait]);
+		void load();
+		const tick = setInterval(() => setNow(Date.now()), 1000);
+		const poll = setInterval(() => void load(), POLL_MS);
+		const onVisibility = () => {
+			setVisible(document.visibilityState === "visible");
+			if (document.visibilityState === "visible") void load();
+		};
+		document.addEventListener("visibilitychange", onVisibility);
+		return () => {
+			clearInterval(tick);
+			clearInterval(poll);
+			document.removeEventListener("visibilitychange", onVisibility);
+		};
+	}, [load]);
 
-	const done = () => {
-		void api.workouts.$post({ json: { kind } }).catch(() => undefined);
-		onDone();
+	const next = plan?.on ? plan.planned[0] : undefined;
+	const due = next ? Date.parse(next.at) : Infinity;
+	const grace = Math.min(GRACE_MIN, plan?.schedule.every ?? GRACE_MIN) * 60_000;
+	const ready = next !== undefined && visible && now >= due && (busy || now >= due + grace);
+	useEffect(() => {
+		if (ready && next && shown?.at !== next.at) setShown({ at: next.at, since: Date.now() });
+	}, [ready, next, shown]);
+
+	if (!next || shown?.at !== next.at) return null;
+	const kind = next.kind;
+	const left = Math.max(0, EXERCISES[kind].wait - Math.floor((now - shown.since) / 1000));
+	/** Hide at once, then read the new plan. */
+	const act = (request: () => Promise<unknown>) => {
+		setShown(null);
+		setPlan(null);
+		void request()
+			.catch(() => undefined)
+			.then(load);
 	};
+	const done = () => act(() => api.workouts.$post({ json: { kind } }));
 
 	return (
-		<dialog
-			ref={ref}
+		<div
+			role="dialog"
 			aria-label={t("Workout")}
-			onCancel={(e) => e.preventDefault()}
-			// Enter is Done once it unlocks, wherever focus sits in the dialog.
+			// Enter is Done once it unlocks, while focus is in the card.
 			onKeyDown={(e) => {
 				if (e.key !== "Enter") return;
 				e.preventDefault();
 				if (left === 0) done();
 			}}
-			className="mx-auto mt-[20vh] hidden w-[min(24rem,92vw)] flex-col items-center gap-4 rounded-md border border-neutral-800 bg-neutral-950 p-6 text-neutral-100 shadow-2xl backdrop:bg-black/50 backdrop:backdrop-blur-sm open:flex"
+			className="fixed top-14 right-6 z-40 flex w-72 flex-col items-center gap-2 rounded-md border border-neutral-800 bg-neutral-950 p-4 text-neutral-100 shadow-2xl"
 		>
-			<WorkoutFigure kind={kind} className="w-full text-amber-400" />
-			<p className="text-center text-title">{exerciseText(kind).task}</p>
-			<p className="-mt-3 text-meta text-neutral-400">{musclesText(kind)}</p>
-			<p className="text-meta text-neutral-500">{t("pi is already answering.")}</p>
-			<Button variant="primary" disabled={left > 0} onClick={done}>
-				{left > 0 ? t("Done in {n}s", { n: left }) : t("Done")}
-			</Button>
-		</dialog>
+			<WorkoutFigure kind={kind} className="w-40 text-amber-400" />
+			<p className="text-center text-body">{exerciseText(kind).task}</p>
+			<p className="text-meta text-neutral-400">{musclesText(kind)}</p>
+			<div className="mt-1 flex gap-2">
+				<Button size="sm" variant="ghost" onClick={() => act(() => api.workouts.skip.$post())}>
+					{t("Skip")}
+				</Button>
+				<Button size="sm" onClick={() => act(() => api.workouts.snooze.$post({ json: { minutes: SNOOZE_MIN } }))}>
+					{t("Snooze {n} min", { n: SNOOZE_MIN })}
+				</Button>
+				<Button size="sm" variant="primary" disabled={left > 0} onClick={done}>
+					{left > 0 ? t("Done in {n}s", { n: left }) : t("Done")}
+				</Button>
+			</div>
+		</div>
 	);
 }

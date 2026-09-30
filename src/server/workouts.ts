@@ -1,9 +1,12 @@
 /**
- * workouts.ts — the sets done for the workout gate (web/Workout.tsx), one
- * entry per Done, for the Workouts tab in Stats.
+ * workouts.ts — the sets done (one entry per Done in web/Workout.tsx), for the
+ * Workouts tab in Stats, and the schedule's plan built from them.
  */
 
-import { EXERCISES, type WorkoutKind, type WorkoutSet } from "../shared/types.js";
+import { EXERCISES, WORKOUT_KINDS, type WorkoutKind, type WorkoutPlan, type WorkoutSet } from "../shared/types.js";
+import { fatigue, plan } from "../shared/rotation.js";
+import { machines } from "./machines.js";
+import { pwiExtensions } from "./pwiExtensions.js";
 import { readStateFile, statePath, writeStateFile } from "./state.js";
 
 const FILE = "workouts.json";
@@ -31,4 +34,44 @@ export function addWorkout(kind: WorkoutKind, at = new Date()): WorkoutSet {
 	const set = { at: at.toISOString(), kind, amount: EXERCISES[kind].amount };
 	writeStateFile(statePath(FILE), `${JSON.stringify([...readWorkouts(), set])}\n`);
 	return set;
+}
+
+const STATE = "workout-state.json";
+
+/** The last Skip and the end of the last Snooze, ISO; they move the next set like a Done does. */
+interface State {
+	skippedAt?: string;
+	snoozedUntil?: string;
+}
+
+function readState(): State {
+	try {
+		return JSON.parse(readStateFile(statePath(STATE)) ?? "{}") as State;
+	} catch {
+		return {};
+	}
+}
+
+export function skipWorkout(now = new Date()): void {
+	writeStateFile(statePath(STATE), JSON.stringify({ ...readState(), skippedAt: now.toISOString() }));
+}
+
+export function snoozeWorkout(minutes: number, now = new Date()): void {
+	const until = new Date(now.getTime() + minutes * 60_000).toISOString();
+	writeStateFile(statePath(STATE), JSON.stringify({ ...readState(), snoozedUntil: until }));
+}
+
+/** What is coming up, over this machine's sets and every mirrored one: a set done anywhere counts. */
+export function workoutPlan(now = Date.now()): WorkoutPlan {
+	const s = pwiExtensions();
+	const sets = [...readWorkouts(), ...machines().flatMap((m) => readWorkouts(m.workouts))];
+	const state = readState();
+	const since = Math.max(0, ...sets.map((x) => Date.parse(x.at)), Date.parse(state.skippedAt ?? "") || 0);
+	const on = WORKOUT_KINDS.filter((k) => !s.workoutOff.includes(k));
+	return {
+		on: s.workout,
+		schedule: s.workoutSchedule,
+		planned: s.workout ? plan(sets, on, s.workoutSchedule, since, Date.parse(state.snoozedUntil ?? "") || 0, now) : [],
+		fatigue: fatigue(sets, now),
+	};
 }

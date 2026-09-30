@@ -6,7 +6,7 @@
  * beside the personality (personality.ts).
  */
 
-import { WORKOUT_KINDS, type PwiExtensions, type WorkoutKind } from "../shared/types.js";
+import { WORKOUT_KINDS, type PwiExtensions, type WorkoutKind, type WorkoutSchedule } from "../shared/types.js";
 import { readStateFile, statePath, writeStateFile } from "./state.js";
 import { isWorkoutKind } from "./workouts.js";
 import { parseProfile } from "../shared/calories.js";
@@ -32,7 +32,24 @@ export function pwiExtensions(): PwiExtensions {
 		workout: s.workout === true,
 		workoutOff: Array.isArray(s.workoutOff) ? s.workoutOff.filter(isWorkoutKind) : [],
 		workoutProfile: parseProfile(s.workoutProfile),
+		workoutSchedule: parseSchedule(s.workoutSchedule) ?? DEFAULT_SCHEDULE,
 	};
+}
+
+const DEFAULT_SCHEDULE: WorkoutSchedule = { every: 30, from: 9, to: 22 };
+
+function parseSchedule(x: unknown): WorkoutSchedule | null {
+	if (!x || typeof x !== "object") return null;
+	const { every, from, to } = x as Record<string, unknown>;
+	const int = (v: unknown, lo: number, hi: number): v is number => Number.isInteger(v) && (v as number) >= lo && (v as number) <= hi;
+	if (!int(every, 1, 240) || !int(from, 0, 23) || !int(to, 1, 24) || from >= to) return null;
+	return { every, from, to };
+}
+
+/** Null unless every is 1–240 minutes and from < to are whole hours in 0–24. */
+export function writeWorkoutSchedule(schedule: unknown): PwiExtensions | null {
+	const parsed = parseSchedule(schedule);
+	return parsed && write({ ...pwiExtensions(), workoutSchedule: parsed });
 }
 
 function write(next: PwiExtensions): PwiExtensions {

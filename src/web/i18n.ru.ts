@@ -554,8 +554,21 @@ export const RU: Record<string, string> = {
 	"Times every tool call, and each command inside a bash call with its output size, for Stats and the context panel. Nothing reaches the model.":
 		"Замеряет время каждого вызова инструмента и каждой команды внутри вызова bash вместе с объёмом её вывода — для статистики и панели контекста. Модель ничего из этого не видит.",
 	"Workout": "Разминка",
-	"After each prompt goes out, asks for a short exercise while pi answers, rotating muscle groups so the ones just worked rest; Done unlocks when the set is over. Sets show in Stats > Workouts. Applies at once.":
-		"После отправки каждого запроса просит сделать короткое упражнение, пока pi отвечает, чередуя группы мышц, чтобы только что нагруженные отдыхали; «Готово» открывается, когда подход закончен. Подходы видны в «Статистика > Тренировки». Действует сразу.",
+	"A short exercise every so often, on its own schedule rather than your prompts: a card in the corner shows while pi is busy on a turn, rotating muscle groups so the ones just worked rest. Done, Snooze or Skip; nothing blocks. Sets and the plan show in Stats > Workouts.":
+		"Короткое упражнение время от времени — по своему расписанию, а не по вашим запросам: карточка в углу появляется, пока pi занят ходом, и чередует группы мышц, чтобы только что нагруженные отдыхали. «Готово», «Отложить» или «Пропустить» — ничего не блокирует. Подходы и план — в «Статистика > Тренировки».",
+	"A set is due this often after the last one, only between these hours:": "Подход — через столько минут после предыдущего и только в эти часы:",
+	"Every, min": "Каждые, мин",
+	"From, h": "С, ч",
+	"To, h": "До, ч",
+	"Every 1–240 minutes, between whole hours 0–24 with From before To.": "Каждые 1–240 минут, в целых часах 0–24, «С» раньше «До».",
+	"Skip": "Пропустить",
+	"Snooze {n} min": "Отложить на {n} мин",
+	"Up next": "Дальше",
+	"Workout is off. Turn it on under Packages > pwi extensions.": "Разминка выключена. Включите её в «Пакеты > Расширения pwi».",
+	"+{n} more planned today": "и ещё {n} на сегодня",
+	"+{n} planned": "+{n} запланировано",
+	"Muscle load now": "Нагрузка на мышцы сейчас",
+	"Each set adds 1 to the groups it works, halving every 45 minutes. The next set works the freshest.": "Каждый подход добавляет 1 к нагруженным группам, и это вдвое убывает каждые 45 минут. Следующий подход берёт самые отдохнувшие.",
 	"Pushups": "Отжимания",
 	"chest": "грудь",
 	"arms": "руки",
@@ -616,7 +629,6 @@ export const RU: Record<string, string> = {
 	"Workout sets per day, last {n} days": "Подходы по дням за последние {n} дней",
 	"{n} sets": "{n} подход|{n} подхода|{n} подходов",
 	"{n}s": "{n} с",
-	"pi is already answering.": "pi уже отвечает.",
 	"Overview": "Обзор",
 	"Workouts": "Тренировки",
 	"No sets yet. Turn on Workout under Packages > pwi extensions.":

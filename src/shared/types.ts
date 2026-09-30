@@ -234,6 +234,32 @@ export interface PwiExtensions {
 	workoutOff: WorkoutKind[];
 	/** For calorie estimates; null until entered. */
 	workoutProfile: WorkoutProfile | null;
+	/** How often a set is due, and in which hours (shared/rotation.ts). */
+	workoutSchedule: WorkoutSchedule;
+}
+
+export interface WorkoutSchedule {
+	/** Minutes from one set to the next, 1–240. */
+	every: number;
+	/** Local hours sets are due in, `from` to `to` (0–24, from < to). */
+	from: number;
+	to: number;
+}
+
+/** A set the schedule has coming up. */
+export interface WorkoutPlanned {
+	/** ISO; the first may be past, meaning overdue. */
+	at: string;
+	kind: WorkoutKind;
+}
+
+/** `GET /api/workouts/plan`: what the corner card and Stats show. */
+export interface WorkoutPlan {
+	on: boolean;
+	schedule: WorkoutSchedule;
+	planned: WorkoutPlanned[];
+	/** Each muscle group's load right now (shared/rotation.ts `fatigue`). */
+	fatigue: Record<Muscle, number>;
 }
 
 /**

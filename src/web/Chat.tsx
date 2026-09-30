@@ -8,7 +8,6 @@ import type {
 	PiMessage,
 	PiPartial,
 	Snapshot,
-	WorkoutKind,
 } from "../shared/types.js";
 import { Button, ContextMenu, IconButton, MenuItem } from "./ui.js";
 import { ModelSelector } from "./ModelSelector.js";
@@ -45,7 +44,6 @@ import {
 } from "./Transcript.js";
 import { t } from "./i18n.js";
 import { PiMark } from "./piMark.js";
-import { pickWorkout, Workout } from "./Workout.js";
 
 /** pi's `get_commands` omits its TUI-only `/compact`; `send` in useSession.ts runs it. */
 const COMPACT_COMMAND: PiCommand = {
@@ -593,10 +591,6 @@ export function Chat({
 		return out;
 	}, [messages, showThinking, toolMode, busy]);
 
-	// Hooks stay above the `!snapshot` early return: React needs the same
-	// hook count on every render.
-	/** The exercise the workout dialog is asking for, or null when it is shut. */
-	const [workout, setWorkout] = useState<WorkoutKind | null>(null);
 
 	if (!snapshot) {
 		return (
@@ -693,9 +687,6 @@ export function Chat({
 		}
 	};
 
-	/** Right after a send: pi starts answering while the dialog asks for a set. */
-	const exercise = () => void pickWorkout().then((kind) => kind && setWorkout(kind));
-
 	const submit = () => {
 		const t = text.trim();
 		// An image on its own is a valid prompt; only block when nothing is staged.
@@ -707,7 +698,6 @@ export function Chat({
 		staged.current = [];
 		clearDraft(snapshot.id);
 		setAttachError(null);
-		exercise();
 	};
 
 	// A suppressed block does not count toward "there is something to show",
@@ -827,14 +817,7 @@ export function Chat({
 								footer={r.footer}
 								onFork={onFork}
 								at={r.at}
-								onEdit={
-									busy
-										? undefined
-										: (at, next, kept) => {
-												onEdit(at, next, kept);
-												exercise();
-											}
-								}
+								onEdit={busy ? undefined : onEdit}
 							/>
 						),
 					)}
@@ -1210,7 +1193,6 @@ export function Chat({
 
 				{/* Last, so it paints over everything: an expanded attachment. */}
 				{zoomed && <Lightbox src={zoomed} above={composer} onClose={() => setZoomed(null)} />}
-				{workout && <Workout kind={workout} onDone={() => setWorkout(null)} />}
 			</main>
 		</ZoomContext.Provider>
 	);
