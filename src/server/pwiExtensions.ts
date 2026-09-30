@@ -9,6 +9,7 @@
 import { WORKOUT_KINDS, type PwiExtensions, type WorkoutKind } from "../shared/types.js";
 import { readStateFile, statePath, writeStateFile } from "./state.js";
 import { isWorkoutKind } from "./workouts.js";
+import { parseProfile } from "../shared/calories.js";
 
 const FILE = "pwi-extensions.json";
 
@@ -30,6 +31,7 @@ export function pwiExtensions(): PwiExtensions {
 		toolMetrics: s.toolMetrics !== false,
 		workout: s.workout === true,
 		workoutOff: Array.isArray(s.workoutOff) ? s.workoutOff.filter(isWorkoutKind) : [],
+		workoutProfile: parseProfile(s.workoutProfile),
 	};
 }
 
@@ -40,6 +42,13 @@ function write(next: PwiExtensions): PwiExtensions {
 
 export function writePwiExtension(key: "toolMetrics" | "workout", on: boolean): PwiExtensions {
 	return write({ ...pwiExtensions(), [key]: on });
+}
+
+/** Null when the profile is out of bounds; a null profile clears it. */
+export function writeWorkoutProfile(profile: unknown): PwiExtensions | null {
+	const parsed = parseProfile(profile);
+	if (profile !== null && !parsed) return null;
+	return write({ ...pwiExtensions(), workoutProfile: parsed });
 }
 
 /** Null when `off` names an unknown exercise or leaves none on. */

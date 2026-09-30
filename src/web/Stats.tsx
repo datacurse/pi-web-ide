@@ -7,7 +7,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowClockwise } from "@phosphor-icons/react";
-import { EXERCISES, WORKOUT_KINDS, type StatsTurn, type StatsView, type ToolCost, type UsageSample, type WorkoutKind, type WorkoutSet } from "../shared/types.js";
+import { EXERCISES, WORKOUT_KINDS, type StatsTurn, type StatsView, type ToolCost, type UsageSample, type WorkoutKind, type WorkoutProfile, type WorkoutSet } from "../shared/types.js";
+import { setKcal } from "../shared/calories.js";
 import { exerciseText } from "./Workout.js";
 import { WorkoutFigure } from "./workoutFigures.js";
 import { Button, IconButton, PanelHeader, sectionLabel, useBatches } from "./ui.js";
@@ -587,14 +588,33 @@ function Summary({ turns }: { turns: StatsTurn[] }) {
 
 /** The sets done for the workout gate (web/Workout.tsx), filtered like Overview by machine. */
 function Workouts({ sets }: { sets: WorkoutSet[] }) {
+	// The body for calorie estimates, re-read whenever Stats reloads.
+	const [profile, setProfile] = useState<WorkoutProfile | null>(null);
+	useEffect(() => {
+		void api["pwi-extensions"]
+			.$get()
+			.then((r) => (r.ok ? r.json() : null))
+			.then((x) => setProfile(x?.workoutProfile ?? null))
+			.catch(() => setProfile(null));
+	}, [sets]);
+	const kcal = (list: WorkoutSet[]) => (profile ? list.reduce((n, s) => n + setKcal(s.kind, s.amount, profile), 0) : 0);
 	const day = (s: WorkoutSet) => dayKey(new Date(s.at));
 	const today = dayKey(new Date());
 	const weekAgo = dayKey(addDays(new Date(), -6));
-	const tiles: [string, number][] = [
-		[t("Sets today"), sets.filter((s) => day(s) === today).length],
-		[t("Sets this week"), sets.filter((s) => day(s) >= weekAgo).length],
-		[t("Sets in total"), sets.length],
-		[t("Active days"), new Set(sets.map(day)).size],
+	const activeDays = new Set(sets.map(day)).size;
+	const tiles: [string, string][] = [
+		[t("Sets today"), num().format(sets.filter((s) => day(s) === today).length)],
+		[t("Sets this week"), num().format(sets.filter((s) => day(s) >= weekAgo).length)],
+		[t("Sets in total"), num().format(sets.length)],
+		[t("Active days"), num().format(activeDays)],
+		...(profile
+			? ([
+					[t("kcal today"), num().format(kcal(sets.filter((s) => day(s) === today)))],
+					[t("kcal this week"), num().format(kcal(sets.filter((s) => day(s) >= weekAgo)))],
+					[t("kcal in total"), num().format(kcal(sets))],
+					[t("kcal per active day"), num().format(activeDays ? kcal(sets) / activeDays : 0)],
+				] as [string, string][])
+			: []),
 	];
 	const sum = (kind: WorkoutKind, from?: string) =>
 		sets.filter((s) => s.kind === kind && (!from || day(s) >= from)).reduce((n, s) => n + s.amount, 0);
@@ -611,12 +631,17 @@ function Workouts({ sets }: { sets: WorkoutSet[] }) {
 			<div className="grid grid-cols-2 gap-2 md:grid-cols-4">
 				{tiles.map(([label, value]) => (
 					<div key={label} className="rounded-sm border border-neutral-800 px-2 py-1.5">
-						<div className="text-title text-neutral-100 tabular-nums">{num().format(value)}</div>
+						<div className="text-title text-neutral-100 tabular-nums">{value}</div>
 						<div className="text-meta text-neutral-500">{label}</div>
 					</div>
 				))}
 			</div>
-			<WorkoutDays sets={sets} />
+			{!profile && sets.length > 0 && (
+				<p className="text-meta text-neutral-500">
+					{t("Enter your sex, age, height and weight under Packages > pwi extensions > Workout to see calories.")}
+				</p>
+			)}
+			<WorkoutDays sets={sets} profile={profile} />
 			<div className="max-w-2xl">
 				<h3 className={`mb-2 ${sectionLabel}`}>{t("Exercises")}</h3>
 				<table className="w-full text-meta tabular-nums">
@@ -627,6 +652,7 @@ function Workouts({ sets }: { sets: WorkoutSet[] }) {
 							<th className="text-right font-normal">{t("Today")}</th>
 							<th className="text-right font-normal">{t("This week")}</th>
 							<th className="text-right font-normal">{t("Total")}</th>
+							{profile && <th className="text-right font-normal">{t("kcal")}</th>}
 						</tr>
 					</thead>
 					<tbody>
@@ -643,6 +669,11 @@ function Workouts({ sets }: { sets: WorkoutSet[] }) {
 								<td className="text-right text-neutral-300">{amount(kind, sum(kind, today))}</td>
 								<td className="text-right text-neutral-300">{amount(kind, sum(kind, weekAgo))}</td>
 								<td className="text-right text-neutral-200">{amount(kind, sum(kind))}</td>
+								{profile && (
+									<td className="text-right text-neutral-200">
+										{num().format(kcal(sets.filter((s) => s.kind === kind)))}
+									</td>
+								)}
 							</tr>
 						))}
 					</tbody>
@@ -668,8 +699,13 @@ const EX_COLOR: Record<WorkoutKind, string> = {
 };
 const shortDayFmt = perLocale((l) => new Intl.DateTimeFormat(l, { day: "numeric", month: "short" }));
 
-/** Sets per day for the last CHART_DAYS days, one column a day stacked by exercise, like By hour. */
-function WorkoutDays({ sets }: { sets: WorkoutSet[] }) {
+/**
+ * Sets, or kcal once a body is entered, per day for the last CHART_DAYS days:
+ * one column a day stacked by exercise, like By hour.
+ */
+function WorkoutDays({ sets, profile }: { sets: WorkoutSet[]; profile: WorkoutProfile | null }) {
+	const [by, setBy] = useState<"sets" | "kcal">("sets");
+	const metric = profile ? by : "sets";
 	const days = useMemo(
 		() => Array.from({ length: CHART_DAYS }, (_, i) => addDays(new Date(), i - CHART_DAYS + 1)),
 		[sets],
@@ -679,11 +715,13 @@ function WorkoutDays({ sets }: { sets: WorkoutSet[] }) {
 		for (const s of sets) {
 			const d = dayKey(new Date(s.at));
 			const kinds = byDay.get(d) ?? new Map<WorkoutKind, number>();
-			kinds.set(s.kind, (kinds.get(s.kind) ?? 0) + 1);
+			const v = metric === "kcal" && profile ? setKcal(s.kind, s.amount, profile) : 1;
+			kinds.set(s.kind, (kinds.get(s.kind) ?? 0) + v);
 			byDay.set(d, kinds);
 		}
 		return days.map((d) => byDay.get(dayKey(d)) ?? new Map<WorkoutKind, number>());
-	}, [sets, days]);
+	}, [sets, days, metric, profile]);
+	const format = (n: number) => (metric === "kcal" ? t("{n} kcal", { n: num().format(n) }) : String(n));
 	const totals = perDay.map((k) => [...k.values()].reduce((a, b) => a + b, 0));
 	const { unit, top, ticks } = axis(Math.max(1, ...totals));
 
@@ -727,15 +765,42 @@ function WorkoutDays({ sets }: { sets: WorkoutSet[] }) {
 		const day = days[i];
 		const kinds = perDay[i];
 		if (!day || !kinds) return void (e.currentTarget.title = "");
-		const parts = WORKOUT_KINDS.filter((k) => kinds.get(k)).map((k) => `${exerciseText(k).name} ${kinds.get(k)}`);
-		e.currentTarget.title = `${dayFmt().format(day)}: ${plural(totals[i] ?? 0, "{n} set", "{n} sets")}${
+		const parts = WORKOUT_KINDS.filter((k) => kinds.get(k)).map((k) => `${exerciseText(k).name} ${format(kinds.get(k)!)}`);
+		const total = totals[i] ?? 0;
+		e.currentTarget.title = `${dayFmt().format(day)}: ${metric === "kcal" ? format(total) : plural(total, "{n} set", "{n} sets")}${
 			parts.length ? `\n${parts.join("\n")}` : ""
 		}`;
 	};
 
 	return (
 		<div>
-			<h3 className={`mb-2 ${sectionLabel}`}>{t("Sets per day, last {n} days", { n: CHART_DAYS })}</h3>
+			<div className="mb-2 flex items-center gap-3">
+				<h3 className={sectionLabel}>
+					{metric === "kcal"
+						? t("kcal per day, last {n} days", { n: CHART_DAYS })
+						: t("Sets per day, last {n} days", { n: CHART_DAYS })}
+				</h3>
+				{profile && (
+					<div className="flex gap-1">
+						{(
+							[
+								["sets", t("Sets")],
+								["kcal", t("kcal")],
+							] as const
+						).map(([m, label]) => (
+							<Button
+								key={m}
+								size="sm"
+								variant={by === m ? "subtle" : "ghost"}
+								aria-pressed={by === m}
+								onClick={() => setBy(m)}
+							>
+								{label}
+							</Button>
+						))}
+					</div>
+				)}
+			</div>
 			<div className="flex gap-2 text-caption text-neutral-500 tabular-nums">
 				<div className="relative w-8 shrink-0" style={{ height: h / dpr }}>
 					{ticks.map((v) => (

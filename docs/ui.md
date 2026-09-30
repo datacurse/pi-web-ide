@@ -468,7 +468,12 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
   (`Nested`, `grid-cols-2 sm:grid-cols-5`) shows every exercise as a `rounded-sm` bordered card: its
   animated figure (amber when on, `neutral-700` when off), then a `size-3` checkbox and the name. The
   dialog picks only from ticked ones (`workoutOff` in `pwi-extensions.json`, so new exercises start on);
-  the last ticked card's checkbox is disabled. Under it, Personality (`Personality.tsx`, moved
+  the last ticked card's checkbox is disabled. With a body saved, each card adds `≈N kcal a set` in
+  `neutral-500`. Under the grid, "Your body": Sex `<select>` (`w-24`), Age, `Height, cm`, `Weight, kg`
+  (`w-20` mono inputs), one `Save` (`Button sm subtle`, enabled while changed), labels above the fields in
+  `text-meta neutral-500`, a red line when the server refuses (`workoutProfile` in `pwi-extensions.json`;
+  saving all fields empty clears it). Calories: `shared/calories.ts`, MET × Mifflin–St Jeor resting
+  kcal/min × minutes of work (`met` and seconds per `rep` in `EXERCISES`). Under it, Personality (`Personality.tsx`, moved
   from Settings): a `text-ui` heading, the file's path, a mono `textarea` with `Save`
   (`Button sm subtle`) and a status line, then the `Repeat before every reply` checkbox.
   It is re-read each time the page is shown unless there are unsaved edits, and the
@@ -523,7 +528,10 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
   day's sets per exercise. Each exercise has its own themed colour token (`ex-*` in `@theme`: one
   `--ct-*` accent each, plank and wall sit mixed). Under it the Exercises table (`max-w-2xl`: the
   figure's first pose `w-12` in `neutral-400`, a `size-2.5` colour dot that is the chart's legend,
-  name, today, this week, total; seconds shown as `20s`).
+  name, today, this week, total; seconds shown as `20s`). With a body saved: a second row of tiles
+  (kcal today, this week, in total, per active day), a `kcal` column in the table, and a Sets / kcal
+  toggle (`Button sm`, `subtle`/`ghost`, `aria-pressed`) beside the chart's label that restacks the
+  columns by kcal. Without one, a `text-meta` line says where to enter it.
 - Stats uses the dialog's width: usage beside the summary tiles (1/3 + 2/3), a 52-week
   heatmap full width, answer time beside by-hour, Machines (when there are others) /
   Models / Projects / Tools in columns, then Tool calls, then Slowest calls, Largest calls

@@ -24,10 +24,11 @@ import { Personality } from "./Personality.js";
 import { Nested, SolPiSettings } from "./SolPiSettings.js";
 import { exerciseText } from "./Workout.js";
 import { WorkoutFigure } from "./workoutFigures.js";
-import { WORKOUT_KINDS, type WorkoutKind } from "../shared/types.js";
+import { EXERCISES, WORKOUT_KINDS, type WorkoutKind, type WorkoutProfile } from "../shared/types.js";
+import { setKcal } from "../shared/calories.js";
 import { parseResponse } from "hono/client";
 import { api } from "./api.js";
-import { t, locale } from "./i18n.js";
+import { t, locale, perLocale } from "./i18n.js";
 
 /** `2026-09-14T20:53:55.440Z` → `14 Sep 2026`. A publish date is a month, not a minute. */
 function shortDate(iso: string | undefined): string {
@@ -517,14 +518,89 @@ function PwiExtensionsSection({ open }: { open: boolean }) {
 											/>
 											{exerciseText(kind).name}
 										</span>
+										{state.workoutProfile && (
+											<span className="text-neutral-500">
+												{t("≈{n} kcal a set", {
+													n: kcalFmt().format(setKcal(kind, EXERCISES[kind].amount, state.workoutProfile)),
+												})}
+											</span>
+										)}
 									</label>
 								);
 							})}
 						</div>
+						<WorkoutBody profile={state.workoutProfile} onSaved={setState} />
 					</Nested>
 				)}
 				<Personality open={open} />
 			</div>
+		</div>
+	);
+}
+
+const kcalFmt = perLocale((l) => new Intl.NumberFormat(l, { maximumFractionDigits: 1 }));
+
+/** Sex, age, height and weight for the calorie estimates; saved together with one button. */
+function WorkoutBody({ profile, onSaved }: { profile: WorkoutProfile | null; onSaved: (s: PwiExtensions) => void }) {
+	const text = (p: WorkoutProfile | null) => ({
+		sex: p?.sex ?? "",
+		age: p ? String(p.age) : "",
+		heightCm: p ? String(p.heightCm) : "",
+		weightKg: p ? String(p.weightKg) : "",
+	});
+	const [draft, setDraft] = useState(() => text(profile));
+	const [error, setError] = useState<string | null>(null);
+	const dirty = JSON.stringify(draft) !== JSON.stringify(text(profile));
+	const save = async () => {
+		const empty = Object.values(draft).every((v) => v.trim() === "");
+		const next = empty
+			? null
+			: { sex: draft.sex, age: Number(draft.age), heightCm: Number(draft.heightCm), weightKg: Number(draft.weightKg) };
+		const r = await api["pwi-extensions"]["workout-profile"]
+			.$put({ json: { profile: next as WorkoutProfile | null } })
+			.catch(() => null);
+		if (!r?.ok) return setError(t("Sex, age 10–120, height 100–250 cm and weight 30–300 kg."));
+		setError(null);
+		onSaved(await r.json());
+	};
+	const field = (key: "age" | "heightCm" | "weightKg", label: string) => (
+		<label className="flex flex-col gap-1">
+			{label}
+			<input
+				value={draft[key]}
+				onChange={(e) => setDraft({ ...draft, [key]: e.target.value })}
+				onKeyDown={(e) => e.key === "Enter" && void save()}
+				inputMode="decimal"
+				className={`w-20 font-mono ${inputClass.sm}`}
+			/>
+		</label>
+	);
+	return (
+		<div className="mt-3 text-meta text-neutral-500">
+			<p>{t("Your body, for the calorie estimates in Stats > Workouts and on the cards above:")}</p>
+			<div className="mt-1 flex flex-wrap items-end gap-2">
+				<label className="flex flex-col gap-1">
+					{t("Sex")}
+					<select
+						value={draft.sex}
+						onChange={(e) => setDraft({ ...draft, sex: e.target.value })}
+						className={`w-24 ${inputClass.sm}`}
+					>
+						<option value="" disabled>
+							{t("Not set")}
+						</option>
+						<option value="male">{t("Male")}</option>
+						<option value="female">{t("Female")}</option>
+					</select>
+				</label>
+				{field("age", t("Age"))}
+				{field("heightCm", t("Height, cm"))}
+				{field("weightKg", t("Weight, kg"))}
+				<Button variant="subtle" size="sm" onClick={() => void save()} disabled={!dirty}>
+					{t("Save")}
+				</Button>
+			</div>
+			{error && <p className="mt-1 text-red-400">{error}</p>}
 		</div>
 	);
 }

@@ -30,3 +30,11 @@ assert.equal(writeWorkoutOff(["squat"]), null);
 assert.equal(writeWorkoutOff(Object.keys((await import("../shared/types.ts")).EXERCISES)), null);
 assert.deepEqual(pwiExtensions().workoutOff, ["plank", "burpees"]);
 console.log("workout exercises: ok");
+
+const { writeWorkoutProfile } = await import("./pwiExtensions.ts");
+const body = { sex: "female", age: 28, heightCm: 165, weightKg: 60 };
+assert.deepEqual(writeWorkoutProfile(body)?.workoutProfile, body);
+assert.equal(writeWorkoutProfile({ ...body, age: 400 }), null);
+assert.deepEqual(pwiExtensions().workoutProfile, body, "a refused save keeps the old profile");
+assert.equal(writeWorkoutProfile(null)?.workoutProfile, null);
+console.log("workout profile: ok");

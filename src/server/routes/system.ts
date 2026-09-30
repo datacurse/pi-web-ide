@@ -14,9 +14,9 @@ import {
 	removeProject,
 } from "../projects.js";
 import { readPersonality, writePersonality, writeRemind } from "../personality.js";
-import { pwiExtensions, writePwiExtension, writeWorkoutOff } from "../pwiExtensions.js";
+import { pwiExtensions, writePwiExtension, writeWorkoutOff, writeWorkoutProfile } from "../pwiExtensions.js";
 import { addWorkout, isWorkoutKind } from "../workouts.js";
-import { PRODUCT } from "../../shared/types.js";
+import { PRODUCT, type WorkoutProfile } from "../../shared/types.js";
 import { query, json, type Deps, type Env } from "../http.js";
 
 /** Machine-level routes: health, models, usage, stats, fleet, projects, favourites, personality. */
@@ -233,6 +233,13 @@ export function systemRoutes({ cwd: CWD, model: MODEL, registry, piVersion: PI_V
 			const b = c.req.valid("json");
 			if (typeof b.on !== "boolean") return c.json({ error: "on must be a boolean" }, 400);
 			return c.json(writePwiExtension("workout", b.on), 200);
+		})
+
+		/** The body calorie estimates use; null clears it. */
+		.put("/pwi-extensions/workout-profile", json<{ profile: WorkoutProfile | null }>(), async (c) => {
+			const next = writeWorkoutProfile(c.req.valid("json").profile);
+			if (!next) return c.json({ error: "sex male or female, age 10–120, height 100–250 cm, weight 30–300 kg" }, 400);
+			return c.json(next, 200);
 		})
 
 		/** Which exercises the workout dialog may pick; at least one stays on. */
