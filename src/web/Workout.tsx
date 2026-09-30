@@ -58,11 +58,12 @@ const SNOOZE_MIN = 10;
 const POLL_MS = 30_000;
 
 /**
- * The workout card: a set on its own schedule (server/workouts.ts), not tied
+ * The workout popup: a set on its own schedule (server/workouts.ts), not tied
  * to prompts. Once one is due it shows while pi is busy on a turn, or after
  * GRACE_MIN (or the interval, if shorter) regardless, and only in a window
- * you are looking at. It never blocks: Done (after the exercise's wait),
- * Snooze or Skip. Another window's Done hides it here on the next poll.
+ * you are looking at. Modal and centred over a dimmed page; only Done (after
+ * the exercise's wait), Snooze or Skip closes it. Another window's Done
+ * closes it here on the next poll.
  */
 export function WorkoutCard({ busy }: { busy: boolean }) {
 	const [plan, setPlan] = useState<WorkoutPlan | null>(null);
@@ -113,19 +114,28 @@ export function WorkoutCard({ busy }: { busy: boolean }) {
 	const done = () => act(() => api.workouts.$post({ json: { kind } }));
 
 	return (
-		<div
-			role="dialog"
+		<dialog
+			ref={(el) => {
+				// Modal, and focused itself so Enter never lands on Skip, the first button.
+				if (el && !el.open) {
+					el.showModal();
+					el.focus();
+				}
+			}}
+			tabIndex={-1}
 			aria-label={t("Workout")}
-			// Enter is Done once it unlocks, while focus is in the card.
+			// Only its buttons close it: not Escape, not a click outside.
+			onCancel={(e) => e.preventDefault()}
+			// Enter is Done once it unlocks.
 			onKeyDown={(e) => {
 				if (e.key !== "Enter") return;
 				e.preventDefault();
 				if (left === 0) done();
 			}}
-			className="fixed top-14 right-6 z-40 flex w-72 flex-col items-center gap-2 rounded-md border border-neutral-800 bg-neutral-950 p-4 text-neutral-100 shadow-2xl"
+			className="m-auto hidden w-[min(24rem,92vw)] flex-col items-center gap-3 rounded-md border border-neutral-800 bg-neutral-950 p-6 text-neutral-100 shadow-2xl backdrop:bg-black/50 open:flex"
 		>
-			<WorkoutFigure kind={kind} className="w-40 text-amber-400" />
-			<p className="text-center text-body">{exerciseText(kind).task}</p>
+			<WorkoutFigure kind={kind} className="w-full text-amber-400" />
+			<p className="text-center text-title">{exerciseText(kind).task}</p>
 			<p className="text-meta text-neutral-400">{musclesText(kind)}</p>
 			<div className="mt-1 flex gap-2">
 				<Button size="sm" variant="ghost" onClick={() => act(() => api.workouts.skip.$post())}>
@@ -138,6 +148,6 @@ export function WorkoutCard({ busy }: { busy: boolean }) {
 					{left > 0 ? t("Done in {n}s", { n: left }) : t("Done")}
 				</Button>
 			</div>
-		</div>
+		</dialog>
 	);
 }

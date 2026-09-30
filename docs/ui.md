@@ -475,12 +475,13 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
   tired group is freshest (near ties by a generator seeded from the last set, so the plan holds still
   between polls; never the same twice running). Once a set is due, `WorkoutCard` (mounted in `App`, polls
   every 30s) shows while pi is busy on a turn, or after 10 min (or the interval, if shorter) regardless,
-  only in a visible window: a fixed `top-14 right-6 w-72` card, `rounded-md` neutral-950 surface,
-  `shadow-2xl`, not modal. In it: the amber figure (`w-40`) flipping between its start and end poses every
-  900ms (`workoutFigures.tsx`, hand-drawn SVG polylines; holds have one pose), the task in `text-body`,
+  only in a visible window: a modal `<dialog>` centred over a `bg-black/50` backdrop (no blur),
+  `w-[min(24rem,92vw)]`, `rounded-md` neutral-950 surface, `shadow-2xl`, asked for so it demands
+  attention; only its buttons close it (Escape and outside clicks do nothing). In it: the amber figure (full width) flipping between its start and end poses every
+  900ms (`workoutFigures.tsx`, hand-drawn SVG polylines; holds have one pose), the task in `text-title`,
   its muscle groups (`chest · arms · core`, `text-meta neutral-400`), then `Skip` (ghost), `Snooze 10 min`
   (secondary) and a `primary` `Done` that reads `Done in 15s` until the exercise's wait is over (all
-  `Button sm`); Enter is Done while focus is in the card. Skip and Snooze are kept in
+  `Button sm`); the dialog takes focus itself, and Enter is Done once it unlocks. Skip and Snooze are kept in
   `workout-state.json` and move the next set like a Done. Done logs the set (`workouts.json`, `server/workouts.ts`). While Workout is on, a nested grid under it
   (`Nested`, `grid-cols-2 sm:grid-cols-5`) shows every exercise as a `rounded-sm` bordered card: its
   animated figure (amber when on, `neutral-700` when off), then a `size-3` checkbox and the name, and its muscle groups in `neutral-500`. The
