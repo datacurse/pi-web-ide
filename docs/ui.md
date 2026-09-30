@@ -483,8 +483,10 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
   the day: each set tires its muscle groups, halving every 45 min, and the next is the exercise whose most
   tired group is freshest (near ties by a generator seeded from the last set, so the plan holds still
   between polls; never the same twice running). Once a set is due, `WorkoutCard` (mounted in `App`, polls
-  every 30s) shows while pi is busy on a turn, or after 10 min (or the interval, if shorter) regardless,
-  only in a visible window: a modal `<dialog>` centred over a `bg-black/50` backdrop (no blur),
+  every 30s) opens at once in every pwi window, hidden ones too, and a window not on screen or not
+  focused also raises a system notification (`requireInteraction`, tag per set) when notifications are
+  allowed. It first waited up to 10 min for pi to be busy and only showed in a visible window, and sets
+  were missed. The Done countdown starts once the window is visible. It is a modal `<dialog>` centred over a `bg-black/50` backdrop (no blur),
   `w-[min(24rem,92vw)]`, `rounded-md` neutral-950 surface, `shadow-2xl`, asked for so it demands
   attention; only its buttons close it (Escape and outside clicks do nothing). In it: the amber figure (full width) flipping between its start and end poses every
   900ms (`workoutFigures.tsx`, hand-drawn SVG polylines; holds have one pose), the task in `text-title`,

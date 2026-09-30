@@ -52,25 +52,28 @@ export function exerciseText(kind: WorkoutKind): { name: string; task: string } 
 	}
 }
 
-/** Minutes a due set waits for pi to get busy (you are waiting anyway) before it shows regardless. */
-const GRACE_MIN = 10;
 const SNOOZE_MIN = 10;
 const POLL_MS = 30_000;
 
 /**
  * The workout popup: a set on its own schedule (server/workouts.ts), not tied
- * to prompts. Once one is due it shows while pi is busy on a turn, or after
- * GRACE_MIN (or the interval, if shorter) regardless, and only in a window
- * you are looking at. Modal and centred over a dimmed page; only Done (after
- * the exercise's wait), Snooze or Skip closes it. Another window's Done
- * closes it here on the next poll.
+ * to prompts. It opens the moment one is due, in every pwi window, hidden
+ * ones included, so it is waiting when you come back; a window that is not on
+ * screen or not focused also raises a system notification that stays until
+ * clicked. (It first waited up to 10 minutes for pi to be busy and skipped
+ * hidden windows, and sets were missed.) Modal and centred over a dimmed page;
+ * only Done (after the exercise's wait), Snooze or Skip closes it. Another
+ * window's Done closes it here on the next poll.
  */
-export function WorkoutCard({ busy }: { busy: boolean }) {
+export function WorkoutCard() {
 	const [plan, setPlan] = useState<WorkoutPlan | null>(null);
 	const [now, setNow] = useState(() => Date.now());
 	const [visible, setVisible] = useState(() => document.visibilityState === "visible");
-	/** The due set the card is showing, and since when (its Done countdown). */
-	const [shown, setShown] = useState<{ at: string; since: number } | null>(null);
+	/**
+	 * The due set the card is showing, and since when it has been on screen
+	 * (its Done countdown); null while it opened in a hidden window.
+	 */
+	const [shown, setShown] = useState<{ at: string; since: number | null } | null>(null);
 
 	const load = useCallback(async () => {
 		const r = await api.workouts.plan.$get().catch(() => null);
@@ -94,15 +97,27 @@ export function WorkoutCard({ busy }: { busy: boolean }) {
 
 	const next = plan?.on ? plan.planned[0] : undefined;
 	const due = next ? Date.parse(next.at) : Infinity;
-	const grace = Math.min(GRACE_MIN, plan?.schedule.every ?? GRACE_MIN) * 60_000;
-	const ready = next !== undefined && visible && now >= due && (busy || now >= due + grace);
 	useEffect(() => {
-		if (ready && next && shown?.at !== next.at) setShown({ at: next.at, since: Date.now() });
-	}, [ready, next, shown]);
+		if (!next || now < due || shown?.at === next.at) return;
+		setShown({ at: next.at, since: visible ? Date.now() : null });
+		if (visible && document.hasFocus()) return;
+		if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
+		// One per set across windows: the same tag replaces rather than stacks.
+		const n = new Notification(t("Workout"), { body: exerciseText(next.kind).task, tag: `pwi-workout-${next.at}`, requireInteraction: true });
+		n.onclick = () => {
+			window.focus();
+			n.close();
+		};
+	}, [next, due, now, visible, shown]);
+	// The countdown starts once you can see it.
+	useEffect(() => {
+		if (visible && shown && shown.since === null) setShown({ ...shown, since: Date.now() });
+	}, [visible, shown]);
 
 	if (!next || shown?.at !== next.at) return null;
 	const kind = next.kind;
-	const left = Math.max(0, EXERCISES[kind].wait - Math.floor((now - shown.since) / 1000));
+	const left =
+		shown.since === null ? EXERCISES[kind].wait : Math.max(0, EXERCISES[kind].wait - Math.floor((now - shown.since) / 1000));
 	/** Hide at once, then read the new plan. */
 	const act = (request: () => Promise<unknown>) => {
 		setShown(null);

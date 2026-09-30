@@ -2037,7 +2037,7 @@ export default function App() {
 
 			<CommandPalette open={paletteOpen} commands={paletteCommands} onClose={() => setPaletteOpen(false)} />
 
-			<WorkoutCard busy={working} />
+			<WorkoutCard />
 
 			<PageDialog page={page} onClose={() => setPage(null)} render={renderPage} />
 		</div>
