@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import {
 	apply,
+	init as gitInit,
 	changes as gitChanges,
 	log as gitLog,
 	repos as gitRepos,
@@ -101,6 +102,13 @@ export function gitRoutes({ cwd: CWD }: Deps) {
 			} catch (err) {
 				return c.json({ error: err instanceof Error ? err.message : String(err) }, 502);
 			}
+		})
+
+		/** `git init`, from the panel's not-a-repository state. */
+		.post("/git/init", json<{ cwd?: string }>(), async (c) => {
+			const b = c.req.valid("json");
+			const cwd = typeof b.cwd === "string" && b.cwd ? b.cwd : CWD;
+			return c.json(await gitInit(cwd), 200);
 		})
 
 		.post("/git", json<{ cwd?: string; branch?: string; message?: string; push?: boolean; pr?: boolean }>(), async (c) => {

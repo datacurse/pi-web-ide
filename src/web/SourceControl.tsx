@@ -447,13 +447,37 @@ function RepoView({
 		}
 	};
 
+	const initRepo = async () => {
+		setGitBusy(cwd, t("Initializing…"));
+		setError(null);
+		try {
+			const r = await api.git.init.$post({ json: { cwd } });
+			const body = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+			if (!body.ok) setError(body.error ?? t("failed"));
+		} catch (err) {
+			setError(err instanceof Error ? err.message : String(err));
+		} finally {
+			setGitBusy(cwd, null);
+			gitChanged(cwd);
+		}
+	};
+
 	if (state && !state.repo) {
 		return (
 			<div className="flex min-h-0 min-w-0 flex-1 flex-col bg-neutral-950">
 				<Header onClose={onClose} branch="" />
-				<p className="p-4 text-ui text-neutral-500">
-					{t("Not a git repository. `git init` in a terminal and this fills in.")}
-				</p>
+				<p className="p-4 pb-2 text-ui text-neutral-500">{t("This folder is not a git repository.")}</p>
+				<Button
+					variant="primary"
+					size="sm"
+					className="mx-4 mb-4"
+					onClick={() => void initRepo()}
+					disabled={running}
+					title={cwd}
+				>
+					{t("Initialize Repository")}
+				</Button>
+				{error && <p className="px-4 pb-2 text-meta text-red-300">{error}</p>}
 				{notRepo}
 			</div>
 		);

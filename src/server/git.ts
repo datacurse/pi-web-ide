@@ -399,6 +399,13 @@ export async function repos(cwd: string): Promise<string[]> {
 	}
 }
 
+/** `git init` in `cwd`, for a new project folder. */
+export async function init(cwd: string): Promise<GitResult> {
+	const r = await git(cwd, ["init"]);
+	const steps = [{ step: "init", output: r.stdout }];
+	return r.code === 0 ? { ok: true, steps } : { ok: false, steps, error: r.stderr || r.stdout };
+}
+
 /** Field separator inside one commit's header line. */
 const FS = "\x1f";
 

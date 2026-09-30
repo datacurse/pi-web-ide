@@ -310,8 +310,9 @@ export const RU: Record<string, string> = {
 	"{time} ago": "{time} назад",
 	"Find repositories one folder down": "Искать репозитории на уровень ниже",
 	"Repositories": "Репозитории",
-	"Not a git repository. `git init` in a terminal and this fills in.":
-		"Это не git-репозиторий. Выполните `git init` в терминале, и здесь всё появится.",
+	"This folder is not a git repository.": "Эта папка не git-репозиторий.",
+	"Initialize Repository": "Создать репозиторий",
+	"Initializing…": "Инициализация…",
 	"Message (Ctrl+Enter to commit)": "Сообщение (Ctrl+Enter — коммит)",
 	"Auto-name this commit": "Придумать сообщение коммита",
 	"Commit {n} files and push": "Закоммитить {n} файл и запушить|Закоммитить {n} файла и запушить|Закоммитить {n} файлов и запушить",
