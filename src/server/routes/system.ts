@@ -15,6 +15,7 @@ import {
 } from "../projects.js";
 import { readPersonality, writePersonality, writeRemind } from "../personality.js";
 import { pwiExtensions, writePwiExtension } from "../pwiExtensions.js";
+import { addWorkout, isWorkoutKind, readWorkouts } from "../workouts.js";
 import { PRODUCT } from "../../shared/types.js";
 import { query, json, type Deps, type Env } from "../http.js";
 
@@ -218,6 +219,15 @@ export function systemRoutes({ cwd: CWD, model: MODEL, registry, piVersion: PI_V
 			const b = c.req.valid("json");
 			if (typeof b.on !== "boolean") return c.json({ error: "on must be a boolean" }, 400);
 			return c.json(writePwiExtension("toolMetrics", b.on), 200);
+		})
+
+		/** Every set done for the workout gate, for the Workouts tab in Stats. */
+		.get("/workouts", (c) => c.json({ sets: readWorkouts() }, 200))
+
+		.post("/workouts", json<{ kind: string }>(), async (c) => {
+			const b = c.req.valid("json");
+			if (!isWorkoutKind(b.kind)) return c.json({ error: "kind must be pushups or situps" }, 400);
+			return c.json(addWorkout(b.kind), 200);
 		})
 
 		/** The workout gate. The browser reads it on each send. */

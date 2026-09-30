@@ -8,6 +8,7 @@ import type {
 	PiMessage,
 	PiPartial,
 	Snapshot,
+	WorkoutKind,
 } from "../shared/types.js";
 import { Button, ContextMenu, IconButton, MenuItem } from "./ui.js";
 import { ModelSelector } from "./ModelSelector.js";
@@ -44,7 +45,7 @@ import {
 } from "./Transcript.js";
 import { t } from "./i18n.js";
 import { PiMark } from "./piMark.js";
-import { Workout, workoutOn } from "./Workout.js";
+import { pickWorkout, Workout, workoutOn } from "./Workout.js";
 
 /** pi's `get_commands` omits its TUI-only `/compact`; `send` in useSession.ts runs it. */
 const COMPACT_COMMAND: PiCommand = {
@@ -594,10 +595,8 @@ export function Chat({
 
 	// Hooks stay above the `!snapshot` early return: React needs the same
 	// hook count on every render.
-	/** The send waiting on the workout dialog, or null. */
-	const [workout, setWorkout] = useState<(() => void) | null>(null);
-	/** A send is checking whether the workout gate is on; a second Enter must not send twice. */
-	const gating = useRef(false);
+	/** The exercise the workout dialog is asking for, or null when it is shut. */
+	const [workout, setWorkout] = useState<WorkoutKind | null>(null);
 
 	if (!snapshot) {
 		return (
@@ -694,27 +693,21 @@ export function Chat({
 		}
 	};
 
-	const gated = (run: () => void) => {
-		if (gating.current) return;
-		gating.current = true;
-		void workoutOn()
-			.then((on) => (on ? setWorkout(() => run) : run()))
-			.finally(() => (gating.current = false));
-	};
+	/** Right after a send: pi starts answering while the dialog asks for a set. */
+	const exercise = () => void workoutOn().then((on) => on && setWorkout(pickWorkout()));
 
 	const submit = () => {
 		const t = text.trim();
 		// An image on its own is a valid prompt; only block when nothing is staged.
 		if (!t && images.length === 0) return;
-		gated(() => {
-			onSend(t, images.length > 0 ? images : undefined, askOnly);
-			if (askMode === "once") setAskOnly(false);
-			setText("");
-			setImages([]);
-			staged.current = [];
-			clearDraft(snapshot.id);
-			setAttachError(null);
-		});
+		onSend(t, images.length > 0 ? images : undefined, askOnly);
+		if (askMode === "once") setAskOnly(false);
+		setText("");
+		setImages([]);
+		staged.current = [];
+		clearDraft(snapshot.id);
+		setAttachError(null);
+		exercise();
 	};
 
 	// A suppressed block does not count toward "there is something to show",
@@ -834,7 +827,14 @@ export function Chat({
 								footer={r.footer}
 								onFork={onFork}
 								at={r.at}
-								onEdit={busy ? undefined : (at, next, kept) => gated(() => onEdit(at, next, kept))}
+								onEdit={
+									busy
+										? undefined
+										: (at, next, kept) => {
+												onEdit(at, next, kept);
+												exercise();
+											}
+								}
 							/>
 						),
 					)}
@@ -1210,15 +1210,7 @@ export function Chat({
 
 				{/* Last, so it paints over everything: an expanded attachment. */}
 				{zoomed && <Lightbox src={zoomed} above={composer} onClose={() => setZoomed(null)} />}
-				{workout && (
-					<Workout
-						onCancel={() => setWorkout(null)}
-						onDone={() => {
-							setWorkout(null);
-							workout();
-						}}
-					/>
-				)}
+				{workout && <Workout kind={workout} onDone={() => setWorkout(null)} />}
 			</main>
 		</ZoomContext.Provider>
 	);

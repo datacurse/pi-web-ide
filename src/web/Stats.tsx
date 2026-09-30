@@ -7,9 +7,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowClockwise } from "@phosphor-icons/react";
-import type { StatsTurn, StatsView, ToolCost, UsageSample } from "../shared/types.js";
+import type { StatsTurn, StatsView, ToolCost, UsageSample, WorkoutSet } from "../shared/types.js";
 import { Button, IconButton, PanelHeader, sectionLabel, useBatches } from "./ui.js";
-import { callDuration, dayKey, duration, heatmapWeeks, LIMIT_WINDOW_MS, pace, percentile, span, streaks, type Pace } from "./stats.js";
+import { addDays, callDuration, dayKey, duration, heatmapWeeks, LIMIT_WINDOW_MS, pace, percentile, span, streaks, type Pace } from "./stats.js";
 import { api } from "./api.js";
 import { locale, perLocale, plural, t } from "./i18n.js";
 
@@ -62,6 +62,7 @@ export function Stats({ open, revision, onClose }: { open: boolean; revision?: u
 	const [machine, setMachine] = useState<string | null>(null);
 	const [syncing, setSyncing] = useState(false);
 	const [reload, setReload] = useState(0);
+	const [tab, setTab] = useState<"overview" | "workouts">("overview");
 
 	const get = useCallback(async (sync?: "1" | "force") => {
 		try {
@@ -121,8 +122,26 @@ export function Stats({ open, revision, onClose }: { open: boolean; revision?: u
 			className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-neutral-950 text-neutral-100"
 		>
 			<PanelHeader title={t("Stats")} onClose={onClose}>
+				<div className="flex gap-1">
+					{(
+						[
+							["overview", t("Overview")],
+							["workouts", t("Workouts")],
+						] as const
+					).map(([id, label]) => (
+						<Button
+							key={id}
+							variant={tab === id ? "subtle" : "ghost"}
+							size="sm"
+							onClick={() => setTab(id)}
+							aria-pressed={tab === id}
+						>
+							{label}
+						</Button>
+					))}
+				</div>
 				{/* Only once there is another machine: until then All and This PC are the same. */}
-				{remote.length > 0 && (
+				{tab === "overview" && remote.length > 0 && (
 					<div className="flex gap-1">
 						{filters.map(([m, label, title]) => (
 							<Button
@@ -144,8 +163,9 @@ export function Stats({ open, revision, onClose }: { open: boolean; revision?: u
 				{syncing && <span className="text-meta text-neutral-500">{t("Syncing machines…")}</span>}
 			</PanelHeader>
 
+			{tab === "workouts" && <Workouts reload={reload} />}
 			{/* Laid out for the page dialog's width; the grids stack on a narrow window. */}
-			<div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto p-4">
+			<div className={`${tab === "overview" ? "flex" : "hidden"} min-h-0 flex-1 flex-col gap-6 overflow-y-auto p-4`}>
 				{error && <p className="text-meta text-red-400">{error}</p>}
 				<div className="grid gap-6 md:grid-cols-3">
 					<Usage usage={usage} />
@@ -557,6 +577,68 @@ function Summary({ turns }: { turns: StatsTurn[] }) {
 					<div className="text-meta text-neutral-500">{label}</div>
 				</div>
 			))}
+		</div>
+	);
+}
+
+/** The sets done for the workout gate (web/Workout.tsx): totals, and reps per day for two weeks. */
+function Workouts({ reload }: { reload: number }) {
+	const [sets, setSets] = useState<WorkoutSet[] | null>(null);
+	const [error, setError] = useState<string | null>(null);
+	useEffect(() => {
+		void api.workouts
+			.$get()
+			.then((r) => (r.ok ? r.json() : Promise.reject(new Error(r.statusText))))
+			.then((b) => {
+				setSets(b.sets);
+				setError(null);
+			})
+			.catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)));
+	}, [reload]);
+	if (error) return <p className="p-4 text-meta text-red-400">{error}</p>;
+	if (!sets) return null;
+
+	const today = dayKey(new Date());
+	const reps = (kind: WorkoutSet["kind"], from?: string) =>
+		sets.filter((s) => s.kind === kind && (!from || dayKey(new Date(s.at)) >= from)).reduce((n, s) => n + s.reps, 0);
+	const weekAgo = dayKey(addDays(new Date(), -6));
+	const tiles: [string, number][] = [
+		[t("Pushups today"), reps("pushups", today)],
+		[t("Situps today"), reps("situps", today)],
+		[t("Sets"), sets.length],
+		[t("Pushups this week"), reps("pushups", weekAgo)],
+		[t("Situps this week"), reps("situps", weekAgo)],
+		[t("Active days"), new Set(sets.map((s) => dayKey(new Date(s.at)))).size],
+		[t("Pushups in total"), reps("pushups")],
+		[t("Situps in total"), reps("situps")],
+		[t("Reps in total"), sets.reduce((n, s) => n + s.reps, 0)],
+	];
+	const days = Array.from({ length: 14 }, (_, i) => dayKey(addDays(new Date(), i - 13)));
+	const perDay = (kind: WorkoutSet["kind"]): [string, number][] =>
+		days.map((d) => [
+			d.slice(5),
+			sets.filter((s) => s.kind === kind && dayKey(new Date(s.at)) === d).reduce((n, s) => n + s.reps, 0),
+		]);
+
+	return (
+		<div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto p-4">
+			{sets.length === 0 && (
+				<p className="text-meta text-neutral-500">
+					{t("No sets yet. Turn on Workout under Packages > pwi extensions.")}
+				</p>
+			)}
+			<div className="grid grid-cols-3 gap-2">
+				{tiles.map(([label, value]) => (
+					<div key={label} className="rounded-sm border border-neutral-800 px-2 py-1.5">
+						<div className="text-title text-neutral-100 tabular-nums">{num().format(value)}</div>
+						<div className="text-meta text-neutral-500">{label}</div>
+					</div>
+				))}
+			</div>
+			<div className="grid gap-6 md:grid-cols-2">
+				<Bars title={t("Pushups per day")} rows={perDay("pushups")} />
+				<Bars title={t("Situps per day")} rows={perDay("situps")} />
+			</div>
 		</div>
 	);
 }

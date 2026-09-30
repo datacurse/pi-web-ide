@@ -226,8 +226,19 @@ export interface StatsView {
 /** The switchable pi extensions pwi loads into the sessions it starts (server/pwiExtensions.ts). */
 export interface PwiExtensions {
 	toolMetrics: boolean;
-	/** Ask for 10 pushups or situps before each prompt goes out (web/Workout.tsx). */
+	/** Ask for 10 pushups or situps after each prompt goes out (web/Workout.tsx). */
 	workout: boolean;
+}
+
+export const WORKOUT_KINDS = ["pushups", "situps"] as const;
+export type WorkoutKind = (typeof WORKOUT_KINDS)[number];
+
+/** One Done in the workout dialog (server/workouts.ts). */
+export interface WorkoutSet {
+	/** ISO time of the Done. */
+	at: string;
+	kind: WorkoutKind;
+	reps: number;
 }
 
 /** SoL-Pi's four mechanisms and their knobs, as `sol-pi.json` holds them. */

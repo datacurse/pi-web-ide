@@ -473,7 +473,7 @@ function PwiExtensionsSection({ open }: { open: boolean }) {
 						{t("Workout")}
 						<span className="block text-meta text-neutral-500">
 							{t(
-								"Asks for 10 pushups or 10 situps before each prompt goes out; Done unlocks after 15 seconds. Applies at once.",
+								"After each prompt goes out, asks for 10 pushups or 10 situps (pwi picks) while pi answers; Done unlocks after 15 seconds. Sets show in Stats > Workouts. Applies at once.",
 							)}
 						</span>
 					</span>

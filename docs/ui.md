@@ -434,9 +434,10 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
   pick (first option `Built-in: …`, or a disabled `Not selected` when pi cannot reach the
   built-in model; no warning), and the compact's cost ratio as a `w-24` input with `Save`. Tool metrics is an `OptionRow` checkbox (on by default) with
   a `text-meta` line saying what it does. Workout (off by default, applies at once) is one too: each
-  send, and each Edit resend, first opens a small centered `<dialog>` (`Workout.tsx`: amber `Barbell`,
-  `text-title` "Do 10 pushups or 10 situps", `Cancel` and a `primary` `Done` that reads
-  `Done in 15s` counting down and stays disabled until 0). Done sends; Cancel or Escape keeps the text. Under it, Personality (`Personality.tsx`, moved
+  send, and each Edit resend, goes out at once and then opens a small centered `<dialog>` (`Workout.tsx`:
+  amber `Barbell`, `text-title` "Do 10 pushups" or "Do 10 situps", picked at random, a `pi is already
+  answering.` hint and a `primary` `Done` that reads `Done in 15s` counting down and stays disabled
+  until 0). No Cancel; Escape does nothing. Done logs the set (`workouts.json`, `server/workouts.ts`). Under it, Personality (`Personality.tsx`, moved
   from Settings): a `text-ui` heading, the file's path, a mono `textarea` with `Save`
   (`Button sm subtle`) and a status line, then the `Repeat before every reply` checkbox.
   It is re-read each time the page is shown unless there are unsaved edits, and the
@@ -482,6 +483,10 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
   `aria-pressed`, row `neutral-900` while shown); a `PanelHeader` with the machine name
   and ✕ (kills the shell) sits over it. Fleet shells never appear in a project's dock.
   Escape inside it goes to the shell, not the dialog.
+- Stats has two tabs in its header, `Overview` and `Workouts` (`Button sm`, `subtle`/`ghost`,
+  `aria-pressed`, like the machine filter, which shows only on Overview). Workouts: the Summary's
+  tiles (today, this week and in total for each exercise, sets, active days, reps), then pushups
+  and situps per day for the last 14 days as `Bars`, side by side.
 - Stats uses the dialog's width: usage beside the summary tiles (1/3 + 2/3), a 52-week
   heatmap full width, answer time beside by-hour, Machines (when there are others) /
   Models / Projects / Tools in columns, then Tool calls, then Slowest calls, Largest calls
