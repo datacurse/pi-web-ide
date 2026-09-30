@@ -226,19 +226,38 @@ export interface StatsView {
 /** The switchable pi extensions pwi loads into the sessions it starts (server/pwiExtensions.ts). */
 export interface PwiExtensions {
 	toolMetrics: boolean;
-	/** Ask for 10 pushups or situps after each prompt goes out (web/Workout.tsx). */
+	/** Ask for a short exercise after each prompt goes out (web/Workout.tsx). */
 	workout: boolean;
+	/** Exercises switched off; the dialog picks from the rest. */
+	workoutOff: WorkoutKind[];
 }
 
-export const WORKOUT_KINDS = ["pushups", "situps"] as const;
-export type WorkoutKind = (typeof WORKOUT_KINDS)[number];
+/**
+ * The workout gate's exercises: how much one set is, in reps or seconds held,
+ * and how long before Done unlocks (getting down and back up included).
+ */
+export const EXERCISES = {
+	pushups: { amount: 10, unit: "reps", wait: 15 },
+	situps: { amount: 10, unit: "reps", wait: 15 },
+	squats: { amount: 10, unit: "reps", wait: 15 },
+	lunges: { amount: 10, unit: "reps", wait: 20 },
+	burpees: { amount: 5, unit: "reps", wait: 20 },
+	jumpingJacks: { amount: 20, unit: "reps", wait: 15 },
+	calfRaises: { amount: 15, unit: "reps", wait: 15 },
+	gluteBridges: { amount: 10, unit: "reps", wait: 20 },
+	plank: { amount: 20, unit: "seconds", wait: 30 },
+	wallSit: { amount: 20, unit: "seconds", wait: 30 },
+} as const satisfies Record<string, { amount: number; unit: "reps" | "seconds"; wait: number }>;
+export type WorkoutKind = keyof typeof EXERCISES;
+export const WORKOUT_KINDS = Object.keys(EXERCISES) as WorkoutKind[];
 
 /** One Done in the workout dialog (server/workouts.ts). */
 export interface WorkoutSet {
 	/** ISO time of the Done. */
 	at: string;
 	kind: WorkoutKind;
-	reps: number;
+	/** Reps, or seconds held: EXERCISES[kind].unit. */
+	amount: number;
 }
 
 /** SoL-Pi's four mechanisms and their knobs, as `sol-pi.json` holds them. */

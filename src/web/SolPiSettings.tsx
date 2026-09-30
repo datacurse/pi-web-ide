@@ -208,7 +208,7 @@ export function SolPiSettings({ cwd }: { cwd: string }) {
 }
 
 /** A control that belongs to the checkbox above it, lined up with that checkbox's text. */
-function Nested({ children }: { children: ReactNode }) {
+export function Nested({ children }: { children: ReactNode }) {
 	return (
 		<div className="flex gap-3 px-2 pb-2">
 			<span className="size-4 shrink-0" />

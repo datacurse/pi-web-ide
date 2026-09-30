@@ -39,9 +39,13 @@ export function readImage(file: File): Promise<PiImage> {
 	});
 }
 
-/** Copy a picked file to the pwi machine, which may not be this one, and return its path there. */
-export async function uploadFile(file: File): Promise<string> {
-	const r = await fetch(`/api/upload?name=${encodeURIComponent(file.name || "file")}`, {
+/**
+ * Copy a picked file to the pwi machine, which may not be this one, and return its path there.
+ * `into` writes it into a project folder instead, as `name` (which may hold subfolders).
+ */
+export async function uploadFile(file: File, into?: { dir: string; name: string }): Promise<string> {
+	const q = new URLSearchParams(into ?? { name: file.name || "file" });
+	const r = await fetch(`/api/upload?${q}`, {
 		method: "POST",
 		headers: { "Content-Type": "application/octet-stream" },
 		body: file,

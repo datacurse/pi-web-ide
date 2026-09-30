@@ -3,27 +3,28 @@
  * entry per Done, for the Workouts tab in Stats.
  */
 
-import { WORKOUT_KINDS, type WorkoutKind, type WorkoutSet } from "../shared/types.js";
+import { EXERCISES, type WorkoutKind, type WorkoutSet } from "../shared/types.js";
 import { readStateFile, statePath, writeStateFile } from "./state.js";
 
 const FILE = "workouts.json";
-const REPS = 10;
 
 export function readWorkouts(): WorkoutSet[] {
 	try {
 		const all = JSON.parse(readStateFile(statePath(FILE)) ?? "[]");
-		return Array.isArray(all) ? all : [];
+		if (!Array.isArray(all)) return [];
+		// The first sets were logged as `reps` before timed exercises existed.
+		return all.map((s) => ({ at: s.at, kind: s.kind, amount: s.amount ?? s.reps }));
 	} catch {
 		return [];
 	}
 }
 
 export function isWorkoutKind(kind: unknown): kind is WorkoutKind {
-	return WORKOUT_KINDS.includes(kind as WorkoutKind);
+	return typeof kind === "string" && Object.hasOwn(EXERCISES, kind);
 }
 
 export function addWorkout(kind: WorkoutKind, at = new Date()): WorkoutSet {
-	const set = { at: at.toISOString(), kind, reps: REPS };
+	const set = { at: at.toISOString(), kind, amount: EXERCISES[kind].amount };
 	writeStateFile(statePath(FILE), `${JSON.stringify([...readWorkouts(), set])}\n`);
 	return set;
 }

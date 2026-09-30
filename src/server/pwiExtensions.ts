@@ -6,8 +6,9 @@
  * beside the personality (personality.ts).
  */
 
-import type { PwiExtensions } from "../shared/types.js";
+import { WORKOUT_KINDS, type PwiExtensions, type WorkoutKind } from "../shared/types.js";
 import { readStateFile, statePath, writeStateFile } from "./state.js";
+import { isWorkoutKind } from "./workouts.js";
 
 const FILE = "pwi-extensions.json";
 
@@ -25,11 +26,26 @@ export function readToolMetrics(): boolean {
 
 export function pwiExtensions(): PwiExtensions {
 	const s = read();
-	return { toolMetrics: s.toolMetrics !== false, workout: s.workout === true };
+	return {
+		toolMetrics: s.toolMetrics !== false,
+		workout: s.workout === true,
+		workoutOff: Array.isArray(s.workoutOff) ? s.workoutOff.filter(isWorkoutKind) : [],
+	};
 }
 
-export function writePwiExtension(key: keyof PwiExtensions, on: boolean): PwiExtensions {
-	const next = { ...pwiExtensions(), [key]: on };
+function write(next: PwiExtensions): PwiExtensions {
 	writeStateFile(statePath(FILE), `${JSON.stringify(next)}\n`);
 	return next;
+}
+
+export function writePwiExtension(key: "toolMetrics" | "workout", on: boolean): PwiExtensions {
+	return write({ ...pwiExtensions(), [key]: on });
+}
+
+/** Null when `off` names an unknown exercise or leaves none on. */
+export function writeWorkoutOff(off: unknown): PwiExtensions | null {
+	if (!Array.isArray(off) || !off.every(isWorkoutKind)) return null;
+	const set = [...new Set(off as WorkoutKind[])];
+	if (set.length >= WORKOUT_KINDS.length) return null;
+	return write({ ...pwiExtensions(), workoutOff: set });
 }

@@ -12,6 +12,7 @@ import {
 	moveEntry,
 	readFile as readReviewFile,
 	safePath,
+	saveUpload,
 	trashEntry,
 	writeFile,
 } from "../files.js";
@@ -98,8 +99,16 @@ export function filesRoutes({ cwd: CWD }: Deps) {
 		 * A file picked in the browser, which may be on another machine than pi.
 		 * Saved under the temp dir so the agent can read it by path; each upload gets
 		 * its own folder so the original name is kept without collisions.
+		 *
+		 * With `dir` it is a drop on the explorer instead: written into that project
+		 * folder, `name` may carry subfolders, and nothing is overwritten.
 		 */
 		.post("/upload", async (c) => {
+			const dir = c.req.query("dir");
+			if (dir) {
+				const data = Buffer.from(await c.req.arrayBuffer());
+				return fileOp(c, () => saveUpload(CWD, dir, c.req.query("name") ?? "", data));
+			}
 			const name = basename(c.req.query("name") ?? "");
 			if (!name || name === "." || name === "..") return c.json({ error: "name required" }, 400);
 			const data = Buffer.from(await c.req.arrayBuffer());

@@ -14,7 +14,7 @@ import {
 	removeProject,
 } from "../projects.js";
 import { readPersonality, writePersonality, writeRemind } from "../personality.js";
-import { pwiExtensions, writePwiExtension } from "../pwiExtensions.js";
+import { pwiExtensions, writePwiExtension, writeWorkoutOff } from "../pwiExtensions.js";
 import { addWorkout, isWorkoutKind, readWorkouts } from "../workouts.js";
 import { PRODUCT } from "../../shared/types.js";
 import { query, json, type Deps, type Env } from "../http.js";
@@ -226,7 +226,7 @@ export function systemRoutes({ cwd: CWD, model: MODEL, registry, piVersion: PI_V
 
 		.post("/workouts", json<{ kind: string }>(), async (c) => {
 			const b = c.req.valid("json");
-			if (!isWorkoutKind(b.kind)) return c.json({ error: "kind must be pushups or situps" }, 400);
+			if (!isWorkoutKind(b.kind)) return c.json({ error: "unknown exercise" }, 400);
 			return c.json(addWorkout(b.kind), 200);
 		})
 
@@ -235,6 +235,13 @@ export function systemRoutes({ cwd: CWD, model: MODEL, registry, piVersion: PI_V
 			const b = c.req.valid("json");
 			if (typeof b.on !== "boolean") return c.json({ error: "on must be a boolean" }, 400);
 			return c.json(writePwiExtension("workout", b.on), 200);
+		})
+
+		/** Which exercises the workout dialog may pick; at least one stays on. */
+		.put("/pwi-extensions/workout-exercises", json<{ off: string[] }>(), async (c) => {
+			const next = writeWorkoutOff(c.req.valid("json").off);
+			if (!next) return c.json({ error: "off must list known exercises and leave one on" }, 400);
+			return c.json(next, 200);
 		})
 
 		/** The "Repeat before every reply" toggle. Applies to sessions started after it. */

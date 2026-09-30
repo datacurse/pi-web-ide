@@ -21,7 +21,10 @@ import type {
 } from "../shared/types.js";
 import { Button, IconButton, OptionRow, PanelHeader, inputClass, sectionLabel } from "./ui.js";
 import { Personality } from "./Personality.js";
-import { SolPiSettings } from "./SolPiSettings.js";
+import { Nested, SolPiSettings } from "./SolPiSettings.js";
+import { exerciseText } from "./Workout.js";
+import { WorkoutFigure } from "./workoutFigures.js";
+import { WORKOUT_KINDS, type WorkoutKind } from "../shared/types.js";
 import { parseResponse } from "hono/client";
 import { api } from "./api.js";
 import { t, locale } from "./i18n.js";
@@ -434,6 +437,15 @@ function PwiExtensionsSection({ open }: { open: boolean }) {
 		setError(null);
 		setState(await r.json());
 	};
+	const setExercise = async (kind: WorkoutKind, on: boolean) => {
+		if (!state) return;
+		const off = on ? state.workoutOff.filter((k) => k !== kind) : [...state.workoutOff, kind];
+		const r = await api["pwi-extensions"]["workout-exercises"].$put({ json: { off } }).catch(() => null);
+		if (!r?.ok) return setError(t("could not save the setting"));
+		setError(null);
+		setState(await r.json());
+	};
+	const exercisesOn = WORKOUT_KINDS.filter((k) => !state?.workoutOff.includes(k)).length;
 	return (
 		<div>
 			<h3 className={sectionLabel}>{t("pwi extensions")}</h3>
@@ -473,11 +485,44 @@ function PwiExtensionsSection({ open }: { open: boolean }) {
 						{t("Workout")}
 						<span className="block text-meta text-neutral-500">
 							{t(
-								"After each prompt goes out, asks for 10 pushups or 10 situps (pwi picks) while pi answers; Done unlocks after 15 seconds. Sets show in Stats > Workouts. Applies at once.",
+								"After each prompt goes out, asks for a short exercise (pwi picks one of ten: pushups, squats, a plank…) while pi answers; Done unlocks when the set is over. Sets show in Stats > Workouts. Applies at once.",
 							)}
 						</span>
 					</span>
 				</OptionRow>
+				{state?.workout && (
+					<Nested>
+						<p className="mb-2 text-meta text-neutral-500">{t("pwi picks only from the exercises ticked here.")}</p>
+						<div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+							{WORKOUT_KINDS.map((kind) => {
+								const on = !state.workoutOff.includes(kind);
+								// The last one stays on: with none, the dialog would have nothing to ask for.
+								const last = on && exercisesOn === 1;
+								return (
+									<label
+										key={kind}
+										title={last ? t("Keep at least one exercise") : undefined}
+										className={`flex flex-col items-center gap-1 rounded-sm border p-2 text-meta ${
+											on ? "border-neutral-700 text-neutral-200" : "border-neutral-800 text-neutral-500"
+										} ${last ? "" : "cursor-pointer hover:bg-neutral-900"}`}
+									>
+										<WorkoutFigure kind={kind} className={`w-full ${on ? "text-amber-400" : "text-neutral-700"}`} />
+										<span className="flex items-center gap-1.5 text-center">
+											<input
+												type="checkbox"
+												checked={on}
+												disabled={last}
+												onChange={(e) => void setExercise(kind, e.target.checked)}
+												className="size-3 shrink-0 accent-amber-400"
+											/>
+											{exerciseText(kind).name}
+										</span>
+									</label>
+								);
+							})}
+						</div>
+					</Nested>
+				)}
 				<Personality open={open} />
 			</div>
 		</div>

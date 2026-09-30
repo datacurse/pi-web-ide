@@ -7,7 +7,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowClockwise } from "@phosphor-icons/react";
-import type { StatsTurn, StatsView, ToolCost, UsageSample, WorkoutSet } from "../shared/types.js";
+import { EXERCISES, WORKOUT_KINDS, type StatsTurn, type StatsView, type ToolCost, type UsageSample, type WorkoutKind, type WorkoutSet } from "../shared/types.js";
+import { exerciseText } from "./Workout.js";
+import { WorkoutFigure } from "./workoutFigures.js";
 import { Button, IconButton, PanelHeader, sectionLabel, useBatches } from "./ui.js";
 import { addDays, callDuration, dayKey, duration, heatmapWeeks, LIMIT_WINDOW_MS, pace, percentile, span, streaks, type Pace } from "./stats.js";
 import { api } from "./api.js";
@@ -581,7 +583,7 @@ function Summary({ turns }: { turns: StatsTurn[] }) {
 	);
 }
 
-/** The sets done for the workout gate (web/Workout.tsx): totals, and reps per day for two weeks. */
+/** The sets done for the workout gate (web/Workout.tsx): counts, each exercise, and sets per day for two weeks. */
 function Workouts({ reload }: { reload: number }) {
 	const [sets, setSets] = useState<WorkoutSet[] | null>(null);
 	const [error, setError] = useState<string | null>(null);
@@ -598,27 +600,20 @@ function Workouts({ reload }: { reload: number }) {
 	if (error) return <p className="p-4 text-meta text-red-400">{error}</p>;
 	if (!sets) return null;
 
+	const day = (s: WorkoutSet) => dayKey(new Date(s.at));
 	const today = dayKey(new Date());
-	const reps = (kind: WorkoutSet["kind"], from?: string) =>
-		sets.filter((s) => s.kind === kind && (!from || dayKey(new Date(s.at)) >= from)).reduce((n, s) => n + s.reps, 0);
 	const weekAgo = dayKey(addDays(new Date(), -6));
 	const tiles: [string, number][] = [
-		[t("Pushups today"), reps("pushups", today)],
-		[t("Situps today"), reps("situps", today)],
-		[t("Sets"), sets.length],
-		[t("Pushups this week"), reps("pushups", weekAgo)],
-		[t("Situps this week"), reps("situps", weekAgo)],
-		[t("Active days"), new Set(sets.map((s) => dayKey(new Date(s.at)))).size],
-		[t("Pushups in total"), reps("pushups")],
-		[t("Situps in total"), reps("situps")],
-		[t("Reps in total"), sets.reduce((n, s) => n + s.reps, 0)],
+		[t("Sets today"), sets.filter((s) => day(s) === today).length],
+		[t("Sets this week"), sets.filter((s) => day(s) >= weekAgo).length],
+		[t("Sets in total"), sets.length],
+		[t("Active days"), new Set(sets.map(day)).size],
 	];
+	const sum = (kind: WorkoutKind, from?: string) =>
+		sets.filter((s) => s.kind === kind && (!from || day(s) >= from)).reduce((n, s) => n + s.amount, 0);
+	const amount = (kind: WorkoutKind, n: number) =>
+		EXERCISES[kind].unit === "seconds" ? t("{n}s", { n: num().format(n) }) : num().format(n);
 	const days = Array.from({ length: 14 }, (_, i) => dayKey(addDays(new Date(), i - 13)));
-	const perDay = (kind: WorkoutSet["kind"]): [string, number][] =>
-		days.map((d) => [
-			d.slice(5),
-			sets.filter((s) => s.kind === kind && dayKey(new Date(s.at)) === d).reduce((n, s) => n + s.reps, 0),
-		]);
 
 	return (
 		<div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto p-4">
@@ -627,7 +622,7 @@ function Workouts({ reload }: { reload: number }) {
 					{t("No sets yet. Turn on Workout under Packages > pwi extensions.")}
 				</p>
 			)}
-			<div className="grid grid-cols-3 gap-2">
+			<div className="grid grid-cols-2 gap-2 md:grid-cols-4">
 				{tiles.map(([label, value]) => (
 					<div key={label} className="rounded-sm border border-neutral-800 px-2 py-1.5">
 						<div className="text-title text-neutral-100 tabular-nums">{num().format(value)}</div>
@@ -636,8 +631,37 @@ function Workouts({ reload }: { reload: number }) {
 				))}
 			</div>
 			<div className="grid gap-6 md:grid-cols-2">
-				<Bars title={t("Pushups per day")} rows={perDay("pushups")} />
-				<Bars title={t("Situps per day")} rows={perDay("situps")} />
+				<div>
+					<h3 className={`mb-2 ${sectionLabel}`}>{t("Exercises")}</h3>
+					<table className="w-full text-meta tabular-nums">
+						<thead className="text-neutral-500">
+							<tr>
+								<th />
+								<th className="text-left font-normal">{t("Exercise")}</th>
+								<th className="text-right font-normal">{t("Today")}</th>
+								<th className="text-right font-normal">{t("This week")}</th>
+								<th className="text-right font-normal">{t("Total")}</th>
+							</tr>
+						</thead>
+						<tbody>
+							{WORKOUT_KINDS.map((kind) => (
+								<tr key={kind} className="border-t border-neutral-800">
+									<td className="w-12 py-1">
+										<WorkoutFigure kind={kind} className="w-12 text-neutral-400" />
+									</td>
+									<td className="text-neutral-300">{exerciseText(kind).name}</td>
+									<td className="text-right text-neutral-300">{amount(kind, sum(kind, today))}</td>
+									<td className="text-right text-neutral-300">{amount(kind, sum(kind, weekAgo))}</td>
+									<td className="text-right text-neutral-200">{amount(kind, sum(kind))}</td>
+								</tr>
+							))}
+						</tbody>
+					</table>
+				</div>
+				<Bars
+					title={t("Sets per day")}
+					rows={days.map((d) => [d.slice(5), sets.filter((s) => day(s) === d).length])}
+				/>
 			</div>
 		</div>
 	);

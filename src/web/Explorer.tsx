@@ -8,7 +8,16 @@
  * closing this panel must not close what you opened.
  */
 
-import { createContext, useCallback, useContext, useEffect, useRef, useState, type MouseEvent } from "react";
+import {
+	createContext,
+	useCallback,
+	useContext,
+	useEffect,
+	useRef,
+	useState,
+	type DragEvent,
+	type MouseEvent,
+} from "react";
 import {
 	ArrowClockwise,
 	ArrowElbowDownRight,
@@ -36,6 +45,40 @@ import { ContextMenu, IconButton, ListRow, MenuItem, MenuSeparator, PanelHeader,
 import { api, unwrap } from "./api.js";
 import { t } from "./i18n.js";
 import { ScrollPane } from "./OverlayScrollbar.js";
+import { uploadFile } from "./Attachments.js";
+
+/** A row dragged within the tree; its data is the row's path. */
+const PATH_DRAG_TYPE = "application/x-pwi-path";
+/** The row being dragged, since drag data cannot be read during dragover. */
+let dragged: string | null = null;
+
+const dragRow = (path: string) => (e: DragEvent<HTMLButtonElement>) => {
+	dragged = path;
+	e.dataTransfer.setData(PATH_DRAG_TYPE, path);
+	e.dataTransfer.effectAllowed = "move";
+};
+
+/** The folder a drag would drop into, highlighted in the tree. */
+const DropContext = createContext<string | null>(null);
+
+/** A file dropped from outside the browser, with its path under the drop folder. */
+type Dropped = { file: File; name: string };
+
+/** Every file under a dropped entry, walking into folders. */
+async function walkEntry(entry: FileSystemEntry, prefix: string, out: Dropped[]): Promise<void> {
+	if (entry.isFile) {
+		const file = await new Promise<File>((res, rej) => (entry as FileSystemFileEntry).file(res, rej));
+		out.push({ file, name: prefix + entry.name });
+	} else if (entry.isDirectory) {
+		const reader = (entry as FileSystemDirectoryEntry).createReader();
+		// readEntries answers in batches; an empty one is the end.
+		for (;;) {
+			const batch = await new Promise<FileSystemEntry[]>((res, rej) => reader.readEntries(res, rej));
+			if (!batch.length) break;
+			for (const child of batch) await walkEntry(child, `${prefix}${entry.name}/`, out);
+		}
+	}
+}
 
 /*
  * Directory listings, kept for the life of the page.
@@ -206,6 +249,7 @@ function TreeDir({
 	}, [open, fetched, rev, entry.path]);
 
 	const { edit } = useContext(EditContext);
+	const dropTarget = useContext(DropContext) === entry.path;
 	const renaming = edit?.kind === "rename" && edit.path === entry.path;
 	const adding = edit && edit.kind !== "rename" && edit.parent === entry.path ? edit : null;
 
@@ -217,7 +261,11 @@ function TreeDir({
 				<ListRow
 					onClick={() => onToggle(entry.path)}
 					data-path={entry.path}
+					data-dir=""
+					draggable
+					onDragStart={dragRow(entry.path)}
 					onContextMenu={(e) => onMenu(entry, e)}
+					className={dropTarget ? "bg-neutral-800" : ""}
 					muted={entry.hidden}
 					size="body"
 					aria-expanded={open}
@@ -282,6 +330,8 @@ function TreeFile({
 		<ListRow
 			onClick={() => onOpen(entry.path)}
 			data-path={entry.path}
+			draggable
+			onDragStart={dragRow(entry.path)}
 			onContextMenu={(e) => onMenu(entry, e)}
 			selected={active}
 			muted={entry.hidden}
@@ -358,6 +408,10 @@ export function Explorer({
 	const [clip, setClip] = useState<{ path: string; cut: boolean } | null>(null);
 	/** Project-relative paths git reports as changed, read when a menu opens. */
 	const [changed, setChanged] = useState<Set<string>>(() => new Set());
+	/** An error to show once the refresh that follows it has re-read the tree. */
+	const afterRefresh = useRef<string | null>(null);
+	/** The folder under a drag in progress, or null. */
+	const [dropDir, setDropDir] = useState<string | null>(null);
 
 	const openMenu = useCallback<RowMenu>((entry, e) => {
 		e.preventDefault();
@@ -497,6 +551,52 @@ export function Explorer({
 		refresh();
 	};
 
+	// A drag resting on a closed folder opens it, so a deep target can be reached.
+	useEffect(() => {
+		if (!dropDir || dropDir === cwd || openDirs.has(dropDir)) return;
+		const timer = setTimeout(() => toggleDir(dropDir), 600);
+		return () => clearTimeout(timer);
+	}, [dropDir, openDirs, cwd, toggleDir]);
+
+	/** The folder a drag event points at: a folder row, a file's folder, or the project. */
+	const dropTargetOf = (e: DragEvent) => {
+		const row = (e.target as HTMLElement).closest<HTMLElement>("[data-path]");
+		const path = row?.dataset.path;
+		if (!path) return cwd;
+		return row.dataset.dir === undefined ? parentOf(path) : path;
+	};
+
+	/** Whether a row may be moved into `dir`: not its own folder, itself, or inside itself. */
+	const canMove = (from: string, dir: string) =>
+		dir !== parentOf(from) && dir !== from && !dir.startsWith(`${from}/`);
+
+	const showDir = (dir: string) => {
+		if (dir !== cwd && !openDirs.has(dir)) toggleDir(dir);
+	};
+
+	const moveInto = async (from: string, dir: string) => {
+		guard(from);
+		const to = `${dir}/${from.slice(from.lastIndexOf("/") + 1)}`;
+		await unwrap(api.files.move.$post({ json: { from, to } }));
+		onPathChange(from, to);
+		showDir(dir);
+		refresh();
+	};
+
+	/** Upload what was dropped from outside; one failure does not stop the rest. */
+	const uploadInto = async (sources: (FileSystemEntry | File)[], dir: string) => {
+		const files: Dropped[] = [];
+		for (const s of sources) {
+			if (s instanceof File) files.push({ file: s, name: s.name });
+			else await walkEntry(s, "", files);
+		}
+		const results = await Promise.allSettled(files.map((f) => uploadFile(f.file, { dir, name: f.name })));
+		const errors = results.flatMap((r) => (r.status === "rejected" ? [String(r.reason?.message ?? r.reason)] : []));
+		afterRefresh.current = errors.length ? errors.join("\n") : null;
+		showDir(dir);
+		refresh();
+	};
+
 	const trash = async (entry: PiwFileEntry) => {
 		guard(entry.path);
 		if (!window.confirm(t("Move \"{name}\" to the Trash?", { name: entry.name }))) return;
@@ -513,7 +613,8 @@ export function Explorer({
 			.then((entries) => {
 				if (!live) return;
 				setRoots(entries);
-				setError(null);
+				setError(afterRefresh.current);
+				afterRefresh.current = null;
 			})
 			.catch((err: unknown) => {
 				if (live) setError(err instanceof Error ? err.message : String(err));
@@ -536,16 +637,52 @@ export function Explorer({
 			{children}
 
 			{error && (
-				<div className="border-b border-red-900 bg-red-950/40 px-3 py-2 text-meta text-red-300">
+				<div className="border-b border-red-900 bg-red-950/40 px-3 py-2 text-meta whitespace-pre-line text-red-300">
 					{error}
 				</div>
 			)}
 
 			<EditContext.Provider value={{ edit, done: finishEdit }}>
+			<DropContext.Provider value={dropDir}>
 				<ScrollPane
 					ref={tree}
 					className="min-h-0 flex-1"
-					innerClassName="py-1"
+					innerClassName={`py-1 ${dropDir === cwd ? "bg-neutral-900" : ""}`}
+					// Drops: a row from this tree moves; files from outside are uploaded.
+					onDragOver={(e) => {
+						const internal = e.dataTransfer.types.includes(PATH_DRAG_TYPE);
+						if (!internal && !e.dataTransfer.types.includes("Files")) return;
+						const dir = dropTargetOf(e);
+						if (internal && (!dragged || !canMove(dragged, dir))) return setDropDir(null);
+						e.preventDefault();
+						e.dataTransfer.dropEffect = internal ? "move" : "copy";
+						setDropDir(dir);
+					}}
+					onDragLeave={(e) => {
+						if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDropDir(null);
+					}}
+					onDragEnd={() => {
+						dragged = null;
+						setDropDir(null);
+					}}
+					onDrop={(e) => {
+						setDropDir(null);
+						const dir = dropTargetOf(e);
+						const from = e.dataTransfer.getData(PATH_DRAG_TYPE);
+						if (from) {
+							e.preventDefault();
+							if (canMove(from, dir)) void moveInto(from, dir).catch(fail);
+							return;
+						}
+						if (!e.dataTransfer.types.includes("Files")) return;
+						e.preventDefault();
+						// Entries must be taken now: the list is emptied once this handler returns.
+						const sources = [...e.dataTransfer.items]
+							.filter((i) => i.kind === "file")
+							.map((i) => i.webkitGetAsEntry() ?? i.getAsFile())
+							.filter((s): s is FileSystemEntry | File => s !== null);
+						void uploadInto(sources, dir).catch(fail);
+					}}
 					// The empty space below the rows: a menu for the project itself.
 					onContextMenu={(e) => {
 						if (e.target !== e.currentTarget) return;
@@ -582,6 +719,7 @@ export function Explorer({
 						),
 					)}
 				</ScrollPane>
+			</DropContext.Provider>
 			</EditContext.Provider>
 
 			{menu && (() => {

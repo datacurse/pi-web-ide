@@ -45,7 +45,7 @@ import {
 } from "./Transcript.js";
 import { t } from "./i18n.js";
 import { PiMark } from "./piMark.js";
-import { pickWorkout, Workout, workoutOn } from "./Workout.js";
+import { pickWorkout, Workout } from "./Workout.js";
 
 /** pi's `get_commands` omits its TUI-only `/compact`; `send` in useSession.ts runs it. */
 const COMPACT_COMMAND: PiCommand = {
@@ -673,7 +673,7 @@ export function Chat({
 		const others = files.filter((f) => !isImage(f));
 
 		try {
-			const paths = await Promise.all(others.map(uploadFile));
+			const paths = await Promise.all(others.map((f) => uploadFile(f)));
 			if (paths.length > 0) {
 				const current = composer.current?.value ?? text;
 				const sep = current && !current.endsWith("\n") ? "\n" : "";
@@ -694,7 +694,7 @@ export function Chat({
 	};
 
 	/** Right after a send: pi starts answering while the dialog asks for a set. */
-	const exercise = () => void workoutOn().then((on) => on && setWorkout(pickWorkout()));
+	const exercise = () => void pickWorkout().then((kind) => kind && setWorkout(kind));
 
 	const submit = () => {
 		const t = text.trim();

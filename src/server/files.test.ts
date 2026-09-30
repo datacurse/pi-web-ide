@@ -9,6 +9,7 @@ import {
 	moveEntry,
 	readFile,
 	safePath,
+	saveUpload,
 	trashEntry,
 	writeReviewed,
 } from "./files.js";
@@ -81,6 +82,14 @@ try {
 	assert.equal(copyEntry(proj, join(proj, "folder"), join(proj, "new")), join(proj, "new", "folder"));
 	assert.ok(existsSync(join(proj, "new", "folder", "deep.ts")));
 	assert.throws(() => copyEntry(proj, join(proj, "folder"), join(proj, "folder")), /into itself/);
+
+	// Dropped files: into a folder, subfolders created, never overwriting or escaping.
+	assert.equal(saveUpload(proj, proj, "up/sub/d.txt", Buffer.from("d")), join(proj, "up", "sub", "d.txt"));
+	assert.equal(readFileSync(join(proj, "up", "sub", "d.txt"), "utf8"), "d");
+	assert.throws(() => saveUpload(proj, proj, "up/sub/d.txt", Buffer.from("x")), /already exists/);
+	assert.throws(() => saveUpload(proj, join(proj, "up"), "../../proj-secrets/k", Buffer.from("x")), /outside/);
+	assert.throws(() => saveUpload(proj, join(proj, "up"), "../a2.ts", Buffer.from("x")), /bad name/);
+	assert.throws(() => saveUpload(proj, proj, "", Buffer.from("x")), /bad name/);
 
 	// Trash: into the desktop Trash with an info file, never unlinked outright.
 	const data = join(root, "data");

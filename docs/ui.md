@@ -380,6 +380,12 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
   (`~/.local/share/Trash`), so it can be restored. Rename, move and delete are
   refused while a file under the path has unsaved edits; open tabs follow a
   rename and close on delete.
+- Drag and drop: rows drag onto a folder row, a file row (its folder) or the empty
+  space (the project) to move there. Files and folders dropped from outside the
+  browser (desktop, file manager, the browser's downloads) are uploaded there,
+  never overwriting; each name that exists is listed in the error bar. The target
+  folder row is `neutral-800`, the project's whole pane `neutral-900`; a closed
+  folder a drag rests on for 600ms opens, and the target opens after the drop.
 
 ## Source Control
 
@@ -434,10 +440,17 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
   pick (first option `Built-in: …`, or a disabled `Not selected` when pi cannot reach the
   built-in model; no warning), and the compact's cost ratio as a `w-24` input with `Save`. Tool metrics is an `OptionRow` checkbox (on by default) with
   a `text-meta` line saying what it does. Workout (off by default, applies at once) is one too: each
-  send, and each Edit resend, goes out at once and then opens a small centered `<dialog>` (`Workout.tsx`:
-  amber `Barbell`, `text-title` "Do 10 pushups" or "Do 10 situps", picked at random, a `pi is already
-  answering.` hint and a `primary` `Done` that reads `Done in 15s` counting down and stays disabled
-  until 0). No Cancel; Escape does nothing. Done logs the set (`workouts.json`, `server/workouts.ts`). Under it, Personality (`Personality.tsx`, moved
+  send, and each Edit resend, goes out at once and then opens a small centered `<dialog>` (`Workout.tsx`):
+  one of ten exercises picked at random (`EXERCISES` in `shared/types.ts`: amount in reps or seconds
+  held, and the wait before Done unlocks), drawn as an amber stick figure that flips between its start
+  and end poses every 900ms (`workoutFigures.tsx`, hand-drawn SVG polylines, no fetched images; holds
+  have one pose), the task in `text-title`, a `pi is already answering.` hint and a `primary` `Done`
+  that reads `Done in 15s` counting down and stays disabled until 0. No Cancel; Escape does nothing.
+  Done logs the set (`workouts.json`, `server/workouts.ts`). While Workout is on, a nested grid under it
+  (`Nested`, `grid-cols-2 sm:grid-cols-5`) shows every exercise as a `rounded-sm` bordered card: its
+  animated figure (amber when on, `neutral-700` when off), then a `size-3` checkbox and the name. The
+  dialog picks only from ticked ones (`workoutOff` in `pwi-extensions.json`, so new exercises start on);
+  the last ticked card's checkbox is disabled. Under it, Personality (`Personality.tsx`, moved
   from Settings): a `text-ui` heading, the file's path, a mono `textarea` with `Save`
   (`Button sm subtle`) and a status line, then the `Repeat before every reply` checkbox.
   It is re-read each time the page is shown unless there are unsaved edits, and the
@@ -484,9 +497,9 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
   and ✕ (kills the shell) sits over it. Fleet shells never appear in a project's dock.
   Escape inside it goes to the shell, not the dialog.
 - Stats has two tabs in its header, `Overview` and `Workouts` (`Button sm`, `subtle`/`ghost`,
-  `aria-pressed`, like the machine filter, which shows only on Overview). Workouts: the Summary's
-  tiles (today, this week and in total for each exercise, sets, active days, reps), then pushups
-  and situps per day for the last 14 days as `Bars`, side by side.
+  `aria-pressed`, like the machine filter, which shows only on Overview). Workouts: four tiles (sets today, this week, in total, active
+  days), then an Exercises table (each figure's first pose `w-12` in `neutral-400`, name, today, this
+  week, total; seconds shown as `20s`) beside `Sets per day` for the last 14 days as `Bars`.
 - Stats uses the dialog's width: usage beside the summary tiles (1/3 + 2/3), a 52-week
   heatmap full width, answer time beside by-hour, Machines (when there are others) /
   Models / Projects / Tools in columns, then Tool calls, then Slowest calls, Largest calls

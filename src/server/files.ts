@@ -254,6 +254,22 @@ export function createEntry(seed: string, path: string, dir: boolean): string {
 	return full;
 }
 
+/**
+ * A file dropped on the explorer, written into `dir`. `rel` may hold
+ * subfolders (a dropped folder's layout), created as needed; it must stay
+ * under `dir`, and an existing file is refused.
+ */
+export function saveUpload(seed: string, dir: string, rel: string, data: Buffer): string {
+	const base = safePath(seed, dir);
+	if (!statSync(base).isDirectory()) throw new Error(`not a directory: ${base}`);
+	const full = safePath(seed, join(base, rel));
+	if (full === base || !within(base, full)) throw new Error(`bad name: ${rel}`);
+	if (taken(full)) throw new Error(`already exists: ${full}`);
+	mkdirSync(dirname(full), { recursive: true });
+	writeFileSync(full, data, { flag: "wx" });
+	return full;
+}
+
 /** Rename or move. Refuses an existing target and a move into its own subtree. */
 export function moveEntry(seed: string, from: string, to: string): string {
 	const src = movable(seed, from);
