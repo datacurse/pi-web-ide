@@ -255,18 +255,17 @@ export function createEntry(seed: string, path: string, dir: boolean): string {
 }
 
 /**
- * A file dropped on the explorer, written into `dir`. `rel` may hold
- * subfolders (a dropped folder's layout), created as needed; it must stay
- * under `dir`, and an existing file is refused.
+ * Where a file dropped on the explorer goes: `rel` under `dir`, whose
+ * subfolders (a dropped folder's layout) are created here. It must stay under
+ * `dir`, and an existing file is refused; the caller writes with `wx`.
  */
-export function saveUpload(seed: string, dir: string, rel: string, data: Buffer): string {
+export function uploadPath(seed: string, dir: string, rel: string): string {
 	const base = safePath(seed, dir);
 	if (!statSync(base).isDirectory()) throw new Error(`not a directory: ${base}`);
 	const full = safePath(seed, join(base, rel));
 	if (full === base || !within(base, full)) throw new Error(`bad name: ${rel}`);
 	if (taken(full)) throw new Error(`already exists: ${full}`);
 	mkdirSync(dirname(full), { recursive: true });
-	writeFileSync(full, data, { flag: "wx" });
 	return full;
 }
 

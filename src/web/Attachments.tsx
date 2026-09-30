@@ -42,19 +42,29 @@ export function readImage(file: File): Promise<PiImage> {
 /**
  * Copy a picked file to the pwi machine, which may not be this one, and return its path there.
  * `into` writes it into a project folder instead, as `name` (which may hold subfolders).
+ * XHR rather than fetch because only XHR reports upload progress, to `onProgress` in bytes.
  */
-export async function uploadFile(file: File, into?: { dir: string; name: string }): Promise<string> {
+export function uploadFile(
+	file: File,
+	into?: { dir: string; name: string },
+	onProgress?: (sent: number) => void,
+): Promise<string> {
 	const q = new URLSearchParams(into ?? { name: file.name || "file" });
-	const r = await fetch(`/api/upload?${q}`, {
-		method: "POST",
-		headers: { "Content-Type": "application/octet-stream" },
-		body: file,
+	const failed = () => new Error(t("could not upload {name}", { name: file.name }));
+	return new Promise((resolve, reject) => {
+		const xhr = new XMLHttpRequest();
+		xhr.open("POST", `/api/upload?${q}`);
+		xhr.setRequestHeader("Content-Type", "application/octet-stream");
+		xhr.responseType = "json";
+		if (onProgress) xhr.upload.onprogress = (e) => onProgress(e.loaded);
+		xhr.onerror = () => reject(failed());
+		xhr.onload = () => {
+			const body = (xhr.response ?? {}) as { path?: unknown; error?: unknown };
+			if (xhr.status === 200 && typeof body.path === "string") return resolve(body.path);
+			reject(typeof body.error === "string" ? new Error(body.error) : failed());
+		};
+		xhr.send(file);
 	});
-	const body = (await r.json().catch(() => ({}))) as { path?: unknown; error?: unknown };
-	if (!r.ok || typeof body.path !== "string") {
-		throw new Error(typeof body.error === "string" ? body.error : t("could not upload {name}", { name: file.name }));
-	}
-	return body.path;
 }
 
 /**

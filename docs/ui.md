@@ -356,9 +356,21 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
 
 ## Explorer
 
-- The header has a refresh `IconButton` (`ArrowClockwise`, `sm`) left of the close ✕.
-  It re-reads the root and every expanded folder. The tree also re-reads each time
-  the agent finishes a reply.
+- The header has `sm` `IconButton`s left of the close ✕: refresh (`ArrowClockwise`),
+  `Expand all folders` (`ArrowsOutLineVertical`; level by level, at most 200 folders,
+  hidden ones stay shut) and `Collapse all folders` (`ArrowsInLineVertical`).
+  Refresh re-reads the root and every expanded folder. The tree also re-reads each time
+  the agent finishes a reply, and when anything changes on disk directly inside the
+  project folder or an expanded one (`/api/files/watch`, one non-recursive watch each).
+- Git status colours the names with Source Control's tones (`statusStyle`): a file
+  also shows its letter at the right edge (`pr-3`); a folder takes its contents'
+  tone, or modified's amber when they differ.
+- Ctrl/Cmd-click toggles a row into the selection (the first also keeps the row
+  clicked before it), Shift-click picks the visible range from the last clicked row.
+  Picked rows are `bg-amber-950/60`. A plain click, a click on the empty space or
+  Escape clears them. Right-click on a picked row opens the menu for all of them:
+  `Add to Chat`, `Copy Path`, `Copy Relative Path`, `Cut`, `Copy`, `Delete`
+  (labelled `N items`); anything that needs one target is left out.
 - Right-click a row → `ContextMenu`, groups split by `MenuSeparator`:
   1. Files: `Open`, `Open to the Side`, and `Open Changes` only when git reports
      the file changed. Folders: `New File…`, `New Folder…`.
@@ -386,6 +398,12 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
   never overwriting; each name that exists is listed in the error bar. The target
   folder row is `neutral-800`, the project's whole pane `neutral-900`; a closed
   folder a drag rests on for 600ms opens, and the target opens after the drop.
+  Dragging a picked row moves every picked row. Uploads have no size limit (streamed
+  to disk).
+- An upload that looks like taking over a second (estimated from the rate so far, or
+  still running at 1s) shows a strip at the panel's bottom: `border-t`, `text-meta`
+  `Uploading N files · sent of total · time left`, over a `h-1` `rounded-full` bar,
+  `amber-400` on `neutral-800`.
 
 ## Source Control
 
@@ -497,9 +515,15 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
   and ✕ (kills the shell) sits over it. Fleet shells never appear in a project's dock.
   Escape inside it goes to the shell, not the dialog.
 - Stats has two tabs in its header, `Overview` and `Workouts` (`Button sm`, `subtle`/`ghost`,
-  `aria-pressed`, like the machine filter, which shows only on Overview). Workouts: four tiles (sets today, this week, in total, active
-  days), then an Exercises table (each figure's first pose `w-12` in `neutral-400`, name, today, this
-  week, total; seconds shown as `20s`) beside `Sets per day` for the last 14 days as `Bars`.
+  `aria-pressed`, like the machine filter, which applies to both: each machine running pwi has its
+  `workouts.json` mirrored with its sessions, and `/api/stats` returns the sets with their machine). Workouts: four tiles (sets today, this week, in total, active
+  days), then `Sets per day, last 30 days` full width: a canvas like By hour (same `axis()` y-axis
+  and gridlines, 160px tall, 4px gaps), one column a day stacked by exercise bottom up in table
+  order, a 1px gap between exercises, every fifth day labelled back from today, tooltip lists the
+  day's sets per exercise. Each exercise has its own themed colour token (`ex-*` in `@theme`: one
+  `--ct-*` accent each, plank and wall sit mixed). Under it the Exercises table (`max-w-2xl`: the
+  figure's first pose `w-12` in `neutral-400`, a `size-2.5` colour dot that is the chart's legend,
+  name, today, this week, total; seconds shown as `20s`).
 - Stats uses the dialog's width: usage beside the summary tiles (1/3 + 2/3), a 52-week
   heatmap full width, answer time beside by-hour, Machines (when there are others) /
   Models / Projects / Tools in columns, then Tool calls, then Slowest calls, Largest calls

@@ -8,9 +8,10 @@ import { readStateFile, statePath, writeStateFile } from "./state.js";
 
 const FILE = "workouts.json";
 
-export function readWorkouts(): WorkoutSet[] {
+/** This machine's sets, or another's from its mirror (machines.ts). */
+export function readWorkouts(file = statePath(FILE)): WorkoutSet[] {
 	try {
-		const all = JSON.parse(readStateFile(statePath(FILE)) ?? "[]");
+		const all = JSON.parse(readStateFile(file) ?? "[]");
 		if (!Array.isArray(all)) return [];
 		// The first sets were logged as `reps` before timed exercises existed.
 		return all.map((s) => ({ at: s.at, kind: s.kind, amount: s.amount ?? s.reps }));

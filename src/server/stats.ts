@@ -13,6 +13,7 @@ import { contentChars, preview, program, splitBySteps, subKey } from "../shared/
 import type { StatsTurn, StatsView, ToolOutlier } from "../shared/types.js";
 import { parseMetrics, type Step, type ToolMetric } from "../tool-metrics/format.js";
 import { machines } from "./machines.js";
+import { readWorkouts } from "./workouts.js";
 import { pooled, sessionFiles, userText } from "./sessions.js";
 import { statePath } from "./state.js";
 
@@ -102,7 +103,11 @@ export async function stats(): Promise<StatsView> {
 		for (const t of p.turns) turns.push({ ...t, machine });
 	});
 	turns.sort((a, b) => b.start - a.start);
-	return { turns, sessions, machines: remote.map(({ name, synced, error }) => ({ name, synced, error })) };
+	const workouts = [
+		...readWorkouts().map((s) => ({ ...s, machine: "" })),
+		...remote.flatMap((m) => readWorkouts(m.workouts).map((s) => ({ ...s, machine: m.name }))),
+	];
+	return { turns, workouts, sessions, machines: remote.map(({ name, synced, error }) => ({ name, synced, error })) };
 }
 
 async function read(file: string, metrics: Metrics): Promise<Parsed | undefined> {

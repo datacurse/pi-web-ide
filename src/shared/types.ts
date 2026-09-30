@@ -219,6 +219,8 @@ export interface StatsMachine {
 
 export interface StatsView {
 	turns: StatsTurn[];
+	/** Workout sets from this machine ("") and every mirrored one, by ssh alias. */
+	workouts: (WorkoutSet & { machine: string })[];
 	sessions: number;
 	machines: StatsMachine[];
 }

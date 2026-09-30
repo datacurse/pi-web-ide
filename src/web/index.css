@@ -77,6 +77,18 @@
 	--color-ctx-skills: #f2b264;
 	--color-ctx-personality: #7fa3c9;
 	--color-ctx-conversation: #6b4152;
+
+	/* Workout exercises in Stats > Workouts: one theme accent each, two mixed for ten. */
+	--color-ex-pushups: var(--ct-peach);
+	--color-ex-situps: var(--ct-mauve);
+	--color-ex-squats: var(--ct-blue);
+	--color-ex-lunges: var(--ct-teal);
+	--color-ex-burpees: var(--ct-red);
+	--color-ex-jumping-jacks: var(--ct-yellow);
+	--color-ex-calf-raises: var(--ct-green);
+	--color-ex-glute-bridges: var(--ct-lavender);
+	--color-ex-plank: color-mix(in oklab, var(--ct-yellow) 50%, var(--ct-green));
+	--color-ex-wall-sit: color-mix(in oklab, var(--ct-red) 50%, var(--ct-mauve));
 }
 
 /*

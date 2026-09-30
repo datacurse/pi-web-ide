@@ -143,7 +143,7 @@ export function Stats({ open, revision, onClose }: { open: boolean; revision?: u
 					))}
 				</div>
 				{/* Only once there is another machine: until then All and This PC are the same. */}
-				{tab === "overview" && remote.length > 0 && (
+				{remote.length > 0 && (
 					<div className="flex gap-1">
 						{filters.map(([m, label, title]) => (
 							<Button
@@ -165,7 +165,9 @@ export function Stats({ open, revision, onClose }: { open: boolean; revision?: u
 				{syncing && <span className="text-meta text-neutral-500">{t("Syncing machines…")}</span>}
 			</PanelHeader>
 
-			{tab === "workouts" && <Workouts reload={reload} />}
+			{tab === "workouts" && view && (
+				<Workouts sets={view.workouts.filter((s) => machine === null || s.machine === machine)} />
+			)}
 			{/* Laid out for the page dialog's width; the grids stack on a narrow window. */}
 			<div className={`${tab === "overview" ? "flex" : "hidden"} min-h-0 flex-1 flex-col gap-6 overflow-y-auto p-4`}>
 				{error && <p className="text-meta text-red-400">{error}</p>}
@@ -583,23 +585,8 @@ function Summary({ turns }: { turns: StatsTurn[] }) {
 	);
 }
 
-/** The sets done for the workout gate (web/Workout.tsx): counts, each exercise, and sets per day for two weeks. */
-function Workouts({ reload }: { reload: number }) {
-	const [sets, setSets] = useState<WorkoutSet[] | null>(null);
-	const [error, setError] = useState<string | null>(null);
-	useEffect(() => {
-		void api.workouts
-			.$get()
-			.then((r) => (r.ok ? r.json() : Promise.reject(new Error(r.statusText))))
-			.then((b) => {
-				setSets(b.sets);
-				setError(null);
-			})
-			.catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)));
-	}, [reload]);
-	if (error) return <p className="p-4 text-meta text-red-400">{error}</p>;
-	if (!sets) return null;
-
+/** The sets done for the workout gate (web/Workout.tsx), filtered like Overview by machine. */
+function Workouts({ sets }: { sets: WorkoutSet[] }) {
 	const day = (s: WorkoutSet) => dayKey(new Date(s.at));
 	const today = dayKey(new Date());
 	const weekAgo = dayKey(addDays(new Date(), -6));
@@ -613,7 +600,6 @@ function Workouts({ reload }: { reload: number }) {
 		sets.filter((s) => s.kind === kind && (!from || day(s) >= from)).reduce((n, s) => n + s.amount, 0);
 	const amount = (kind: WorkoutKind, n: number) =>
 		EXERCISES[kind].unit === "seconds" ? t("{n}s", { n: num().format(n) }) : num().format(n);
-	const days = Array.from({ length: 14 }, (_, i) => dayKey(addDays(new Date(), i - 13)));
 
 	return (
 		<div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto p-4">
@@ -630,38 +616,158 @@ function Workouts({ reload }: { reload: number }) {
 					</div>
 				))}
 			</div>
-			<div className="grid gap-6 md:grid-cols-2">
-				<div>
-					<h3 className={`mb-2 ${sectionLabel}`}>{t("Exercises")}</h3>
-					<table className="w-full text-meta tabular-nums">
-						<thead className="text-neutral-500">
-							<tr>
-								<th />
-								<th className="text-left font-normal">{t("Exercise")}</th>
-								<th className="text-right font-normal">{t("Today")}</th>
-								<th className="text-right font-normal">{t("This week")}</th>
-								<th className="text-right font-normal">{t("Total")}</th>
+			<WorkoutDays sets={sets} />
+			<div className="max-w-2xl">
+				<h3 className={`mb-2 ${sectionLabel}`}>{t("Exercises")}</h3>
+				<table className="w-full text-meta tabular-nums">
+					<thead className="text-neutral-500">
+						<tr>
+							<th />
+							<th className="text-left font-normal">{t("Exercise")}</th>
+							<th className="text-right font-normal">{t("Today")}</th>
+							<th className="text-right font-normal">{t("This week")}</th>
+							<th className="text-right font-normal">{t("Total")}</th>
+						</tr>
+					</thead>
+					<tbody>
+						{WORKOUT_KINDS.map((kind) => (
+							<tr key={kind} className="border-t border-neutral-800">
+								<td className="w-12 py-1">
+									<WorkoutFigure kind={kind} className="w-12 text-neutral-400" />
+								</td>
+								<td className="text-neutral-300">
+									{/* The swatch is the chart's legend. */}
+									<span className={`mr-2 inline-block size-2.5 rounded-full ${EX_COLOR[kind]}`} />
+									{exerciseText(kind).name}
+								</td>
+								<td className="text-right text-neutral-300">{amount(kind, sum(kind, today))}</td>
+								<td className="text-right text-neutral-300">{amount(kind, sum(kind, weekAgo))}</td>
+								<td className="text-right text-neutral-200">{amount(kind, sum(kind))}</td>
 							</tr>
-						</thead>
-						<tbody>
-							{WORKOUT_KINDS.map((kind) => (
-								<tr key={kind} className="border-t border-neutral-800">
-									<td className="w-12 py-1">
-										<WorkoutFigure kind={kind} className="w-12 text-neutral-400" />
-									</td>
-									<td className="text-neutral-300">{exerciseText(kind).name}</td>
-									<td className="text-right text-neutral-300">{amount(kind, sum(kind, today))}</td>
-									<td className="text-right text-neutral-300">{amount(kind, sum(kind, weekAgo))}</td>
-									<td className="text-right text-neutral-200">{amount(kind, sum(kind))}</td>
-								</tr>
-							))}
-						</tbody>
-					</table>
+						))}
+					</tbody>
+				</table>
+			</div>
+		</div>
+	);
+}
+
+const CHART_DAYS = 30;
+/** Literal classes so Tailwind emits them; the chart reads the colours back through bgColor. */
+const EX_COLOR: Record<WorkoutKind, string> = {
+	pushups: "bg-ex-pushups",
+	situps: "bg-ex-situps",
+	squats: "bg-ex-squats",
+	lunges: "bg-ex-lunges",
+	burpees: "bg-ex-burpees",
+	jumpingJacks: "bg-ex-jumping-jacks",
+	calfRaises: "bg-ex-calf-raises",
+	gluteBridges: "bg-ex-glute-bridges",
+	plank: "bg-ex-plank",
+	wallSit: "bg-ex-wall-sit",
+};
+const shortDayFmt = perLocale((l) => new Intl.DateTimeFormat(l, { day: "numeric", month: "short" }));
+
+/** Sets per day for the last CHART_DAYS days, one column a day stacked by exercise, like By hour. */
+function WorkoutDays({ sets }: { sets: WorkoutSet[] }) {
+	const days = useMemo(
+		() => Array.from({ length: CHART_DAYS }, (_, i) => addDays(new Date(), i - CHART_DAYS + 1)),
+		[sets],
+	);
+	const perDay = useMemo(() => {
+		const byDay = new Map<string, Map<WorkoutKind, number>>();
+		for (const s of sets) {
+			const d = dayKey(new Date(s.at));
+			const kinds = byDay.get(d) ?? new Map<WorkoutKind, number>();
+			kinds.set(s.kind, (kinds.get(s.kind) ?? 0) + 1);
+			byDay.set(d, kinds);
+		}
+		return days.map((d) => byDay.get(dayKey(d)) ?? new Map<WorkoutKind, number>());
+	}, [sets, days]);
+	const totals = perDay.map((k) => [...k.values()].reduce((a, b) => a + b, 0));
+	const { unit, top, ticks } = axis(Math.max(1, ...totals));
+
+	const box = useRef<HTMLDivElement>(null);
+	const canvas = useRef<HTMLCanvasElement>(null);
+	const width = useWidth(box);
+	const dpr = window.devicePixelRatio || 1;
+	const gap = Math.max(1, Math.round(4 * dpr));
+	const bar = Math.max(1, Math.floor((Math.floor(width * dpr) - gap * (CHART_DAYS - 1)) / CHART_DAYS));
+	const step = bar + gap;
+	const w = CHART_DAYS * step - gap;
+	const h = Math.round(160 * dpr);
+	const line = Math.max(1, Math.round(dpr));
+	const y = (v: number) => Math.round((v / top) * h);
+
+	useEffect(() => {
+		const ctx = canvas.current?.getContext("2d");
+		if (!ctx || !width || !box.current) return;
+		ctx.canvas.width = w;
+		ctx.canvas.height = h;
+		ctx.fillStyle = bgColor(box.current, "bg-neutral-800");
+		for (let v = 0; v <= top; v += unit) ctx.fillRect(0, Math.min(h - line, h - y(v)), w, line);
+		const colors = Object.fromEntries(WORKOUT_KINDS.map((k) => [k, bgColor(box.current!, EX_COLOR[k])]));
+		perDay.forEach((kinds, i) => {
+			let below = 0;
+			// Same order as the table, bottom up; a line of ground between exercises.
+			for (const k of WORKOUT_KINDS) {
+				const n = kinds.get(k);
+				if (!n) continue;
+				const y0 = y(below);
+				const y1 = y(below + n);
+				ctx.fillStyle = colors[k] ?? "";
+				ctx.fillRect(i * step, h - y1, bar, y1 - y0 - (below + n < totals[i]! ? line : 0));
+				below += n;
+			}
+		});
+	}, [perDay, totals, width, w, h, step, bar, line, top, unit]);
+
+	const hover = (e: React.MouseEvent<HTMLCanvasElement>) => {
+		const i = Math.floor((e.nativeEvent.offsetX * dpr) / step);
+		const day = days[i];
+		const kinds = perDay[i];
+		if (!day || !kinds) return void (e.currentTarget.title = "");
+		const parts = WORKOUT_KINDS.filter((k) => kinds.get(k)).map((k) => `${exerciseText(k).name} ${kinds.get(k)}`);
+		e.currentTarget.title = `${dayFmt().format(day)}: ${plural(totals[i] ?? 0, "{n} set", "{n} sets")}${
+			parts.length ? `\n${parts.join("\n")}` : ""
+		}`;
+	};
+
+	return (
+		<div>
+			<h3 className={`mb-2 ${sectionLabel}`}>{t("Sets per day, last {n} days", { n: CHART_DAYS })}</h3>
+			<div className="flex gap-2 text-caption text-neutral-500 tabular-nums">
+				<div className="relative w-8 shrink-0" style={{ height: h / dpr }}>
+					{ticks.map((v) => (
+						<span key={v} className="absolute right-0 translate-y-1/2 leading-none" style={{ bottom: y(v) / dpr }}>
+							{num().format(v)}
+						</span>
+					))}
 				</div>
-				<Bars
-					title={t("Sets per day")}
-					rows={days.map((d) => [d.slice(5), sets.filter((s) => day(s) === d).length])}
-				/>
+				<div ref={box} className="min-w-0 flex-1">
+					<canvas
+						ref={canvas}
+						role="img"
+						aria-label={t("Workout sets per day, last {n} days", { n: CHART_DAYS })}
+						onMouseMove={hover}
+						className="block"
+						style={{ width: w / dpr, height: h / dpr }}
+					/>
+					{/* Every fifth day counting back from today, centred under its column. */}
+					<div className="relative mt-1 h-4" style={{ width: w / dpr }}>
+						{days.map((d, i) =>
+							(CHART_DAYS - 1 - i) % 5 === 0 ? (
+								<span
+									key={i}
+									className="absolute top-0 -translate-x-1/2 whitespace-nowrap leading-none"
+									style={{ left: (i * step + bar / 2) / dpr }}
+								>
+									{shortDayFmt().format(d)}
+								</span>
+							) : null,
+						)}
+					</div>
+				</div>
 			</div>
 		</div>
 	);
@@ -847,19 +953,25 @@ function AnswerTimes({ turns }: { turns: StatsTurn[] }) {
 	);
 }
 
+/**
+ * A round unit (1, 2 or 5 times a power of 10) giving at most four gridlines
+ * above zero; bars scale to the top gridline, not to the tallest bar.
+ */
+function axis(max: number): { unit: number; top: number; ticks: number[] } {
+	const raw = max / 4;
+	const mag = 10 ** Math.floor(Math.log10(raw));
+	const unit = Math.max(1, ([1, 2, 5, 10].find((s) => s * mag >= raw) ?? 10) * mag);
+	const top = Math.ceil(max / unit) * unit;
+	return { unit, top, ticks: Array.from({ length: top / unit + 1 }, (_, i) => i * unit) };
+}
+
 function Hours({ turns }: { turns: StatsTurn[] }) {
 	const hours = useMemo(() => {
 		const out = Array.from({ length: 24 }, () => 0);
 		for (const t of turns) out[new Date(t.start).getHours()]! += 1;
 		return out;
 	}, [turns]);
-	// A round unit (1, 2 or 5 times a power of 10) giving at most four gridlines
-	// above zero; the bars scale to the top gridline, not to the tallest bar.
-	const raw = Math.max(1, ...hours) / 4;
-	const mag = 10 ** Math.floor(Math.log10(raw));
-	const unit = Math.max(1, ([1, 2, 5, 10].find((s) => s * mag >= raw) ?? 10) * mag);
-	const top = Math.ceil(Math.max(1, ...hours) / unit) * unit;
-	const ticks = Array.from({ length: top / unit + 1 }, (_, i) => i * unit);
+	const { unit, top, ticks } = axis(Math.max(1, ...hours));
 
 	const box = useRef<HTMLDivElement>(null);
 	const canvas = useRef<HTMLCanvasElement>(null);

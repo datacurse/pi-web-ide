@@ -72,7 +72,13 @@ interface Commit {
  * spelled out is the thing that truncates the filename. Same letters git's own
  * porcelain uses, so there is nothing new to learn.
  */
-function StatusMark({ status }: { status: string }) {
+export function StatusMark({ status }: { status: string }) {
+	const { letter, tone } = statusStyle(status);
+	return <span className={`shrink-0 font-mono text-meta ${tone}`}>{letter}</span>;
+}
+
+/** A porcelain status as its one letter and colour, shared with the Explorer. */
+export function statusStyle(status: string): { letter: string; tone: string } {
 	const code = status.trim() || "M";
 	const letter = code === "??" ? "U" : code[0];
 	/*
@@ -89,7 +95,7 @@ function StatusMark({ status }: { status: string }) {
 				: letter === "R"
 					? "text-blue-400"
 					: "text-amber-400";
-	return <span className={`shrink-0 font-mono text-meta ${tone}`}>{letter}</span>;
+	return { letter, tone };
 }
 
 /** One file row, in either half. The whole row is the button. */

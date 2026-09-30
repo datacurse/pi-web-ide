@@ -1,8 +1,12 @@
 import { Hono, type Context } from "hono";
 import { getMimeType } from "hono/utils/mime";
 import { createStreamBody } from "@hono/node-server/utils/stream";
+import { RESPONSE_ALREADY_SENT } from "@hono/node-server/utils/response";
 import { basename, join } from "node:path";
-import { createReadStream, mkdirSync, statSync, writeFileSync } from "node:fs";
+import { createReadStream, createWriteStream, mkdirSync, rmSync, statSync, watch, type FSWatcher } from "node:fs";
+import { Readable } from "node:stream";
+import { pipeline } from "node:stream/promises";
+import type { ReadableStream as NodeReadableStream } from "node:stream/web";
 import { tmpdir } from "node:os";
 import { randomUUID } from "node:crypto";
 import {
@@ -12,8 +16,8 @@ import {
 	moveEntry,
 	readFile as readReviewFile,
 	safePath,
-	saveUpload,
 	trashEntry,
+	uploadPath,
 	writeFile,
 } from "../files.js";
 import { query, json, type Deps, type Env } from "../http.js";
@@ -40,6 +44,24 @@ export function filesRoutes({ cwd: CWD }: Deps) {
 	}
 
 	const str = (v: unknown) => (typeof v === "string" ? v : "");
+
+	/**
+	 * Stream a request body to a new file. No size cap (app.ts exempts this
+	 * route from the body limit): it never sits in memory. A failed or cut-off
+	 * upload removes the partial file, but never one that was already there.
+	 */
+	async function receive(c: Context<Env>, path: string): Promise<void> {
+		const out = createWriteStream(path, { flags: "wx" });
+		let created = false;
+		out.once("open", () => (created = true));
+		const body = c.req.raw.body;
+		try {
+			await pipeline(body ? Readable.fromWeb(body as NodeReadableStream) : Readable.from([]), out);
+		} catch (err) {
+			if (created) rmSync(path, { force: true });
+			throw err;
+		}
+	}
 
 	const fileOp = (c: Context<Env>, run: () => string | void) => {
 		try {
@@ -104,19 +126,23 @@ export function filesRoutes({ cwd: CWD }: Deps) {
 		 * folder, `name` may carry subfolders, and nothing is overwritten.
 		 */
 		.post("/upload", async (c) => {
-			const dir = c.req.query("dir");
-			if (dir) {
-				const data = Buffer.from(await c.req.arrayBuffer());
-				return fileOp(c, () => saveUpload(CWD, dir, c.req.query("name") ?? "", data));
+			const into = c.req.query("dir");
+			if (into) {
+				try {
+					const path = uploadPath(CWD, into, c.req.query("name") ?? "");
+					await receive(c, path);
+					return c.json({ ok: true, path }, 200);
+				} catch (err) {
+					return c.json({ error: err instanceof Error ? err.message : String(err) }, 400);
+				}
 			}
 			const name = basename(c.req.query("name") ?? "");
 			if (!name || name === "." || name === "..") return c.json({ error: "name required" }, 400);
-			const data = Buffer.from(await c.req.arrayBuffer());
 			try {
 				const dir = join(tmpdir(), "pwi-uploads", randomUUID());
 				mkdirSync(dir, { recursive: true });
 				const path = join(dir, name);
-				writeFileSync(path, data);
+				await receive(c, path);
 				return c.json({ path }, 200);
 			} catch (err) {
 				return c.json({ error: err instanceof Error ? err.message : String(err) }, 500);
@@ -161,6 +187,56 @@ export function filesRoutes({ cwd: CWD }: Deps) {
 		.post("/files/trash", json<{ path: string }>(), (c) => {
 			const b = c.req.valid("json");
 			return fileOp(c, () => trashEntry(CWD, str(b.path)));
+		})
+
+		/**
+		 * An event stream that says `change` when an entry directly inside `root`
+		 * or one of the `dir`s (relative to `root`: the explorer's open folders)
+		 * is added, removed or written. Not recursive, so it costs one inotify
+		 * watch per open folder and nothing for the rest of the repo. Bursts are
+		 * coalesced; the client re-reads the tree.
+		 */
+		.get("/files/watch", query<{ root?: string; dir?: string }>(), (c) => {
+			let root: string;
+			try {
+				root = safePath(CWD, c.req.query("root") ?? "");
+			} catch (err) {
+				return c.json({ error: err instanceof Error ? err.message : String(err) }, 400);
+			}
+			const res = c.env.outgoing;
+			res.writeHead(200, {
+				"Content-Type": "text/event-stream",
+				"Cache-Control": "no-cache, no-transform",
+				Connection: "keep-alive",
+				"X-Accel-Buffering": "no",
+			});
+			res.write(": connected\n\n");
+
+			let timer: NodeJS.Timeout | undefined;
+			const changed = () => {
+				clearTimeout(timer);
+				timer = setTimeout(() => res.write("data: change\n\n"), 250);
+			};
+			const watchers: FSWatcher[] = [];
+			// Capped so a huge expanded tree cannot exhaust the inotify limit.
+			for (const rel of ["", ...(c.req.queries("dir") ?? [])].slice(0, 500)) {
+				try {
+					const w = watch(safePath(CWD, join(root, rel)), changed);
+					// A watched folder deleted or unreadable must not crash the server.
+					w.on("error", () => w.close());
+					watchers.push(w);
+				} catch {
+					// Gone or outside every project: nothing to watch there.
+				}
+			}
+
+			const keepalive = setInterval(() => res.write(": ping\n\n"), 15_000);
+			res.on("close", () => {
+				clearInterval(keepalive);
+				clearTimeout(timer);
+				for (const w of watchers) w.close();
+			});
+			return RESPONSE_ALREADY_SENT;
 		})
 
 		/** One directory's files and subdirectories, for the editor's tree. */

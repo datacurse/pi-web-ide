@@ -13,6 +13,7 @@ import {
 	useCallback,
 	useContext,
 	useEffect,
+	useMemo,
 	useRef,
 	useState,
 	type DragEvent,
@@ -21,6 +22,8 @@ import {
 import {
 	ArrowClockwise,
 	ArrowElbowDownRight,
+	ArrowsInLineVertical,
+	ArrowsOutLineVertical,
 	CaretDown,
 	CaretRight,
 	ChatText,
@@ -43,23 +46,96 @@ import { FileGlyph } from "./fileIcon.js";
 import { readExplorerOpen, writeExplorerOpen } from "./prefs.js";
 import { ContextMenu, IconButton, ListRow, MenuItem, MenuSeparator, PanelHeader, inputClass } from "./ui.js";
 import { api, unwrap } from "./api.js";
-import { t } from "./i18n.js";
+import { locale, plural, t } from "./i18n.js";
 import { ScrollPane } from "./OverlayScrollbar.js";
 import { uploadFile } from "./Attachments.js";
+import { statusStyle } from "./SourceControl.js";
 
-/** A row dragged within the tree; its data is the row's path. */
+/** Rows dragged within the tree; the data is their paths, as JSON. */
 const PATH_DRAG_TYPE = "application/x-pwi-path";
-/** The row being dragged, since drag data cannot be read during dragover. */
-let dragged: string | null = null;
+/** The rows being dragged, since drag data cannot be read during dragover. */
+let dragged: string[] | null = null;
 
-const dragRow = (path: string) => (e: DragEvent<HTMLButtonElement>) => {
-	dragged = path;
-	e.dataTransfer.setData(PATH_DRAG_TYPE, path);
-	e.dataTransfer.effectAllowed = "move";
-};
+/** Expand All stops after this many folders, so a huge repo cannot flood the panel. */
+const EXPAND_ALL_CAP = 200;
 
-/** The folder a drag would drop into, highlighted in the tree. */
-const DropContext = createContext<string | null>(null);
+/** Drop paths inside another of the paths: moving or deleting the folder covers them. */
+const topmost = (paths: string[]) => paths.filter((p) => !paths.some((q) => p.startsWith(`${q}/`)));
+
+/** Git's porcelain status by project-relative path; a folder carries its contents'. */
+type GitMarks = { files: Map<string, string>; dirs: Map<string, string>; untracked: string[] };
+
+function gitMarks(changes: { status: string; path: string }[]): GitMarks {
+	const marks: GitMarks = { files: new Map(), dirs: new Map(), untracked: [] };
+	// A folder takes its contents' colour, or modified's when they differ.
+	const addDir = (dir: string, status: string) => {
+		const had = marks.dirs.get(dir);
+		marks.dirs.set(dir, !had || statusStyle(had).tone === statusStyle(status).tone ? status : " M");
+	};
+	const up = (p: string) => p.slice(0, Math.max(0, p.lastIndexOf("/")));
+	for (const { status, path } of changes) {
+		// A wholly untracked folder is one entry, `dir/`, standing for everything in it.
+		const own = path.replace(/\/$/, "");
+		if (own !== path) {
+			marks.untracked.push(own);
+			addDir(own, status);
+		} else marks.files.set(own, status);
+		for (let d = up(own); d; d = up(d)) addDir(d, status);
+	}
+	return marks;
+}
+
+/** Git's status for a row, by its project-relative path. */
+function gitStatus(marks: GitMarks, rel: string, dir: boolean): string | undefined {
+	const own = (dir ? marks.dirs : marks.files).get(rel);
+	return own ?? (marks.untracked.some((d) => rel.startsWith(`${d}/`)) ? "??" : undefined);
+}
+
+/** What every row reads from the panel, at any depth. */
+const TreeContext = createContext<{
+	cwd: string;
+	/** The folder a drag would drop into. */
+	dropDir: string | null;
+	/** Rows picked with Ctrl- or Shift-click. */
+	marked: Set<string>;
+	/** Apply a click's Ctrl/Shift selection; true when that was all the click did. */
+	pick: (path: string, e: MouseEvent) => boolean;
+	dragStart: (path: string, e: DragEvent) => void;
+	git: GitMarks;
+}>({
+	cwd: "",
+	dropDir: null,
+	marked: new Set(),
+	pick: () => false,
+	dragStart: () => {},
+	git: gitMarks([]),
+});
+
+/** A row's background: drop target, then picked. */
+function rowBg(tree: { dropDir: string | null; marked: Set<string> }, path: string): string {
+	if (tree.dropDir === path) return "bg-neutral-800";
+	return tree.marked.has(path) ? "bg-amber-950/60" : "";
+}
+
+/** Bytes in the largest unit that keeps the number above 1, localised. */
+function formatBytes(n: number): string {
+	const units = ["byte", "kilobyte", "megabyte", "gigabyte", "terabyte"];
+	let i = 0;
+	for (; n >= 1024 && i < units.length - 1; i++) n /= 1024;
+	return new Intl.NumberFormat(locale(), {
+		style: "unit",
+		unit: units[i],
+		unitDisplay: "short",
+		maximumFractionDigits: i && n < 10 ? 1 : 0,
+	}).format(n);
+}
+
+/** A time left in whole seconds, then minutes, then hours, never under the real one. */
+function formatDuration(ms: number): string {
+	const s = Math.ceil(ms / 1000);
+	const [value, unit] = s < 60 ? [s, "second"] : s < 3600 ? [Math.ceil(s / 60), "minute"] : [Math.ceil(s / 3600), "hour"];
+	return new Intl.NumberFormat(locale(), { style: "unit", unit, unitDisplay: "long" }).format(value);
+}
 
 /** A file dropped from outside the browser, with its path under the drop folder. */
 type Dropped = { file: File; name: string };
@@ -249,7 +325,8 @@ function TreeDir({
 	}, [open, fetched, rev, entry.path]);
 
 	const { edit } = useContext(EditContext);
-	const dropTarget = useContext(DropContext) === entry.path;
+	const tree = useContext(TreeContext);
+	const status = gitStatus(tree.git, relativePath(tree.cwd, entry.path), true);
 	const renaming = edit?.kind === "rename" && edit.path === entry.path;
 	const adding = edit && edit.kind !== "rename" && edit.parent === entry.path ? edit : null;
 
@@ -259,13 +336,15 @@ function TreeDir({
 				<NameRow depth={depth} dir initial={entry.name} />
 			) : (
 				<ListRow
-					onClick={() => onToggle(entry.path)}
+					onClick={(e) => {
+						if (!tree.pick(entry.path, e)) onToggle(entry.path);
+					}}
 					data-path={entry.path}
 					data-dir=""
 					draggable
-					onDragStart={dragRow(entry.path)}
+					onDragStart={(e) => tree.dragStart(entry.path, e)}
 					onContextMenu={(e) => onMenu(entry, e)}
-					className={dropTarget ? "bg-neutral-800" : ""}
+					className={rowBg(tree, entry.path)}
 					muted={entry.hidden}
 					size="body"
 					aria-expanded={open}
@@ -276,7 +355,7 @@ function TreeDir({
 					<span className="flex w-4 shrink-0 justify-center text-neutral-500" aria-hidden>
 						{open ? <CaretDown size={14} /> : <CaretRight size={14} />}
 					</span>
-					<span className="fade-edge min-w-0 flex-1">{entry.name}</span>
+					<span className={`fade-edge min-w-0 flex-1 ${status ? statusStyle(status).tone : ""}`}>{entry.name}</span>
 				</ListRow>
 			)}
 			{open && adding && <NameRow depth={depth + 1} dir={adding.kind === "folder"} initial="" />}
@@ -323,16 +402,22 @@ function TreeFile({
 	onMenu: RowMenu;
 }) {
 	const { edit } = useContext(EditContext);
+	const tree = useContext(TreeContext);
 	if (edit?.kind === "rename" && edit.path === entry.path) {
 		return <NameRow depth={depth} dir={false} initial={entry.name} />;
 	}
+	const status = gitStatus(tree.git, relativePath(tree.cwd, entry.path), false);
+	const mark = status ? statusStyle(status) : null;
 	return (
 		<ListRow
-			onClick={() => onOpen(entry.path)}
+			onClick={(e) => {
+				if (!tree.pick(entry.path, e)) onOpen(entry.path);
+			}}
 			data-path={entry.path}
 			draggable
-			onDragStart={dragRow(entry.path)}
+			onDragStart={(e) => tree.dragStart(entry.path, e)}
 			onContextMenu={(e) => onMenu(entry, e)}
+			className={rowBg(tree, entry.path)}
 			selected={active}
 			muted={entry.hidden}
 			size="body"
@@ -340,7 +425,8 @@ function TreeFile({
 			style={{ paddingLeft: `${depth * 12 + 4}px`, paddingRight: 0 }}
 		>
 			<FileGlyph name={entry.name} />
-			<span className="fade-edge min-w-0 flex-1">{entry.name}</span>
+			<span className={`fade-edge min-w-0 flex-1 ${mark?.tone ?? ""}`}>{entry.name}</span>
+			{mark && <span className={`shrink-0 pr-3 font-mono text-meta ${mark.tone}`}>{mark.letter}</span>}
 		</ListRow>
 	);
 }
@@ -400,31 +486,46 @@ export function Explorer({
 	 */
 	const [openDirs, setOpenDirs] = useState<Set<string>>(() => new Set(readExplorerOpen(cwd)));
 	/** `root`: opened on the empty area below the rows, acting on the project itself. */
-	const [menu, setMenu] = useState<{ entry: PiwFileEntry; x: number; y: number; root?: boolean } | null>(
-		null,
-	);
+	/** `targets`: the paths it acts on, several when opened on a picked row. */
+	const [menu, setMenu] = useState<{
+		entry: PiwFileEntry;
+		targets: string[];
+		x: number;
+		y: number;
+		root?: boolean;
+	} | null>(null);
 	const [edit, setEdit] = useState<NameEdit | null>(null);
 	/** Cut or copied, waiting for Paste. Cut is a move, so it is used up by one paste. */
-	const [clip, setClip] = useState<{ path: string; cut: boolean } | null>(null);
-	/** Project-relative paths git reports as changed, read when a menu opens. */
-	const [changed, setChanged] = useState<Set<string>>(() => new Set());
+	const [clip, setClip] = useState<{ paths: string[]; cut: boolean } | null>(null);
+	/** Git's changes in the project, re-read with the tree. */
+	const [changes, setChanges] = useState<{ status: string; path: string }[]>([]);
+	const git = useMemo(() => gitMarks(changes), [changes]);
 	/** An error to show once the refresh that follows it has re-read the tree. */
 	const afterRefresh = useRef<string | null>(null);
 	/** The folder under a drag in progress, or null. */
 	const [dropDir, setDropDir] = useState<string | null>(null);
+	/** Rows picked with Ctrl- or Shift-click; a plain click clears them. */
+	const [marked, setMarked] = useState<Set<string>>(() => new Set());
+	/** The last clicked row, where a Shift-click range starts. */
+	const anchor = useRef<string | null>(null);
+	/** An upload in progress; `shown` once it looks like taking over a second. */
+	const [transfer, setTransfer] = useState<{
+		id: number;
+		count: number;
+		total: number;
+		sent: number;
+		started: number;
+		shown: boolean;
+	} | null>(null);
 
 	const openMenu = useCallback<RowMenu>((entry, e) => {
 		e.preventDefault();
-		// Not a repo, or git failed: no "Open Changes", nothing else lost.
-		if (!entry.dir) {
-			void unwrap(api.git.changes.$get({ query: { cwd } }))
-				.then((r) => setChanged(new Set(r.files.map((f) => f.path))))
-				.catch(() => setChanged(new Set()));
-		}
+		const targets = marked.has(entry.path) ? topmost([...marked]) : [entry.path];
+		if (!marked.has(entry.path)) setMarked(new Set());
 		// A keyboard-raised menu reports (0,0); anchor it to the row instead.
 		const box = e.currentTarget.getBoundingClientRect();
-		setMenu({ entry, x: e.clientX || box.left + 16, y: e.clientY || box.bottom });
-	}, [cwd]);
+		setMenu({ entry, targets, x: e.clientX || box.left + 16, y: e.clientY || box.bottom });
+	}, [marked]);
 
 	/** Run a menu action, closing the menu first. */
 	const act = (fn: () => void | Promise<void>) => () => {
@@ -457,6 +558,69 @@ export function Explorer({
 	);
 
 	const tree = useRef<HTMLDivElement>(null);
+
+	const collapseAll = () => {
+		setOpenDirs(new Set());
+		writeExplorerOpen(cwd, []);
+	};
+
+	/** Open every folder, level by level, up to EXPAND_ALL_CAP; hidden ones stay shut. */
+	const expandAll = async () => {
+		const found: string[] = [];
+		for (let level = [cwd]; level.length && found.length < EXPAND_ALL_CAP; ) {
+			const lists = await Promise.all(level.map((d) => listDir(d).catch(() => [])));
+			level = lists
+				.flat()
+				.filter((e) => e.dir && !e.hidden)
+				.map((e) => e.path)
+				.slice(0, EXPAND_ALL_CAP - found.length);
+			found.push(...level);
+		}
+		setOpenDirs((prev) => {
+			const next = new Set([...prev, ...found]);
+			writeExplorerOpen(cwd, [...next]);
+			return next;
+		});
+	};
+
+	/*
+	 * Selection keys on a row click. Ctrl (Cmd) toggles one row, Shift picks
+	 * every visible row between the last clicked and this one. A plain click
+	 * clears the picks and does the row's usual thing.
+	 */
+	const pick = (path: string, e: MouseEvent) => {
+		if (e.shiftKey && anchor.current && tree.current) {
+			const rows = [...tree.current.querySelectorAll<HTMLElement>("[data-path]")].map((r) => r.dataset.path);
+			const a = rows.indexOf(anchor.current);
+			const b = rows.indexOf(path);
+			if (a >= 0 && b >= 0) {
+				setMarked(new Set(rows.slice(Math.min(a, b), Math.max(a, b) + 1) as string[]));
+				return true;
+			}
+		}
+		if (e.ctrlKey || e.metaKey) {
+			// The first Ctrl-click also keeps the row clicked before it, as VS Code does.
+			const from = anchor.current;
+			setMarked((prev) => {
+				const next = new Set(prev.size || !from ? prev : [from]);
+				if (!next.delete(path)) next.add(path);
+				return next;
+			});
+			anchor.current = path;
+			return true;
+		}
+		anchor.current = path;
+		if (marked.size) setMarked(new Set());
+		return false;
+	};
+
+	/** Dragging a picked row drags every picked row. */
+	const dragStart = (path: string, e: DragEvent) => {
+		const paths = marked.has(path) ? topmost([...marked]) : [path];
+		dragged = paths;
+		e.dataTransfer.setData(PATH_DRAG_TYPE, JSON.stringify(paths));
+		e.dataTransfer.effectAllowed = "move";
+	};
 
 	/*
 	 * Reveal: open every folder between the project and the file, then wait
@@ -538,17 +702,15 @@ export function Explorer({
 	const paste = async (dir: string) => {
 		if (!clip) return;
 		if (clip.cut) {
-			const to = `${dir}/${clip.path.slice(clip.path.lastIndexOf("/") + 1)}`;
-			if (to !== clip.path) {
-				guard(clip.path);
-				await unwrap(api.files.move.$post({ json: { from: clip.path, to } }));
-				onPathChange(clip.path, to);
-			}
+			await moveInto(clip.paths, dir);
 			setClip(null);
 		} else {
-			await unwrap(api.files.copy.$post({ json: { from: clip.path, toDir: dir } }));
+			try {
+				for (const from of clip.paths) await unwrap(api.files.copy.$post({ json: { from, toDir: dir } }));
+			} finally {
+				refresh();
+			}
 		}
-		refresh();
 	};
 
 	// A drag resting on a closed folder opens it, so a deep target can be reached.
@@ -566,21 +728,29 @@ export function Explorer({
 		return row.dataset.dir === undefined ? parentOf(path) : path;
 	};
 
-	/** Whether a row may be moved into `dir`: not its own folder, itself, or inside itself. */
-	const canMove = (from: string, dir: string) =>
-		dir !== parentOf(from) && dir !== from && !dir.startsWith(`${from}/`);
+	/** Whether rows may move into `dir`: none into itself, and not all already there. */
+	const canMove = (paths: string[], dir: string) =>
+		paths.every((p) => dir !== p && !dir.startsWith(`${p}/`)) && paths.some((p) => parentOf(p) !== dir);
 
 	const showDir = (dir: string) => {
 		if (dir !== cwd && !openDirs.has(dir)) toggleDir(dir);
 	};
 
-	const moveInto = async (from: string, dir: string) => {
-		guard(from);
-		const to = `${dir}/${from.slice(from.lastIndexOf("/") + 1)}`;
-		await unwrap(api.files.move.$post({ json: { from, to } }));
-		onPathChange(from, to);
+	/** Move rows into `dir`, skipping any already there. All are checked for unsaved edits first. */
+	const moveInto = async (paths: string[], dir: string) => {
+		const moving = paths.filter((p) => parentOf(p) !== dir);
+		for (const p of moving) guard(p);
+		try {
+			for (const from of moving) {
+				const to = `${dir}/${from.slice(from.lastIndexOf("/") + 1)}`;
+				await unwrap(api.files.move.$post({ json: { from, to } }));
+				onPathChange(from, to);
+			}
+		} finally {
+			setMarked(new Set());
+			refresh();
+		}
 		showDir(dir);
-		refresh();
 	};
 
 	/** Upload what was dropped from outside; one failure does not stop the rest. */
@@ -590,21 +760,86 @@ export function Explorer({
 			if (s instanceof File) files.push({ file: s, name: s.name });
 			else await walkEntry(s, "", files);
 		}
-		const results = await Promise.allSettled(files.map((f) => uploadFile(f.file, { dir, name: f.name })));
+		const id = Date.now();
+		const total = files.reduce((n, f) => n + f.file.size, 0);
+		const sent = files.map(() => 0);
+		const started = performance.now();
+		setTransfer({ id, count: files.length, total, sent: 0, started, shown: false });
+		/*
+		 * Shown once the upload looks like taking over a second, estimated from
+		 * the rate so far, or when it simply still runs at one second: a quick
+		 * drop never flashes a bar.
+		 */
+		const update = (late = false) =>
+			setTransfer((tr) => {
+				if (tr?.id !== id) return tr;
+				const now = sent.reduce((a, b) => a + b, 0);
+				const took = performance.now() - started;
+				const slow = late || (took > 200 && now > 0 && (took * total) / now - took > 1000);
+				return { ...tr, sent: now, shown: tr.shown || slow };
+			});
+		const late = setTimeout(() => update(true), 1000);
+		const results = await Promise.allSettled(
+			files.map((f, i) =>
+				uploadFile(f.file, { dir, name: f.name }, (n) => {
+					sent[i] = n;
+					update();
+				}),
+			),
+		).finally(() => {
+			clearTimeout(late);
+			setTransfer((tr) => (tr?.id === id ? null : tr));
+		});
 		const errors = results.flatMap((r) => (r.status === "rejected" ? [String(r.reason?.message ?? r.reason)] : []));
 		afterRefresh.current = errors.length ? errors.join("\n") : null;
 		showDir(dir);
 		refresh();
 	};
 
-	const trash = async (entry: PiwFileEntry) => {
-		guard(entry.path);
-		if (!window.confirm(t("Move \"{name}\" to the Trash?", { name: entry.name }))) return;
-		await unwrap(api.files.trash.$post({ json: { path: entry.path } }));
-		onPathChange(entry.path, null);
-		if (clip && (clip.path === entry.path || clip.path.startsWith(`${entry.path}/`))) setClip(null);
-		refresh();
+	const trash = async (paths: string[]) => {
+		for (const p of paths) guard(p);
+		const ask =
+			paths.length === 1
+				? t("Move \"{name}\" to the Trash?", { name: paths[0].slice(paths[0].lastIndexOf("/") + 1) })
+				: plural(paths.length, "Move {n} item to the Trash?", "Move {n} items to the Trash?");
+		if (!window.confirm(ask)) return;
+		try {
+			for (const path of paths) {
+				await unwrap(api.files.trash.$post({ json: { path } }));
+				onPathChange(path, null);
+				setClip((c) => (c?.paths.some((q) => q === path || q.startsWith(`${path}/`)) ? null : c));
+			}
+		} finally {
+			setMarked(new Set());
+			refresh();
+		}
 	};
+
+	useEffect(() => {
+		if (!cwd) return;
+		let live = true;
+		// Not a repo, or git failed: no colours and no "Open Changes", nothing else lost.
+		void unwrap(api.git.changes.$get({ query: { cwd } }))
+			.then((r) => live && setChanges(r.files))
+			.catch(() => live && setChanges([]));
+		return () => {
+			live = false;
+		};
+	}, [cwd, rev]);
+
+	/*
+	 * Re-read the tree when something changes on disk in the project folder or
+	 * an open one: the server watches those (not the whole repo) and says so.
+	 * Reconnects when folders open or close, which is cheap.
+	 */
+	useEffect(() => {
+		if (!cwd) return;
+		const q = new URLSearchParams({ root: cwd });
+		for (const d of openDirs) if (d.startsWith(`${cwd}/`)) q.append("dir", d.slice(cwd.length + 1));
+		const events = new EventSource(`/api/files/watch?${q}`);
+		events.onmessage = () => setManual((n) => n + 1);
+		return () => events.close();
+	}, [cwd, openDirs]);
 
 	useEffect(() => {
 		if (!cwd) return;
@@ -633,6 +868,12 @@ export function Explorer({
 				<IconButton size="sm" className="ml-auto" onClick={refresh} label={t("Refresh explorer")}>
 					<ArrowClockwise size={16} />
 				</IconButton>
+				<IconButton size="sm" onClick={() => void expandAll().catch(fail)} label={t("Expand all folders")}>
+					<ArrowsOutLineVertical size={16} />
+				</IconButton>
+				<IconButton size="sm" onClick={collapseAll} label={t("Collapse all folders")}>
+					<ArrowsInLineVertical size={16} />
+				</IconButton>
 			</PanelHeader>
 			{children}
 
@@ -643,7 +884,7 @@ export function Explorer({
 			)}
 
 			<EditContext.Provider value={{ edit, done: finishEdit }}>
-			<DropContext.Provider value={dropDir}>
+			<TreeContext.Provider value={{ cwd, dropDir, marked, pick, dragStart, git }}>
 				<ScrollPane
 					ref={tree}
 					className="min-h-0 flex-1"
@@ -654,6 +895,8 @@ export function Explorer({
 						if (!internal && !e.dataTransfer.types.includes("Files")) return;
 						const dir = dropTargetOf(e);
 						if (internal && (!dragged || !canMove(dragged, dir))) return setDropDir(null);
+						// A drop from outside while a pick is showing is about neither.
+						if (!internal && marked.size) setMarked(new Set());
 						e.preventDefault();
 						e.dataTransfer.dropEffect = internal ? "move" : "copy";
 						setDropDir(dir);
@@ -668,10 +911,12 @@ export function Explorer({
 					onDrop={(e) => {
 						setDropDir(null);
 						const dir = dropTargetOf(e);
-						const from = e.dataTransfer.getData(PATH_DRAG_TYPE);
-						if (from) {
+						const raw = e.dataTransfer.getData(PATH_DRAG_TYPE);
+						if (raw) {
 							e.preventDefault();
-							if (canMove(from, dir)) void moveInto(from, dir).catch(fail);
+							const paths = dragged;
+							dragged = null;
+							if (paths && canMove(paths, dir)) void moveInto(paths, dir).catch(fail);
 							return;
 						}
 						if (!e.dataTransfer.types.includes("Files")) return;
@@ -687,8 +932,16 @@ export function Explorer({
 					onContextMenu={(e) => {
 						if (e.target !== e.currentTarget) return;
 						e.preventDefault();
+						setMarked(new Set());
 						const name = cwd.slice(cwd.lastIndexOf("/") + 1);
-						setMenu({ entry: { name, path: cwd, dir: true, hidden: false }, x: e.clientX, y: e.clientY, root: true });
+						const entry = { name, path: cwd, dir: true, hidden: false };
+						setMenu({ entry, targets: [cwd], x: e.clientX, y: e.clientY, root: true });
+					}}
+					onClick={(e) => {
+						if (e.target === e.currentTarget && marked.size) setMarked(new Set());
+					}}
+					onKeyDown={(e) => {
+						if (e.key === "Escape" && marked.size) setMarked(new Set());
 					}}
 				>
 					{edit && edit.kind !== "rename" && edit.parent === cwd && (
@@ -719,15 +972,47 @@ export function Explorer({
 						),
 					)}
 				</ScrollPane>
-			</DropContext.Provider>
+			</TreeContext.Provider>
 			</EditContext.Provider>
+
+			{transfer?.shown && (() => {
+				const { count, total, sent, started } = transfer;
+				const took = performance.now() - started;
+				const left = sent >= total ? t("finishing…") : sent > 0 ? t("{time} left", { time: formatDuration(((total - sent) * took) / sent) }) : "";
+				const parts = [
+					plural(count, "Uploading {n} file", "Uploading {n} files"),
+					t("{sent} of {total}", { sent: formatBytes(sent), total: formatBytes(total) }),
+					left,
+				];
+				return (
+					<div role="status" className="border-t border-neutral-800 px-3 py-2 text-meta text-neutral-400">
+						{parts.filter(Boolean).join(" · ")}
+						<div className="mt-1.5 h-1 overflow-hidden rounded-full bg-neutral-800">
+							<div className="h-full rounded-full bg-amber-400" style={{ width: `${total ? (sent / total) * 100 : 100}%` }} />
+						</div>
+					</div>
+				);
+			})()}
 
 			{menu && (() => {
 				const m = menu.entry;
 				const dir = m.dir ? m.path : parentOf(m.path);
+				const targets = menu.targets;
+				/** Opened on several picked rows: only what applies to all of them at once. */
+				const many = targets.length > 1;
+				const clipName = clip
+					? clip.paths.length === 1
+						? clip.paths[0].slice(clip.paths[0].lastIndexOf("/") + 1)
+						: plural(clip.paths.length, "{n} item", "{n} items")
+					: "";
 				return (
-					<ContextMenu x={menu.x} y={menu.y} label={m.name} onClose={() => setMenu(null)}>
-						{m.dir ? (
+					<ContextMenu
+						x={menu.x}
+						y={menu.y}
+						label={many ? plural(targets.length, "{n} item", "{n} items") : m.name}
+						onClose={() => setMenu(null)}
+					>
+						{many ? null : m.dir ? (
 							<>
 								<MenuItem icon={<FilePlus size={16} />} role="menuitem" autoFocus onClick={act(() => startNew("file", m.path))}>
 									{t("New File…")}
@@ -744,28 +1029,31 @@ export function Explorer({
 								<MenuItem icon={<SquareSplitHorizontal size={16} />} role="menuitem" onClick={act(() => onOpenSide(m.path))}>
 									{t("Open to the Side")}
 								</MenuItem>
-								{changed.has(relativePath(cwd, m.path)) && (
+								{git.files.has(relativePath(cwd, m.path)) && (
 									<MenuItem icon={<GitDiff size={16} />} role="menuitem" onClick={act(() => onOpenDiff("", relativePath(cwd, m.path)))}>
 										{t("Open Changes")}
 									</MenuItem>
 								)}
 							</>
 						)}
-						<MenuSeparator />
+						{!many && <MenuSeparator />}
 						{!menu.root && (
 							<MenuItem icon={<ChatText size={16} />}
 								role="menuitem"
+								autoFocus={many}
 								disabled={!onAddToChat}
 								title={onAddToChat ? undefined : t("Open a session first")}
-								onClick={act(() => onAddToChat?.(relativePath(cwd, m.path)))}
+								onClick={act(() => onAddToChat?.(targets.map((p) => relativePath(cwd, p)).join(" ")))}
 							>
 								{t("Add to Chat")}
 							</MenuItem>
 						)}
-						<MenuItem icon={<TerminalWindow size={16} />} role="menuitem" disabled={!onOpenTerminal} onClick={act(() => onOpenTerminal?.(dir))}>
-							{t("Open in Terminal")}
-						</MenuItem>
-						{!m.dir && (
+						{!many && (
+							<MenuItem icon={<TerminalWindow size={16} />} role="menuitem" disabled={!onOpenTerminal} onClick={act(() => onOpenTerminal?.(dir))}>
+								{t("Open in Terminal")}
+							</MenuItem>
+						)}
+						{!m.dir && !many && (
 							<MenuItem icon={<DownloadSimple size={16} />}
 								role="menuitem"
 								onClick={act(() => {
@@ -779,13 +1067,13 @@ export function Explorer({
 							</MenuItem>
 						)}
 						<MenuSeparator />
-						<MenuItem icon={<Path size={16} />} role="menuitem" onClick={act(() => navigator.clipboard.writeText(m.path))}>
+						<MenuItem icon={<Path size={16} />} role="menuitem" onClick={act(() => navigator.clipboard.writeText(targets.join("\n")))}>
 							{t("Copy Path")}
 						</MenuItem>
 						{!menu.root && (
 							<MenuItem icon={<ArrowElbowDownRight size={16} />}
 								role="menuitem"
-								onClick={act(() => navigator.clipboard.writeText(relativePath(cwd, m.path)))}
+								onClick={act(() => navigator.clipboard.writeText(targets.map((p) => relativePath(cwd, p)).join("\n")))}
 							>
 								{t("Copy Relative Path")}
 							</MenuItem>
@@ -793,35 +1081,39 @@ export function Explorer({
 						<MenuSeparator />
 						{!menu.root && (
 							<>
-								<MenuItem icon={<Scissors size={16} />} role="menuitem" onClick={act(() => setClip({ path: m.path, cut: true }))}>
+								<MenuItem icon={<Scissors size={16} />} role="menuitem" onClick={act(() => setClip({ paths: targets, cut: true }))}>
 									{t("Cut")}
 								</MenuItem>
-								<MenuItem icon={<Copy size={16} />} role="menuitem" onClick={act(() => setClip({ path: m.path, cut: false }))}>
+								<MenuItem icon={<Copy size={16} />} role="menuitem" onClick={act(() => setClip({ paths: targets, cut: false }))}>
 									{t("Copy")}
 								</MenuItem>
 							</>
 						)}
-						<MenuItem icon={<Clipboard size={16} />}
-							role="menuitem"
-							disabled={!clip}
-							title={clip ? t("Paste {name} into {dir}", { name: clip.path.slice(clip.path.lastIndexOf("/") + 1), dir: relativePath(cwd, dir) }) : undefined}
-							onClick={act(() => paste(dir))}
-						>
-							{t("Paste")}
-						</MenuItem>
+						{!many && (
+							<MenuItem icon={<Clipboard size={16} />}
+								role="menuitem"
+								disabled={!clip}
+								title={clip ? t("Paste {name} into {dir}", { name: clipName, dir: relativePath(cwd, dir) }) : undefined}
+								onClick={act(() => paste(dir))}
+							>
+								{t("Paste")}
+							</MenuItem>
+						)}
 						{!menu.root && (
 							<>
 								<MenuSeparator />
-								<MenuItem icon={<PencilSimple size={16} />}
-									role="menuitem"
-									onClick={act(() => {
-										guard(m.path);
-										setEdit({ kind: "rename", path: m.path, name: m.name, dir: m.dir });
-									})}
-								>
-									{t("Rename…")}
-								</MenuItem>
-								<MenuItem icon={<Trash size={16} />} role="menuitem" onClick={act(() => trash(m))}>
+								{!many && (
+									<MenuItem icon={<PencilSimple size={16} />}
+										role="menuitem"
+										onClick={act(() => {
+											guard(m.path);
+											setEdit({ kind: "rename", path: m.path, name: m.name, dir: m.dir });
+										})}
+									>
+										{t("Rename…")}
+									</MenuItem>
+								)}
+								<MenuItem icon={<Trash size={16} />} role="menuitem" onClick={act(() => trash(targets))}>
 									{t("Delete")}
 								</MenuItem>
 							</>

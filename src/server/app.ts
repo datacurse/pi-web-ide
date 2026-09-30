@@ -33,14 +33,12 @@ export function createApp(deps: Deps) {
 	// inflates by ~33%. The real per-image ceiling is enforced in agent.ts, where
 	// a rejection can be reported to the user; hitting THIS limit yields an
 	// opaque 413, so it deliberately sits well above the limit that produces a
-	// good error. It also bounds /api/upload.
-	app.use(
-		"/api/*",
-		bodyLimit({
-			maxSize: 64 * 1024 * 1024,
-			onError: (c) => c.json({ error: "request body too large" }, 413),
-		}),
-	);
+	// good error. /api/upload is exempt: it streams to disk, never into memory.
+	const limit = bodyLimit({
+		maxSize: 64 * 1024 * 1024,
+		onError: (c) => c.json({ error: "request body too large" }, 413),
+	});
+	app.use("/api/*", (c, next) => (c.req.path === "/api/upload" ? next() : limit(c, next)));
 
 	// `no-store` on every /api answer. Nothing under /api is worth caching — the
 	// page polls it — and a revalidatable answer is how a stale 304 once stood

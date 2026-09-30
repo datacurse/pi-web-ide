@@ -6,13 +6,14 @@
  * appends to session files, so a sync moves only the new lines. Aliases of one
  * machine share one mirror, named after the first alias in the config. A
  * machine is its /etc/machine-id AND hostname: VPSes cloned from one image
- * share the id. A machine that is off keeps its last mirror.
+ * share the id. A machine that is off keeps its last mirror. A machine that
+ * runs pwi also has its tool metrics and workout sets mirrored.
  */
 
 import { execFile } from "node:child_process";
 import { mkdirSync, readFileSync } from "node:fs";
 import { homedir, hostname } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 import { readStateFile, statePath, writeStateFile } from "./state.js";
 
@@ -30,6 +31,8 @@ export interface Machine {
 	root: string;
 	/** The mirror of its pwi's tool metrics (tool-metrics/FORMAT.md), kept apart so it is never read as sessions. */
 	metrics: string;
+	/** The mirror of its pwi's workout sets (workouts.ts); absent until it has any. */
+	workouts: string;
 	/** When its mirror last synced, ISO. */
 	synced: string;
 	/** Why the last sync did not reach it. */
@@ -73,8 +76,10 @@ function readIndex(): Index {
 
 const mirror = (id: string) => join(statePath("machines"), id.replace(/[^\w.-]/g, "_"));
 const metricsMirror = (id: string) => join(statePath("machine-metrics"), id.replace(/[^\w.-]/g, "_"));
+const workoutsMirror = (id: string) => join(statePath("machine-workouts"), `${id.replace(/[^\w.-]/g, "_")}.json`);
 /** Where pwi keeps them on the other machine, assuming its default state dir. */
 const REMOTE_METRICS = ".config/pi-web-ide/tool-metrics/";
+const REMOTE_WORKOUTS = ".config/pi-web-ide/workouts.json";
 
 function localId(): string {
 	let id = "";
@@ -100,6 +105,11 @@ async function probe(host: string): Promise<{ id: string; pi: boolean }> {
 	);
 	const lines = stdout.split("\n").map((l) => l.trim());
 	return { id: lines[0] ?? "", pi: lines.includes("pi") };
+}
+
+async function copyFile(host: string, from: string, dest: string): Promise<void> {
+	mkdirSync(dirname(dest), { recursive: true });
+	await run("rsync", ["-a", "-e", `ssh ${SSH.join(" ")}`, `${host}:${from}`, dest], { timeout: 60_000 });
 }
 
 async function rsync(host: string, dest: string, from = ".pi/agent/sessions/"): Promise<void> {
@@ -165,7 +175,10 @@ async function sync(): Promise<void> {
 				async () => {
 					index.synced[p.id] = new Date().toISOString();
 					// Only machines that run pwi have them; without, it has estimates only.
-					await rsync(p.host, metricsMirror(p.id), REMOTE_METRICS).catch(() => {});
+					await Promise.all([
+						rsync(p.host, metricsMirror(p.id), REMOTE_METRICS).catch(() => {}),
+						copyFile(p.host, REMOTE_WORKOUTS, workoutsMirror(p.id)).catch(() => {}),
+					]);
 				},
 				(err: unknown) => {
 					errors.set(p.id, reason(err));
@@ -192,7 +205,14 @@ export function machines(): Machine[] {
 		const synced = id && index.synced[id];
 		if (!id || !synced || seen.has(id)) continue;
 		seen.add(id);
-		out.push({ name: host, root: mirror(id), metrics: metricsMirror(id), synced, error: errors.get(id) });
+		out.push({
+			name: host,
+			root: mirror(id),
+			metrics: metricsMirror(id),
+			workouts: workoutsMirror(id),
+			synced,
+			error: errors.get(id),
+		});
 	}
 	return out;
 }

@@ -8,7 +8,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { hc } from "hono/client";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createApp } from "./app.js";
@@ -122,12 +122,23 @@ test("a non-JSON body is not parsed, so a form POST carries nothing", async () =
 });
 
 test("a body over 64 MB is refused before any route reads it", async () => {
-	const r = await app.request("/api/upload?name=big", {
+	const r = await app.request("/api/projects", {
 		method: "POST",
 		body: new Uint8Array(64 * 1024 * 1024 + 1),
-		headers: HOST,
+		headers: { ...HOST, "Content-Type": "application/json" },
 	});
 	assert.equal(r.status, 413);
+});
+
+test("an upload is streamed to disk with no size cap, and never overwrites", async () => {
+	const size = 64 * 1024 * 1024 + 1;
+	const url = `/api/upload?dir=${encodeURIComponent(project)}&name=upload/big.bin`;
+	const r = await app.request(url, { method: "POST", body: new Uint8Array(size), headers: HOST });
+	assert.equal(r.status, 200);
+	assert.equal(statSync(join(project, "upload", "big.bin")).size, size);
+	const again = await app.request(url, { method: "POST", body: new Uint8Array(1), headers: HOST });
+	assert.equal(again.status, 400);
+	assert.equal(statSync(join(project, "upload", "big.bin")).size, size);
 });
 
 test("a route that throws answers 500 with the message", async () => {

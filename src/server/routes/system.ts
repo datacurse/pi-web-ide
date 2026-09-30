@@ -15,7 +15,7 @@ import {
 } from "../projects.js";
 import { readPersonality, writePersonality, writeRemind } from "../personality.js";
 import { pwiExtensions, writePwiExtension, writeWorkoutOff } from "../pwiExtensions.js";
-import { addWorkout, isWorkoutKind, readWorkouts } from "../workouts.js";
+import { addWorkout, isWorkoutKind } from "../workouts.js";
 import { PRODUCT } from "../../shared/types.js";
 import { query, json, type Deps, type Env } from "../http.js";
 
@@ -221,9 +221,7 @@ export function systemRoutes({ cwd: CWD, model: MODEL, registry, piVersion: PI_V
 			return c.json(writePwiExtension("toolMetrics", b.on), 200);
 		})
 
-		/** Every set done for the workout gate, for the Workouts tab in Stats. */
-		.get("/workouts", (c) => c.json({ sets: readWorkouts() }, 200))
-
+		/** Log a set done for the workout gate; Stats reads them with /stats. */
 		.post("/workouts", json<{ kind: string }>(), async (c) => {
 			const b = c.req.valid("json");
 			if (!isWorkoutKind(b.kind)) return c.json({ error: "unknown exercise" }, 400);
