@@ -129,7 +129,7 @@ export function writeThinkingMode(mode: ThinkingMode): void {
  * first. A name pi holds always wins.
  */
 export function readLatestPrompt(): boolean {
-	return readStored(LATEST_PROMPT_KEY) === "1";
+	return readStored(LATEST_PROMPT_KEY) !== "0";
 }
 
 export function writeLatestPrompt(on: boolean): void {

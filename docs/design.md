@@ -705,7 +705,7 @@ everything that is a property of *this browser* rather than of the agent:
 | theme | `pwi:theme` | `mocha` |
 | show thinking | `pwi:showThinking` | on |
 | tool calls | `pwi:tools` | `live` |
-| session titles from latest prompt | `pwi:latestPrompt` | off |
+| session titles from latest prompt | `pwi:latestPrompt` | on |
 | notify when finished | `pwi:notify` | off |
 
 All of them live in `localStorage` via `src/web/prefs.ts`, which validates on
