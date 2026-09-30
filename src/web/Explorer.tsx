@@ -50,6 +50,7 @@ import { locale, plural, t } from "./i18n.js";
 import { ScrollPane } from "./OverlayScrollbar.js";
 import { uploadFile } from "./Attachments.js";
 import { statusStyle } from "./SourceControl.js";
+import { GIT_CHANGED } from "./GitActions.js";
 
 /** Rows dragged within the tree; the data is their paths, as JSON. */
 const PATH_DRAG_TYPE = "application/x-pwi-path";
@@ -478,6 +479,8 @@ export function Explorer({
 	/** Bumped by the refresh button. */
 	const [manual, setManual] = useState(0);
 	const rev = `${revision}:${manual}`;
+	/** Bumped after a commit or push, which changes git's view but not the files. */
+	const [gitRev, setGitRev] = useState(0);
 	/*
 	 * The expanded directories, restored per project. App keys this panel on
 	 * `cwd`, so a project switch remounts it and the lazy initialisers (this,
@@ -825,7 +828,13 @@ export function Explorer({
 		return () => {
 			live = false;
 		};
-	}, [cwd, rev]);
+	}, [cwd, rev, gitRev]);
+
+	useEffect(() => {
+		const on = () => setGitRev((n) => n + 1);
+		window.addEventListener(GIT_CHANGED, on);
+		return () => window.removeEventListener(GIT_CHANGED, on);
+	}, []);
 
 	/*
 	 * Re-read the tree when something changes on disk in the project folder or

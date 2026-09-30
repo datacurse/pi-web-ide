@@ -75,12 +75,18 @@ export function Workout({ kind, onDone }: { kind: WorkoutKind; onDone: () => voi
 			ref={ref}
 			aria-label={t("Workout")}
 			onCancel={(e) => e.preventDefault()}
+			// Enter is Done once it unlocks, wherever focus sits in the dialog.
+			onKeyDown={(e) => {
+				if (e.key !== "Enter") return;
+				e.preventDefault();
+				if (left === 0) done();
+			}}
 			className="mx-auto mt-[20vh] hidden w-[min(24rem,92vw)] flex-col items-center gap-4 rounded-md border border-neutral-800 bg-neutral-950 p-6 text-neutral-100 shadow-2xl backdrop:bg-black/50 backdrop:backdrop-blur-sm open:flex"
 		>
 			<WorkoutFigure kind={kind} className="w-full text-amber-400" />
 			<p className="text-center text-title">{exerciseText(kind).task}</p>
 			<p className="text-meta text-neutral-500">{t("pi is already answering.")}</p>
-			<Button variant="primary" disabled={left > 0} onClick={done} autoFocus={left === 0}>
+			<Button variant="primary" disabled={left > 0} onClick={done}>
 				{left > 0 ? t("Done in {n}s", { n: left }) : t("Done")}
 			</Button>
 		</dialog>

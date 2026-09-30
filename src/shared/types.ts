@@ -240,15 +240,17 @@ export interface PwiExtensions {
  * The workout gate's exercises: how much one set is, in reps or seconds held,
  * and how long before Done unlocks (getting down and back up included).
  * For calories (shared/calories.ts): `met`, rough values after the Compendium
- * of Physical Activities (calisthenics light 2.8, moderate 3.8, vigorous 8.0;
- * squats 5.0), and `rep`, the seconds one rep takes.
+ * of Physical Activities (calisthenics light 2.8, moderate 3.8, vigorous 8.0),
+ * with situps, squats, lunges and burpees tuned to common per-rep figures
+ * (situps ~0.25 kcal, squats and lunges ~0.35, burpees ~1), and `rep`, the
+ * seconds one rep takes.
  */
 export const EXERCISES = {
 	pushups: { amount: 10, unit: "reps", wait: 15, met: 8, rep: 2 },
-	situps: { amount: 10, unit: "reps", wait: 15, met: 8, rep: 2.5 },
-	squats: { amount: 10, unit: "reps", wait: 15, met: 5, rep: 2.5 },
-	lunges: { amount: 10, unit: "reps", wait: 20, met: 3.8, rep: 3 },
-	burpees: { amount: 5, unit: "reps", wait: 20, met: 8, rep: 5 },
+	situps: { amount: 10, unit: "reps", wait: 15, met: 5, rep: 2.5 },
+	squats: { amount: 10, unit: "reps", wait: 15, met: 7, rep: 2.5 },
+	lunges: { amount: 10, unit: "reps", wait: 20, met: 6, rep: 3 },
+	burpees: { amount: 5, unit: "reps", wait: 20, met: 12, rep: 5 },
 	jumpingJacks: { amount: 20, unit: "reps", wait: 15, met: 8, rep: 1 },
 	calfRaises: { amount: 15, unit: "reps", wait: 15, met: 2.8, rep: 1.5 },
 	gluteBridges: { amount: 10, unit: "reps", wait: 20, met: 3.8, rep: 2.5 },
