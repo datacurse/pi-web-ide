@@ -1,15 +1,15 @@
 import type { HighlightStyle } from "@codemirror/language";
 
-import { darkPlus, loadCodeMirror } from "./codemirror.js";
+import { loadCodeMirror, syntaxStyle } from "./codemirror.js";
 
 export type Token = { text: string; cls: string };
 
 let style: Promise<HighlightStyle> | undefined;
 
-/** The editor's Dark+ colours, with their CSS put on the page once (no editor mounts it here). */
-function darkPlusStyle() {
+/** The app theme's syntax colours, with their CSS put on the page once (no editor mounts it here). */
+function appSyntaxStyle() {
 	style ??= loadCodeMirror().then((cm) => {
-		const s = darkPlus(cm);
+		const s = syntaxStyle(cm, "tk");
 		const el = document.createElement("style");
 		el.textContent = s.module?.getRules() ?? "";
 		document.head.append(el);
@@ -32,7 +32,7 @@ export async function highlightLines(lang: string, text: string): Promise<Token[
 	const desc =
 		LanguageDescription.matchLanguageName(languages, lang) ?? LanguageDescription.matchFilename(languages, `x.${lang}`);
 	if (!desc) return null;
-	const [support, hs] = await Promise.all([desc.load(), darkPlusStyle()]);
+	const [support, hs] = await Promise.all([desc.load(), appSyntaxStyle()]);
 	const lines: Token[][] = [[]];
 	highlightCode(
 		text,

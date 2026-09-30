@@ -12,7 +12,11 @@
  * makes every open after the first instant.
  */
 
+import type { HighlightStyle } from "@codemirror/language";
 import type { Decoration, DecorationSet, EditorView, ViewUpdate } from "@codemirror/view";
+import type { Tag } from "@lezer/highlight";
+
+import { SYNTAX_ROLES, type SyntaxRole } from "./vscodeTheme.js";
 
 export interface CmModules {
 	HighlightStyle: typeof import("@codemirror/language").HighlightStyle;
@@ -138,78 +142,76 @@ export function wrapIndent(cm: CmModules) {
 }
 
 /**
- * VS Code's Dark+ syntax colours.
+ * Syntax colors as CSS variables, so a theme switch recolors every open
+ * editor, diff and chat code block without rebuilding a view.
  *
- * Written out here rather than pulled from a theme package, because a theme
- * package brings its OWN editor chrome — background, gutters, selection,
- * cursor — and would be the one panel in the app ignoring the CSS-variable
- * palette every other surface follows. That is the mistake Terminal.tsx
- * documents having made once with xterm. This is only the token colours; the
- * chrome stays in the `.cm-editor-host` block in index.css.
- *
- * The hexes are Dark+'s literal token colours, so they are deliberately NOT
- * CSS variables: a theme that recolours them is a different theme, not this
- * one. Switching the app palette to Latte will leave code looking like VS
- * Code, which is exactly what was asked for.
- *
- * One hard-coded theme. If a second one is ever wanted, this becomes
- * a table keyed by theme id and a Compartment to swap it live.
+ * Each role of SYNTAX_SCOPES (vscodeTheme.ts) is one `--<prefix>-<role>`
+ * color plus optional `-fs`/`-fw`/`-td`, written onto <html> by applyTheme
+ * (prefs.ts). An unset variable makes its property fall back to the
+ * surrounding text, which is what a theme that leaves a role uncolored means.
+ * `tk` is the app theme's syntax (chat, diffs), `etk` the editor's own.
  */
-export function darkPlus(cm: CmModules) {
-	const t = cm.tags;
-	return cm.HighlightStyle.define([
-		{ tag: t.comment, color: "#6a9955" },
-		{ tag: t.lineComment, color: "#6a9955" },
-		{ tag: t.blockComment, color: "#6a9955" },
-		{ tag: t.docComment, color: "#6a9955" },
-		// Keywords and operators share Dark+'s blue/magenta split: control flow
-		// (if/return/for) is magenta, everything else keyword-ish is blue.
-		{ tag: t.keyword, color: "#569cd6" },
-		{ tag: t.controlKeyword, color: "#c586c0" },
-		{ tag: t.moduleKeyword, color: "#c586c0" },
-		{ tag: t.operatorKeyword, color: "#569cd6" },
-		{ tag: t.definitionKeyword, color: "#569cd6" },
-		{ tag: t.self, color: "#569cd6" },
-		{ tag: t.null, color: "#569cd6" },
-		{ tag: t.bool, color: "#569cd6" },
-		{ tag: t.string, color: "#ce9178" },
-		{ tag: t.special(t.string), color: "#d7ba7d" },
-		{ tag: t.regexp, color: "#d16969" },
-		{ tag: t.escape, color: "#d7ba7d" },
-		{ tag: t.number, color: "#b5cea8" },
-		{ tag: t.integer, color: "#b5cea8" },
-		{ tag: t.float, color: "#b5cea8" },
-		{ tag: t.function(t.variableName), color: "#dcdcaa" },
-		{ tag: t.function(t.propertyName), color: "#dcdcaa" },
-		{ tag: t.definition(t.function(t.variableName)), color: "#dcdcaa" },
-		{ tag: t.definition(t.variableName), color: "#9cdcfe" },
-		{ tag: t.variableName, color: "#9cdcfe" },
-		{ tag: t.propertyName, color: "#9cdcfe" },
-		{ tag: t.definition(t.propertyName), color: "#9cdcfe" },
-		{ tag: t.attributeName, color: "#9cdcfe" },
-		{ tag: t.attributeValue, color: "#ce9178" },
-		{ tag: t.typeName, color: "#4ec9b0" },
-		{ tag: t.className, color: "#4ec9b0" },
-		{ tag: t.namespace, color: "#4ec9b0" },
-		{ tag: t.standard(t.typeName), color: "#4ec9b0" },
-		// JSX/HTML tag names are Dark+'s element blue, distinct from keyword blue.
-		{ tag: t.tagName, color: "#569cd6" },
-		{ tag: t.angleBracket, color: "#808080" },
-		{ tag: t.constant(t.variableName), color: "#4fc1ff" },
-		{ tag: t.labelName, color: "#c8c8c8" },
-		{ tag: t.macroName, color: "#c586c0" },
-		{ tag: t.operator, color: "#d4d4d4" },
-		{ tag: t.punctuation, color: "#d4d4d4" },
-		{ tag: t.separator, color: "#d4d4d4" },
-		{ tag: t.bracket, color: "#d4d4d4" },
-		{ tag: t.invalid, color: "#f44747" },
-		// Markdown, which the pane opens as often as code.
-		{ tag: t.heading, color: "#569cd6", fontWeight: "bold" },
-		{ tag: t.link, color: "#3794ff", textDecoration: "underline" },
-		{ tag: t.emphasis, fontStyle: "italic" },
-		{ tag: t.strong, fontWeight: "bold" },
-		{ tag: t.strikethrough, textDecoration: "line-through" },
-	]);
+const SYNTAX_TAGS: Record<SyntaxRole, (t: CmModules["tags"]) => Tag[]> = {
+	comment: (t) => [t.comment, t.lineComment, t.blockComment],
+	docComment: (t) => [t.docComment],
+	keyword: (t) => [t.keyword],
+	controlKeyword: (t) => [t.controlKeyword],
+	moduleKeyword: (t) => [t.moduleKeyword],
+	operatorKeyword: (t) => [t.operatorKeyword],
+	definitionKeyword: (t) => [t.definitionKeyword],
+	modifier: (t) => [t.modifier],
+	self: (t) => [t.self],
+	constantLanguage: (t) => [t.null, t.bool],
+	atom: (t) => [t.atom],
+	string: (t) => [t.string, t.attributeValue],
+	templateString: (t) => [t.special(t.string)],
+	regexp: (t) => [t.regexp],
+	escape: (t) => [t.escape],
+	number: (t) => [t.number, t.integer, t.float],
+	function: (t) => [t.function(t.variableName), t.function(t.propertyName), t.definition(t.function(t.variableName))],
+	variable: (t) => [t.variableName, t.definition(t.variableName)],
+	property: (t) => [t.propertyName, t.definition(t.propertyName)],
+	attribute: (t) => [t.attributeName],
+	type: (t) => [t.typeName, t.standard(t.typeName)],
+	class: (t) => [t.className],
+	namespace: (t) => [t.namespace],
+	tag: (t) => [t.tagName],
+	tagBracket: (t) => [t.angleBracket],
+	constant: (t) => [t.constant(t.variableName)],
+	label: (t) => [t.labelName],
+	macro: (t) => [t.macroName],
+	operator: (t) => [t.operator],
+	punctuation: (t) => [t.punctuation, t.separator, t.bracket],
+	invalid: (t) => [t.invalid],
+	heading: (t) => [t.heading],
+	link: (t) => [t.link, t.url],
+	quote: (t) => [t.quote],
+	monospace: (t) => [t.monospace],
+	emphasis: (t) => [t.emphasis],
+	strong: (t) => [t.strong],
+	strikethrough: (t) => [t.strikethrough],
+};
+
+const styles = new Map<string, HighlightStyle>();
+
+export function syntaxStyle(cm: CmModules, prefix: "tk" | "etk"): HighlightStyle {
+	let style = styles.get(prefix);
+	if (!style) {
+		style = cm.HighlightStyle.define(
+			SYNTAX_ROLES.map((role) => {
+				const v = `--${prefix}-${role}`;
+				return {
+					tag: SYNTAX_TAGS[role](cm.tags),
+					color: `var(${v})`,
+					fontStyle: `var(${v}-fs)`,
+					fontWeight: `var(${v}-fw)`,
+					textDecoration: `var(${v}-td)`,
+				};
+			}),
+		);
+		styles.set(prefix, style);
+	}
+	return style;
 }
 
 /**

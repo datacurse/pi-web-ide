@@ -81,6 +81,7 @@ import {
 	LIST_MIN_PX,
 	LIST_MAX_PX,
 	writeListWidth,
+	readEditorTheme,
 	readTheme,
 	readToolMode,
 	readUserMode,
@@ -227,6 +228,7 @@ export default function App() {
 	/** The row holding the panel, the chat and the divider between them. */
 	const splitRow = useRef<HTMLDivElement | null>(null);
 	const [theme, setTheme] = useState<ThemeId>(readTheme);
+	const [editorTheme, setEditorTheme] = useState(readEditorTheme);
 	const [language, setLanguageState] = useState<Language>(getLanguage);
 	const [thinkingMode, setThinkingMode] = useState<ThinkingMode>(readThinkingMode);
 	const [toolMode, setToolMode] = useState<ToolMode>(readToolMode);
@@ -248,7 +250,7 @@ export default function App() {
 	 * and on mount it also normalises an attribute that storage set to
 	 * something no longer recognised.
 	 */
-	useEffect(() => applyTheme(theme), [theme]);
+	useEffect(() => applyTheme(theme, editorTheme), [theme, editorTheme]);
 	useEffect(() => applyHideScrollbars(hideScrollbars), [hideScrollbars]);
 	// Settings owns later changes; this paints the stored fade once.
 	useEffect(() => applyChatFade(readChatFade()), []);
@@ -1676,6 +1678,8 @@ export default function App() {
 			<Settings
 				theme={theme}
 				onTheme={setTheme}
+				editorTheme={editorTheme}
+				onEditorTheme={setEditorTheme}
 				language={language}
 				onLanguage={changeLanguage}
 				thinkingMode={thinkingMode}

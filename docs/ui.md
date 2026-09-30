@@ -122,7 +122,19 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
 - Accent and primary action: `amber-*`. Errors: `red-*`. Success: `green-*`.
 - Every separator (panel edges, list row rules, table rows) is `border-neutral-800`; no fainter `neutral-900` rules.
 - The side panel's, the session list's (px width, 180–640, default 288; replaces the list's `border-l` on wide) and the terminal's resize dividers are 1px `neutral-800` lines like any other edge, drawn as a `border` on a zero-size box (a 1px `bg` box straddles two device pixels under display scaling and looks thicker than the bordered edges); their hit area is an invisible `after` box (9px; 13px on the side panel's), `z-10` so neighbors cannot cover it; the side panel's and session list's lean 2px left (and 10px / 6px right) to stay off the scrollbar to their left. They use the scrollbar's timing: amber after 300ms of hover (100ms fade), timed in JS by `hoverIntent` (ui.tsx) because a CSS `hover:delay-300` still flashed on a fast pass, the resize cursor shows on the same 300ms (a press shows both at once), then 1s after the pointer leaves they fade back over 500ms.
-- Settings lists themes in two groups, Dark then Light (`light` flag in `prefs.ts`).
+- Settings lists themes in two groups, Dark then Light (`light` flag in `prefs.ts`), built-ins first,
+  in a `max-h-96` scroll box because VS Code's themes make it sixty rows.
+- VS Code themes (`@shikijs/themes`, converted at build time by `scripts/vscode-themes.ts` into
+  `vscodeThemes.json`; mapping in `vscodeTheme.ts`) fill the same 18 `--ct-*` slots, as inline
+  variables on `<html>`: editor background → base, a darker sidebar (or the editor darkened) → mantle,
+  greys evenly spaced from background to text, accents from the terminal ANSI colors. Peach (amber,
+  the primary accent) is the theme's own emphasis color (badge, button, focus ring), so on Dark+ it is
+  blue. Accents are lifted to 3:1 against the background. Their Catppuccin entries are hidden, the
+  built-ins are those.
+- Syntax colors are CSS variables (`syntaxStyle` in `codemirror.ts`): chat code blocks and diffs use
+  the app theme's (`--tk-*`; Claude → Dark+/Light+, Catppuccin → its VS Code port), the editor its own
+  (`--etk-*`, chrome `--ed-*`). Settings > Appearance > `Editor theme` defaults to `Match app theme`
+  (`pwi:editorTheme`). `data-light` on `<html>` marks any light app theme.
 
 ## Composer
 
@@ -551,18 +563,25 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
   Escape inside it goes to the shell, not the dialog.
 - Stats has two tabs in its header, `Overview` and `Workouts` (`Button sm`, `subtle`/`ghost`,
   `aria-pressed`, like the machine filter, which applies to both: each machine running pwi has its
-  `workouts.json` mirrored with its sessions, and `/api/stats` returns the sets with their machine). Workouts: four tiles (sets today, this week, in total, active
-  days), then `Sets per day, last 30 days` full width: a canvas like By hour (same `axis()` y-axis
-  and gridlines, 160px tall, 4px gaps), one column a day stacked by exercise bottom up in table
-  order, a 1px gap between exercises, every fifth day labelled back from today, tooltip lists the
-  day's sets per exercise. Each exercise has its own themed colour token (`ex-*` in `@theme`: one
+  `workouts.json` mirrored with its sessions, and `/api/stats` returns the sets with their machine). Workouts: first `Today`, side by side, sets and (with a body saved)
+  kcal as progress cards: `done / done + planned` (`text-title` over `text-ui neutral-500`), the label
+  right, an `h-2` `rounded-full` bar (`amber-500` on `neutral-800`) and `N done, M planned`, planned
+  being what the schedule still has today. The plan and the body come inside `/api/stats`, not as
+  separate requests: those queued behind the machine sync (the browser's six connections per host are
+  mostly held by event streams) and showed `0 planned` and no calories. Then tiles (sets this week, in total, active
+  days), then `Sets per day, done and planned` full width: 15 days back, today, 14 ahead (today in the
+  middle, labelled `Today` in `neutral-200`, then every fifth day either side). A canvas like By hour
+  (same `axis()` y-axis and gridlines, 160px tall, 4px gaps), one column a day stacked by exercise
+  bottom up in table order, a 1px gap between segments: done sets solid, planned ones (the rest of
+  today, and each coming day planned whole from `From` to `To`, `plan.ahead` from `daysAhead` in
+  `shared/rotation.ts`) the same colours at 35% on top. Tooltip: `N done, M planned` and each
+  exercise as `done + planned`. Each exercise has its own themed colour token (`ex-*` in `@theme`: one
   `--ct-*` accent each, plank and wall sit mixed). Under it the Exercises table (`max-w-2xl`: the
   figure's first pose `w-12` in `neutral-400`, a `size-2.5` colour dot that is the chart's legend,
-  name, today, this week, total; seconds shown as `20s`). With a body saved: a second row of tiles
-  (kcal today, this week, in total, per active day), a `kcal` column in the table, and a Sets / kcal
+  name, today, planned (still to come today, `neutral-500`), this week, total; seconds shown as `20s`).
+  With a body saved: kcal tiles (this week, in total, per active day), a `kcal` column in the table, and a Sets / kcal
   toggle (`Button sm`, `subtle`/`ghost`, `aria-pressed`) beside the chart's label that restacks the
-  columns by kcal. Without one, a `text-meta` line says where to enter it. Today's planned sets sit on
-  top of today's column in `neutral-700` (`+N planned` in its tooltip). Under the chart, side by side:
+  columns by kcal. Without one, a `text-meta` line says where to enter it. Under the chart, side by side:
   `Up next` (the next 8 planned: time or `now`, colour dot, name, muscle groups, then `+N more planned
   today`) and `Muscle load now` (`Bars` of each group's current load, with a `text-meta` line on how
   it decays).

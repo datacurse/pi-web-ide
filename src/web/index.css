@@ -465,8 +465,7 @@
 	display: none;
 }
 
-:root[data-theme="latte"],
-:root[data-theme="claude-light"] {
+:root[data-light] {
 	color-scheme: light;
 }
 
@@ -530,8 +529,7 @@
 	line-height: 1;
 	color: var(--seti-dark);
 }
-:root[data-theme="latte"] .seti-icon,
-:root[data-theme="claude-light"] .seti-icon {
+:root[data-light] .seti-icon {
 	color: var(--seti-light);
 }
 
@@ -1025,12 +1023,12 @@ input[type="number"]::-webkit-outer-spin-button {
 }
 
 /*
- * The editor's CodeMirror, in VS Code's Dark+ chrome.
+ * The editor's CodeMirror, in its own VS Code theme's chrome.
  *
- * This is the ONE surface that does not follow the app palette, deliberately:
- * the token colours are Dark+'s literal hexes (see darkPlus() in
- * codemirror.ts), and neutral-950 chrome around them reads as a theme someone
- * half-applied. Code looks like code here; the app around it still themes.
+ * Settings > Editor theme picks a VS Code theme for the editor (by default the
+ * one matching the app theme); applyTheme (prefs.ts) writes its chrome as
+ * `--ed-*` and its syntax as `--etk-*` onto <html>. Its own background around
+ * its own token colours, so a light editor theme in a dark app still reads.
  *
  * Plus the two things an EDITABLE view needs that a read-only one does not:
  * it has to fill the pane so clicking empty space below the last line still
@@ -1042,8 +1040,8 @@ input[type="number"]::-webkit-outer-spin-button {
 }
 
 .cm-editor-host .cm-editor {
-	background: #1f1f1f;
-	color: #d4d4d4;
+	background: var(--ed-bg);
+	color: var(--ed-fg);
 }
 
 /* Without this the focused editor wears the browser's default focus ring. */
@@ -1057,22 +1055,22 @@ input[type="number"]::-webkit-outer-spin-button {
 }
 
 .cm-editor-host .cm-gutters {
-	background: #1f1f1f;
-	color: #6e7681;
+	background: var(--ed-bg);
+	color: var(--ed-gutter);
 	border-right: none;
 }
 
 .cm-editor-host .cm-activeLine {
-	background: #ffffff0a;
+	background: var(--ed-line);
 }
 
 .cm-editor-host .cm-activeLineGutter {
 	background: transparent;
-	color: #cccccc;
+	color: var(--ed-gutter-active);
 }
 
 .cm-editor-host .cm-cursor {
-	border-left-color: #aeafad;
+	border-left-color: var(--ed-cursor);
 }
 
 /*
@@ -1118,46 +1116,46 @@ input[type="number"]::-webkit-outer-spin-button {
 /* Specific enough to beat CodeMirror's light base theme (#d7d4f0 when focused). */
 .cm-editor-host .cm-editor.cm-focused .cm-scroller .cm-selectionLayer .cm-selectionBackground,
 .cm-editor-host .cm-content ::selection {
-	background: #264f78;
+	background: var(--ed-selection);
 }
 
 .cm-editor-host .cm-editor .cm-selectionLayer .cm-selectionBackground {
-	background: #3a3d41;
+	background: var(--ed-selection-inactive);
 }
 
 .cm-editor-host .cm-selectionMatch {
-	background: #add6ff26;
+	background: var(--ed-selection-match);
 }
 
 .cm-editor-host .cm-matchingBracket {
-	background: #0064001a;
-	outline: 1px solid #888888;
+	background: var(--ed-bracket);
+	outline: 1px solid var(--ed-bracket-border);
 }
 
 /* The search panel and autocomplete popup are chrome CodeMirror draws itself,
    and default to a light theme that flashes white over a dark editor. */
 .cm-editor-host .cm-panels {
-	background: #252526;
-	color: #cccccc;
-	border-color: #454545;
+	background: var(--ed-widget);
+	color: var(--ed-widget-fg);
+	border-color: var(--ed-widget-border);
 }
 
 .cm-editor-host .cm-panel input,
 .cm-editor-host .cm-panel button {
-	background: #3c3c3c;
-	color: #cccccc;
-	border: 1px solid #454545;
+	background: var(--ed-input);
+	color: var(--ed-widget-fg);
+	border: 1px solid var(--ed-widget-border);
 }
 
 .cm-editor-host .cm-tooltip {
-	background: #252526;
-	color: #cccccc;
-	border: 1px solid #454545;
+	background: var(--ed-widget);
+	color: var(--ed-widget-fg);
+	border: 1px solid var(--ed-widget-border);
 }
 
 .cm-editor-host .cm-tooltip-autocomplete ul li[aria-selected] {
-	background: #04395e;
-	color: #ffffff;
+	background: var(--ed-list-active);
+	color: var(--ed-list-active-fg);
 }
 
 /* Settings search matches (CSS Custom Highlight API, set in Settings.tsx). */

@@ -24,8 +24,13 @@ import {
 	writeChatFadeOn,
 	writeSettingsExpanded,
 	type ChatFade,
+	EDITOR_THEMES,
+	editorThemeOf,
 	LANGUAGES,
+	MATCH_APP,
+	paletteVars,
 	THEMES,
+	VSCODE_THEMES,
 	THINKING_MODES,
 	TOOL_MODES,
 	USER_MODES,
@@ -39,6 +44,7 @@ import {
 	type UserMode,
 } from "./prefs.js";
 import { t } from "./i18n.js";
+import { SYNTAX_ROLES } from "./vscodeTheme.js";
 
 const CATEGORIES = [
 	{ id: "appearance", label: "Appearance", icon: <Palette size={16} /> },
@@ -64,13 +70,85 @@ function Swatch({ theme }: { theme: ThemeId }) {
 			aria-hidden
 			className="flex shrink-0 overflow-hidden rounded-sm border border-neutral-700"
 		>
-			<span data-theme={theme} className="flex">
+			{/* A VS Code theme's palette is not in index.css, so it comes along inline. */}
+			<span data-theme={theme} style={paletteVars(theme) as CSSProperties} className="flex">
 				<span className="block size-4 bg-neutral-950" />
 				<span className="block size-4 bg-neutral-800" />
 				<span className="block size-4 bg-neutral-100" />
 				<span className="block size-4 bg-amber-400" />
 			</span>
 		</span>
+	);
+}
+
+/** An editor theme's background, then its keyword, string and function colors. */
+function EditorSwatch({ theme }: { theme: string }) {
+	const th = VSCODE_THEMES[theme];
+	const [kw, str, fn] = (["keyword", "string", "function"] as const).map(
+		(role) => th.syntax[SYNTAX_ROLES.indexOf(role)].split("|")[0] || th.editor[1],
+	);
+	return (
+		<span aria-hidden className="flex shrink-0 overflow-hidden rounded-sm border border-neutral-700">
+			{[th.editor[0], kw, str, fn].map((c, i) => (
+				<span key={i} className="block size-4" style={{ background: c }} />
+			))}
+		</span>
+	);
+}
+
+/**
+ * A radio list of themes in two groups, Dark then Light, capped in height:
+ * with VS Code's themes it runs to sixty rows, which would bury every setting
+ * below it. `lead` is an optional first row outside the groups.
+ */
+function ThemeList({
+	name,
+	label,
+	themes,
+	value,
+	onChange,
+	swatch,
+	lead,
+}: {
+	name: string;
+	label: string;
+	themes: { id: string; label: string; light: boolean }[];
+	value: string;
+	onChange: (id: string) => void;
+	swatch: (id: string) => ReactNode;
+	lead?: { id: string; label: string; swatch: ReactNode };
+}) {
+	const row = (id: string, text: string, sw: ReactNode) => (
+		<OptionRow key={id} selected={id === value}>
+			<input
+				type="radio"
+				name={name}
+				value={id}
+				checked={id === value}
+				onChange={() => onChange(id)}
+				className="sr-only"
+			/>
+			{sw}
+			<span className="flex-1">{text}</span>
+			<span aria-hidden className={id === value ? "text-amber-400" : "invisible"}>
+				{"\u2713"}
+			</span>
+		</OptionRow>
+	);
+	return (
+		// Real radios, visually hidden: the group gets arrow-key navigation,
+		// roving focus and the right screen reader announcement for free.
+		<div role="radiogroup" aria-label={label} className="flex max-h-96 flex-col gap-0.5 overflow-y-auto">
+			{lead && row(lead.id, lead.label, lead.swatch)}
+			{themes.map((th, i) => [
+				th.light !== themes[i - 1]?.light && (
+					<div key={th.light ? "light" : "dark"} className="px-2 pt-1 pb-1 text-ui text-neutral-300">
+						{th.light ? t("Light") : t("Dark")}
+					</div>
+				),
+				row(th.id, th.label, swatch(th.id)),
+			])}
+		</div>
 	);
 }
 
@@ -325,6 +403,8 @@ function ChatFadePreview({ fade }: { fade: ChatFade }) {
 export function Settings({
 	theme,
 	onTheme,
+	editorTheme,
+	onEditorTheme,
 	language,
 	onLanguage,
 	thinkingMode,
@@ -347,6 +427,8 @@ export function Settings({
 }: {
 	theme: ThemeId;
 	onTheme: (theme: ThemeId) => void;
+	editorTheme: string;
+	onEditorTheme: (theme: string) => void;
 	language: Language;
 	onLanguage: (language: Language) => void;
 	thinkingMode: ThinkingMode;
@@ -434,32 +516,34 @@ export function Settings({
 			label: t("Theme"),
 			text: `color colour palette dark light ${THEMES.map((th) => th.label).join(" ")}`,
 			node: (
-				// Real radios, visually hidden: the group gets arrow-key navigation,
-				// roving focus and the right screen reader announcement for free.
-				<div role="radiogroup" aria-label={t("Theme")} className="flex flex-col gap-0.5">
-					{THEMES.map((th, i) => [
-						th.light !== THEMES[i - 1]?.light && (
-							<div key={th.light ? "light" : "dark"} className="px-2 pt-1 pb-1 text-ui text-neutral-300">
-								{th.light ? t("Light") : t("Dark")}
-							</div>
-						),
-						<OptionRow key={th.id} selected={th.id === theme}>
-							<input
-								type="radio"
-								name="theme"
-								value={th.id}
-								checked={th.id === theme}
-								onChange={() => onTheme(th.id)}
-								className="sr-only"
-							/>
-							<Swatch theme={th.id} />
-							<span className="flex-1">{th.label}</span>
-							<span aria-hidden className={th.id === theme ? "text-amber-400" : "invisible"}>
-								{"\u2713"}
-							</span>
-						</OptionRow>,
-					])}
-				</div>
+				<ThemeList
+					name="theme"
+					label={t("Theme")}
+					themes={THEMES}
+					value={theme}
+					onChange={onTheme}
+					swatch={(id) => <Swatch theme={id} />}
+				/>
+			),
+		},
+		{
+			category: "appearance",
+			label: t("Editor theme"),
+			text: `code editor syntax color colour highlighting vs code ${EDITOR_THEMES.map((th) => th.label).join(" ")}`,
+			node: (
+				<ThemeList
+					name="editor-theme"
+					label={t("Editor theme")}
+					themes={EDITOR_THEMES}
+					value={editorTheme}
+					onChange={onEditorTheme}
+					swatch={(id) => <EditorSwatch theme={id} />}
+					lead={{
+						id: MATCH_APP,
+						label: t("Match app theme"),
+						swatch: <EditorSwatch theme={editorThemeOf(theme, MATCH_APP)} />,
+					}}
+				/>
 			),
 		},
 		{

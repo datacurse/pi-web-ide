@@ -56,3 +56,14 @@ assert.equal(night[0]!.at, "2025-01-02T09:00:00.000Z");
 // Nothing on, nothing planned.
 assert.deepEqual(plan([], [], day, 0, 0, now), []);
 console.log("plan: ok");
+
+// Days ahead: each a full working day, 9:00 to 18:00 every 30 minutes = 18 sets.
+const { daysAhead } = await import("./rotation.ts");
+const week = daysAhead(kinds, day, now, 3);
+assert.equal(week.length, 3);
+assert.equal(week[0]!.at, "2025-01-02T09:00:00.000Z");
+for (const d of week) assert.equal(Object.values(d.kinds).reduce((a, b) => a + b, 0), 18);
+const t0 = performance.now();
+daysAhead(kinds, { every: 5, from: 9, to: 22 }, now, 14);
+assert.ok(performance.now() - t0 < 1000, "fourteen 5-minute days plan in well under a second");
+console.log("days ahead: ok");

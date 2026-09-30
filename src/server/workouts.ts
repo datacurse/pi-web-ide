@@ -4,7 +4,10 @@
  */
 
 import { EXERCISES, WORKOUT_KINDS, type WorkoutKind, type WorkoutPlan, type WorkoutSet } from "../shared/types.js";
-import { fatigue, plan } from "../shared/rotation.js";
+import { daysAhead, fatigue, plan } from "../shared/rotation.js";
+
+/** How many days the plan reaches past today, for the chart in Stats. */
+const AHEAD_DAYS = 14;
 import { machines } from "./machines.js";
 import { pwiExtensions } from "./pwiExtensions.js";
 import { readStateFile, statePath, writeStateFile } from "./state.js";
@@ -72,6 +75,7 @@ export function workoutPlan(now = Date.now()): WorkoutPlan {
 		on: s.workout,
 		schedule: s.workoutSchedule,
 		planned: s.workout ? plan(sets, on, s.workoutSchedule, since, Date.parse(state.snoozedUntil ?? "") || 0, now) : [],
+		ahead: s.workout ? daysAhead(on, s.workoutSchedule, now, AHEAD_DAYS) : [],
 		fatigue: fatigue(sets, now),
 	};
 }

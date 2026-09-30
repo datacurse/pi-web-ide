@@ -24,14 +24,21 @@
 					localStorage.getItem("pwi:theme") || "mocha";
 				if (localStorage.getItem("pwi:hideScrollbars") === "1")
 					document.documentElement.dataset.scrollbars = "hidden";
+				// The variables applyTheme last wrote: a VS Code theme's palette,
+				// the syntax colors, and whether it is light.
+				var boot = JSON.parse(localStorage.getItem("pwi:themeBoot") || "{}");
+				if (boot.style) document.documentElement.style.cssText = boot.style;
+				if (boot.light) document.documentElement.dataset.light = "";
 			} catch {}
 		</script>
 		<!--
 		  index.css arrives with the JS bundle, so until then the page would be
 		  white. Paint each theme's backdrop (--ct-mantle) now; keep in sync.
+		  A VS Code theme's comes from the inline variables set above.
 		-->
 		<style>
-			html { background: #181825; color-scheme: dark; }
+			html { background: var(--ct-mantle, #181825); color-scheme: dark; }
+			html[data-light] { color-scheme: light; }
 			html[data-theme="macchiato"] { background: #1e2030; }
 			html[data-theme="frappe"] { background: #292c3c; }
 			html[data-theme="claude"] { background: #141414; }

@@ -221,6 +221,13 @@ export interface StatsView {
 	turns: StatsTurn[];
 	/** Workout sets from this machine ("") and every mirrored one, by ssh alias. */
 	workouts: (WorkoutSet & { machine: string })[];
+	/**
+	 * The plan and the body for calories, in the same answer as the sets: as
+	 * separate requests they queued behind the machine sync (the browser's six
+	 * connections are mostly held by event streams) and showed as empty.
+	 */
+	workoutPlan: WorkoutPlan;
+	workoutProfile: WorkoutProfile | null;
 	sessions: number;
 	machines: StatsMachine[];
 }
@@ -258,6 +265,11 @@ export interface WorkoutPlan {
 	on: boolean;
 	schedule: WorkoutSchedule;
 	planned: WorkoutPlanned[];
+	/**
+	 * The next days, each planned as a full working day from `from` to `to`
+	 * (shared/rotation.ts `daysAhead`): when it starts, and how many sets of each exercise.
+	 */
+	ahead: { at: string; kinds: Partial<Record<WorkoutKind, number>> }[];
 	/** Each muscle group's load right now (shared/rotation.ts `fatigue`). */
 	fatigue: Record<Muscle, number>;
 }

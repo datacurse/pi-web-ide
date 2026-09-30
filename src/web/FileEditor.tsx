@@ -24,7 +24,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowClockwise, FloppyDisk } from "@phosphor-icons/react";
 import type { EditorView } from "@codemirror/view";
-import { darkPlus, languageFor, loadCodeMirror, wrapIndent } from "./codemirror.js";
+import { languageFor, loadCodeMirror, syntaxStyle, wrapIndent } from "./codemirror.js";
 import { Button, PanelHeader } from "./ui.js";
 import { api, unwrap } from "./api.js";
 import { t } from "./i18n.js";
@@ -129,7 +129,7 @@ export function FileEditor({
 							cm.indentWithTab,
 						]),
 						...lang,
-						cm.syntaxHighlighting(darkPlus(cm), { fallback: true }),
+						cm.syntaxHighlighting(syntaxStyle(cm, "etk"), { fallback: true }),
 						cm.EditorView.updateListener.of((update) => {
 							if (!update.docChanged) return;
 							setDirty(update.state.doc.toString() !== baseRef.current);

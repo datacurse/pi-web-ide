@@ -105,3 +105,23 @@ export function plan(
 	}
 	return out;
 }
+
+/**
+ * The next `days` days, each planned as a whole working day from `from` to
+ * `to`, as counts per exercise. Each day starts rested; the rotation runs as
+ * it would live.
+ */
+export function daysAhead(
+	on: WorkoutKind[],
+	schedule: WorkoutSchedule,
+	now: number,
+	days: number,
+): { at: string; kinds: Partial<Record<WorkoutKind, number>> }[] {
+	const today = new Date(now);
+	return Array.from({ length: days }, (_, i) => {
+		const start = new Date(today.getFullYear(), today.getMonth(), today.getDate() + i + 1, schedule.from).getTime();
+		const kinds: Partial<Record<WorkoutKind, number>> = {};
+		for (const p of plan([], on, schedule, start - schedule.every * 60_000, 0, start)) kinds[p.kind] = (kinds[p.kind] ?? 0) + 1;
+		return { at: new Date(start).toISOString(), kinds };
+	});
+}

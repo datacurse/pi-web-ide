@@ -9,6 +9,8 @@
  */
 
 import { EMPTY_LAYOUT, parseLayout, type TermLayout } from "./termLayout.js";
+import { EDITOR_KEYS, PALETTE_KEYS, SYNTAX_ROLES, type ConvertedTheme } from "./vscodeTheme.js";
+import vscodeThemes from "./vscodeThemes.json";
 
 export function readStored(key: string): string | null {
 	try {
@@ -38,26 +40,93 @@ export function writeStored(key: string, value: string): void {
  *
  * Labels are whole names rather than a bare flavor: the list is no longer one
  * family, so the dialog cannot prefix them all with "Catppuccin".
+ *
+ * After the built-ins come VS Code's themes (vscodeThemes.json, converted by
+ * scripts/vscode-themes.ts). Their palettes are not in index.css: applyTheme
+ * writes them onto <html> as inline `--ct-*` variables. Their Catppuccin
+ * entries are left out, the hand-tuned built-ins already are those.
  */
-export const THEMES = [
+export const VSCODE_THEMES: Record<string, ConvertedTheme> = vscodeThemes;
+
+const BUILTIN_THEMES = [
 	{ id: "mocha", label: "Catppuccin Mocha", light: false },
 	{ id: "macchiato", label: "Catppuccin Macchiato", light: false },
 	{ id: "frappe", label: "Catppuccin Frappé", light: false },
 	{ id: "claude", label: "Claude", light: false },
 	{ id: "latte", label: "Catppuccin Latte", light: true },
 	{ id: "claude-light", label: "Claude Light", light: true },
-] as const;
+];
 
-export type ThemeId = (typeof THEMES)[number]["id"];
+const vscodeList = (skip: (id: string) => boolean) =>
+	Object.entries(VSCODE_THEMES)
+		.filter(([id]) => !skip(id))
+		.map(([id, th]) => ({ id, label: th.label, light: th.light }))
+		.sort((a, b) => a.label.localeCompare(b.label));
+
+/** Dark first, then light; built-ins lead each group. */
+const darkThenLight = <T extends { light: boolean }>(list: T[]) => [
+	...list.filter((th) => !th.light),
+	...list.filter((th) => th.light),
+];
+
+export const THEMES: { id: string; label: string; light: boolean }[] = darkThenLight([
+	...BUILTIN_THEMES,
+	...vscodeList((id) => id.startsWith("catppuccin-")),
+]);
+
+export type ThemeId = string;
 
 /** Matches the fallback palette on `:root`, and the one index.html assumes. */
 export const DEFAULT_THEME: ThemeId = "mocha";
+
+/** The editor follows the app theme unless the user picks one of its own. */
+export const MATCH_APP = "app";
+
+/** Every VS Code theme can color the editor, Catppuccin included. */
+export const EDITOR_THEMES = darkThenLight(vscodeList(() => false));
+
+/** The VS Code theme whose syntax colors go with an app theme. */
+export function syntaxThemeOf(app: ThemeId): string {
+	if (VSCODE_THEMES[app]) return app;
+	if (app === "claude") return "dark-plus";
+	if (app === "claude-light") return "light-plus";
+	return `catppuccin-${app}`;
+}
+
+/** The theme the editor actually wears. */
+export function editorThemeOf(app: ThemeId, editor: string): string {
+	return editor === MATCH_APP ? syntaxThemeOf(app) : editor;
+}
+
+/** A VS Code theme's `--ct-*` palette, for <html> or a settings swatch. */
+export function paletteVars(id: ThemeId): Record<string, string> | undefined {
+	const th = VSCODE_THEMES[id];
+	return th && Object.fromEntries(PALETTE_KEYS.map((k, i) => [`--ct-${k}`, th.palette[i]]));
+}
+
+/** `--<prefix>-<role>` color plus `-fs`/`-fw`/`-td` for the syntax roles codemirror.ts styles. */
+function syntaxVars(prefix: string, th: ConvertedTheme): [string, string][] {
+	return SYNTAX_ROLES.flatMap((role, i) => {
+		const [color, f] = th.syntax[i].split("|");
+		const name = `--${prefix}-${role}`;
+		const deco = [f.includes("u") && "underline", f.includes("s") && "line-through"].filter(Boolean).join(" ");
+		return [
+			color && [name, color],
+			f.includes("i") && [`${name}-fs`, "italic"],
+			f.includes("b") && [`${name}-fw`, "bold"],
+			deco && [`${name}-td`, deco],
+		].filter((v): v is [string, string] => !!v);
+	});
+}
 
 /**
  * Also hardcoded in the bootstrap script in index.html, which runs before this
  * module is even fetched so the first paint is already in the right flavor.
  */
 const THEME_KEY = "pwi:theme";
+const EDITOR_THEME_KEY = "pwi:editorTheme";
+/** The inline variables and light flag applyTheme last wrote, replayed by index.html before the first paint. */
+const THEME_BOOT_KEY = "pwi:themeBoot";
 
 /** Interface languages, each labelled in itself so it can be found by someone who cannot read the other. */
 export const LANGUAGES = [
@@ -93,9 +162,34 @@ export function readTheme(): ThemeId {
 	return THEMES.some((t) => t.id === stored) ? (stored as ThemeId) : DEFAULT_THEME;
 }
 
-export function applyTheme(id: ThemeId): void {
-	document.documentElement.dataset.theme = id;
+export function readEditorTheme(): string {
+	const stored = readStored(EDITOR_THEME_KEY);
+	return stored && VSCODE_THEMES[stored] ? stored : MATCH_APP;
+}
+
+/**
+ * Paints the app theme and the editor theme. Built-in palettes come from
+ * index.css via `data-theme`; everything else is inline variables on <html>:
+ * a VS Code app theme's `--ct-*`, the app's syntax colors `--tk-*` (chat code
+ * blocks, diffs), and the editor's `--etk-*` syntax and `--ed-*` chrome.
+ */
+export function applyTheme(id: ThemeId, editor: string): void {
+	const root = document.documentElement;
+	const ed = VSCODE_THEMES[editorThemeOf(id, editor)] ?? VSCODE_THEMES["dark-plus"];
+	const vars: [string, string][] = [
+		...Object.entries(paletteVars(id) ?? {}),
+		...syntaxVars("tk", VSCODE_THEMES[syntaxThemeOf(id)] ?? VSCODE_THEMES["dark-plus"]),
+		...syntaxVars("etk", ed),
+		...EDITOR_KEYS.map((k, i): [string, string] => [`--ed-${k}`, ed.editor[i]]),
+	];
+	for (const name of [...root.style]) if (/^--(ct|tk|etk|ed)-/.test(name)) root.style.removeProperty(name);
+	for (const [name, value] of vars) root.style.setProperty(name, value);
+	const light = THEMES.find((th) => th.id === id)?.light ?? false;
+	root.dataset.theme = id;
+	root.toggleAttribute("data-light", light);
 	writeStored(THEME_KEY, id);
+	writeStored(EDITOR_THEME_KEY, editor);
+	writeStored(THEME_BOOT_KEY, JSON.stringify({ light, style: vars.map(([n, v]) => `${n}:${v}`).join(";") }));
 }
 
 /**

@@ -21,7 +21,7 @@ import { ArrowCounterClockwise, Check } from "@phosphor-icons/react";
 import type { EditorView } from "@codemirror/view";
 import type { Hunk, HunkState } from "../shared/hunks.js";
 import { fitHunk } from "../shared/hunks.js";
-import { darkPlus, languageFor, loadCodeMirror, wrapIndent } from "./codemirror.js";
+import { languageFor, loadCodeMirror, syntaxStyle, wrapIndent } from "./codemirror.js";
 import { Button, PanelHeader } from "./ui.js";
 import { api, unwrap } from "./api.js";
 import { t } from "./i18n.js";
@@ -77,7 +77,7 @@ function Merge({ path, before, after }: { path: string; before: string; after: s
 						 * index.css), so a bundled theme would be the one pane
 						 * ignoring the palette.
 						 */
-						cm.syntaxHighlighting(darkPlus(cm), { fallback: true }),
+						cm.syntaxHighlighting(syntaxStyle(cm, "tk"), { fallback: true }),
 					],
 				}),
 			});

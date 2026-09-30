@@ -7,7 +7,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowClockwise } from "@phosphor-icons/react";
-import { EXERCISES, MUSCLES, WORKOUT_KINDS, type StatsTurn, type StatsView, type ToolCost, type UsageSample, type WorkoutKind, type WorkoutPlan, type WorkoutPlanned, type WorkoutProfile, type WorkoutSet } from "../shared/types.js";
+import { EXERCISES, MUSCLES, WORKOUT_KINDS, type StatsTurn, type StatsView, type ToolCost, type UsageSample, type WorkoutKind, type WorkoutPlan, type WorkoutProfile, type WorkoutSet } from "../shared/types.js";
 import { setKcal } from "../shared/calories.js";
 import { exerciseText, muscleName, musclesText } from "./Workout.js";
 import { WorkoutFigure } from "./workoutFigures.js";
@@ -172,7 +172,7 @@ export function Stats({ open, revision, onClose }: { open: boolean; revision?: u
 			</PanelHeader>
 
 			{tab === "workouts" && view && (
-				<Workouts sets={workouts} />
+				<Workouts sets={workouts} plan={view.workoutPlan} profile={view.workoutProfile} />
 			)}
 			{/* Laid out for the page dialog's width; the grids stack on a narrow window. */}
 			<div className={`${tab === "overview" ? "flex" : "hidden"} min-h-0 flex-1 flex-col gap-6 overflow-y-auto p-4`}>
@@ -592,44 +592,38 @@ function Summary({ turns }: { turns: StatsTurn[] }) {
 }
 
 /** The sets done for the workout gate (web/Workout.tsx), filtered like Overview by machine. */
-function Workouts({ sets }: { sets: WorkoutSet[] }) {
-	// The body for calorie estimates and the plan, re-read whenever Stats reloads.
-	const [profile, setProfile] = useState<WorkoutProfile | null>(null);
-	const [plan, setPlan] = useState<WorkoutPlan | null>(null);
-	useEffect(() => {
-		void api["pwi-extensions"]
-			.$get()
-			.then((r) => (r.ok ? r.json() : null))
-			.then((x) => setProfile(x?.workoutProfile ?? null))
-			.catch(() => setProfile(null));
-		void api.workouts.plan
-			.$get()
-			.then((r) => (r.ok ? r.json() : null))
-			.then(setPlan)
-			.catch(() => setPlan(null));
-	}, [sets]);
-	const plannedToday = (plan?.planned ?? []).filter((p) => dayKey(new Date(p.at)) === dayKey(new Date()));
+function Workouts({
+	sets,
+	plan,
+	profile,
+}: {
+	sets: WorkoutSet[];
+	plan: WorkoutPlan;
+	profile: WorkoutProfile | null;
+}) {
+	const plannedToday = plan.planned.filter((p) => dayKey(new Date(p.at)) === dayKey(new Date()));
 	const kcal = (list: WorkoutSet[]) => (profile ? list.reduce((n, s) => n + setKcal(s.kind, s.amount, profile), 0) : 0);
 	const day = (s: WorkoutSet) => dayKey(new Date(s.at));
 	const today = dayKey(new Date());
 	const weekAgo = dayKey(addDays(new Date(), -6));
 	const activeDays = new Set(sets.map(day)).size;
+	const doneToday = sets.filter((s) => day(s) === today);
+	/** Today's planned sets as sets, so kcal and amounts add up the same way. */
+	const aheadToday: WorkoutSet[] = plannedToday.map((p) => ({ ...p, amount: EXERCISES[p.kind].amount }));
 	const tiles: [string, string][] = [
-		[t("Sets today"), num().format(sets.filter((s) => day(s) === today).length)],
 		[t("Sets this week"), num().format(sets.filter((s) => day(s) >= weekAgo).length)],
 		[t("Sets in total"), num().format(sets.length)],
 		[t("Active days"), num().format(activeDays)],
 		...(profile
 			? ([
-					[t("kcal today"), num().format(kcal(sets.filter((s) => day(s) === today)))],
 					[t("kcal this week"), num().format(kcal(sets.filter((s) => day(s) >= weekAgo)))],
 					[t("kcal in total"), num().format(kcal(sets))],
 					[t("kcal per active day"), num().format(activeDays ? kcal(sets) / activeDays : 0)],
 				] as [string, string][])
 			: []),
 	];
-	const sum = (kind: WorkoutKind, from?: string) =>
-		sets.filter((s) => s.kind === kind && (!from || day(s) >= from)).reduce((n, s) => n + s.amount, 0);
+	const sum = (kind: WorkoutKind, from?: string, list = sets) =>
+		list.filter((s) => s.kind === kind && (!from || day(s) >= from)).reduce((n, s) => n + s.amount, 0);
 	const amount = (kind: WorkoutKind, n: number) =>
 		EXERCISES[kind].unit === "seconds" ? t("{n}s", { n: num().format(n) }) : num().format(n);
 
@@ -640,7 +634,23 @@ function Workouts({ sets }: { sets: WorkoutSet[] }) {
 					{t("No sets yet. Turn on Workout under Packages > pwi extensions.")}
 				</p>
 			)}
-			<div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+			<div className="grid gap-2 md:grid-cols-2">
+				<TodayProgress
+					label={t("Sets today")}
+					done={doneToday.length}
+					ahead={aheadToday.length}
+					format={(n) => num().format(n)}
+				/>
+				{profile && (
+					<TodayProgress
+						label={t("kcal today")}
+						done={kcal(doneToday)}
+						ahead={kcal(aheadToday)}
+						format={(n) => num().format(n)}
+					/>
+				)}
+			</div>
+			<div className="grid grid-cols-2 gap-2 md:grid-cols-3">
 				{tiles.map(([label, value]) => (
 					<div key={label} className="rounded-sm border border-neutral-800 px-2 py-1.5">
 						<div className="text-title text-neutral-100 tabular-nums">{value}</div>
@@ -653,21 +663,19 @@ function Workouts({ sets }: { sets: WorkoutSet[] }) {
 					{t("Enter your sex, age, height and weight under Packages > pwi extensions > Workout to see calories.")}
 				</p>
 			)}
-			<WorkoutDays sets={sets} profile={profile} planned={plannedToday} />
-			{plan && (
-				<div className="grid gap-6 md:grid-cols-2">
-					<UpNext plan={plan} />
-					<div>
-						<Bars
-							title={t("Muscle load now")}
-							rows={MUSCLES.map((m) => [muscleName(m), Math.round(plan.fatigue[m] * 10) / 10])}
-						/>
-						<p className="mt-2 text-meta text-neutral-500">
-							{t("Each set adds 1 to the groups it works, halving every 45 minutes. The next set works the freshest.")}
-						</p>
-					</div>
+			<WorkoutDays sets={sets} profile={profile} plan={plan} />
+			<div className="grid gap-6 md:grid-cols-2">
+				<UpNext plan={plan} />
+				<div>
+					<Bars
+						title={t("Muscle load now")}
+						rows={MUSCLES.map((m) => [muscleName(m), Math.round(plan.fatigue[m] * 10) / 10])}
+					/>
+					<p className="mt-2 text-meta text-neutral-500">
+						{t("Each set adds 1 to the groups it works, halving every 45 minutes. The next set works the freshest.")}
+					</p>
 				</div>
-			)}
+			</div>
 			<div className="max-w-2xl">
 				<h3 className={`mb-2 ${sectionLabel}`}>{t("Exercises")}</h3>
 				<table className="w-full text-meta tabular-nums">
@@ -676,6 +684,7 @@ function Workouts({ sets }: { sets: WorkoutSet[] }) {
 							<th />
 							<th className="text-left font-normal">{t("Exercise")}</th>
 							<th className="text-right font-normal">{t("Today")}</th>
+							<th className="text-right font-normal">{t("Planned")}</th>
 							<th className="text-right font-normal">{t("This week")}</th>
 							<th className="text-right font-normal">{t("Total")}</th>
 							{profile && <th className="text-right font-normal">{t("kcal")}</th>}
@@ -693,6 +702,7 @@ function Workouts({ sets }: { sets: WorkoutSet[] }) {
 									{exerciseText(kind).name}
 								</td>
 								<td className="text-right text-neutral-300">{amount(kind, sum(kind, today))}</td>
+								<td className="text-right text-neutral-500">{amount(kind, sum(kind, undefined, aheadToday))}</td>
 								<td className="text-right text-neutral-300">{amount(kind, sum(kind, weekAgo))}</td>
 								<td className="text-right text-neutral-200">{amount(kind, sum(kind))}</td>
 								{profile && (
@@ -704,6 +714,36 @@ function Workouts({ sets }: { sets: WorkoutSet[] }) {
 						))}
 					</tbody>
 				</table>
+			</div>
+		</div>
+	);
+}
+
+/** Today so far against today's whole plan: done, then what the schedule still has planned. */
+function TodayProgress({
+	label,
+	done,
+	ahead,
+	format,
+}: {
+	label: string;
+	done: number;
+	ahead: number;
+	format: (n: number) => string;
+}) {
+	const all = done + ahead;
+	return (
+		<div className="rounded-sm border border-neutral-800 px-3 py-2">
+			<div className="flex items-baseline gap-2">
+				<span className="text-title text-neutral-100 tabular-nums">{format(done)}</span>
+				<span className="text-ui text-neutral-500 tabular-nums">/ {format(all)}</span>
+				<span className="ml-auto text-meta text-neutral-500">{label}</span>
+			</div>
+			<div className="mt-2 h-2 rounded-full bg-neutral-800">
+				<div className="h-full rounded-full bg-amber-500" style={{ width: `${all ? (done / all) * 100 : 0}%` }} />
+			</div>
+			<div className="mt-1 text-meta text-neutral-500">
+				{t("{done} done, {ahead} planned", { done: format(done), ahead: format(ahead) })}
 			</div>
 		</div>
 	);
@@ -740,7 +780,10 @@ function UpNext({ plan }: { plan: WorkoutPlan }) {
 	);
 }
 
-const CHART_DAYS = 30;
+/** Days before today and after it in the workout chart; today sits between them. */
+const CHART_BACK = 15;
+const CHART_AHEAD = 14;
+const CHART_DAYS = CHART_BACK + 1 + CHART_AHEAD;
 /** Literal classes so Tailwind emits them; the chart reads the colours back through bgColor. */
 const EX_COLOR: Record<WorkoutKind, string> = {
 	pushups: "bg-ex-pushups",
@@ -757,43 +800,59 @@ const EX_COLOR: Record<WorkoutKind, string> = {
 const shortDayFmt = perLocale((l) => new Intl.DateTimeFormat(l, { day: "numeric", month: "short" }));
 
 /**
- * Sets, or kcal once a body is entered, per day for the last CHART_DAYS days:
- * one column a day stacked by exercise, like By hour.
+ * Sets, or kcal once a body is entered, per day: CHART_BACK days back, today,
+ * CHART_AHEAD ahead. One column a day stacked by exercise, like By hour; what
+ * was done is solid, what the schedule plans (the rest of today, whole days
+ * after it) is the same colours faded, on top.
  */
 function WorkoutDays({
 	sets,
 	profile,
-	planned,
+	plan,
 }: {
 	sets: WorkoutSet[];
 	profile: WorkoutProfile | null;
-	/** Today's sets still to come, drawn on top of today's column in `neutral-700`. */
-	planned: WorkoutPlanned[];
+	plan: WorkoutPlan;
 }) {
 	const [by, setBy] = useState<"sets" | "kcal">("sets");
 	const metric = profile ? by : "sets";
 	const days = useMemo(
-		() => Array.from({ length: CHART_DAYS }, (_, i) => addDays(new Date(), i - CHART_DAYS + 1)),
-		[sets],
+		() => Array.from({ length: CHART_DAYS }, (_, i) => addDays(new Date(), i - CHART_BACK)),
+		[sets, plan],
 	);
+	const value = useCallback(
+		(kind: WorkoutKind, amount: number) => (metric === "kcal" && profile ? setKcal(kind, amount, profile) : 1),
+		[metric, profile],
+	);
+	/** Per day, per exercise: [done, planned]. */
 	const perDay = useMemo(() => {
-		const byDay = new Map<string, Map<WorkoutKind, number>>();
-		for (const s of sets) {
-			const d = dayKey(new Date(s.at));
-			const kinds = byDay.get(d) ?? new Map<WorkoutKind, number>();
-			const v = metric === "kcal" && profile ? setKcal(s.kind, s.amount, profile) : 1;
-			kinds.set(s.kind, (kinds.get(s.kind) ?? 0) + v);
+		const byDay = new Map<string, Map<WorkoutKind, [number, number]>>();
+		const add = (at: Date, kind: WorkoutKind, v: number, planned: boolean) => {
+			const d = dayKey(at);
+			const kinds = byDay.get(d) ?? new Map<WorkoutKind, [number, number]>();
+			const cell = kinds.get(kind) ?? [0, 0];
+			cell[planned ? 1 : 0] += v;
+			kinds.set(kind, cell);
 			byDay.set(d, kinds);
+		};
+		for (const s of sets) add(new Date(s.at), s.kind, value(s.kind, s.amount), false);
+		for (const p of plan.planned) add(new Date(p.at), p.kind, value(p.kind, EXERCISES[p.kind].amount), true);
+		for (const d of plan.ahead)
+			for (const [k, n] of Object.entries(d.kinds) as [WorkoutKind, number][])
+				add(new Date(d.at), k, n * value(k, EXERCISES[k].amount), true);
+		return days.map((d) => byDay.get(dayKey(d)) ?? new Map<WorkoutKind, [number, number]>());
+	}, [sets, plan, days, value]);
+	const format = (n: number) => (metric === "kcal" ? t("{n} kcal", { n: num().format(n) }) : num().format(n));
+	const sums = perDay.map((k) => {
+		let done = 0;
+		let planned = 0;
+		for (const [d, p] of k.values()) {
+			done += d;
+			planned += p;
 		}
-		return days.map((d) => byDay.get(dayKey(d)) ?? new Map<WorkoutKind, number>());
-	}, [sets, days, metric, profile]);
-	const format = (n: number) => (metric === "kcal" ? t("{n} kcal", { n: num().format(n) }) : String(n));
-	const totals = perDay.map((k) => [...k.values()].reduce((a, b) => a + b, 0));
-	const ahead = planned.reduce(
-		(n, p) => n + (metric === "kcal" && profile ? setKcal(p.kind, EXERCISES[p.kind].amount, profile) : 1),
-		0,
-	);
-	const { unit, top, ticks } = axis(Math.max(1, ...totals, (totals.at(-1) ?? 0) + ahead));
+		return { done, planned };
+	});
+	const { unit, top, ticks } = axis(Math.max(1, ...sums.map((x) => x.done + x.planned)));
 
 	const box = useRef<HTMLDivElement>(null);
 	const canvas = useRef<HTMLCanvasElement>(null);
@@ -816,47 +875,46 @@ function WorkoutDays({
 		for (let v = 0; v <= top; v += unit) ctx.fillRect(0, Math.min(h - line, h - y(v)), w, line);
 		const colors = Object.fromEntries(WORKOUT_KINDS.map((k) => [k, bgColor(box.current!, EX_COLOR[k])]));
 		perDay.forEach((kinds, i) => {
+			const total = sums[i]!.done + sums[i]!.planned;
 			let below = 0;
-			// Same order as the table, bottom up; a line of ground between exercises.
-			for (const k of WORKOUT_KINDS) {
-				const n = kinds.get(k);
-				if (!n) continue;
-				const y0 = y(below);
-				const y1 = y(below + n);
-				ctx.fillStyle = colors[k] ?? "";
-				ctx.fillRect(i * step, h - y1, bar, y1 - y0 - (below + n < totals[i]! ? line : 0));
-				below += n;
+			// Done first, then planned; each in table order, bottom up, a line of ground between segments.
+			for (const phase of [0, 1] as const) {
+				ctx.globalAlpha = phase === 0 ? 1 : 0.35;
+				for (const k of WORKOUT_KINDS) {
+					const n = kinds.get(k)?.[phase];
+					if (!n) continue;
+					const y0 = y(below);
+					const y1 = y(below + n);
+					ctx.fillStyle = colors[k] ?? "";
+					ctx.fillRect(i * step, h - y1, bar, y1 - y0 - (below + n < total ? line : 0));
+					below += n;
+				}
 			}
+			ctx.globalAlpha = 1;
 		});
-		if (ahead > 0) {
-			const i = CHART_DAYS - 1;
-			const y0 = y(totals[i] ?? 0);
-			ctx.fillStyle = bgColor(box.current, "bg-neutral-700");
-			ctx.fillRect(i * step, h - y(ahead + (totals[i] ?? 0)), bar, y(ahead + (totals[i] ?? 0)) - y0 - (y0 > 0 ? line : 0));
-		}
-	}, [perDay, totals, ahead, width, w, h, step, bar, line, top, unit]);
+	}, [perDay, sums, width, w, h, step, bar, line, top, unit]);
 
 	const hover = (e: React.MouseEvent<HTMLCanvasElement>) => {
 		const i = Math.floor((e.nativeEvent.offsetX * dpr) / step);
 		const day = days[i];
 		const kinds = perDay[i];
-		if (!day || !kinds) return void (e.currentTarget.title = "");
-		const parts = WORKOUT_KINDS.filter((k) => kinds.get(k)).map((k) => `${exerciseText(k).name} ${format(kinds.get(k)!)}`);
-		const total = totals[i] ?? 0;
-		const more = i === CHART_DAYS - 1 && ahead > 0 ? `\n${t("+{n} planned", { n: format(ahead) })}` : "";
-		e.currentTarget.title = `${dayFmt().format(day)}: ${metric === "kcal" ? format(total) : plural(total, "{n} set", "{n} sets")}${
-			parts.length ? `\n${parts.join("\n")}` : ""
-		}${more}`;
+		const sum = sums[i];
+		if (!day || !kinds || !sum) return void (e.currentTarget.title = "");
+		const parts = WORKOUT_KINDS.filter((k) => kinds.get(k)).map((k) => {
+			const [d, p] = kinds.get(k)!;
+			return `${exerciseText(k).name} ${format(d)}${p ? ` + ${format(p)}` : ""}`;
+		});
+		const head =
+			metric === "kcal"
+				? t("{done} done, {ahead} planned", { done: format(sum.done), ahead: format(sum.planned) })
+				: t("{done} done, {ahead} planned", { done: num().format(sum.done), ahead: num().format(sum.planned) });
+		e.currentTarget.title = `${dayFmt().format(day)}: ${head}${parts.length ? `\n${parts.join("\n")}` : ""}`;
 	};
 
 	return (
 		<div>
 			<div className="mb-2 flex items-center gap-3">
-				<h3 className={sectionLabel}>
-					{metric === "kcal"
-						? t("kcal per day, last {n} days", { n: CHART_DAYS })
-						: t("Sets per day, last {n} days", { n: CHART_DAYS })}
-				</h3>
+				<h3 className={sectionLabel}>{metric === "kcal" ? t("kcal per day, done and planned") : t("Sets per day, done and planned")}</h3>
 				{profile && (
 					<div className="flex gap-1">
 						{(
@@ -890,21 +948,23 @@ function WorkoutDays({
 					<canvas
 						ref={canvas}
 						role="img"
-						aria-label={t("Workout sets per day, last {n} days", { n: CHART_DAYS })}
+						aria-label={t("Workout sets per day, done and planned")}
 						onMouseMove={hover}
 						className="block"
 						style={{ width: w / dpr, height: h / dpr }}
 					/>
-					{/* Every fifth day counting back from today, centred under its column. */}
+					{/* Today, and every fifth day either side of it, centred under its column; today brighter. */}
 					<div className="relative mt-1 h-4" style={{ width: w / dpr }}>
 						{days.map((d, i) =>
-							(CHART_DAYS - 1 - i) % 5 === 0 ? (
+							(i - CHART_BACK) % 5 === 0 ? (
 								<span
 									key={i}
-									className="absolute top-0 -translate-x-1/2 whitespace-nowrap leading-none"
+									className={`absolute top-0 -translate-x-1/2 whitespace-nowrap leading-none ${
+										i === CHART_BACK ? "text-neutral-200" : ""
+									}`}
 									style={{ left: (i * step + bar / 2) / dpr }}
 								>
-									{shortDayFmt().format(d)}
+									{i === CHART_BACK ? t("Today") : shortDayFmt().format(d)}
 								</span>
 							) : null,
 						)}
