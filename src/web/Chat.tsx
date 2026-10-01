@@ -45,6 +45,8 @@ import {
 } from "./Transcript.js";
 import { t } from "./i18n.js";
 import { PiMark } from "./piMark.js";
+import { PastedTexts } from "./PastedTexts.js";
+import { addPastedText, isLargePaste, joinPastedText, splitPastedText } from "./pastedText.js";
 
 /** pi's `get_commands` omits its TUI-only `/compact`; `send` in useSession.ts runs it. */
 const COMPACT_COMMAND: PiCommand = {
@@ -222,6 +224,7 @@ export function Chat({
 }) {
 	const showThinking = thinkingMode !== "hidden";
 	const [text, setText] = useState("");
+	const pasted = useMemo(() => splitPastedText(text), [text]);
 	// In "toggle" mode sticky until switched off or the session changes; "once" clears it on send.
 	const [askOnly, setAskOnly] = useState(false);
 	/** The Ask only button's right-click menu position, or null when shut. */
@@ -329,7 +332,7 @@ export function Chat({
 	 * one source of truth means the panel cannot disagree with the box it is
 	 * completing, and there is no open/close bookkeeping to get wrong.
 	 */
-	const completion = useMemo(() => parseCompletion(text), [text]);
+	const completion = useMemo(() => pasted.attachments.length ? null : parseCompletion(pasted.text), [pasted]);
 	const options = useMemo(
 		() =>
 			completion ? completionOptions([COMPACT_COMMAND, ...(snapshot?.commands ?? [])], completion) : [],
@@ -641,8 +644,9 @@ export function Chat({
 	 * space, which is what turns `/fast` into the state that offers `on`,
 	 * `off`, `status`.
 	 */
+	const changeVisibleText = (value: string) => changeText(joinPastedText(value, pasted.attachments));
 	const accept = (option: CommandOption) => {
-		changeText(option.insert);
+		changeVisibleText(option.insert);
 		composer.current?.focus();
 	};
 	/** False when the attachments are staged but too big to persist as a draft. */
@@ -673,9 +677,9 @@ export function Chat({
 		try {
 			const paths = await Promise.all(others.map((f) => uploadFile(f)));
 			if (paths.length > 0) {
-				const current = composer.current?.value ?? text;
+				const current = composer.current?.value ?? pasted.text;
 				const sep = current && !current.endsWith("\n") ? "\n" : "";
-				changeText(current + sep + paths.join("\n"));
+				changeVisibleText(current + sep + paths.join("\n"));
 			}
 			const read = await Promise.all(accepted.map(readImage));
 			const kept = read.length === 0 || changeImages([...staged.current, ...read]);
@@ -695,7 +699,7 @@ export function Chat({
 		const t = text.trim();
 		// An image on its own is a valid prompt; only block when nothing is staged.
 		if (!t && images.length === 0) return;
-		onSend(t, images.length > 0 ? images : undefined, askOnly);
+		onSend(pasted.attachments.length ? text : t, images.length > 0 ? images : undefined, askOnly);
 		if (askMode === "once") setAskOnly(false);
 		setText("");
 		setImages([]);
@@ -987,6 +991,7 @@ export function Chat({
 						 * you are about to send.
 						 */}
 						<div className="-mx-3 rounded-lg bg-neutral-900 p-3 ring-1 ring-neutral-700 ring-inset">
+							<PastedTexts key={draftKey} items={pasted.attachments} onChange={(items) => changeText(joinPastedText(pasted.text, items))} />
 							<Attachments
 								images={images}
 								onRemove={(i) => void changeImages(images.filter((_, n) => n !== i))}
@@ -1005,8 +1010,8 @@ export function Chat({
 							<textarea
 								data-custom="composer"
 								ref={composer}
-								value={text}
-								onChange={(e) => changeText(e.target.value)}
+								value={pasted.text}
+								onChange={(e) => changeVisibleText(e.target.value)}
 								/*
 								 * Ctrl+V never reaches onKeyDown as an intercept point worth using:
 								 * clipboard contents are only available on the paste event itself
@@ -1014,14 +1019,22 @@ export function Chat({
 								 * listen for paste, which also covers Cmd+V, middle-click paste and
 								 * the context menu for free.
 								 *
-								 * preventDefault ONLY when a file was actually consumed, so a
-								 * normal text paste is left completely untouched.
+								 * Small text pastes keep the browser's normal insertion behavior.
 								 */
 								onPaste={(e) => {
 									const files = Array.from(e.clipboardData.files);
-									if (files.length === 0) return;
+									if (files.length > 0) {
+										e.preventDefault();
+										void addFiles(files);
+										return;
+									}
+									const value = e.clipboardData.getData("text/plain");
+									if (!isLargePaste(value)) return;
 									e.preventDefault();
-									void addFiles(files);
+									const el = e.currentTarget;
+									const caret = el.selectionStart;
+									changeText(addPastedText(text, value, caret, el.selectionEnd));
+									requestAnimationFrame(() => el.setSelectionRange(caret, caret));
 								}}
 								onDragOver={(e) => e.preventDefault()}
 								onDrop={(e) => {
@@ -1222,8 +1235,8 @@ export function Chat({
 						else next[index] = image;
 						const kept = changeImages(next);
 						setAttachError(kept ? null : t("Attached, but too large to keep if the page reloads."));
-						const current = composer.current?.value ?? text;
-						changeText(`${current}${current && !current.endsWith("\n") ? "\n" : ""}[Image ${index < 0 ? next.length : index + 1}] ${reference}`);
+						const current = composer.current?.value ?? pasted.text;
+						changeVisibleText(`${current}${current && !current.endsWith("\n") ? "\n" : ""}[Image ${index < 0 ? next.length : index + 1}] ${reference}`);
 						composer.current?.focus();
 						return true;
 					}}

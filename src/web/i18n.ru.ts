@@ -1,5 +1,7 @@
 /** Russian for every `t`/`plural` key (see i18n.ts). Plurals are `one|few|many`. */
 export const RU: Record<string, string> = {
+	"Save changes": "Сохранить изменения",
+	"Empty text": "Пустой текст",
 	"Fit": "Вписать",
 	"Zoom in": "Увеличить",
 	"Zoom out": "Уменьшить",

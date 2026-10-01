@@ -22,6 +22,22 @@ the probe results in `docs/plans/tool-metrics.md`.
 
 ## Time
 
+### Split personality and global workflow instructions (2026-10-01)
+
+- Applied the agreed drafts to `~/.config/pi-web-ide/personality.md` and
+  `~/.pi/agent/AGENTS.md`. Personality now contains only communication
+  guidance; global instructions contain implementation, efficient exploration,
+  batched validation, and existing environment/read-guard rules. Repo-specific
+  instructions and the personality repetition setting are unchanged.
+- Use the new files' modification timestamps as the rollout boundary, and
+  compare new sessions only: existing pwi children retain their old personality
+  snapshot. No model/reasoning/diagnostic settings changed in this rollout.
+- Prior recorded same-repo baseline: 13 completed GPT tool-using turns,
+  median 216.6s, 12 requests per task, 11.89s per request. This is an
+  observational baseline, not a matched-task benchmark; performance after
+  this policy split has not been measured yet. Compare task duration,
+  model-request count, and correctness on comparable new-session tasks.
+
 ### Timing recheck confirms the live Stats fix (2026-10-01, 19 GPT / 60 Opus turns)
 
 - Live `/api/stats` now reports the affected optimization task as 229.406s,

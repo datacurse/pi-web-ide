@@ -27,6 +27,7 @@ import { SourceControl } from "./SourceControl.js";
 import { GIT_CHANGED } from "./GitActions.js";
 import { Explorer } from "./Explorer.js";
 import { readDraft, writeDraftText } from "./drafts.js";
+import { joinPastedText, splitPastedText } from "./pastedText.js";
 import {
 	afterPathChange,
 	collapse,
@@ -1303,8 +1304,8 @@ export default function App() {
 	const addToChat = (text: string) => {
 		const target = chatTarget();
 		if (!target) return;
-		const prev = readDraft(target.id).text;
-		writeDraftText(target.id, `${prev}${prev && !/\s$/.test(prev) ? " " : ""}${text} `);
+		const prev = splitPastedText(readDraft(target.id).text);
+		writeDraftText(target.id, joinPastedText(`${prev.text}${prev.text && !/\s$/.test(prev.text) ? " " : ""}${text} `, prev.attachments));
 		if (!target.showing) {
 			if (target.side === "right") selectRight(target.entry);
 			else selectTab(target.entry);

@@ -152,6 +152,13 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
 
 ## Composer
 
+- Text pasted at 2,000 characters or 20 lines becomes a compact `Pasted text N.txt`
+  card above the field, rather than filling it. Small pastes stay inline. Cards open
+  a text dialog with Close and Save changes, and can be removed before sending.
+  They survive draft restoration and remain compact, read-only cards in sent messages;
+  editing a message makes them editable again. Full contents travel as fenced text in
+  the prompt, not as a filesystem path, so every model receives them without a tool call.
+
 - The box pads `p-3` (12px) on every side. The button row sits `mt-4` (16px) below the typed text.
 - Attach, `?` and Send are `bare` round `IconButton`s whose icon fills the button (24px, `size="sm"`,
   no outline or disc, no background even on hover; hover only brightens the icon), like Cursor's. Stop is an `outline` round `sm` `IconButton`; the star is `ghost`.

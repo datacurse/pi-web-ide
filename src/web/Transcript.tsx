@@ -10,6 +10,8 @@ import { timeAgo } from "./SessionList.js";
 import { Attachments, Thumb } from "./Attachments.js";
 import { t, plural, locale, getLanguage } from "./i18n.js";
 import type { UserMode } from "./prefs.js";
+import { PastedTexts } from "./PastedTexts.js";
+import { addPastedText, isLargePaste, joinPastedText, splitPastedText } from "./pastedText.js";
 
 /** Braille spinner, same visual language as the TUI. */
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
@@ -332,6 +334,12 @@ export function Thought({ text, streaming = false }: { text: string; streaming?:
  * transcript. The toggle shows only when the clamp actually cuts text.
  */
 function UserText({ text, mode }: { text: string; mode: UserMode }) {
+	const pasted = splitPastedText(text);
+	if (pasted.attachments.length) return <><PastedTexts items={pasted.attachments} />{pasted.text && <PlainUserText text={pasted.text} mode={mode} />}</>;
+	return <PlainUserText text={text} mode={mode} />;
+}
+
+function PlainUserText({ text, mode }: { text: string; mode: UserMode }) {
 	const ref = useRef<HTMLDivElement>(null);
 	const [open, setOpen] = useState(mode !== "clamped");
 	const [overflows, setOverflows] = useState(false);
@@ -1119,6 +1127,7 @@ function EditMessage({
 	onSend: (text: string, images: PiImage[]) => void;
 }) {
 	const [draft, setDraft] = useState(text);
+	const pasted = splitPastedText(draft);
 	const [images, setImages] = useState(attached);
 	const canSend = draft.trim() !== "" || images.length > 0;
 	return (
@@ -1127,13 +1136,20 @@ function EditMessage({
 			<div className="chat-gutter">
 			<div className="chat-measure">
 				<div className="-mx-3 rounded-lg bg-neutral-900 p-3 ring-1 ring-neutral-700 ring-inset">
+					<PastedTexts items={pasted.attachments} onChange={(items) => setDraft(joinPastedText(pasted.text, items))} />
 					<Attachments images={images} onRemove={(i) => setImages(images.filter((_, n) => n !== i))} />
 					<textarea
 						data-custom="composer"
 						autoFocus
-						value={draft}
-						onChange={(e) => setDraft(e.target.value)}
-						onFocus={(e) => e.currentTarget.setSelectionRange(draft.length, draft.length)}
+						value={pasted.text}
+						onChange={(e) => setDraft(joinPastedText(e.target.value, pasted.attachments))}
+						onPaste={(e) => {
+							const value = e.clipboardData.getData("text/plain");
+							if (!isLargePaste(value)) return;
+							e.preventDefault();
+							setDraft(addPastedText(draft, value, e.currentTarget.selectionStart, e.currentTarget.selectionEnd));
+						}}
+						onFocus={(e) => e.currentTarget.setSelectionRange(pasted.text.length, pasted.text.length)}
 						onKeyDown={(e) => {
 							if (e.key === "Escape") onCancel();
 							if (e.key === "Enter" && !e.shiftKey) {
