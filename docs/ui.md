@@ -72,8 +72,8 @@ fits none of the existing ones, and record it here.
   and metadata for reads, terminal-style commands for shell calls, the editor's
   read-only unified diff for each edit replacement (content-height, capped at
   `max-h-64`), and content previews for writes. Other arguments stay visible as
-  key/value rows. Results are separated
-  from inputs, and unavailable nested output stays explicitly marked.
+  key/value rows. Results are separated from inputs. Unified diffs in tool output use the same
+  added/removed color convention as review diffs.
 - Tool call lines are always one line; the result preview fades. Tool and group
   chevrons and status indicators never shrink when the preview or label is long.
 - Anything that scrolls fades out over 2em at each edge it can still scroll past, so
@@ -92,7 +92,7 @@ fits none of the existing ones, and record it here.
   (1, 2, 3 or All; `pwi:sessionLines`, `data-session-lines` on `<html>`, default 1).
   The last shown line fades at the edge; the pin and state dot sit inline on the first line.
 - Code (editor and diff tabs) soft-wraps; continuation rows keep the line's own
-  indent and start with a dim `↳` marker (`wrapIndent()`, `.cm-wrapIndent`).
+  indent (`wrapIndent()`, `.cm-wrapIndent`).
 - The file editor shows the active-line background only with an empty selection;
   selecting text hides it so the line and selection highlights do not overlap.
 
@@ -184,11 +184,9 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
   tools and their brief intervening bookkeeping. Retry, compaction and user waits remain distinct.
   Explicit live/collapsed/grouped/hidden preferences are preserved; `Answer only` also uses timed
   phases when available. Unmeasured old turns retain their ordinary work fold.
-- The separate round header is removed: the `text-meta` round number and a 12px caret sit
-  left of the thin bar, with total wall time to its right. Summary padding is `px-2 py-1`;
-  round gaps use `space-y-2`. Bars contain no text or icons; hover/accessible labels retain
-  individual segment timing. The compact legend below keeps observed steps and times readable,
-  including tiny Requesting intervals. Sub-second times use milliseconds instead of `0.0s`.
+- The separate round header is removed: the `text-meta` round number, a 12px caret and a clock icon with total wall time sit together at the left. Summary padding is `px-2 py-1`;
+  round gaps use `space-y-2`. Round summaries have no progress bar. The compact legend shows each observed step as
+  its icon and elapsed time (phase names remain available to assistive technology and tooltips).
   Actual tool rows show the target/path, semantic icon, elapsed duration, and outcome; their
   own arguments/output remain individually expandable. Tool durations do not form a second log.
   Only the final assistant message's trailing answer stays outside the phase folds.
@@ -211,17 +209,17 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
   invented for older or incomplete telemetry. Model rounds are not new user-prompt turns.
 - Parallel calls overlap and are not added together in wall-clock totals. Individual call
   durations remain available inside their phase.
-- Codemode has no separate disclosure or extra indentation: a muted `via codemode` context
-  line shows its duration/outcome/retention gaps, followed by child tool rows at the same level.
-  Its script and aggregate output remain hidden. Read tools use blue `BookOpen` icons; writing
+- Codemode wrappers add no transcript row or disclosure: render child calls directly. Keep its script
+  hidden. For a single bash call, strip the codemode completion/wall-time envelope and show its
+  combined stdout in that command's result, without repeating its command arguments. Suppress the
+  wrapper output when it is only a success notice from a non-command tool. For multiple calls,
+  combined output may be shown once only when it cannot be attributed to an individual call; never
+  claim child output is missing when that combined output is visible. Use each child tool's elapsed
+  time, not codemode's separate wall-time string. Read tools use blue `BookOpen` icons; writing
   and editing use amber `NotePencil`; commands use `TerminalWindow`; searches use
-  `MagnifyingGlass`; other tools use `Wrench`. Prefer paths/commands over output previews.
-  Round call counts omit codemode wrappers when child calls are observed. Keep wrapper failures
-  visible even without a failed child. The saved parent/child tree is retained for streaming,
-  reconnects and reloads, but codemode's display is flat; never duplicate calls in both forms.
+  `MagnifyingGlass`; other tools use `Wrench`. Round call counts omit codemode wrappers.
   Do not guess Explore/Modify/Verify stages from tool names or commands. Parent wall time owns
-  the outer timeline; overlapping child durations are not added to it. Retention gaps and missing
-  historical child output are not presented as complete data or fabricated output.
+  the outer timeline; overlapping child durations are not added to it.
 - Integrated work owns the turn's timing strip; do not duplicate it in the answer footer.
   Other tool modes retain timing next to the answer's copy/fork controls, with the same strip
   visible while collapsed. Timings survive reloads and server restarts in pwi's state directory;
@@ -901,8 +899,7 @@ New UI uses these; convert raw markup when you touch it. Tune styles in
 ## Chat code blocks
 
 - Code blocks keep to the reading column (`chat-measure`) and soft-wrap like the editor:
-  continuation rows keep the line's indent behind a dim `↳` (`.code-line`, same rule as
-  `.cm-wrapIndent`). No horizontal scroll.
+  continuation rows keep the line's indent (`.code-line`, same rule as `.cm-wrapIndent`). No horizontal scroll.
 - They use the editor's Dark+ token colours when the fence's language is known (name or
   extension, `codeHighlight.ts`); plain `neutral-300` otherwise and while the colour loads.
 - A finished `svg` block is drawn as the image itself (`<img>` from a data URL, so its

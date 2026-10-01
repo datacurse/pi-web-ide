@@ -435,14 +435,16 @@ the probe results in `docs/plans/tool-metrics.md`.
 ### The agent barely uses fff or pi-lens's read tools (2026-09-29)
 
 - This session: 158 bash, 81 edit, 14 write, 9 read, 3 `ffgrep`; no
-  `fffind`, `read_symbol`, `read_enclosing` or `symbol_search`.
+- This session: 158 bash, 81 edit, 14 write, 9 read; no `read_symbol`,
+  `read_enclosing` or `symbol_search`.
 - Full history (estimated), tokens per call: `ffgrep` ~380 and `grep` ~380
   (the same); `read_symbol` ~510 against `sed` ~835, `read` ~1020, `cat`
   ~1070. The saving is in reading one symbol instead of a range or a file,
   not in swapping grep for ffgrep.
 - Why bash wins: pi-lens's read-before-edit guard credits `cat`, `sed -n`
-  and `grep -n` but never `ffgrep`, so the agent reads with bash to be
-  allowed to edit; several lookups fit in one bash call; and habit.
+- Why bash wins: pi-lens's read-before-edit guard credits `cat`, `sed -n`
+  and `grep -n`, so the agent reads with bash to be allowed to edit;
+  several lookups fit in one bash call; and habit.
 
 ## Ideas not yet tried
 

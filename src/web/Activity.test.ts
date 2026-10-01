@@ -162,7 +162,7 @@ test("round body shows received prose before flat tool calls, without phase or c
 		]},
 		{kind:"text",text:"Received prose"},
 	]}));
-	assert.ok(html.indexOf("Received prose") < html.indexOf("via codemode"));
+	assert.ok(html.indexOf("Received prose") < html.indexOf("a.ts"));
 	assert.match(html,/a\.ts/);
 	assert.match(html,/120ms/);
 	assert.doesNotMatch(html,/<details|border-l|hidden script|hidden aggregate|Sending request/);

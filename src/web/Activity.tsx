@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Brain, ArrowUpRight, ArrowDownLeft, Wrench, ArrowClockwise, ArrowsInLineVertical, QuestionMark, CaretDown, CaretRight } from "@phosphor-icons/react";
+import { Brain, ArrowUpRight, ArrowDownLeft, Wrench, ArrowClockwise, ArrowsInLineVertical, QuestionMark, CaretDown, CaretRight, Clock } from "@phosphor-icons/react";
 import { activityDuration, activityGroups, activityRounds, type ActivityRound, type ActivityPhase, type ActivityPhaseGroup, type ActivityStep, type TurnActivity } from "../shared/activity.js";
 import { t, plural } from "./i18n.js";
 import { readWorkExpanded } from "./prefs.js";
@@ -57,7 +57,7 @@ function useClock(active: boolean): number {
 type RoundContent = (round: ActivityRound, now: number) => ReactNode;
 
 /** The same timed steps power each round and the complete turn; never a completion estimate. */
-export function ActivitySteps({ groups, now, start, onSelect, label, leading, trailing, status }: {
+export function ActivitySteps({ groups, now, start, onSelect, label, leading, trailing, status, showBar = true }: {
 	groups: ActivityPhaseGroup[];
 	now: number;
 	start: number;
@@ -66,34 +66,39 @@ export function ActivitySteps({ groups, now, start, onSelect, label, leading, tr
 	leading?: ReactNode;
 	trailing?: ReactNode;
 	status?: ReactNode;
+	showBar?: boolean;
 }) {
 	const durations = groups.map((group) => Math.max(0, (group.end ?? now) - group.start));
 	const totals = new Map<ActivityPhase, number>();
 	groups.forEach((group, i) => totals.set(group.kind, (totals.get(group.kind) ?? 0) + durations[i]));
 	return (
 		<div className="space-y-1">
-			<div className="flex items-center gap-2">
+			<div className="flex items-center gap-3">
 				{leading}
-			<div className="flex h-2 min-w-0 flex-1 overflow-hidden rounded-sm bg-neutral-800" role="group" aria-label={label}>
-				{groups.map((group, i) => {
-					const props = {
-						title: `${phaseTitle(group.kind)} · +${activityDuration(group.start - start)} · ${activityDuration(durations[i])}${phaseHint(group.kind) ? ` · ${phaseHint(group.kind)}` : ""}`,
-						"aria-label": `${phaseTitle(group.kind)} · ${activityDuration(durations[i])}`,
-						"aria-current": group.end === undefined ? "step" as const : undefined,
-						className: `min-w-0 overflow-hidden ring-1 ring-inset ${PHASE_STYLE[group.kind].background} ${group.end === undefined ? "ring-neutral-100" : "ring-neutral-950/30"}`,
-						style: { flexGrow: durations[i], flexBasis: 0 },
-					};
-					return onSelect
-						? <button key={group.id} type="button" data-custom="proportional elapsed phase segment" {...props} onClick={() => onSelect(group.id)} />
-						: <span key={group.id} {...props} />;
-				})}
-			</div>
+				{showBar && <div className="flex h-2 min-w-0 flex-1 overflow-hidden rounded-sm bg-neutral-800" role="group" aria-label={label}>
+					{groups.map((group, i) => {
+						const props = {
+							title: `${phaseTitle(group.kind)} · +${activityDuration(group.start - start)} · ${activityDuration(durations[i])}${phaseHint(group.kind) ? ` · ${phaseHint(group.kind)}` : ""}`,
+							"aria-label": `${phaseTitle(group.kind)} · ${activityDuration(durations[i])}`,
+							"aria-current": group.end === undefined ? "step" as const : undefined,
+							className: `min-w-0 overflow-hidden ring-1 ring-inset ${PHASE_STYLE[group.kind].background} ${group.end === undefined ? "ring-neutral-100" : "ring-neutral-950/30"}`,
+							style: { flexGrow: durations[i], flexBasis: 0 },
+						};
+						return onSelect
+							? <button key={group.id} type="button" data-custom="proportional elapsed phase segment" {...props} onClick={() => onSelect(group.id)} />
+							: <span key={group.id} {...props} />;
+					})}
+				</div>}
+				{!showBar && <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-meta">
+					{[...totals].map(([kind, ms]) => <span key={kind} title={`${phaseTitle(kind)}${phaseHint(kind) ? ` · ${phaseHint(kind)}` : ""}`} aria-label={`${phaseTitle(kind)} · ${activityDuration(ms)}`} className={`flex items-center gap-1 ${PHASE_STYLE[kind].text}`}><PhaseIcon kind={kind} size={12} /><span className="tabular-nums">{activityDuration(ms)}</span></span>)}
+					{status}
+				</div>}
 				{trailing}
 			</div>
-			<div className="flex flex-wrap gap-x-3 gap-y-1 text-meta">
-				{[...totals].map(([kind, ms]) => <span key={kind} title={phaseHint(kind)} className={`flex items-center gap-1 ${PHASE_STYLE[kind].text}`}><PhaseIcon kind={kind} size={12} />{phaseTitle(kind)} <span className="tabular-nums">{activityDuration(ms)}</span></span>)}
+			{showBar && <div className="flex flex-wrap gap-x-3 gap-y-1 text-meta">
+				{[...totals].map(([kind, ms]) => <span key={kind} title={`${phaseTitle(kind)}${phaseHint(kind) ? ` · ${phaseHint(kind)}` : ""}`} aria-label={`${phaseTitle(kind)} · ${activityDuration(ms)}`} className={`flex items-center gap-1 ${PHASE_STYLE[kind].text}`}><PhaseIcon kind={kind} size={12} /><span className="tabular-nums">{activityDuration(ms)}</span></span>)}
 				{status}
-			</div>
+			</div>}
 		</div>
 	);
 }
@@ -115,9 +120,8 @@ function RoundGroup({ round, number, now, renderContent, roundRefs, expandedByDe
 	return (
 		<details ref={(element) => { if (element) roundRefs?.set(round.id, element); else roundRefs?.delete(round.id); }} className="group/round" open={open} onToggle={(event) => setOpen(event.currentTarget.open)}>
 			<summary className="cursor-pointer list-none px-2 py-1 hover:bg-neutral-800/30 [&::-webkit-details-marker]:hidden">
-				<ActivitySteps groups={round.groups} now={now} start={round.start} label={t("Round step timings, not completion progress")}
-					leading={<span className="flex shrink-0 items-center gap-1 text-meta text-neutral-300"><CaretRight size={12} className="group-open/round:rotate-90" aria-hidden />{t("Round {n}", { n: number })}</span>}
-					trailing={<span className="shrink-0 text-meta tabular-nums text-neutral-500">{activityDuration((round.end ?? now) - round.start)}</span>}
+				<ActivitySteps groups={round.groups} now={now} start={round.start} label={t("Round step timings, not completion progress")} showBar={false}
+					leading={<span className="flex items-center gap-1 text-meta text-neutral-300"><CaretRight size={12} className="group-open/round:rotate-90" aria-hidden />{t("Round {n}", { n: number })}<span className="ml-1 flex items-center gap-1 text-neutral-500"><Clock size={12} aria-hidden /><span className="tabular-nums">{activityDuration((round.end ?? now) - round.start)}</span></span></span>}
 					status={<>{calls.length > 0 && <span className="text-neutral-500">{plural(calls.length, "1 tool", "{n} tools")}</span>}{failed > 0 && <span className="text-red-400">{t("{n} failed", { n: failed })}</span>}</>}
 				/>
 			</summary>

@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import { ArrowsInLineVertical, ArrowsOutLineVertical, CaretDown, CaretRight, CaretUp, Check, Copy, GitFork, PaperPlaneTilt, PencilSimple, X, BookOpen, NotePencil, TerminalWindow, MagnifyingGlass, Wrench, Code } from "@phosphor-icons/react";
+import { ArrowsInLineVertical, ArrowsOutLineVertical, CaretDown, CaretRight, CaretUp, Check, Copy, GitFork, PaperPlaneTilt, PencilSimple, X, BookOpen, NotePencil, TerminalWindow, MagnifyingGlass, Wrench } from "@phosphor-icons/react";
 import { AnsiHtml } from "fancy-ansi/react";
 import { hasAnsi, stripAnsi } from "fancy-ansi";
 import type { ContextBreakdown, ContextItem, ContextPart, PiBlock, PiImage, PiMessage, PiNotice, PiTool } from "../shared/types.js";
@@ -39,6 +39,18 @@ function useSpinner(active: boolean, frames = SPINNER_FRAMES, ms = 80): string {
  * actually contains escape codes, to avoid the extra DOM work otherwise.
  */
 function AnsiOutput({ text, className }: { text: string; className?: string }) {
+	const lines = text.split("\n");
+	if (lines.some((line) => line.startsWith("diff --git ")) && lines.some((line) => line.startsWith("@@ "))) {
+		return <div className={`font-mono ${className ?? ""}`}>
+			{lines.map((line, index) => {
+				const tone = line.startsWith("+") && !line.startsWith("+++") ? "text-green-400" :
+					line.startsWith("-") && !line.startsWith("---") ? "text-red-400" :
+					line.startsWith("@@ ") || line.startsWith("diff --git ") || line.startsWith("index ") ||
+					line.startsWith("--- ") || line.startsWith("+++ ") ? "text-neutral-500" : "text-neutral-300";
+				return <pre key={index} className={`whitespace-pre-wrap wrap-anywhere ${tone}`}>{line || " "}</pre>;
+			})}
+		</div>;
+	}
 	if (!hasAnsi(text)) return <pre className={className}>{text}</pre>;
 	return <AnsiHtml className={`${className ?? ""} whitespace-pre-wrap`} text={text} />;
 }
@@ -50,6 +62,22 @@ function AnsiOutput({ text, className }: { text: string; className?: string }) {
  */
 function resultPreview(result: string): string {
 	return stripAnsi(result).split("\n", 1)[0]?.trim() ?? "";
+}
+
+function codemodeOutputs(result: string): string[] {
+	const outputs = result.split("\n").flatMap((line) => {
+		try {
+			const value: unknown = JSON.parse(line);
+			return value && typeof value === "object" && "output" in value && typeof value.output === "string" ? [value.output] : [];
+		} catch {
+			return [];
+		}
+	});
+	if (outputs.length > 0) return outputs;
+	const cleaned = result.split("\n")
+		.filter((line) => !/^Script completed$|^Wall time .+$|^Output:$/.test(line))
+		.join("\n").trim();
+	return cleaned ? [cleaned] : [];
 }
 
 /**
@@ -66,7 +94,7 @@ export function ToolIcon({ name }: { name: string }) {
 		case "read": case "read_symbol": case "read_enclosing": return <BookOpen size={14} className="shrink-0 text-blue-400" aria-hidden />;
 		case "write": case "edit": case "ast_grep_replace": return <NotePencil size={14} className="shrink-0 text-amber-400" aria-hidden />;
 		case "bash": case "powershell": return <TerminalWindow size={14} className="shrink-0 text-neutral-400" aria-hidden />;
-		case "grep": case "ffgrep": case "find": case "fffind": case "symbol_search": return <MagnifyingGlass size={14} className="shrink-0 text-neutral-400" aria-hidden />;
+		case "grep": case "ffgrep": case "find": case "symbol_search": return <MagnifyingGlass size={14} className="shrink-0 text-neutral-400" aria-hidden />;
 		default: return <Wrench size={14} className="shrink-0 text-neutral-400" aria-hidden />;
 	}
 }
@@ -127,17 +155,15 @@ export function Tool({
 	};
 	count(children ?? []);
 	const summary = [...counts].map(([tool, n]) => tool + " × " + n).join(" · ");
+	const batchOutputs = name === "codemode" && typeof result === "string" ? codemodeOutputs(result) : [];
+	const outputMatchesCalls = children?.length === batchOutputs.length;
 	if (name === "codemode") return <div className={nested ? "my-1" : "chat-wide my-3"}>
-		<div className="flex items-center gap-2 text-meta text-neutral-500">
-			<Code size={14} className="shrink-0" aria-hidden />
-			<span>{t("via codemode")}</span>
-			{failures > 0 && <span className="text-red-400">{t("{n} failed", { n: failures })}</span>}
-			{childrenIncomplete && <span className="text-amber-400">{t("Partial batch")}</span>}
-			{elapsed !== undefined && <span className="ml-auto tabular-nums">{activityDuration(elapsed)}</span>}
-			{running ? <span>{spinner}</span> : isError ? <X size={12} className="text-red-400" aria-label={t("failed")} /> : interrupted ? <span>{t("Interrupted")}</span> : <Check size={12} className="text-green-400" aria-hidden />}
-		</div>
-		{children?.map((child) => <Tool key={child.id} {...child} nested autoOpen={false} expandedByDefault={expandedByDefault} ms={child.durationMs} />)}
+		{children?.map((child, index) => {
+			const output = outputMatchesCalls && child.name === "bash" ? batchOutputs[index] : undefined;
+			return <Tool key={child.id} {...child} {...(output !== undefined ? { result: output, outputUnavailable: false } : {})} nested autoOpen={false} expandedByDefault={expandedByDefault} ms={child.durationMs} />;
+		})}
 		{childrenIncomplete && <p className="mt-1 text-meta text-amber-400">{t("Some nested calls were not retained")}</p>}
+		{!children?.length && (isError || interrupted) && <p className="text-meta text-red-400">{isError ? t("failed") : t("Interrupted")}</p>}
 	</div>;
 	return (
 		<div className={nested ? "my-1" : "chat-wide my-3"}>
@@ -173,8 +199,8 @@ export function Tool({
 			{open && childrenIncomplete && <p className="mt-1 text-meta text-amber-400">{t("Some nested calls were not retained")}</p>}
 			{open && name !== "codemode" && (
 				<div className="chat-code mt-1 max-h-96 overflow-auto rounded-sm border border-neutral-800 bg-neutral-900 text-neutral-400">
-					<ToolArguments name={name} args={args} />
-					{outputUnavailable && <p className="border-t border-neutral-800 px-3 py-2 text-meta">{t("Nested output was not retained")}</p>}
+					{!(nested && name === "bash") && <ToolArguments name={name} args={args} />}
+					{outputUnavailable && !nested && <p className="border-t border-neutral-800 px-3 py-2 text-meta">{t("Nested output was not retained")}</p>}
 					{result !== undefined && result !== "" && (
 						<div className="border-t border-neutral-800 p-3">
 							<AnsiOutput className="whitespace-pre-wrap wrap-anywhere" text={result} />

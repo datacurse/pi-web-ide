@@ -1104,20 +1104,7 @@ input[type="number"]::-webkit-outer-spin-button {
 .cm-content .cm-wrapIndent,
 .code-line {
 	position: relative;
-	text-indent: calc(var(--indent) + 2ch) hanging;
-}
-
-.cm-content .cm-wrapIndent::before,
-.code-line::before {
-	content: "";
-	position: absolute;
-	left: calc(var(--wrap-pad) + var(--indent));
-	top: 1lh;
-	bottom: 0;
-	width: 2ch;
-	pointer-events: none;
-	background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%236e7681' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 3v6h8M9 6l3 3-3 3'/%3E%3C/svg%3E")
-		0 0 / 2ch 1lh repeat-y;
+	text-indent: var(--indent) hanging;
 }
 
 /*
