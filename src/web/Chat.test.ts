@@ -144,6 +144,22 @@ test("history is passed to Virtuoso without eagerly mounting message rows", () =
 	assert.equal(updated.props.computeItemKey(250, updated.props.data[250]), key);
 });
 
+test("phase work keeps its preceding user prompt in the same row", () => {
+	const env = harness();
+	env.props.toolMode = "phases";
+	env.props.snapshot!.messages = [
+		{ role: "user", timestamp: 1, blocks: [{ kind: "text", text: "question" }] },
+		{ role: "assistant", timestamp: 2, endedAt: 3, blocks: [{ kind: "text", text: "answer" }] },
+	];
+	env.props.snapshot!.activity = [{
+		start: 1, asked: 1, end: 3, steps: [{ kind: "text", label: "Receiving answer", start: 2, end: 3 }], tools: [],
+	}];
+	const list = env.render().find((node) => node.type === Virtuoso)!;
+	const phase = list.props.data.find((row: any) => row.kind === "phases");
+	assert.ok(phase);
+	assert.equal(phase.prompt.blocks[0].text, "question");
+	assert.equal(list.props.data.some((row: any) => row.kind === "message" && row.role === "user"), false);
+});
 test("content growth follows only while pinned, and jump-to-latest resumes following", () => {
 	const env = harness();
 	const observer = env.observers[0];

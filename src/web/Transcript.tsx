@@ -60,6 +60,14 @@ function AnsiOutput({ text, className }: { text: string; className?: string }) {
  * tool call, so scanning a long transcript of settled tool calls doesn't
  * require opening every single one to see what happened.
  */
+/** Remove transcript anchors and common indentation from read output for code display. */
+function formatReadOutput(result: string): string {
+	const lines = result.replace(/^[A-Za-z0-9]{4}│/gm, "").split("\n");
+	const indents = lines.filter((line) => line.trim()).map((line) => line.match(/^[ \t]*/)?.[0].length ?? 0);
+	const indent = indents.length ? Math.min(...indents) : 0;
+	return lines.map((line) => line.slice(Math.min(indent, line.match(/^[ \t]*/)?.[0].length ?? 0))).join("\n");
+}
+
 function resultPreview(result: string): string {
 	return stripAnsi(result).split("\n", 1)[0]?.trim() ?? "";
 }
@@ -147,7 +155,7 @@ export function Tool({
 	const elapsed = ms ?? (running && startedAt !== undefined ? Math.max(0, Date.now() - startedAt) : undefined);
 	const target = args && typeof args === "object" ? (args as { path?: unknown; command?: unknown }).path ?? (args as { command?: unknown }).command : undefined;
 	const codeLanguage = (name === "read" || name === "read_symbol" || name === "read_enclosing") && typeof target === "string" ? target.split(".").at(-1) : undefined;
-	const displayedResult = codeLanguage && result ? result.replace(/^[A-Za-z0-9]{4}│/gm, "") : result;
+	const displayedResult = codeLanguage && result ? formatReadOutput(result) : result;
 	const preview = name !== "codemode" ? typeof target === "string" ? target : !open && result ? resultPreview(result) : "" : "";
 	const counts = new Map<string, number>();
 	let failures = 0;

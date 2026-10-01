@@ -157,10 +157,11 @@ export function ActivityHistory({ activity, now = Date.now(), onSelect }: { acti
 }
 
 /** Round cards own their text and tools; the complete turn keeps one chronological strip. */
-export function ActivityPanel({ activity, renderContent, controls, waitingForInput = false, expandedByDefault = readWorkExpanded() }: {
+export function ActivityPanel({ activity, renderContent, controls, stickyLeading, waitingForInput = false, expandedByDefault = readWorkExpanded() }: {
 	activity: TurnActivity;
 	renderContent?: RoundContent;
 	controls?: ReactNode;
+	stickyLeading?: ReactNode;
 	waitingForInput?: boolean;
 	expandedByDefault?: boolean;
 }) {
@@ -183,24 +184,26 @@ export function ActivityPanel({ activity, renderContent, controls, waitingForInp
 			detail.scrollIntoView({ block: "nearest", behavior: "smooth" });
 		});
 	};
+	const status = activity.end === undefined && current && step ? (
+		<div className="mt-2 flex items-baseline gap-2 text-body text-neutral-400">
+			<PhaseIcon kind={waitingForInput ? "input" : current.kind} />
+			<span title={waitingForInput ? undefined : phaseHint(current.kind)} className={`min-w-0 flex-1 break-words ${!waitingForInput && current.kind === "thinking" ? PHASE_STYLE[current.kind].text : ""}`} role="status">{waitingForInput ? t("Waiting for your input") : ["requesting", "thinking"].includes(current.kind) ? phaseTitle(current.kind) : phaseLabel(step)}</span>
+			<span className="shrink-0 tabular-nums">{activityDuration(now - current.start)}</span>
+		</div>
+	) : null;
+	const summary = (
+		<div className="mt-2 flex flex-wrap items-center gap-1 text-meta text-neutral-500">
+			{controls}
+			<button type="button" data-custom="inline timing disclosure" className="flex items-center gap-1 hover:text-neutral-300" onClick={() => setOpen(!open)} aria-expanded={open} aria-label={t("Toggle breakdown")}>
+				{open ? <CaretDown size={12} /> : <CaretRight size={12} />}{t("Breakdown")} <Clock size={12} aria-hidden /> <span className="tabular-nums">{activityDuration((activity.end ?? now) - activity.start)}</span>
+			</button>
+			<ActivityHistory activity={activity} now={now} onSelect={select} />
+			{activity.end === undefined && silence >= 3000 && <span> · {t("No new output for")} <span className="tabular-nums">{activityDuration(silence)}</span></span>}
+		</div>
+	);
 	return (
 		<div>
-
-			{activity.end === undefined && current && step && (
-				<div className="mt-2 flex items-baseline gap-2 text-body text-neutral-400">
-					<PhaseIcon kind={waitingForInput ? "input" : current.kind} />
-					<span title={waitingForInput ? undefined : phaseHint(current.kind)} className={`min-w-0 flex-1 break-words ${!waitingForInput && current.kind === "thinking" ? PHASE_STYLE[current.kind].text : ""}`} role="status">{waitingForInput ? t("Waiting for your input") : ["requesting", "thinking"].includes(current.kind) ? phaseTitle(current.kind) : phaseLabel(step)}</span>
-					<span className="shrink-0 tabular-nums">{activityDuration(now - current.start)}</span>
-				</div>
-			)}
-			<div className="mt-2 flex flex-wrap items-center gap-1 text-meta text-neutral-500">
-				{controls}
-				<button type="button" data-custom="inline timing disclosure" className="flex items-center gap-1 hover:text-neutral-300" onClick={() => setOpen(!open)} aria-expanded={open} aria-label={t("Toggle breakdown")}>
-					{open ? <CaretDown size={12} /> : <CaretRight size={12} />}<Clock size={12} aria-hidden />{t("Breakdown")} <span className="tabular-nums">{activityDuration((activity.end ?? now) - activity.start)}</span>
-				</button>
-				<ActivityHistory activity={activity} now={now} onSelect={select} />
-				{activity.end === undefined && silence >= 3000 && <span> · {t("No new output for")} <span className="tabular-nums">{activityDuration(silence)}</span></span>}
-			</div>
+			{stickyLeading ? <div className="sticky top-0 z-10 bg-neutral-950">{stickyLeading}{status}{summary}</div> : <>{status}{summary}</>}
 			{renderContent && breakdown}
 			{!renderContent && breakdown}
 		</div>

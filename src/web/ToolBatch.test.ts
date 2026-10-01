@@ -36,10 +36,11 @@ test("tool types have distinct read, write, and command icons", () => {
 	assert.equal(ToolIcon({name:"edit"}).type,NotePencil);
 	assert.equal(ToolIcon({name:"bash"}).type,TerminalWindow);
 });
-test("source-reading output strips read anchors before rendering code", () => {
-	const html = renderToStaticMarkup(createElement(Tool,{name:"read",args:{path:"src/a.ts"},result:"Ab12│const answer = 42;",autoOpen:false,expandedByDefault:true}));
+test("source-reading output strips anchors and common indentation before rendering code", () => {
+	const html = renderToStaticMarkup(createElement(Tool,{name:"read",args:{path:"src/a.ts"},result:"Ab12│        const answer = 42;\nCd34│            return answer;",autoOpen:false,expandedByDefault:true}));
 	assert.match(html,/const answer = 42;/);
-	assert.doesNotMatch(html,/Ab12│/);
+	assert.match(html,/>    return answer;/);
+	assert.doesNotMatch(html,/Ab12│|Cd34│| {8}const answer/);
 });
 test("file paths stay visible instead of being replaced with a source-code preview", () => {
 	const html = renderToStaticMarkup(createElement(Tool,{name:"read",args:{path:"a.ts"},result:"secret child output",autoOpen:false,ms:120}));

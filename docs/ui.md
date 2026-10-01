@@ -75,8 +75,8 @@ fits none of the existing ones, and record it here.
   diff for completed anchor-based `replace` calls. Other arguments stay visible
   as key/value rows. Results are separated from inputs. Unified diffs in tool
   output use the same added/removed color convention as review diffs. Source-reading
-  tool results strip read anchors before syntax highlighting; unknown extensions
-  remain plain text.
+  tool results strip read anchors and common indentation before syntax highlighting;
+  unknown extensions remain plain text.
 - Tool call lines are always one line; the result preview fades. Tool and group
   chevrons and status indicators never shrink when the preview or label is long.
 - Anything that scrolls fades out over 2em at each edge it can still scroll past, so
@@ -198,7 +198,10 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
   Receiving is `green-400` / `ArrowDownLeft`; Doing is
   `amber-400` / `Wrench`. Retry and user waits use `red-400` with `ArrowClockwise` / `QuestionMark`;
   compaction uses `neutral-400` / `ArrowsInLineVertical`. Icons and labels accompany colour.
-- A `Breakdown` disclosure with a clock icon and total elapsed time sits above the work; observed phase icons and elapsed times sit beside it on the same row. No overall progress bar.
+- A `Breakdown` disclosure with a clock icon and total elapsed time sits above the work; observed
+  phase icons and elapsed times sit beside it on the same row. No overall progress bar. In Rounds
+  mode, the preceding user prompt and its breakdown stick together at the top while scrolling
+  through the turn's work, without duplicating the prompt.
   For current design review, `Expand work by default` is on by default (`pwi:workExpanded`).
   Rounds and completed tool arguments/output start open. The Transcript settings checkbox
   changes this immediately and persists it; explicit off is respected. Individual disclosures

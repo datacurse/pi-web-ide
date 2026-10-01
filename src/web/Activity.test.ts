@@ -28,7 +28,7 @@ test("live status shows the actual phase, phase time, total time, and honest str
 	const html = renderToStaticMarkup(createElement(TurnStatus, { activity }));
 	assert.match(html, /Receiving answer/);
 	assert.match(html, /6\.0s/);
-	assert.match(html, /Total/);
+	assert.match(html, /Breakdown/);
 	assert.match(html, /9\.0s/);
 	assert.match(html, /No new output for/);
 	assert.match(html, /aria-expanded="true"/);
@@ -81,7 +81,7 @@ test("breakdown preserves observed boundaries and completed durations do not gro
 	assert.match(html, /2\.0s/);
 	assert.match(html, /not isolated thinking time/);
 	assert.doesNotMatch(html, /993\.9s|aria-current="step"/);
-	assert.match(renderToStaticMarkup(createElement(CompletedActivity, { activity: completed })), /Timing.*5\.0s/);
+	assert.match(renderToStaticMarkup(createElement(CompletedActivity, { activity: completed })), /Breakdown.*5\.0s/);
 });
 
 test("the elapsed strip remains visible while timing is collapsed and marks the live segment without a completion percentage", (t) => {
@@ -106,12 +106,14 @@ test("integrated work starts expanded and preserves failures without a duplicate
 		{ kind: "processing", label: "processing", start: 4000, end: 4100 },
 		{ kind: "tools", label: "edit", start: 4100, end: 6000 },
 	], tools: [{ id: "a", label: "read", start: 3000, end: 4000 }, { id: "b", label: "edit", start: 4100, end: 6000, isError: true }] };
-	const html = renderToStaticMarkup(createElement(TurnWork, { activity: timed, messages: [{ role: "assistant", timestamp: 1000, blocks: [
+	const html = renderToStaticMarkup(createElement(TurnWork, { activity: timed, prompt: { role: "user", timestamp: 900, blocks: [{ kind: "text", text: "my question" }] }, userMode: "full", thinkingMode: "folded", onFork: async () => {}, messages: [{ role: "assistant", timestamp: 1000, blocks: [
 		{ kind: "thinking", text: "Detailed reasoning" },
 		{ kind: "tool", id: "a", name: "read", args: { path: "a.ts" }, result: "Private output" },
 	] }] }));
 	assert.equal((html.match(/<details/g) ?? []).length, 1);
 	assert.match(html,/Round 1/);
+	assert.match(html, /sticky top-0 z-10 bg-neutral-950/);
+	assert.match(html, /my question/);
 	assert.match(html, /<details[^>]* open/);
 	assert.match(html,/Detailed reasoning/);
 	assert.match(html,/Private output/);

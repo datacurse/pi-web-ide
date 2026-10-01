@@ -2,7 +2,8 @@ import type { ActivityRound, TurnActivity } from "../shared/activity.js";
 import { activityGroups } from "../shared/activity.js";
 import type { PiBlock, PiMessage, PiPartial } from "../shared/types.js";
 import { ActivityPanel } from "./Activity.js";
-import { Block } from "./Transcript.js";
+import type { ThinkingMode, UserMode } from "./prefs.js";
+import { Block, Message } from "./Transcript.js";
 import { phaseBlocks } from "./turnPhases.js";
 import { readWorkExpanded } from "./prefs.js";
 
@@ -21,18 +22,29 @@ export function RoundWork({ round, blocks, now, expandedByDefault = readWorkExpa
 }
 
 /** Each timed round contains the actual reasoning and tool cards, not a second log. */
-export function TurnWork({ activity, messages, partial, waitingForInput, expandedByDefault = readWorkExpanded() }: {
+export function TurnWork({ activity, messages, prompt, partial, waitingForInput, expandedByDefault = readWorkExpanded(), userMode, thinkingMode, onFork, onEdit }: {
 	activity: TurnActivity;
 	messages: PiMessage[];
+	prompt?: PiMessage;
 	partial?: PiPartial;
 	waitingForInput?: boolean;
 	expandedByDefault?: boolean;
+	userMode: UserMode;
+	thinkingMode: ThinkingMode;
+	onFork: (at: number) => Promise<void>;
+	onEdit?: (at: number, text: string, images: { data: string; mimeType: string }[]) => void;
 }) {
 	const blocks = phaseBlocks(activityGroups(activity), messages, partial);
 	return (
 		<div className="chat-gutter my-3">
 			<div className="chat-measure">
-				<ActivityPanel activity={activity} waitingForInput={waitingForInput} expandedByDefault={expandedByDefault} renderContent={(round, now) => <RoundWork round={round} blocks={round.groups.flatMap((group) => blocks.get(group.id) ?? [])} now={now} expandedByDefault={expandedByDefault} />} />
+				<ActivityPanel
+					activity={activity}
+					waitingForInput={waitingForInput}
+					expandedByDefault={expandedByDefault}
+					stickyLeading={prompt && <Message role="user" blocks={prompt.blocks} labelled={false} autoOpenTools={false} userMode={userMode} foldThinking={thinkingMode === "folded"} onFork={onFork} at={prompt.timestamp} onEdit={onEdit} />}
+					renderContent={(round, now) => <RoundWork round={round} blocks={round.groups.flatMap((group) => blocks.get(group.id) ?? [])} now={now} expandedByDefault={expandedByDefault} />}
+				/>
 			</div>
 		</div>
 	);

@@ -163,7 +163,7 @@ const HistoryRow = memo(function HistoryRow({
 	onFork: (at: number) => Promise<void>;
 	onEdit?: (at: number, text: string, images: PiImage[]) => void;
 }) {
-	if (row.kind === "phases") return <TurnWork activity={row.activity} messages={row.messages} partial={live} waitingForInput={waitingForInput} expandedByDefault={workExpanded} />;
+	if (row.kind === "phases") return <TurnWork activity={row.activity} messages={row.messages} prompt={row.prompt} partial={live} waitingForInput={waitingForInput} expandedByDefault={workExpanded} userMode={userMode} thinkingMode={thinkingMode} onFork={onFork} onEdit={onEdit} />;
 	if (row.kind === "tools") return (
 		<TranscriptRow role="assistant" labelled={row.labelled}>
 			<ToolGroup blocks={liveBlocks ? [...row.blocks, ...liveBlocks] : row.blocks} streaming={!!liveBlocks} />
@@ -531,7 +531,13 @@ export function Chat({
 			const activity = turnMessages.length > 0 ? snapshot?.activity?.find((trace) => trace.asked === turnAsked) : undefined;
 			if (activity) {
 				const { work, answer } = partitionPhaseTurn(turnMessages, live && activity.end === undefined);
-				out.push({ kind: "phases", activity, messages: work });
+				let prompt: PiMessage | undefined;
+				const previous = out.at(-1);
+				if (previous?.kind === "message" && previous.role === "user") {
+					out.pop();
+					prompt = { role: "user", blocks: previous.blocks, timestamp: previous.at ?? activity.start };
+				}
+				out.push({ kind: "phases", activity, messages: work, prompt });
 				if (answer) out.push({ kind: "message", role: "assistant", blocks: answer.blocks, labelled: false, at: answer.timestamp, footer: turnFooter ? { ...turnFooter, activity: undefined } : undefined });
 				turn = [];
 				turnMessages = [];
