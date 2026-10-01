@@ -104,7 +104,10 @@ export function activityGroups(activity: TurnActivity): ActivityPhaseGroup[] {
 		if (previous?.kind === kind) {
 			previous.steps.push(step);
 			previous.end = step.end ?? activity.end;
-		} else groups.push({ id, kind, start: step.start, end: step.end ?? activity.end, steps: [step], tools: [] });
+		} else {
+			if (previous) previous.end = step.start;
+			groups.push({ id, kind, start: step.start, end: step.end ?? activity.end, steps: [step], tools: [] });
+		}
 	}
 	for (const tool of activity.tools) {
 		const containsStart = (g: ActivityPhaseGroup) => tool.start >= g.start && (g.end === undefined || tool.start < g.end);

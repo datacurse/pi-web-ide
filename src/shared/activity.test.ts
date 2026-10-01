@@ -46,6 +46,7 @@ test("a live group's identity stays stable as it grows, and completed groups kee
 	assert.equal(after.at(-1)?.id, before.at(-1)?.id);
 	assert.equal(after.at(-1)?.end, undefined);
 	assert.deepEqual(after.slice(0, -1), before.slice(0, -1));
+	assert.ok(after.slice(0, -1).every((group) => group.end !== undefined));
 });
 
 test("rounds group request/response/tool cycles without adding overlapping tool time", () => {
