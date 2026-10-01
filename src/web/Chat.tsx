@@ -843,6 +843,12 @@ export function Chat({
 				<div className="relative flex min-h-0 flex-1 flex-col">
 				<div
 					ref={attachViewport}
+					onClickCapture={(e) => {
+						if (e.target instanceof Element && e.target.closest('[data-custom="inline timing disclosure"]')) {
+							pinned.current = false;
+							setAtBottom(false);
+						}
+					}}
 					onScroll={(e) => {
 						const el = e.currentTarget;
 						const bottom =
