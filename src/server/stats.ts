@@ -141,6 +141,9 @@ export async function parseLines(
 	const out: Omit<Parsed, "size" | "mtimeMs"> = { id: "", cwd: "", turns: [] };
 	let turn: Omit<StatsTurn, "machine"> | undefined;
 	let end = 0;
+	let activeProvider = "";
+	let activeModel = "";
+	const identities = new Set<string>();
 	/**
 	 * This turn's calls, sizes in chars until close. Timed by the collector
 	 * when it ran (`measured`), else `sent`/`batch` estimate the wait.
@@ -201,6 +204,7 @@ export async function parseLines(
 			out.turns.push({ ...turn, ms: end - turn.start });
 		}
 		turn = undefined;
+		identities.clear();
 		calls = [];
 		pending.clear();
 	};
@@ -218,6 +222,16 @@ export async function parseLines(
 			if (typeof entry.cwd === "string") out.cwd = entry.cwd;
 			continue;
 		}
+		if (entry?.type === "model_change") {
+			if (typeof entry.provider === "string") activeProvider = entry.provider;
+			if (typeof entry.modelId === "string") activeModel = entry.modelId;
+			else if (typeof entry.model === "string") {
+				const slash = entry.model.indexOf("/");
+				if (slash > 0) { activeProvider = entry.model.slice(0, slash); activeModel = entry.model.slice(slash + 1); }
+				else activeModel = entry.model;
+			}
+			continue;
+		}
 		if (entry?.type !== "message") continue;
 		const m = entry.message as Record<string, unknown> | undefined;
 		if (!m) continue;
@@ -232,6 +246,11 @@ export async function parseLines(
 				start,
 				ms: 0,
 				model: "",
+				provider: "",
+				mixedModels: false,
+				inputTokens: 0,
+				cacheReadTokens: 0,
+				cacheWriteTokens: 0,
 				prompt: userText(m),
 				tools: {},
 				costs: {},
@@ -263,11 +282,20 @@ export async function parseLines(
 			continue;
 		}
 		if (m.role !== "assistant") continue;
-		if (typeof m.model === "string") turn.model = m.model;
+		if (typeof m.model === "string") activeModel = m.model;
+		if (typeof m.provider === "string") activeProvider = m.provider;
+		turn.model = activeModel;
+		turn.provider = activeProvider;
+		if (activeModel) identities.add(`${activeProvider}/${activeModel}`);
+		turn.mixedModels = identities.size > 1;
 		if (typeof m.stopReason === "string") turn.outcome = m.stopReason;
-		const usage = m.usage as { output?: unknown; cost?: { total?: unknown } } | undefined;
-		if (typeof usage?.output === "number") turn.outputTokens += usage.output;
-		if (typeof usage?.cost?.total === "number") turn.cost += usage.cost.total;
+		const usage = m.usage as { input?: unknown; output?: unknown; cacheRead?: unknown; cacheWrite?: unknown; cost?: { total?: unknown } } | undefined;
+		const amount = (v: unknown) => typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : 0;
+		turn.inputTokens += amount(usage?.input);
+		turn.outputTokens += amount(usage?.output);
+		turn.cacheReadTokens += amount(usage?.cacheRead);
+		turn.cacheWriteTokens += amount(usage?.cacheWrite);
+		turn.cost += amount(usage?.cost?.total);
 		if (Array.isArray(m.content)) {
 			const batch = (m.content as { type?: unknown; name?: unknown; id?: unknown; arguments?: unknown }[]).filter(
 				(b): b is { type: "toolCall"; name: string; id?: unknown; arguments?: unknown } =>

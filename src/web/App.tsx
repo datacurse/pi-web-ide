@@ -1433,8 +1433,8 @@ export default function App() {
 		// The same for a question: it arrives as an event, long before a poll.
 		const live = new Map<string, { isStreaming: boolean; needsInput: boolean }>();
 		for (const c of [left, right])
-			if (c.snapshot?.file)
-				live.set(c.snapshot.file, { isStreaming: c.busy, needsInput: c.snapshot.ask !== null });
+			if (c.snapshot)
+				live.set(c.snapshot.file ?? c.snapshot.id, { isStreaming: c.busy, needsInput: c.snapshot.ask !== null });
 		if (!live.size) return all;
 		return all.map((s) => {
 			const l = live.get(s.path);
@@ -1446,9 +1446,11 @@ export default function App() {
 		tabs.files,
 		tabs.right,
 		left.snapshot?.file,
+		left.snapshot?.id,
 		left.snapshot?.ask,
 		left.busy,
 		right.snapshot?.file,
+		right.snapshot?.id,
 		right.snapshot?.ask,
 		right.busy,
 	]);

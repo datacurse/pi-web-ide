@@ -1963,8 +1963,12 @@ export function toEvents(frame: Record<string, unknown>): PiEvent[] {
 				const status = typeof m.errorStatus === "number" ? ` (HTTP ${m.errorStatus})` : "";
 				return [
 					{
-						type: "error",
-						message: `${String(m.errorMessage ?? "assistant turn failed")}${status}`,
+						type: "notice",
+						notice: {
+							level: "error",
+							text: `${String(m.errorMessage ?? "assistant turn failed")}${status}`,
+							key: "provider",
+						},
 					},
 				];
 			}
@@ -1997,19 +2001,20 @@ export function toEvents(frame: Record<string, unknown>): PiEvent[] {
 			const delay = typeof frame.delayMs === "number" ? Math.round(frame.delayMs / 1000) : 0;
 			const why = typeof frame.errorMessage === "string" ? `: ${frame.errorMessage}` : "";
 			return [
-				{ type: "notice", notice: { level: "warning", text: `retry ${attempt}/${max} in ${delay}s${why}` } },
+				{ type: "notice", notice: { level: "warning", text: `retry ${attempt}/${max} in ${delay}s${why}`, key: "provider" } },
 			];
 		}
 
 		case "auto_retry_end":
 			return frame.success === true
-				? []
+				? [{ type: "notice", notice: { level: "info", text: "", key: "provider" } }]
 				: [
 						{
 							type: "notice",
 							notice: {
 								level: "error",
 								text: `retries exhausted: ${String(frame.finalError ?? "unknown error")}`,
+								key: "provider",
 							},
 						},
 					];

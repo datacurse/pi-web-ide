@@ -279,6 +279,8 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
 | ready   | new activity since this browser saw it   | `neutral-500`      | amber                   |
 | needs   | blocked on a question (`ask`)            | `red-400`, steady  | red                     |
 
+- The tab's `π` lights up immediately when a prompt is sent, including a new session
+  before its file exists; it does not wait for an acknowledgement or streamed output.
 - An amber `π` only ever means working: a finished turn must not look like one still running.
 - "Seen" means on screen in either column while the window is visible and focused.
   Per-browser (`localStorage`), synced across pwi windows.
@@ -365,6 +367,12 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
   `PaperPlaneTilt` send. No attach, context or model controls. Enter sends, Escape
   cancels. Sending rewinds the session in place to before that message (pi's `/tree`;
   the old branch stays in the file) and asks again with the remaining attachments.
+
+## Retry notices
+
+- A provider failure and its automatic retries share one notice: warning while retrying,
+  one error if retries are exhausted. Successful recovery removes it without clearing
+  unrelated extension or compaction notices.
 
 ## Reasoning
 
@@ -603,8 +611,27 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
   `Up next` (the next 8 planned: time or `now`, colour dot, name, muscle groups, then `+N more planned
   today`) and `Muscle load now` (`Bars` of each group's current load, with a `text-meta` line on how
   it decays).
-- Stats uses the dialog's width: usage beside the summary tiles (1/3 + 2/3), a 52-week
-  heatmap full width, answer time beside by-hour, Machines (when there are others) /
+- Stats Overview starts with Provider and Model selects (`inputClass.sm`), defaulting
+  to All providers / All models. They filter historical summaries, charts, tool metrics
+  and answers along with the machine filter; changing provider or machine clears the
+  model selection. Model identities include the provider, so identical model IDs never
+  merge across providers; unknown providers and mixed-model answers have separate groups.
+  Workouts only uses the machine filter.
+- Usage remaining names the selected provider (All uses pi's startup provider), using
+  this PC's login regardless of machine/model filters. OpenAI (ChatGPT / `openai-codex`)
+  reads its subscription limits, Anthropic reads its own, and unsupported or logged-out
+  providers show a neutral explanation while historical statistics remain usable.
+  Each provider has its own cache and history. Cached usage after a fetch failure is
+  marked with its timestamp and hides Pace until refreshed; provider switches cancel
+  old browser requests so old limits cannot replace the new selection.
+- Model comparison uses a two-column grid of `rounded-sm` bordered cards (one column
+  below `md`): provider/model name in `text-ui`, metrics in `text-meta`. Each shows
+  sample size, median/p90 answer time, average input/output tokens, tools and estimated
+  cost per prompt, and errors/aborts. Input includes cached tokens. A note says these
+  are recorded performance metrics, not quality scores or subscription charges;
+  answers using multiple models are kept separate rather than credited to the final model.
+- Stats uses the dialog's width: usage beside the summary tiles (1/3 + 2/3), model
+  comparisons, a 52-week heatmap full width, answer time beside by-hour, Machines (when there are others) /
   Models / Projects / Tools in columns, then Tool calls, then Slowest calls, Largest calls
   and Background jobs in three columns, then every answer (50 at a time, more as the end
   scrolls into view). The grids stack below `md`.
@@ -626,8 +653,8 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
   what is on disk first, then `Syncing machines…` beside Refresh until the sync lands.
   Remote projects read `alias:project`; remote answers carry the alias. Heatmap cells are square with no radius,
   `neutral-800` for empty days, then `green-900/700/500/300`. Bars are `amber-500`.
-- Under the usage bars, a `text-meta neutral-500` line: `Claude Max renews 22 Oct (in 24 days)`.
-  Anthropic gives no end date, so it is the next monthly anniversary of
+- Under the usage bars, a `text-meta neutral-500` line shows the provider's plan.
+  For Anthropic it can say `Claude Max renews 22 Oct (in 24 days)`; Anthropic gives no end date, so it is the next monthly anniversary of
   `subscription_created_at` (oauth/profile), explained in its `title`. A non-active
   subscription shows its status in `red-400` instead.
 - Pace sits full width under usage and the tiles: one card per live limit window
@@ -638,6 +665,9 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
   (`green-400` on pace, `red-400` runs out, `neutral-400` under 5% of the window gone)
   and a `neutral-500` line: average rate, budget rate for the rest of the window
   (%/h for the session, %/day for weekly), and prompts left at the window's average.
+  Window duration comes from the provider when available (OpenAI plans can report a
+  weekly primary window); the five-hour/week lengths are only fallbacks. Prompt counts
+  use this PC's single-model answers from the selected provider, not a Claude-name regex.
 - The heatmap is a canvas, so cells and ~2px gaps are whole device pixels at any
   display scaling. It reads its colors from the legend swatches.
 - By hour has a y-axis: a round step (1, 2 or 5 times a power of 10, at most four above zero) with

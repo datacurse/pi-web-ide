@@ -67,6 +67,9 @@ started sessions; trusted project SoL-Pi settings can override the reducer.
   message.
 - **Terminal**: real PTYs with tabs and splits, shared across windows, kept
   alive through tmux across server restarts.
+- **Stats**: provider/model filters, ChatGPT and Anthropic subscription usage,
+  and per-model comparisons of answer times, tokens, tools, estimated cost,
+  errors and aborts; historical sessions are included.
 - **Packages**: browse, install, update and remove pi packages.
 - **Settings**: themes (Catppuccin, Claude), tool-call display modes, and a
   personality prompt appended to every new session.

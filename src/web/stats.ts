@@ -1,4 +1,60 @@
 import { t } from "./i18n.js";
+import type { StatsTurn } from "../shared/types.js";
+import { providerLabel, type UsageLimit } from "../shared/usage.js";
+
+export function usageLimitLabel(l: UsageLimit): string {
+	if (l.windowMs === 5 * 3_600_000) return t("Current session");
+	if (l.windowMs === 7 * 86_400_000) return t("This week");
+	if (l.windowMs) return t("{span} window", { span: span(l.windowMs) });
+	if (l.kind === "session" || l.kind === "openai_primary_window") return t("Current session");
+	if (l.kind === "weekly_all" || l.kind === "openai_secondary_window") return t("This week");
+	const model = l.scope?.model?.display_name;
+	return model ? t("{model} this week", { model }) : l.kind.replace(/_/g, " ");
+}
+
+export function turnProvider(turn: StatsTurn): string {
+	return turn.mixedModels ? "@mixed" : turn.provider || "@unknown";
+}
+
+export function modelKey(turn: StatsTurn): string {
+	return turn.mixedModels ? "@mixed" : `${turnProvider(turn)}/${turn.model || "?"}`;
+}
+
+export function statsProviderLabel(provider: string): string {
+	return provider === "@mixed" ? t("Mixed models") : provider === "@unknown" ? t("Unknown provider") : providerLabel(provider);
+}
+
+export function modelLabel(turn: StatsTurn): string {
+	return turn.mixedModels ? t("Mixed models") : `${statsProviderLabel(turnProvider(turn))} / ${turn.model || "?"}`;
+}
+
+export function filterTurns(turns: StatsTurn[], provider: string, model: string): StatsTurn[] {
+	return turns.filter((turn) => (!provider || turnProvider(turn) === provider) && (!model || modelKey(turn) === model));
+}
+
+export function modelComparisons(turns: StatsTurn[]) {
+	const groups = new Map<string, StatsTurn[]>();
+	for (const turn of turns) {
+		const key = modelKey(turn);
+		const group = groups.get(key) ?? [];
+		group.push(turn);
+		groups.set(key, group);
+	}
+	return [...groups].map(([key, rows]) => {
+		const times = rows.map((turn) => turn.ms).sort((a, b) => a - b);
+		const average = (value: (turn: StatsTurn) => number) => rows.reduce((sum, turn) => sum + value(turn), 0) / rows.length;
+		return {
+			key, label: modelLabel(rows[0]!), prompts: rows.length,
+			median: percentile(times, 0.5), p90: percentile(times, 0.9),
+			input: average((turn) => (turn.inputTokens ?? 0) + (turn.cacheReadTokens ?? 0) + (turn.cacheWriteTokens ?? 0)),
+			output: average((turn) => turn.outputTokens),
+			tools: average((turn) => Object.values(turn.tools).reduce((a, b) => a + b, 0)),
+			cost: average((turn) => turn.cost),
+			errors: rows.filter((turn) => turn.outcome === "error").length,
+			aborted: rows.filter((turn) => turn.outcome === "aborted").length,
+		};
+	}).sort((a, b) => b.prompts - a.prompts);
+}
 /** Pure helpers for the Stats panel. Days are LOCAL calendar days. */
 
 export function dayKey(ms: number | Date): string {
@@ -72,7 +128,7 @@ export function heatmapWeeks(weeks: number, today = new Date()): (Date | null)[]
 	return out;
 }
 
-/** Claude's limit windows by `group`: the 5-hour session and the week. */
+/** Fallback durations when a provider does not report its window length. */
 export const LIMIT_WINDOW_MS: Record<string, number> = { session: 5 * 3_600_000, weekly: 7 * 86_400_000 };
 
 export interface Pace {

@@ -11,8 +11,9 @@ import { EXERCISES, MUSCLES, WORKOUT_KINDS, type StatsTurn, type StatsView, type
 import { setKcal } from "../shared/calories.js";
 import { exerciseText, muscleName, musclesText } from "./Workout.js";
 import { WorkoutFigure } from "./workoutFigures.js";
-import { Button, IconButton, PanelHeader, sectionLabel, useBatches } from "./ui.js";
-import { addDays, callDuration, dayKey, duration, heatmapWeeks, LIMIT_WINDOW_MS, pace, percentile, span, streaks, type Pace } from "./stats.js";
+import { Button, IconButton, inputClass, PanelHeader, sectionLabel, useBatches } from "./ui.js";
+import { type ProviderUsage, type UsageLimit, type UsageSubscription as Subscription } from "../shared/usage.js";
+import { addDays, callDuration, dayKey, duration, filterTurns, heatmapWeeks, LIMIT_WINDOW_MS, modelComparisons, modelKey, modelLabel, pace, percentile, span, statsProviderLabel, streaks, turnProvider, usageLimitLabel as limitLabel, type Pace } from "./stats.js";
 import { api } from "./api.js";
 import { locale, perLocale, plural, t } from "./i18n.js";
 
@@ -66,6 +67,8 @@ export function Stats({ open, revision, onClose }: { open: boolean; revision?: u
 	const [syncing, setSyncing] = useState(false);
 	const [reload, setReload] = useState(0);
 	const [tab, setTab] = useState<"overview" | "workouts">("overview");
+	const [provider, setProvider] = useState("");
+	const [model, setModel] = useState("");
 
 	const get = useCallback(async (sync?: "1" | "force") => {
 		try {
@@ -95,12 +98,15 @@ export function Stats({ open, revision, onClose }: { open: boolean; revision?: u
 	useEffect(() => {
 		if (open) void load();
 	}, [load, revision, open]);
-	const usage = useUsage(reload);
+	const usage = useUsage(reload, provider, open && tab === "overview");
 
-	const turns = useMemo(
+	const machineTurns = useMemo(
 		() => (view?.turns ?? []).filter((t) => machine === null || t.machine === machine),
 		[view, machine],
 	);
+	const turns = useMemo(() => filterTurns(machineTurns, provider, model), [machineTurns, provider, model]);
+	const providers = [...new Set([...usage.providers, ...machineTurns.map(turnProvider), ...(provider ? [provider] : [])])].sort();
+	const modelChoices = [...new Map(filterTurns(machineTurns, provider, "").map((turn) => [modelKey(turn), modelLabel(turn)]))].sort();
 	// Memoised like `turns`: Workouts re-reads the body whenever this array changes.
 	const workouts = useMemo(
 		() => (view?.workouts ?? []).filter((s) => machine === null || s.machine === machine),
@@ -156,7 +162,7 @@ export function Stats({ open, revision, onClose }: { open: boolean; revision?: u
 								key={label}
 								variant={machine === m ? "subtle" : "ghost"}
 								size="sm"
-								onClick={() => setMachine(m)}
+								onClick={() => { setMachine(m); setModel(""); }}
 								aria-pressed={machine === m}
 								title={title}
 							>
@@ -183,6 +189,22 @@ export function Stats({ open, revision, onClose }: { open: boolean; revision?: u
 			{/* Laid out for the page dialog's width; the grids stack on a narrow window. */}
 			<div className={`${tab === "overview" ? "flex" : "hidden"} min-h-0 flex-1 flex-col gap-6 overflow-y-auto p-4`}>
 				{error && <p className="text-meta text-red-400">{error}</p>}
+				<div className="flex flex-wrap gap-3">
+					<label className="min-w-0 flex-1 text-meta text-neutral-500">
+						{t("Provider")}
+						<select value={provider} onChange={(e) => { setProvider(e.target.value); setModel(""); }} className={`mt-1 w-full ${inputClass.sm}`}>
+							<option value="">{t("All providers")}</option>
+							{providers.map((p) => <option key={p} value={p}>{statsProviderLabel(p)}</option>)}
+						</select>
+					</label>
+					<label className="min-w-0 flex-1 text-meta text-neutral-500">
+						{t("Model")}
+						<select value={model} onChange={(e) => setModel(e.target.value)} className={`mt-1 w-full ${inputClass.sm}`}>
+							<option value="">{t("All models")}</option>
+							{modelChoices.map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+						</select>
+					</label>
+				</div>
 				<div className="grid gap-6 md:grid-cols-3">
 					<Usage usage={usage} />
 					<div className="md:col-span-2">
@@ -193,9 +215,10 @@ export function Stats({ open, revision, onClose }: { open: boolean; revision?: u
 						)}
 					</div>
 				</div>
-				{usage.limits && <Paces limits={usage.limits} history={usage.history} turns={view?.turns ?? []} />}
+				{usage.limits && !usage.stale && <Paces limits={usage.limits} history={usage.history} turns={(view?.turns ?? []).filter((turn) => !turn.machine && !turn.mixedModels && turn.provider === usage.provider)} />}
 				{view && (
 					<>
+						<ModelComparison turns={turns} />
 						<Heatmap turns={turns} />
 						<div className="grid gap-6 md:grid-cols-2">
 							<AnswerTimes turns={turns} />
@@ -205,7 +228,7 @@ export function Stats({ open, revision, onClose }: { open: boolean; revision?: u
 							{remote.length > 0 && (
 								<Bars title={t("Machines")} rows={top(tally(turns, (turn) => turn.machine || t("This PC")))} />
 							)}
-							<Bars title={t("Models")} rows={top(tally(turns, (t) => t.model))} />
+							<Bars title={t("Models")} rows={top(tally(turns, modelLabel))} />
 							<Bars title={t("Projects")} rows={top(tally(turns, projectOf))} />
 							<Bars
 								title={t("Tools")}
@@ -233,23 +256,6 @@ export function Stats({ open, revision, onClose }: { open: boolean; revision?: u
 	);
 }
 
-/** The subset of /api/usage (Anthropic's oauth/usage) this panel reads. */
-interface UsageLimit {
-	kind: string;
-	/** `session` (5 hours) or `weekly`. */
-	group?: string;
-	percent: number;
-	resets_at: string | null;
-	scope: { model?: { display_name?: string | null } } | null;
-}
-
-function limitLabel(l: UsageLimit): string {
-	if (l.kind === "session") return t("Current session");
-	if (l.kind === "weekly_all") return t("This week");
-	const model = l.scope?.model?.display_name;
-	return model ? t("{model} this week", { model }) : l.kind.replace(/_/g, " ");
-}
-
 function resetLabel(iso: string | null): string {
 	if (!iso) return "";
 	const d = new Date(iso);
@@ -257,13 +263,6 @@ function resetLabel(iso: string | null): string {
 	return d.getTime() - Date.now() < 86_400_000
 		? t("Resets at {time}", { time })
 		: t("Resets {day} {time}", { day: d.toLocaleDateString(locale(), { weekday: "long" }), time });
-}
-
-/** From Anthropic's oauth/profile; it has no end date, only when the plan started. */
-interface Subscription {
-	plan: string | null;
-	status: string | null;
-	since: string | null;
 }
 
 /** The next monthly anniversary of `since`, assuming monthly billing. */
@@ -278,14 +277,14 @@ function nextRenewal(since: string, now = new Date()): Date | null {
 }
 
 function SubscriptionLine({ sub }: { sub: Subscription }) {
-	const plan = (sub.plan ?? "Claude").replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+	const plan = (sub.plan ?? "").replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 	if (sub.status && sub.status !== "active") {
 		return <p className="text-meta text-red-400">
 				{t("{plan} subscription {status}", { plan, status: sub.status.replace(/_/g, " ") })}
 			</p>;
 	}
 	const next = sub.since ? nextRenewal(sub.since) : null;
-	if (!next) return null;
+	if (!next) return sub.plan ? <p className="text-meta text-neutral-500">{plan}</p> : null;
 	const days = Math.ceil((next.getTime() - Date.now()) / 86_400_000);
 	return (
 		<p
@@ -302,45 +301,48 @@ function SubscriptionLine({ sub }: { sub: Subscription }) {
 	);
 }
 
-interface UsageState {
+interface UsageState extends Omit<ProviderUsage, "limits"> {
 	limits: UsageLimit[] | null;
-	subscription: Subscription | null;
+	providers: string[];
 	history: UsageSample[];
 	error: string | null;
 }
 
-function useUsage(reload: number): UsageState {
-	const [state, setState] = useState<UsageState>({ limits: null, subscription: null, history: [], error: null });
+function useUsage(reload: number, provider: string, enabled: boolean): UsageState {
+	const [state, setState] = useState<UsageState>({ provider, providers: [], limits: null, subscription: null, history: [], error: null });
 	useEffect(() => {
+		if (!enabled) return;
+		const controller = new AbortController();
+		setState((s) => ({ provider, providers: s.providers, limits: null, subscription: null, history: [], error: null }));
 		void (async () => {
-			const r = await api.usage.$get().catch(() => null);
-			const body = (await r?.json().catch(() => null)) as {
-				limits?: UsageLimit[];
-				subscription?: Subscription;
-				history?: UsageSample[];
-				error?: string;
-			} | null;
-			if (r?.ok && Array.isArray(body?.limits)) {
-				setState({
-					limits: body.limits,
-					subscription: body.subscription ?? null,
-					history: body.history ?? [],
-					error: null,
-				});
-			} else setState((s) => ({ ...s, error: body?.error ?? t("could not load usage") }));
+			try {
+				const r = await api.usage.$get({ query: { provider } }, { init: { signal: AbortSignal.any([controller.signal, AbortSignal.timeout(35_000)]) } });
+				const body = await r.json();
+				if (controller.signal.aborted) return;
+				if ("error" in body) {
+					setState((s) => ({ ...s, provider: body.provider, providers: body.providers, error: body.error }));
+				} else setState({ ...body, error: null });
+			} catch {
+				if (!controller.signal.aborted) setState((s) => ({ ...s, error: t("could not load usage") }));
+			}
 		})();
-	}, [reload]);
+		return () => controller.abort();
+	}, [reload, provider, enabled]);
 	return state;
 }
 
-function Usage({ usage: { limits, subscription, error: usageError } }: { usage: UsageState }) {
+function Usage({ usage: { provider, limits, subscription, message, stale, updatedAt, error: usageError } }: { usage: UsageState }) {
 	return (
 		<div>
-			<h3 className={`mb-2 ${sectionLabel}`}>{t("Usage remaining")}</h3>
+			<h3 className={`mb-2 ${sectionLabel}`}>{t("Usage remaining")} {provider && `· ${statsProviderLabel(provider)}`}</h3>
+			<p className="mb-2 text-meta text-neutral-500">{t("Subscription limits use this PC's login, independent of the model filter.")}</p>
+			{stale && updatedAt && <p className="mb-2 text-meta text-amber-400">{t("Showing cached usage from {when}; the provider could not be reached.", { when: stampFmt().format(updatedAt) })}</p>}
 			{usageError ? (
 				<p className="text-meta text-red-400">{usageError}</p>
 			) : !limits ? (
 				<p className="text-meta text-neutral-500">{t("loading…")}</p>
+			) : message ? (
+				<p className="text-meta text-neutral-500">{t(message)}</p>
 			) : (
 				<div className="flex flex-col gap-3">
 					{limits.map((l) => {
@@ -386,7 +388,7 @@ const weekClockFmt = perLocale(
 function Paces({ limits, history, turns }: { limits: UsageLimit[]; history: UsageSample[]; turns: StatsTurn[] }) {
 	const now = Date.now();
 	const rows = limits.flatMap((l) => {
-		const windowMs = LIMIT_WINDOW_MS[l.group ?? ""];
+		const windowMs = l.windowMs ?? LIMIT_WINDOW_MS[l.group ?? ""];
 		const end = l.resets_at ? Date.parse(l.resets_at) : NaN;
 		const p = windowMs && Number.isFinite(end) ? pace(l.percent, end, windowMs, now) : null;
 		return p ? [{ l, p }] : [];
@@ -423,7 +425,7 @@ function PaceCard({
 	now: number;
 }) {
 	const model = limit.scope?.model?.display_name ?? null;
-	const weekly = limit.group === "weekly";
+	const weekly = (limit.windowMs ?? LIMIT_WINDOW_MS[limit.group ?? ""] ?? 0) >= 2 * 86_400_000;
 	const fmt = weekly ? weekClockFmt() : clockFmt();
 	const unitMs = weekly ? 86_400_000 : 3_600_000;
 	const unit = weekly ? t("day") : t("h");
@@ -451,7 +453,8 @@ function PaceCard({
 	const prompts = turns.filter(
 		(t) =>
 			t.start >= p.start &&
-			(model ? t.model.toLowerCase().includes(model.toLowerCase()) : /claude/i.test(t.model)),
+			t.start <= now &&
+			(!model || t.model.toLowerCase().includes(model.toLowerCase())),
 	).length;
 	const promptsLeft = used >= 1 && prompts >= 3 ? Math.round((prompts * (100 - used)) / used) : null;
 
@@ -563,6 +566,41 @@ function PaceCard({
 				{promptsLeft !== null &&
 					` \u00b7 \u2248 ${plural(promptsLeft, "{count} more prompt", "{count} more prompts", { count: num().format(promptsLeft) })}`}
 			</p>
+		</div>
+	);
+}
+
+function ModelComparison({ turns }: { turns: StatsTurn[] }) {
+	const rows = useMemo(() => modelComparisons(turns), [turns]);
+	return (
+		<div>
+			<h3 className={`mb-2 ${sectionLabel}`}>{t("Model comparison")}</h3>
+			{rows.length === 0 && <p className="text-meta text-neutral-500">{t("None yet.")}</p>}
+			<div className="grid gap-3 md:grid-cols-2">
+				{rows.map((row) => (
+					<div key={row.key} className="rounded-sm border border-neutral-800 p-3">
+						<div className="mb-2 break-all text-ui text-neutral-200">{row.label}</div>
+						<dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-meta">
+							{[
+								[t("Prompts"), num().format(row.prompts)],
+								[t("Median answer"), duration(row.median)],
+								[t("p90"), duration(row.p90)],
+								[t("Input / prompt"), num().format(row.input)],
+								[t("Output / prompt"), num().format(row.output)],
+								[t("Tools / prompt"), num().format(row.tools)],
+								[t("Cost / prompt"), usd().format(row.cost)],
+								[t("Errors / aborted"), `${row.errors} / ${row.aborted}`],
+							].map(([label, value]) => (
+								<div key={label} className="flex justify-between gap-2">
+									<dt className="text-neutral-500">{label}</dt>
+									<dd className="text-neutral-200 tabular-nums">{value}</dd>
+								</div>
+							))}
+						</dl>
+					</div>
+				))}
+			</div>
+			<p className="mt-2 text-meta text-neutral-500">{t("Recorded metrics are not a quality score. Answer times include tool waits; input includes cached tokens; costs are estimates, not subscription charges. Mixed-model answers are shown separately.")}</p>
 		</div>
 	);
 }
@@ -1468,7 +1506,7 @@ function Answers({ turns }: { turns: StatsTurn[] }) {
 								<span className="shrink-0 text-caption text-neutral-400 tabular-nums">{duration(turn.ms)}</span>
 							</div>
 							<div className="fade-end text-meta text-neutral-500">
-								{stampFmt().format(new Date(turn.start))} · {projectName(turn.cwd)} · {turn.model || "?"}
+								{stampFmt().format(new Date(turn.start))} · {projectName(turn.cwd)} · {modelLabel(turn)}
 								{tools > 0 && ` · ${plural(tools, "{n} tool", "{n} tools")}`}
 								{turn.cost > 0 && ` · ${usd().format(turn.cost)}`}
 							</div>

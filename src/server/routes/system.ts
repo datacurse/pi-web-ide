@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { listModels, readSettings, setDefaultModel, setDefaultThinkingLevel } from "../models.js";
 import { stats } from "../stats.js";
 import { syncMachines } from "../machines.js";
-import { fetchUsage, readHistory } from "../usage.js";
+import { defaultUsageProvider, fetchUsage, readHistory, usageProviders } from "../usage.js";
 import { fleet, startPwi, validTarget } from "../fleet.js";
 import {
 	addFavorite,
@@ -79,11 +79,12 @@ export function systemRoutes({ cwd: CWD, model: MODEL, registry, piVersion: PI_V
 			}
 		})
 
-		/** Claude subscription limits (server/usage.ts), with their recorded history for the pace charts. */
-		.get("/usage", async (c) => {
-			const r = await fetchUsage();
-			if ("error" in r) return c.json({ error: r.error }, 502);
-			return c.json({ ...r.body, history: readHistory() }, 200);
+		.get("/usage", query<{ provider?: string }>(), async (c) => {
+			const provider = c.req.query("provider") || defaultUsageProvider();
+			const providers = usageProviders();
+			const r = await fetchUsage(provider);
+			if ("error" in r) return c.json({ error: r.error, provider, providers }, 502);
+			return c.json({ ...r.body, providers, history: readHistory(provider) }, 200);
 		})
 
 		/** `?sync=1` first brings other machines' mirrors up to date (throttled); `?sync=force` always does. */

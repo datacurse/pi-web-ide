@@ -74,12 +74,13 @@ export interface PiMessage {
 export interface PiNotice {
 	level: "info" | "warning" | "error";
 	text: string;
-	/** A later notice with the same key replaces this one, so a compaction is one box, not one per stage. */
+	/** A later notice with the same key replaces this one; empty text clears it. */
 	key?: string;
 }
 
 export function addNotice(notices: PiNotice[], n: PiNotice): PiNotice[] {
-	return [...notices.filter((o) => !n.key || o.key !== n.key), n];
+	const remaining = notices.filter((o) => !n.key || o.key !== n.key);
+	return n.key && !n.text ? remaining : [...remaining, n];
 }
 
 /**
@@ -191,6 +192,12 @@ export interface StatsTurn {
 	/** Until the last message of the turn was written. */
 	ms: number;
 	model: string;
+	provider: string;
+	/** Answers that changed provider/model mid-prompt are compared separately. */
+	mixedModels: boolean;
+	inputTokens: number;
+	cacheReadTokens: number;
+	cacheWriteTokens: number;
 	prompt: string;
 	/** Tool name \u2192 calls in this turn. */
 	tools: Record<string, number>;
@@ -345,8 +352,9 @@ export interface SolPiSettings {
 	projectFile: string | null;
 }
 
-/** One reading of every Claude limit, from `/api/usage`'s `history`. */
+/** One reading of a provider's limits; older samples without a provider are Anthropic. */
 export interface UsageSample {
+	provider?: string;
 	at: number;
 	limits: { kind: string; model: string | null; percent: number; resets_at: string | null }[];
 }

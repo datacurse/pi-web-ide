@@ -188,7 +188,7 @@ assert.deepEqual(
 			errorStatus: 529,
 		},
 	}),
-	[{ type: "error", message: "overloaded (HTTP 529)" }],
+	[{ type: "notice", notice: { level: "error", text: "overloaded (HTTP 529)", key: "provider" } }],
 );
 
 // An extension's `notify` is fire-and-forget and is the ONLY output an
@@ -218,8 +218,42 @@ assert.deepEqual(
 		delayMs: 2000,
 		errorMessage: "529 overloaded",
 	}),
-	[{ type: "notice", notice: { level: "warning", text: "retry 1/3 in 2s: 529 overloaded" } }],
+	[{ type: "notice", notice: { level: "warning", text: "retry 1/3 in 2s: 529 overloaded", key: "provider" } }],
 );
+
+{
+	const unrelated = { level: "info" as const, text: "extension notice" };
+	let notices: Parameters<typeof addNotice>[0] = [unrelated];
+	const apply = (frame: Record<string, unknown>) => {
+		for (const event of toEvents(frame)) {
+			assert.equal(event.type, "notice");
+			if (event.type === "notice") notices = addNotice(notices, event.notice);
+		}
+	};
+	const fail = () => apply({
+		type: "message_end",
+		message: { role: "assistant", content: [], stopReason: "error", errorMessage: "WebSocket error" },
+	});
+	const retry = (attempt: number) => apply({
+		type: "auto_retry_start", attempt, maxAttempts: 3, delayMs: 2000, errorMessage: "WebSocket error",
+	});
+	fail();
+	retry(1);
+	assert.deepEqual(notices, [unrelated, {
+		level: "warning", text: "retry 1/3 in 2s: WebSocket error", key: "provider",
+	}], "retry replaces the provider error without touching unrelated notices");
+	fail();
+	retry(2);
+	assert.equal(notices.length, 2, "repeated failures and retries do not accumulate");
+	apply({ type: "auto_retry_end", success: true });
+	assert.deepEqual(notices, [unrelated], "recovery clears the provider notice");
+	fail();
+	retry(3);
+	apply({ type: "auto_retry_end", success: false, finalError: "WebSocket error" });
+	assert.deepEqual(notices, [unrelated, {
+		level: "error", text: "retries exhausted: WebSocket error", key: "provider",
+	}], "exhaustion leaves only one final error");
+}
 
 /*
  * pi 0.86 persists the system prompt as a `system` message at the head of

@@ -713,14 +713,26 @@ All of them live in `localStorage` via `src/web/prefs.ts`, which validates on
 every read — storage is user-writable and outlives any rename, so an unknown
 value falls back rather than rendering something broken.
 
-The dialog also shows how much of each **Claude subscription limit** is left
-and when it resets. `GET /api/usage` asks Anthropic's `oauth/usage` endpoint
-with the OAuth token pi stored in `auth.json`. An expired token is refreshed
-with `pi auth print-bearer-token`, which rotates it under pi's own lock, so an
-idle pi no longer makes the limits disappear. The server also samples the
-limits every ten minutes into `usage-history.json` (eight days kept), and
-Stats' Pace charts plot each window from them and extrapolate its average pace
-to the reset: whether you will run out first, and how much faster you could go.
+Stats shows **subscription limits for the selected provider**. `GET /api/usage?provider=…`
+uses only that provider's OAuth token: OpenAI Codex reads ChatGPT's `backend-api/wham/usage`,
+Anthropic reads its `oauth/usage` and `oauth/profile`. Tokens are never tried against
+another provider's endpoint. An expired token is refreshed with
+`pi auth print-bearer-token --provider …`, under pi's own lock. Unsupported providers
+and missing logins return a neutral explanation, not fabricated limits.
+
+Caches, in-flight requests and history are isolated by provider; failures are throttled
+along with successes, and older good data is explicitly marked as cached. The server
+samples the startup provider every ten minutes into `usage-history.json` (eight days
+kept). Old untagged samples are Anthropic, never OpenAI. Pace uses the actual window
+length when reported, rather than assuming every primary window lasts five hours.
+
+Provider/model filters apply to historical Stats alongside the machine filter. The
+model comparison cards show sample size, median/p90 answer time, input/output tokens,
+tool calls and estimated cost per prompt, errors and aborts. Provider identity comes
+from assistant messages or recorded model changes; missing identity is not guessed.
+Mixed-model answers are grouped separately rather than attributed to the last model.
+These are recorded performance metrics, not a score of answer quality; subscription
+limits use the local login and are independent of the model and machine filters.
 
 **Show thinking** hides reasoning blocks, streaming and historical, and it
 *filters* rather than `display: none`s them: reasoning is routinely the
