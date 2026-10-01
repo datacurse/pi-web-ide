@@ -41,6 +41,7 @@ export default function fastMode(pi: Pi) {
 	pi.on("before_provider_request", ({ payload }, ctx) => {
 		if (!supportsFastMode(ctx.model && `${ctx.model.provider}/${ctx.model.id}`)) return;
 		if (!payload || typeof payload !== "object" || !("model" in payload) || payload.model !== ctx.model?.id) return;
+		pi.appendEntry(FAST_COMMAND, { enabled });
 		return { ...payload, service_tier: enabled ? "priority" : "default" };
 	});
 }

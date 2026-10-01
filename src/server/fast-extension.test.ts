@@ -40,15 +40,16 @@ test("Fast is opt-in and updates the actual provider payload independently of re
 	const payload = { model: "gpt-6.1-sol", reasoning: { effort: "high" }, input: [] };
 	assert.deepEqual(f.payload(payload), { ...payload, service_tier: "default" });
 	assert.equal(f.command("status").enabled, false);
-	assert.equal(f.entries.length, 0);
+	assert.deepEqual(f.entries.map((entry) => entry.data.enabled), [false]);
 	assert.equal(f.command("on").enabled, true);
 	assert.deepEqual(f.payload(payload), { ...payload, service_tier: "priority" });
 	assert.equal("service_tier" in payload, false, "does not mutate another extension's payload");
-	assert.equal(f.entries.length, 1);
+	assert.deepEqual(f.entries.map((entry) => entry.data.enabled), [false, true, true]);
 	f.command("on");
-	assert.equal(f.entries.length, 1, "idempotent saves do not add entries");
+	assert.equal(f.entries.length, 3, "idempotent saves do not add entries");
 	f.command("off");
 	assert.deepEqual(f.payload({ ...payload, service_tier: "priority" }), { ...payload, service_tier: "default" });
+	assert.deepEqual(f.entries.map((entry) => entry.data.enabled), [false, true, true, false, false]);
 });
 
 test("session restart restores the last persisted preference", () => {

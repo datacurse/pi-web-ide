@@ -380,7 +380,7 @@ export function SessionList({
 							>
 								<div className="session-title text-ui text-neutral-200">
 									{/* The session's state, the same colors as its tab π: amber
-									    pulsing while it works, steady amber for a new reply, red
+									    pulsing while it works, steady green for a new reply, red
 									    for a question. Inline, so a wrapped title keeps them on
 									    its first line. */}
 									{state && (

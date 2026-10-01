@@ -527,8 +527,8 @@ export function SessionTabs({
 									<PushPin size={12} weight="fill" className="shrink-0 text-amber-400" aria-label={t("Pinned")} />
 								)}
 								{/* Marks an AI session so it never reads as a code tab, and
-								    doubles as its live signal: grey when idle, amber and
-								    pulsing while it works, grey plus the dot for a new reply, red
+								    doubles as its live signal: grey when idle, glowing amber and
+								    pulsing while it works, glowing green for a new reply, red
 								    for a question. Color alone still carries it under reduced
 								    motion. */}
 								{!isFile && (
@@ -549,7 +549,7 @@ export function SessionTabs({
 								)}
 								{dirty && <span className="sr-only">, {t("unsaved changes")}</span>}
 								{/* Waiting on you: the same dot as unsaved, in the state's color. */}
-								{(state === "ready" || state === "needs") && (
+								{state === "needs" && (
 									<span aria-hidden className={`size-1.5 shrink-0 rounded-full ${ATTENTION_UI[state].dot}`} />
 								)}
 								{state && <span className="sr-only">, {t(ATTENTION_UI[state].label)}</span>}

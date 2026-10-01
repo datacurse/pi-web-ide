@@ -24,8 +24,8 @@ export function attentionOf(s: PiSessionInfo, seen: SeenSessions): Attention {
 /** How each state looks, shared by the tab π and the session-list dot. */
 export const ATTENTION_UI = {
 	needs: { text: "text-red-400", dot: "bg-red-400", label: "needs your answer" },
-	ready: { text: "text-neutral-500", dot: "bg-amber-400", label: "new reply" },
-	working: { text: "animate-pulse text-amber-400", dot: "animate-pulse bg-amber-400", label: "working" },
+	ready: { text: "text-green-400 drop-shadow-sm drop-shadow-current", dot: "bg-green-400", label: "new reply" },
+	working: { text: "animate-pulse text-amber-400 drop-shadow-sm drop-shadow-current", dot: "animate-pulse bg-amber-400", label: "working" },
 } as const;
 
 /** Sort rank: what to look at first. */

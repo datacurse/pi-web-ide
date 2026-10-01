@@ -1,7 +1,7 @@
 // Run: node --import tsx src/web/attention.test.ts
 import assert from "node:assert/strict";
 import type { PiSessionInfo } from "../shared/types.js";
-import { attentionOf, attentionTitle, nextWaiting, type Attention } from "./attention.js";
+import { ATTENTION_UI, attentionOf, attentionTitle, nextWaiting, type Attention } from "./attention.js";
 
 const session = (path: string, lastActive: string, extra: Partial<PiSessionInfo> = {}): PiSessionInfo => ({
 	id: path,
@@ -28,6 +28,12 @@ assert.equal(
 	attentionOf(session("/b", "2025-01-04T00:00:00.000Z", { isStreaming: true, needsInput: true }), seen),
 	"needs",
 );
+
+// Tabs and list rows share orange for working and green for unread completion.
+assert.equal(ATTENTION_UI.working.dot, "animate-pulse bg-amber-400");
+assert.equal(ATTENTION_UI.ready.dot, "bg-green-400");
+assert.equal(ATTENTION_UI.working.text, "animate-pulse text-amber-400 drop-shadow-sm drop-shadow-current");
+assert.equal(ATTENTION_UI.ready.text, "text-green-400 drop-shadow-sm drop-shadow-current");
 
 assert.equal(attentionTitle([]), "pwi");
 assert.equal(attentionTitle(["working", null]), "\u25cf pwi");

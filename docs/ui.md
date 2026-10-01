@@ -315,13 +315,15 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
 | State   | Meaning                                  | Tab `π`            | Dot (tab end, list row) |
 | ------- | ---------------------------------------- | ------------------ | ----------------------- |
 | idle    | nothing new                              | `neutral-500`      | none                    |
-| working | streaming                                | amber, pulsing     | list only, pulsing amber |
-| ready   | new activity since this browser saw it   | `neutral-500`      | amber                   |
+| working | streaming                                | amber, glowing and pulsing | list only, pulsing amber |
+| ready   | new activity since this browser saw it   | green, glowing     | list only, green        |
 | needs   | blocked on a question (`ask`)            | `red-400`, steady  | red                     |
 
 - The tab's `π` lights up immediately when a prompt is sent, including a new session
   before its file exists; it does not wait for an acknowledgement or streamed output.
-- An amber `π` only ever means working: a finished turn must not look like one still running.
+- Orange (`amber-400`) means working; green (`green-400`) means done but not checked yet.
+  Tabs show these states through the `π` itself, with `drop-shadow-sm drop-shadow-current`
+  glow, not a trailing dot. An amber `π` only ever means working.
 - "Seen" means on screen in either column while the window is visible and focused.
   Per-browser (`localStorage`), synced across pwi windows.
 - Window title: `N ● pwi` — N = ready + needs (omitted at 0), `●` while anything works. No brackets.
@@ -661,8 +663,12 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
   `Up next` (the next 8 planned: time or `now`, colour dot, name, muscle groups, then `+N more planned
   today`) and `Muscle load now` (`Bars` of each group's current load, with a `text-meta` line on how
   it decays).
-- Stats Overview starts with Provider and Model selects (`inputClass.sm`), defaulting
-  to All providers / All models. They filter historical summaries, charts, tool metrics
+- Stats Overview starts with Provider, Model and Request mode selects (`inputClass.sm`), defaulting
+  to All providers / All models / All modes. Request mode offers Standard, Fast, Unknown
+  and Mixed; comparisons separate these groups and each answer shows its mode.
+  Sol requests record their requested Fast setting outside model context, including Standard.
+  Historical Sol runs without a saved setting stay Unknown; settings on unsupported models
+  count as Standard. Mixed-mode prompts never enter the Standard or Fast comparison groups. They filter historical summaries, charts, tool metrics
   and answers along with the machine filter; changing provider or machine clears the
   model selection. Model identities include the provider, so identical model IDs never
   merge across providers; unknown providers and mixed-model answers have separate groups.

@@ -13,7 +13,7 @@ import { exerciseText, muscleName, musclesText } from "./Workout.js";
 import { WorkoutFigure } from "./workoutFigures.js";
 import { Button, IconButton, inputClass, PanelHeader, sectionLabel, useBatches } from "./ui.js";
 import { type ProviderUsage, type UsageLimit, type UsageSubscription as Subscription } from "../shared/usage.js";
-import { addDays, callDuration, dayKey, duration, filterTurns, heatmapWeeks, LIMIT_WINDOW_MS, modelComparisons, modelKey, modelLabel, pace, percentile, span, statsProviderLabel, streaks, tokensPerSecond, turnProvider, usageLimitLabel as limitLabel, type Pace } from "./stats.js";
+import { addDays, callDuration, dayKey, duration, filterTurns, heatmapWeeks, LIMIT_WINDOW_MS, modelComparisons, modelKey, modelLabel, pace, percentile, span, statsProviderLabel, streaks, tokensPerSecond, turnModeLabel, turnProvider, usageLimitLabel as limitLabel, type Pace } from "./stats.js";
 import { api } from "./api.js";
 import { locale, perLocale, plural, t } from "./i18n.js";
 
@@ -69,6 +69,7 @@ export function Stats({ open, revision, onClose }: { open: boolean; revision?: u
 	const [tab, setTab] = useState<"overview" | "workouts">("overview");
 	const [provider, setProvider] = useState("");
 	const [model, setModel] = useState("");
+	const [mode, setMode] = useState("");
 
 	const get = useCallback(async (sync?: "1" | "force") => {
 		try {
@@ -104,7 +105,7 @@ export function Stats({ open, revision, onClose }: { open: boolean; revision?: u
 		() => (view?.turns ?? []).filter((t) => machine === null || t.machine === machine),
 		[view, machine],
 	);
-	const turns = useMemo(() => filterTurns(machineTurns, provider, model), [machineTurns, provider, model]);
+	const turns = useMemo(() => filterTurns(machineTurns, provider, model, mode), [machineTurns, provider, model, mode]);
 	const providers = [...new Set([...usage.providers, ...machineTurns.map(turnProvider), ...(provider ? [provider] : [])])].sort();
 	const modelChoices = [...new Map(filterTurns(machineTurns, provider, "").map((turn) => [modelKey(turn), modelLabel(turn)]))].sort();
 	// Memoised like `turns`: Workouts re-reads the body whenever this array changes.
@@ -202,6 +203,16 @@ export function Stats({ open, revision, onClose }: { open: boolean; revision?: u
 						<select value={model} onChange={(e) => setModel(e.target.value)} className={`mt-1 w-full ${inputClass.sm}`}>
 							<option value="">{t("All models")}</option>
 							{modelChoices.map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+						</select>
+					</label>
+					<label className="min-w-0 flex-1 text-meta text-neutral-500">
+						{t("Request mode")}
+						<select value={mode} onChange={(e) => setMode(e.target.value)} className={`mt-1 w-full ${inputClass.sm}`}>
+							<option value="">{t("All modes")}</option>
+							<option value="standard">{t("Standard mode")}</option>
+							<option value="fast">{t("Fast mode")}</option>
+							<option value="unknown">{t("Unknown mode")}</option>
+							<option value="mixed">{t("Mixed modes")}</option>
 						</select>
 					</label>
 				</div>
@@ -1509,7 +1520,7 @@ function Answers({ turns }: { turns: StatsTurn[] }) {
 								<span className="shrink-0 text-caption text-neutral-400 tabular-nums">{duration(turn.ms)}</span>
 							</div>
 							<div className="fade-end text-meta text-neutral-500">
-								{stampFmt().format(new Date(turn.start))} · {projectName(turn.cwd)} · {modelLabel(turn)}
+								{stampFmt().format(new Date(turn.start))} · {projectName(turn.cwd)} · {modelLabel(turn)} · {turnModeLabel(turn)}
 								{` · ${t("Generation TPS")}: ${tps === undefined ? "–" : tps.toFixed(1)}`}
 								{tools > 0 && ` · ${plural(tools, "{n} tool", "{n} tools")}`}
 								{turn.cost > 0 && ` · ${usd().format(turn.cost)}`}

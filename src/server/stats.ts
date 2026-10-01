@@ -9,6 +9,7 @@ import { createReadStream, type Stats } from "node:fs";
 import { readdir, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
+import { FAST_COMMAND, supportsFastMode } from "../shared/fastMode.js";
 import { contentChars, preview, program, splitBySteps, subKey } from "../shared/toolCalls.js";
 import type { StatsTurn, StatsView, ToolOutlier } from "../shared/types.js";
 import { parseMetrics, type Step, type ToolMetric } from "../tool-metrics/format.js";
@@ -143,6 +144,8 @@ export async function parseLines(
 	let end = 0;
 	let activeProvider = "";
 	let activeModel = "";
+	let fastMode: boolean | undefined;
+	const fastModes = new Set<boolean | undefined>();
 	const identities = new Set<string>();
 	const generation = new Map<number, { ms: number; tokens: number }>();
 	let outputs: { timestamp: number; tokens: number }[] = [];
@@ -213,6 +216,7 @@ export async function parseLines(
 		}
 		turn = undefined;
 		identities.clear();
+		fastModes.clear();
 		generation.clear();
 		outputs = [];
 		calls = [];
@@ -240,6 +244,11 @@ export async function parseLines(
 				if (slash > 0) { activeProvider = entry.model.slice(0, slash); activeModel = entry.model.slice(slash + 1); }
 				else activeModel = entry.model;
 			}
+			continue;
+		}
+		if (entry?.type === "custom" && entry.customType === FAST_COMMAND) {
+			const data = entry.data as { enabled?: unknown } | undefined;
+			if (data && typeof data.enabled === "boolean") fastMode = data.enabled;
 			continue;
 		}
 		if (entry?.type === "custom" && entry.customType === "pwi-generation") {
@@ -306,6 +315,12 @@ export async function parseLines(
 		turn.provider = activeProvider;
 		if (activeModel) identities.add(`${activeProvider}/${activeModel}`);
 		turn.mixedModels = identities.size > 1;
+		const effectiveFastMode = activeModel && activeProvider
+			? supportsFastMode(`${activeProvider}/${activeModel}`) ? fastMode : false
+			: undefined;
+		fastModes.add(effectiveFastMode);
+		turn.mixedFastMode = fastModes.size > 1;
+		turn.fastMode = turn.mixedFastMode ? undefined : effectiveFastMode;
 		if (typeof m.stopReason === "string") turn.outcome = m.stopReason;
 		const usage = m.usage as { input?: unknown; output?: unknown; cacheRead?: unknown; cacheWrite?: unknown; cost?: { total?: unknown } } | undefined;
 		const amount = (v: unknown) => typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : 0;

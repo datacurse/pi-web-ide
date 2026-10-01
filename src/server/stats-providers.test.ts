@@ -54,6 +54,37 @@ test("stats retain provider identity, all token types and mixed-model answers", 
 	assert.equal(p.turns[0]?.cacheWriteTokens, 40);
 });
 
+test("Fast mode follows saved settings and requests, not the final session setting", async () => {
+	const mode = (enabled: unknown) => JSON.stringify({ type: "custom", customType: "pwi-fast", data: { enabled } });
+	const sol = { role: "assistant", provider: "openai-codex", model: "gpt-6.1-sol", stopReason: "stop" };
+	const p = await parseLines([
+		msg(0, { role: "user", content: "historical unknown" }), msg(1, sol),
+		msg(2, { role: "user", content: "recorded default request" }), mode(false), msg(3, sol),
+		mode(true),
+		msg(4, { role: "user", content: "fast persisted" }), msg(5, sol),
+		msg(6, { role: "user", content: "unsupported model" }),
+		msg(7, { ...sol, provider: "anthropic", model: "claude-opus" }),
+		msg(8, { role: "user", content: "Sol again" }), mode("invalid"), msg(9, sol),
+		msg(10, { role: "user", content: "mixed" }), msg(11, { ...sol, stopReason: "toolUse" }),
+		mode(false), msg(12, sol),
+		msg(13, { role: "user", content: "standard afterward" }), msg(14, sol),
+		mode(true),
+	]);
+	assert.deepEqual(p.turns.map((turn) => turn.fastMode), [undefined, false, true, false, true, undefined, false]);
+	assert.deepEqual(p.turns.map((turn) => turn.mixedFastMode), [false, false, false, false, false, true, false]);
+	assert.equal(p.turns[5]?.mixedModels, false);
+});
+
+test("unknown and recorded settings within one prompt are not credited to Fast", async () => {
+	const assistant = { role: "assistant", provider: "openai-codex", model: "gpt-6.1-sol", stopReason: "stop" };
+	const p = await parseLines([
+		msg(0, { role: "user", content: "mixed coverage" }), msg(1, assistant),
+		JSON.stringify({ type: "custom", customType: "pwi-fast", data: { enabled: true } }), msg(2, assistant),
+	]);
+	assert.equal(p.turns[0]?.fastMode, undefined);
+	assert.equal(p.turns[0]?.mixedFastMode, true);
+});
+
 test("model_change supplies identity for older messages; absent providers are not guessed", async () => {
 	const p = await parseLines([
 		msg(0, { role: "user", content: "old" }),

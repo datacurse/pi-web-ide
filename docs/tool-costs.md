@@ -22,6 +22,36 @@ the probe results in `docs/plans/tool-metrics.md`.
 
 ## Time
 
+### Fast-toggle task: model requests dominate 22-minute completion (2026-10-01)
+
+- One completed turn in session `01a0f7b6-d503-73b1-bd6d-a8d7adea1747`,
+  raw entries 207–349: prompt at 14:27:01.161 UTC, final answer at
+  14:49:30.001 UTC, 1348.840s total. Sol used low reasoning; the screenshot's
+  duration is real, not idle time incorrectly charged to the turn.
+- Nested assistant request timestamps to persisted entry timestamps total
+  1255.131s across 33 attempts (median 30.383s), about 93% of wall time.
+  This includes provider/network/reasoning/generation and does not isolate
+  queueing or prove that large context caused the latency. Successful
+  requests reported input + cache context growing from 143,468 to 219,081
+  tokens; total reported output was 21,221 tokens, including 9,910 reasoning.
+- 77 requested tools, including 38 read calls (not 38 distinct files).
+  Persisted tool-result intervals total 84.417s on the wall path; 76 matched
+  raw metric rows sum to 122.907s tool time and 52.495s hooks, overlapping
+  because calls were batched. Do not add those sums to wall time. Final
+  tests took 8.293s and typecheck 7.032s; active diagnostics took 37.678s.
+- Main feature wiring was written by 14:34:47, about 7m46s after the prompt.
+  A subsequent request producing four test-file changes took 224.523s.
+  Temporary wire/wrapper verification occupied approximately 14:40:26–
+  14:46:50 (6m24s), including three failed probe runs: an interception
+  assertion, `.ts` top-level await compiled as CJS, and an unsettled await.
+  These were harness failures, not demonstrated feature failures.
+- One additional request failed with `WebSocket closed 1012` after 37.595s;
+  the retry took 42.257s before diagnostics could run. No compaction entry
+  appears within the turn. Supported targets are fewer sequential model
+  requests, narrower context, and simpler verification harnesses—not
+  disabling checks or optimizing filesystem reads. Context reduction is a
+  plausible improvement, not a measured causal result from this one turn.
+
 ### Action Fusion helps selectively, not a measured task-wide speedup (2026-10-01)
 
 - Same-repo raw history, deduplicated by assistant entry ID: 460

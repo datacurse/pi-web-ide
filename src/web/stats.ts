@@ -1,3 +1,4 @@
+import { supportsFastMode } from "../shared/fastMode.js";
 import { t } from "./i18n.js";
 import type { StatsTurn } from "../shared/types.js";
 import { providerLabel, type UsageLimit } from "../shared/usage.js";
@@ -28,8 +29,26 @@ export function modelLabel(turn: StatsTurn): string {
 	return turn.mixedModels ? t("Mixed models") : `${statsProviderLabel(turnProvider(turn))} / ${turn.model || "?"}`;
 }
 
-export function filterTurns(turns: StatsTurn[], provider: string, model: string): StatsTurn[] {
-	return turns.filter((turn) => (!provider || turnProvider(turn) === provider) && (!model || modelKey(turn) === model));
+export function turnMode(turn: StatsTurn): "fast" | "standard" | "unknown" | "mixed" {
+	if (turn.mixedFastMode) return "mixed";
+	if (turn.fastMode === true) return "fast";
+	if (turn.fastMode === false) return "standard";
+	return !turn.mixedModels && turn.provider && turn.model && !supportsFastMode(`${turn.provider}/${turn.model}`)
+		? "standard" : "unknown";
+}
+
+export function turnModeLabel(turn: StatsTurn): string {
+	switch (turnMode(turn)) {
+		case "fast": return t("Fast mode");
+		case "standard": return t("Standard mode");
+		case "mixed": return t("Mixed modes");
+		case "unknown": return t("Unknown mode");
+	}
+}
+
+export function filterTurns(turns: StatsTurn[], provider: string, model: string, mode = ""): StatsTurn[] {
+	return turns.filter((turn) => (!provider || turnProvider(turn) === provider) && (!model || modelKey(turn) === model)
+		&& (!mode || turnMode(turn) === mode));
 }
 
 export function tokensPerSecond(turn: StatsTurn): number | undefined {
@@ -41,7 +60,7 @@ export function tokensPerSecond(turn: StatsTurn): number | undefined {
 export function modelComparisons(turns: StatsTurn[]) {
 	const groups = new Map<string, StatsTurn[]>();
 	for (const turn of turns) {
-		const key = modelKey(turn);
+		const key = `${modelKey(turn)}:${turnMode(turn)}`;
 		const group = groups.get(key) ?? [];
 		group.push(turn);
 		groups.set(key, group);
@@ -52,7 +71,7 @@ export function modelComparisons(turns: StatsTurn[]) {
 		const generationMs = measured.reduce((sum, turn) => sum + turn.generationMs!, 0);
 		const average = (value: (turn: StatsTurn) => number) => rows.reduce((sum, turn) => sum + value(turn), 0) / rows.length;
 		return {
-			key, label: modelLabel(rows[0]!), prompts: rows.length,
+			key, label: `${modelLabel(rows[0]!)} · ${turnModeLabel(rows[0]!)}`, prompts: rows.length,
 			median: percentile(times, 0.5), p90: percentile(times, 0.9),
 			input: average((turn) => (turn.inputTokens ?? 0) + (turn.cacheReadTokens ?? 0) + (turn.cacheWriteTokens ?? 0)),
 			output: average((turn) => turn.outputTokens),

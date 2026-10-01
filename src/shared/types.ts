@@ -199,6 +199,10 @@ export interface StatsTurn {
 	provider: string;
 	/** Answers that changed provider/model mid-prompt are compared separately. */
 	mixedModels: boolean;
+	/** Requested Fast setting; absent when historical data cannot establish it. */
+	fastMode?: boolean;
+	/** Requests within this prompt used different Fast settings (including unknown). */
+	mixedFastMode?: boolean;
 	inputTokens: number;
 	cacheReadTokens: number;
 	cacheWriteTokens: number;
