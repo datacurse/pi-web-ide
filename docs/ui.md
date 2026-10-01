@@ -70,8 +70,9 @@ fits none of the existing ones, and record it here.
   where a mask cannot follow the text). Multi-line: `.fade-clamp` (3 lines).
 - Expanded tool calls use structured argument views, not JSON dumps: file paths
   and metadata for reads, terminal-style commands for shell calls, the editor's
-  read-only unified diff for each edit replacement, and content previews for
-  writes. Other arguments stay visible as key/value rows. Results are separated
+  read-only unified diff for each edit replacement (content-height, capped at
+  `max-h-64`), and content previews for writes. Other arguments stay visible as
+  key/value rows. Results are separated
   from inputs, and unavailable nested output stays explicitly marked.
 - Tool call lines are always one line; the result preview fades. Tool and group
   chevrons and status indicators never shrink when the preview or label is long.

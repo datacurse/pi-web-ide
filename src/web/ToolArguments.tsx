@@ -31,7 +31,7 @@ export function ToolArguments({ name, args }: { name: string; args: unknown }) {
 		</div>}
 		{edits?.map((edit, i) => <div key={i} className="border-b border-neutral-800">
 			<div className="px-3 py-1 text-caption text-neutral-500">{t("Changes")} · {i + 1} / {edits.length}</div>
-			<div className="flex h-64 min-h-0 flex-col overflow-hidden">
+			<div className="flex max-h-64 min-h-0 flex-col overflow-hidden">
 				<Merge path={path ?? ""} before={edit.oldText} after={edit.newText} />
 			</div>
 		</div>)}
