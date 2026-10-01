@@ -123,18 +123,12 @@ const app = createApp({
 });
 
 /*
- * In production serve the built client; in dev, Vite proxies /api here instead.
- *
- * `PWI_DEV` (set only by `pnpm dev`, which always starts Vite) turns the
- * static half OFF and sends the browser to the dev server instead. Without
- * it this port keeps answering with whatever `dist/` was last built, which
- * during development is by definition stale: the page looks alive, the API
- * behind it is the one you are editing, and the only symptom of the mismatch
- * is that your changes are not there. A redirect to the port that does have
- * them is the honest answer, and it costs one line of config to say so.
+ * Dev servers on non-default ports redirect the page to Vite for hot reload.
+ * The default port serves the last build, so the stable URL remains usable while
+ * `pnpm dev` refreshes `dist/` before starting its separate hot-reload server.
  */
 const dist = resolve(ROOT, "dist");
-if (process.env.PWI_DEV === "1") {
+if (process.env.PWI_DEV === "1" && PORT !== 8890) {
 	app.get("*", (c) => {
 		// Path and query exactly as sent: everything after the origin.
 		const url = c.req.url;

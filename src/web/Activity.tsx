@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Brain, ArrowUpRight, ArrowDownLeft, Wrench, ArrowClockwise, ArrowsInLineVertical, QuestionMark, CaretDown, CaretRight, Clock, ListNumbers } from "@phosphor-icons/react";
+import { Brain, ArrowUpRight, ArrowDownLeft, Wrench, ArrowClockwise, ArrowsInLineVertical, QuestionMark, Clock, ListNumbers } from "@phosphor-icons/react";
 import { activityDuration, activityGroups, activityRounds, type ActivityRound, type ActivityPhase, type ActivityPhaseGroup, type ActivityStep, type TurnActivity } from "../shared/activity.js";
 import { t, plural } from "./i18n.js";
 import { readWorkExpanded } from "./prefs.js";
@@ -159,10 +159,11 @@ export function ActivityBreakdown({ activity, now = Date.now(), renderContent, r
 }) {
 	return (
 		<ol className="mt-1 space-y-0" aria-label={t("Turn timeline")}>
-			{activityRounds(activityGroups(activity)).map((round) => <li key={round.id} className="relative border-l border-neutral-800 pl-4 last:border-transparent">
- 				<span aria-hidden className="absolute left-0 top-1 size-2 -translate-x-1/2 rounded-full border border-neutral-500 bg-neutral-950" />
- 				<RoundGroup round={round} now={now} renderContent={renderContent} roundRefs={roundRefs} />
- 			</li>)}
+			{activityRounds(activityGroups(activity)).map((round) => <li key={round.id} className="relative pl-4 last:[&>span:first-child]:border-transparent">
+				<span aria-hidden className="absolute left-1 top-0 bottom-0 border-l border-neutral-800" />
+				<span aria-hidden className="absolute left-1 top-1 size-2 rounded-full border border-neutral-500 bg-neutral-950" />
+				<RoundGroup round={round} now={now} renderContent={renderContent} roundRefs={roundRefs} />
+			</li>)}
 		</ol>
 	);
 }
@@ -226,7 +227,7 @@ export function ActivityPanel({ activity, renderContent, liveContent, controls, 
 		<div className="mt-2 flex items-center gap-2 text-meta text-neutral-500">
 			{controls}
 {breakdownAvailable ? <button type="button" data-custom="inline timing disclosure" className="flex shrink-0 items-center gap-3 hover:text-neutral-300" onClick={() => { const next = !open; rememberBreakdownOpen(activity.start, next); setOpenOverride(next); }} aria-expanded={open} aria-label={t("Toggle breakdown")}>
-<span className="flex items-center gap-1">{open ? <CaretDown size={12} /> : <CaretRight size={12} />}<span className="flex items-center gap-1"><span className="flex w-3 shrink-0 justify-center"><ListNumbers size={12} aria-hidden /></span><span aria-label={plural(roundCount, "1 round", "{n} rounds")} className="tabular-nums">{roundCount}</span></span></span>
+<span className="flex items-center gap-1"><span className="flex w-3 shrink-0 justify-center"><ListNumbers size={12} aria-hidden /></span><span aria-label={plural(roundCount, "1 round", "{n} rounds")} className="tabular-nums">{roundCount}</span></span>
 <span className="flex items-center gap-1"><span className="flex w-3 shrink-0 justify-center"><Clock size={12} aria-hidden /></span><span className="tabular-nums">{activityDuration((activity.end ?? now) - activity.start)}</span></span>
 </button> : <span className="flex shrink-0 items-center gap-3">
 <span className="flex items-center gap-1"><span className="flex w-3 shrink-0 justify-center"><ListNumbers size={12} aria-hidden /></span><span aria-label={plural(roundCount, "1 round", "{n} rounds")} className="tabular-nums">{roundCount}</span></span>
@@ -239,7 +240,7 @@ export function ActivityPanel({ activity, renderContent, liveContent, controls, 
 	);
 	return (
 		<div>
-			{stickyLeading ? <div className="sticky top-0 z-10 bg-neutral-950">{stickyLeading}{summary}</div> : summary}
+			{stickyLeading && !open ? <div className="chat-sticky-leading sticky top-0 z-10 bg-neutral-950">{stickyLeading}{summary}</div> : summary}
 			{renderContent && breakdown}
 			{!renderContent && breakdown}
 			{liveContent}

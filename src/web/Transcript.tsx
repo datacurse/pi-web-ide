@@ -186,6 +186,7 @@ export function Tool({
 				onClick={() => setOpen((o) => !o)}
 				className={`flex w-full items-center gap-2 whitespace-nowrap chat-code font-mono ${isError ? "text-red-400" : running ? "text-amber-400" : "text-neutral-500"} hover:text-neutral-300`}
 			>
+{!running && !interrupted && !isError && <Check size={11} weight="bold" className="shrink-0 text-green-400" />}
 				<ToolIcon name={name} />
 				{nested && name === "bash" && typeof target === "string" ? (
 					<span className="min-w-0 flex-1 fade-end text-left text-neutral-300"><span className="text-amber-400">$</span> {target}</span>
@@ -206,7 +207,7 @@ export function Tool({
 				) : isError ? (
 					<X size={11} weight="bold" className="shrink-0" />
 				) : (
-					<Check size={11} weight="bold" className="shrink-0 text-green-400" />
+					null
 				)}
 			</button>
 			{open && children && children.length > 0 && (
@@ -320,6 +321,7 @@ export function ToolGroup({ blocks, streaming }: { blocks: PiBlock[]; streaming?
 	return (
 		<div className="chat-wide my-3">
 			<button
+				type="button"
 				data-custom="transcript disclosure"
 				onClick={() => setOpen((o) => !o)}
 				className="flex max-w-full items-center gap-1 whitespace-nowrap chat-code font-mono text-neutral-500 hover:text-neutral-300"
@@ -1045,7 +1047,6 @@ export function TranscriptRow({
 			<div className="group/turn first:pt-6">
 				<TurnSeparator />
 				<div className="chat-gutter">
-					{/* The composer's width: it overhangs the reading column by its padding. */}
 					<div className="chat-measure">
 						<div className="-mx-3 chat-prose rounded-lg bg-neutral-900 p-3 ring-1 ring-neutral-700 ring-inset">
 							{children}

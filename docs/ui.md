@@ -190,17 +190,18 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
   Explicit live/collapsed/grouped/hidden preferences are preserved; `Answer only` also uses timed
   phases when available. Unmeasured old turns retain their ordinary work fold.
 - The separate round header is removed: the `text-meta` round number, a 12px caret and a clock icon with total wall time sit together at the left. Summary padding is `px-2`;
-  round gaps use `space-y-0`. Round work keeps Markdown blocks at `my-1` margins,
-  with no margin between its text and tool rows. Round summaries have no progress bar.
-  Actual tool rows show the target/path, semantic icon, elapsed duration, and outcome; their
-  own arguments/output remain individually expandable. Tool durations do not form a second log.
+  round gaps use `space-y-0`. Round work has no vertical margins between Markdown
+  blocks or tool rows. Round summaries have no progress bar.
+  Actual tool rows put the success check at the far left, followed by the target/path
+  and semantic icon; elapsed duration stays right-aligned. Their own arguments/output
+  remain individually expandable. Tool durations do not form a second log.
   Only the final assistant message's trailing answer stays outside the phase folds.
 - Requesting is `blue-400` / `ArrowUpRight`; Thinking is `pink-400` / `Brain` in live status and step legends; the bar segments use pink without icons.
   The label and icon are pink; the theme maps `pink-400` to a blend of its red and mauve accents.
   Receiving is `green-400` / `ArrowDownLeft`; Doing is
   `amber-400` / `Wrench`. Retry and user waits use `red-400` with `ArrowClockwise` / `QuestionMark`;
   compaction uses `neutral-400` / `ArrowsInLineVertical`. Icons and labels accompany colour.
-- The left disclosure has its chevron, `ListNumbers` icon, round count and total-time clock; complete-turn phase icons/durations follow immediately at their natural widths. No fixed-width slots or spacer push them to the right.
+- The left disclosure is a full-row toggle with no chevron; its `ListNumbers` icon, round count and total-time clock sit together. Complete-turn phase icons/durations follow immediately at their natural widths. No fixed-width slots or spacer push them to the right.
 - A `Breakdown` disclosure with a clock icon and total elapsed time sits at the left, immediately followed by the complete-turn phase icons and durations; each takes only its natural width. The current action sits
 - Compact phase timings use `gap-2` between icon-and-duration pairs so their colours and values read as separate groups.
 - The elapsed-history strip centers each icon in a `w-3` slot; `gap-1` keeps it close to its duration, while `gap-3` separates neighboring pairs.
@@ -303,11 +304,8 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
   (worse still), pure `(1-t)^3` (right start, but a near-black band above the box) and
   `0.8(1-t)^4 + 0.2(1-t^4)` (held dim, but still ended at zero).
 - In a narrow pane the box and the user pill keep 24px to the pane's sides, the same as the
-  box's gap to the bottom (`pb-6`): `.chat-gutter`'s minimum is `2.25rem` (24px + the 12px overhang).
-- The box overlaps the transcript by its radius (`-mt-3`), so text shows behind its
-  corners, and sticks out of the reading column by its padding (`-mx-3`), so the typed
-  text lines up with the response text, like Cursor. To keep that exact, the transcript
-  reserves its scrollbar on both sides (`scrollbar-gutter: stable both-edges`) and the
+  box's gap to the bottom (`pb-6`): `.chat-gutter`'s minimum is `2.25rem`.
+	corners. The composer and pill share the same width: `-mx-3` overhangs the `chat-measure` column by the box's padding. A sticky prompt inside a timed turn clears its nested gutter so it doesn't shrink a second time. The transcript reserves its scrollbar on both sides (`scrollbar-gutter: stable both-edges`), and the
   box's edge is an inset `ring-1 ring-neutral-700` (Commit & Push's border colour, the same
   focused or not), not a border. The git row's right edge follows the box,
   `mb-2` above it (the same gap as between its buttons), every button `control-md` tall. It is a ring in a ghost round `IconButton`, `size="sm"`, as wide as the other composer buttons (~24px outer edge: a `size-7 shrink-0` SVG with `stroke={1.5}`, so the flex button cannot shrink it)
@@ -489,8 +487,7 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
   scrollbar is `OverlayScrollbar`, drawn over the content (see Scrollbars). The user row has no bottom padding: the gap above your prompt (between turns)
   is wider than the one under it (to its own answer).
 - The pill has the composer's edge (inset `ring-1 ring-neutral-700`) and width: `-mx-3 p-3`
-  inside `chat-measure`, so it overhangs the reading column like the box and its text
-  lines up with the answer's.
+  inside `chat-measure`, so it matches the composer's overhang; its text is inset like the composer's.
 - Under the pill, always shown: the answer footer's shape — `Copy`, `Edit` (`PencilSimple`,
   in Fork's slot, disabled but still shown while a turn runs), then `timeAgo` of when it was sent.
 
