@@ -50,6 +50,7 @@ function harness() {
 				return request.promise;
 			} },
 			$get: ({ param }: { param: { id: string } }) => get(param.id),
+			prompt: { $post: async () => response({}) },
 		},
 	} };
 	const exports = {} as { useSession: typeof useSession };
@@ -171,5 +172,38 @@ test("live timing updates replace their turn, survive completion, and cannot lea
 	assert.equal(h.render().snapshot?.activity?.length, 1);
 	await h.render().attach();
 	stream.onmessage!({ data: JSON.stringify({ type: "activity", activity: turn }) });
+	assert.equal(h.render().snapshot?.activity?.length, 0);
+});
+
+for (const trigger of ["refresh", "send"] as const) {
+	test(`${trigger} snapshots cannot roll Thinking back to stale Requesting telemetry`, async () => {
+		const h = harness();
+		await h.render().attach("session");
+		const emit = (turn: activity.TurnActivity) => h.streams[0]!.onmessage!({ data: JSON.stringify({ type: "activity", activity: turn }) });
+		const preparing: activity.TurnActivity = { start: 1000, steps: [{ kind: "preparing", label: "Preparing request", start: 1000 }], tools: [] };
+		emit(preparing);
+		const pending = deferred();
+		h.setGet(() => pending.promise);
+		const sending = trigger === "send" ? h.render().send("hello") : undefined;
+		if (trigger === "refresh") h.streams[0]!.onmessage!({ data: JSON.stringify({ type: "message_done" }) });
+		await new Promise((resolve) => setImmediate(resolve));
+		const thinking: activity.TurnActivity = { ...preparing, steps: [{ ...preparing.steps[0], end: 1010 }, { kind: "request", label: "Waiting for model output", start: 1010 }] };
+		emit(thinking);
+		pending.resolve(response({ id: "session", file: "session", activity: [preparing] }));
+		await sending;
+		await new Promise((resolve) => setImmediate(resolve));
+		assert.equal(h.render().snapshot?.activity?.[0].steps.at(-1)?.kind, "request");
+		assert.equal(activity.activityGroups(h.render().snapshot!.activity![0]).at(-1)?.kind, "thinking");
+	});
+}
+
+test("a refresh without intervening live timing accepts authoritative removal", async () => {
+	const h = harness();
+	await h.render().attach("session");
+	h.streams[0]!.onmessage!({ data: JSON.stringify({ type: "activity", activity: { start: 1000, steps: [], tools: [] } }) });
+	h.render();
+	h.setGet(async () => response({ id: "session", file: "session", activity: [] }));
+	h.streams[0]!.onmessage!({ data: JSON.stringify({ type: "message_done" }) });
+	await new Promise((resolve) => setImmediate(resolve));
 	assert.equal(h.render().snapshot?.activity?.length, 0);
 });

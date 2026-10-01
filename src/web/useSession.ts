@@ -67,6 +67,16 @@ function toSnapshot(raw: Partial<Snapshot>): Snapshot {
 	};
 }
 
+function preserveLiveActivity(fresh: Snapshot, current: Snapshot | null, baseline: Snapshot | null): Snapshot {
+	if (!current || current.id !== fresh.id) return fresh;
+	const before = new Map((baseline?.id === fresh.id ? baseline.activity ?? [] : []).map((turn) => [turn.start, turn]));
+	const updates = (current.activity ?? []).filter((turn) => before.get(turn.start) !== turn);
+	if (!updates.length) return fresh;
+	const turns = new Map((fresh.activity ?? []).map((turn) => [turn.start, turn]));
+	for (const turn of updates) turns.set(turn.start, turn);
+	return { ...fresh, activity: [...turns.values()].sort((a, b) => a.start - b.start) };
+}
+
 /**
  * What a "finished" notification says: the opening line of the answer that
  * just landed, which is the part worth reading from a desktop corner. A run
@@ -396,6 +406,7 @@ export function useSession({
 			};
 
 			const refetch = async (): Promise<Snapshot | undefined> => {
+				const baseline = snapshotRef.current;
 				const rr = await api.sessions[":id"].$get({ param: { id: snap.id } }).catch(() => null);
 				if (!rr || rr.status === 404) {
 					reattach();
@@ -404,7 +415,7 @@ export function useSession({
 				if (!rr.ok) return undefined;
 				const s = toSnapshot(await rr.json());
 				if (superseded() || esRef.current !== es) return undefined;
-				setSnapshot({ ...s, error: s.error ?? seenErrorRef.current });
+				setSnapshot((current) => preserveLiveActivity({ ...s, error: s.error ?? seenErrorRef.current }, current, baseline));
 				setPartial(s.partial ?? emptyPartial());
 				setBusy(s.isStreaming);
 				return s;
@@ -651,11 +662,13 @@ export function useSession({
 
 			// The ack can beat pi's `message_end` for this message (images are
 			// processed first), so keep the optimistic copy until the server has it.
+			const baseline = snapshotRef.current;
 			const rr = await api.sessions[":id"].$get({ param: { id: snapshot.id } });
 			if (!rr.ok) return;
 			const fresh = toSnapshot(await rr.json());
 			const landed = fresh.messages.length > snapshot.messages.length;
-			setSnapshot(optimistic && !landed ? { ...fresh, messages: [...fresh.messages, optimistic] } : fresh);
+			setSnapshot((current) => current?.id === fresh.id ? preserveLiveActivity(
+				optimistic && !landed ? { ...fresh, messages: [...fresh.messages, optimistic] } : fresh, current, baseline) : current);
 		},
 		[snapshot, busy, compact],
 	);

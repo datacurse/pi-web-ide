@@ -16,6 +16,9 @@ export type Attention = "needs" | "ready" | "working" | null;
 export function attentionOf(s: PiSessionInfo, seen: SeenSessions): Attention {
 	if (s.needsInput) return "needs";
 	if (s.isStreaming) return "working";
+	// A blank session's file timestamp is not evidence of a reply. Only sessions
+	// that have received a prompt can become unread-ready.
+	if (!s.lastAsked) return null;
 	const last = Date.parse(s.lastActive);
 	const saw = Date.parse(seen.seen[s.path] ?? seen.baseline);
 	return last > saw ? "ready" : null;

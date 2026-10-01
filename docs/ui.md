@@ -172,6 +172,8 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
   retry backoff, compaction, and waiting for user input. Only observed phases are labelled.
   Request hooks do not prove upload completion: do not claim “request delivered”, or separate
   network delivery from provider processing. Missing request telemetry is labelled unavailable.
+- Snapshot refreshes must preserve live timing events received while the request was in flight;
+  the displayed phase must not regress to stale Requesting telemetry.
 - While reasoning is set to Shown, its live streamed text appears directly below the Breakdown disclosure and above the current phase/status; it leaves the round detail while streaming so it is not duplicated.
 - Streaming silence of at least three seconds shows “No new output for …”, not an invented
   cause. Phase and total clocks update live even when the provider is silent.
@@ -676,11 +678,16 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
 - Settings has a `w-48` category nav on the left (`NavItem`s: Appearance, Transcript,
   Sessions, Agent instructions, Automatic actions, Notifications, Shortcuts), like Obsidian; the right side shows only the
   chosen category, `max-w-xl p-6`. Opens on Appearance.
-- Agent instructions shows read-only global and selected-project `AGENTS.md` files side by side
+- Agent instructions shows global and selected-project `AGENTS.md` files side by side
   (`md:grid-cols-2`, stacked on narrow screens), using the full Settings content width.
-  Each has its full path and scrollable plain-text contents; missing, empty and unreadable files
-  are distinguished. Global uses pi’s agent directory; project uses the selected project root.
-  Files reload when Settings opens or the project changes. No editing controls.
+  Each has its full path, a Current preview and a `New empty` button that archives the
+  current contents before activating an empty file. Backlog versions have dated disclosures
+  with read-only previews and `Use as current`; switching archives the outgoing contents.
+  Archives live in pi’s agent directory, outside project context discovery. Global uses pi’s
+  agent directory; project uses the selected project root. Missing, empty and unreadable
+  files are distinguished. Files reload when Settings opens or the project changes.
+  A hint says to start a fresh session after switching; prewarmed sessions are discarded,
+  but existing sessions keep their loaded context. Concurrent disk changes are refused.
 - Automatic actions has provider-grouped model selects for Commit naming, Session naming,
   Compaction (manual, automatic and SoL-Pi online compaction), and Log reduction (SoL-Pi's
   reducer), all defaulting to `openai-codex/gpt-6.1-sol`. Each saves on pick, independently

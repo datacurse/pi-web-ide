@@ -6,7 +6,7 @@ import type { ThinkingMode, UserMode } from "./prefs.js";
 import { Block, Message, Reasoning } from "./Transcript.js";
 import { phaseBlocks } from "./turnPhases.js";
 import { readWorkExpanded } from "./prefs.js";
-
+import { useRef } from "react";
 /** Round content is prose first, then tools; empty timing-only stages have no extra folds. */
 export function RoundWork({ round, blocks, now, expandedByDefault = readWorkExpanded() }: { round: ActivityRound; blocks: PiBlock[]; now: number; expandedByDefault?: boolean }) {
 	const tools = new Map(round.groups.flatMap((group) => group.tools).map((tool) => [tool.id, tool]));
@@ -35,7 +35,10 @@ export function TurnWork({ activity, messages, prompt, partial, waitingForInput,
 	onEdit?: (at: number, text: string, images: { data: string; mimeType: string }[]) => void;
 }) {
 	const blocks = phaseBlocks(activityGroups(activity), messages, partial);
-	const liveThinking = thinkingMode === "shown" ? partial?.thinking : undefined;
+	const lastThinking = useRef({ promptAt: prompt?.timestamp, text: "" });
+	if (lastThinking.current.promptAt !== prompt?.timestamp) lastThinking.current = { promptAt: prompt?.timestamp, text: "" };
+	if (partial?.thinking) lastThinking.current.text = partial.thinking;
+	const liveThinking = thinkingMode === "shown" ? partial?.thinking || lastThinking.current.text : undefined;
 	const breakdownAvailable = [...blocks.values()].some((items) => items.some((block) => !(liveThinking && block.kind === "thinking" && block.text === liveThinking)));
 	return (
 		<div className="chat-gutter my-3">
