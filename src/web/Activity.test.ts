@@ -64,7 +64,7 @@ test("compact live round legends retain the pink Thinking label and total durati
 	assert.match(html,/Round 1/);
 	assert.match(html,/class="flex items-center gap-1 text-pink-400"/);
 	assert.match(html,/3\.0s/);
-	assert.match(html,/<details[^>]* open/);
+	assert.doesNotMatch(html, /<details/);
 });
 
 test("streamed reasoning is still Receiving, not an additional waiting phase", () => {

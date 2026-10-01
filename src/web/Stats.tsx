@@ -16,6 +16,7 @@ import { type ProviderUsage, type UsageLimit, type UsageSubscription as Subscrip
 import { addDays, callDuration, dayKey, duration, filterTurns, heatmapWeeks, LIMIT_WINDOW_MS, modelComparisons, modelKey, modelLabel, pace, percentile, span, statsProviderLabel, streaks, tokensPerSecond, turnModeLabel, turnProvider, usageLimitLabel as limitLabel, type Pace } from "./stats.js";
 import { api } from "./api.js";
 import { locale, perLocale, plural, t } from "./i18n.js";
+import { readStored, writeStored } from "./prefs.js";
 
 const WEEKS = 52;
 const HEAT = ["bg-neutral-800", "bg-green-900", "bg-green-700", "bg-green-500", "bg-green-300"];
@@ -59,17 +60,42 @@ function tally<T>(items: T[], key: (t: T) => string | undefined, by: (t: T) => n
 	return m;
 }
 
+const STATS_PREFS = "pwi:stats";
+type StatsPrefs = { machine: string | null; tab: "overview" | "workouts"; provider: string; model: string; mode: string };
+
+function readStatsPrefs(): StatsPrefs {
+	try {
+		const value: unknown = JSON.parse(readStored(STATS_PREFS) ?? "{}");
+		if (!value || typeof value !== "object") throw new Error("invalid stats preferences");
+		const saved = value as Partial<StatsPrefs>;
+		return {
+			machine: saved.machine === null || typeof saved.machine === "string" ? saved.machine : null,
+			tab: saved.tab === "workouts" ? "workouts" : "overview",
+			provider: typeof saved.provider === "string" ? saved.provider : "",
+			model: typeof saved.model === "string" ? saved.model : "",
+			mode: typeof saved.mode === "string" ? saved.mode : "",
+		};
+	} catch {
+		return { machine: null, tab: "overview", provider: "", model: "", mode: "" };
+	}
+}
+
+
 export function Stats({ open, revision, onClose }: { open: boolean; revision?: unknown; onClose: () => void }) {
+	const [prefs] = useState(readStatsPrefs);
 	const [view, setView] = useState<StatsView | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	/** null for all machines, "" for this one, else an ssh alias. */
-	const [machine, setMachine] = useState<string | null>(null);
+	const [machine, setMachine] = useState<string | null>(prefs.machine);
 	const [syncing, setSyncing] = useState(false);
 	const [reload, setReload] = useState(0);
-	const [tab, setTab] = useState<"overview" | "workouts">("overview");
-	const [provider, setProvider] = useState("");
-	const [model, setModel] = useState("");
-	const [mode, setMode] = useState("");
+	const [tab, setTab] = useState<"overview" | "workouts">(prefs.tab);
+	const [provider, setProvider] = useState(prefs.provider);
+	const [model, setModel] = useState(prefs.model);
+	const [mode, setMode] = useState(prefs.mode);
+	useEffect(() => {
+		writeStored(STATS_PREFS, JSON.stringify({ machine, tab, provider, model, mode }));
+	}, [machine, tab, provider, model, mode]);
 
 	const get = useCallback(async (sync?: "1" | "force") => {
 		try {

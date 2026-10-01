@@ -419,15 +419,8 @@ export function Block({
  */
 export function Reasoning({ text, className = "chat-measure my-3" }: { text: string; className?: string }) {
 	return (
-		<div className={`${className} text-neutral-500 italic`}>
-			{text
-				.trim()
-				.split(/\n\s*\n/)
-				.map((p, i) => (
-					<p key={i} className="my-3 whitespace-pre-wrap first:mt-0 last:mb-0">
-						{p}
-					</p>
-				))}
+		<div className={`${className} chat-reasoning text-neutral-500 italic`}>
+			<MarkdownText text={text.trim()} />
 		</div>
 	);
 }

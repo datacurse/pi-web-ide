@@ -625,6 +625,11 @@ body {
 	line-height: 1.6;
 	overflow-wrap: break-word;
 }
+/* Reasoning is italic by default; Markdown bold should remain upright. */
+.chat-reasoning strong {
+	font-style: normal;
+}
+
 
 /*
  * Anything read line by line. Applied per element, so a code block or table

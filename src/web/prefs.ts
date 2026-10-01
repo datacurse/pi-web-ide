@@ -318,7 +318,7 @@ export function applyScrollPast(on: boolean, amount: number): void {
 const WORK_EXPANDED_KEY = "pwi:workExpanded";
 
 export function readWorkExpanded(): boolean {
-	return readStored(WORK_EXPANDED_KEY) !== "0";
+	return readStored(WORK_EXPANDED_KEY) === "1";
 }
 
 export function writeWorkExpanded(on: boolean): void {

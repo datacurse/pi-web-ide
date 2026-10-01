@@ -199,17 +199,15 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
   Receiving is `green-400` / `ArrowDownLeft`; Doing is
   `amber-400` / `Wrench`. Retry and user waits use `red-400` with `ArrowClockwise` / `QuestionMark`;
   compaction uses `neutral-400` / `ArrowsInLineVertical`. Icons and labels accompany colour.
+- The left disclosure omits a text label: its chevron, `ListNumbers` icon and round count, then total-time clock make the control. Phase icons and durations occupy fixed-width slots on the right; unobserved requesting/thinking/receiving/doing phases remain dimmed at `0s` so observed timings fill their slots without shifting the row.
 - A `Breakdown` disclosure with a clock icon and total elapsed time sits above the work; observed
   phase icons and elapsed times sit beside it on the same row. The current action sits
   below the breakdown, including its expanded rounds. No overall progress bar. In Rounds mode,
   the preceding user prompt and its breakdown stick together at the top while scrolling through the turn's work, without duplicating
   the prompt.
-  For current design review, `Expand work by default` is on by default (`pwi:workExpanded`).
-  Rounds and completed tool arguments/output start open. The Transcript settings checkbox
-  changes this immediately and persists it; explicit off is respected. Individual disclosures
-  can still be collapsed by hand without being forced open by clock/stream updates. Retries before any response remain in
-  their current round; later observed request cycles start another. Missing stages are not
-  invented for older or incomplete telemetry. Model rounds are not new user-prompt turns.
+  `Expand work by default` is off by default (`pwi:workExpanded`).
+  Rounds and completed tool arguments/output stay open; rounds cannot be collapsed independently. The Transcript settings checkbox controls whether the overall Breakdown opens by default and persists that choice; explicit off is respected.
+  Retries before any response remain in their current round; later observed request cycles start another. Missing stages are not invented for older or incomplete telemetry. Model rounds are not new user-prompt turns.
 - Parallel calls overlap and are not added together in wall-clock totals. Individual call
   durations remain available inside their phase.
 - Codemode wrappers add no transcript row or disclosure: render child calls directly. Keep its script
