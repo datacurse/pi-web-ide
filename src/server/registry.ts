@@ -396,6 +396,8 @@ export class Registry {
 			supportsImages: entry.session.supportsImages,
 			thinkingLevel: entry.session.thinkingLevel,
 			thinkingLevels: entry.session.thinkingLevels,
+			thinkingLevelMap: entry.session.thinkingLevelMap,
+			fastMode: entry.session.fastMode,
 			contextTokens: entry.session.contextTokens,
 			contextWindow: entry.session.contextWindow,
 			/**
@@ -467,6 +469,15 @@ export class Registry {
 			throw new Error("cannot switch models while streaming");
 		entry.lastActivity = Date.now();
 		await entry.session.setModel(spec);
+	}
+
+	async setFastMode(id: string, enabled: boolean): Promise<void> {
+		const entry = this.entries.get(id);
+		if (!entry) throw new Error(`unknown session: ${id}`);
+		if (entry.streaming || entry.session.isStreaming) throw new Error("cannot change Fast mode while streaming");
+		if (!entry.session.setFastMode) throw new Error("restart this session to use Fast mode");
+		entry.lastActivity = Date.now();
+		await entry.session.setFastMode(enabled);
 	}
 
 	/**

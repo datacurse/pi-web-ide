@@ -58,6 +58,7 @@ import { Socket } from "node:net";
 import { join } from "node:path";
 
 import { isRecord, records } from "./guards.js";
+import { FAST_COMMAND, supportsFastMode } from "../shared/fastMode.js";
 import { hunkFromWrite, hunksFromEdit, type Hunk } from "../shared/hunks.js";
 import { fileURLToPath } from "node:url";
 import { personalityPath, readRemind } from "./personality.js";
@@ -291,7 +292,7 @@ export function toCommands(list: unknown): PiCommand[] {
 	for (const c of records(list)) {
 		const name = typeof c.name === "string" ? c.name : "";
 		// pwi's own plumbing (rewind-extension.ts, context-extension.ts), not something to type.
-		if (!name || name === REWIND_COMMAND || name === CONTEXT_COMMAND) continue;
+		if (!name || name === REWIND_COMMAND || name === CONTEXT_COMMAND || name === FAST_COMMAND) continue;
 		out.push({
 			name,
 			...(typeof c.description === "string" ? { description: c.description } : {}),
@@ -929,6 +930,8 @@ export interface PiSession {
 	/** Current reasoning effort, and the levels this model accepts. */
 	readonly thinkingLevel: string | undefined;
 	readonly thinkingLevels: string[];
+	readonly thinkingLevelMap?: Record<string, string | null>;
+	readonly fastMode?: boolean;
 	/** Tokens in context as of the last assistant turn, and the model's ceiling. */
 	readonly contextTokens: number;
 	readonly contextWindow: number;
@@ -980,6 +983,7 @@ export interface PiSession {
 	 * so the check has to happen on this side of the boundary.
 	 */
 	setThinkingLevel(level: string): Promise<void>;
+	setFastMode?(enabled: boolean): Promise<void>;
 	/**
 	 * Rename the session. pi owns the name: `set_session_name` appends a
 	 * `session_info` entry to the JSONL, which is the file this server only
@@ -1010,6 +1014,7 @@ interface SessionState {
 	isStreaming: boolean;
 	thinkingLevel: string | undefined;
 	thinkingLevels: string[];
+	thinkingLevelMap: Record<string, string | null>;
 	contextWindow: number;
 	contextTokens: number;
 }
@@ -1030,6 +1035,8 @@ const REWIND_COMMAND = "pwi-rewind";
 const CONTEXT_EXTENSION = fileURLToPath(new URL("./context-extension.ts", import.meta.url));
 const CONTEXT_COMMAND = "pwi-context";
 const COMPACTION_EXTENSION = fileURLToPath(new URL("./compaction-extension.ts", import.meta.url));
+const GENERATION_EXTENSION = fileURLToPath(new URL("./generation-extension.ts", import.meta.url));
+const FAST_EXTENSION = fileURLToPath(new URL("./fast-extension.ts", import.meta.url));
 const TOOL_METRICS_EXTENSION = fileURLToPath(new URL("../tool-metrics/collector.ts", import.meta.url));
 const CONTEXT_KEYS: ContextPart["key"][] = ["system", "tools", "rules", "skills", "personality", "conversation"];
 
@@ -1053,7 +1060,7 @@ export function spawnArgs(opts: {
 	args.push("--approve");
 	// First among extensions, so it sees each result before other packages' hooks.
 	if (opts.toolMetrics !== false) args.push("-e", TOOL_METRICS_EXTENSION);
-	args.push("-e", REWIND_EXTENSION, "-e", CONTEXT_EXTENSION, "-e", COMPACTION_EXTENSION);
+	args.push("-e", REWIND_EXTENSION, "-e", CONTEXT_EXTENSION, "-e", COMPACTION_EXTENSION, "-e", GENERATION_EXTENSION, "-e", FAST_EXTENSION);
 	if (opts.file) args.push("--session", opts.file);
 	else if (opts.fork) args.push("--fork", opts.fork);
 	if (opts.model) args.push("--model", opts.model);
@@ -1224,6 +1231,7 @@ async function wrap(child: RpcChild, cwd: string): Promise<PiSession> {
 	 * read is a cursor and each resync reads only what is new.
 	 */
 	const ends = new Map<number, number>();
+	let fastMode = false;
 	let lastEntry: string | undefined;
 	const fetchEnds = (): Promise<void> =>
 		child
@@ -1231,6 +1239,9 @@ async function wrap(child: RpcChild, cwd: string): Promise<PiSession> {
 			.then((data) => {
 				const entries = isRecord(data) ? records(data.entries) : [];
 				for (const e of entries) {
+					if (e.type === "custom" && e.customType === FAST_COMMAND && isRecord(e.data) && typeof e.data.enabled === "boolean") {
+						fastMode = e.data.enabled;
+					}
 					const m = e.message;
 					if (!isRecord(m) || m.role !== "assistant" || typeof m.timestamp !== "number") continue;
 					const end = Date.parse(String(e.timestamp));
@@ -1258,6 +1269,7 @@ async function wrap(child: RpcChild, cwd: string): Promise<PiSession> {
 	let streaming = state.isStreaming;
 	let thinkingLevel = state.thinkingLevel;
 	let thinkingLevels = state.thinkingLevels;
+	let thinkingLevelMap = state.thinkingLevelMap;
 	let contextWindow = state.contextWindow;
 	let contextTokens = state.contextTokens;
 	let compactionEnds = 0;
@@ -1268,6 +1280,7 @@ async function wrap(child: RpcChild, cwd: string): Promise<PiSession> {
 	// would reach the model as text.
 	const canRewind = records(rawCommands).some((c) => c.name === REWIND_COMMAND);
 	const canMeasure = records(rawCommands).some((c) => c.name === CONTEXT_COMMAND);
+	const canFast = records(rawCommands).some((c) => c.name === FAST_COMMAND);
 
 	const listeners = new Set<(e: PiEvent) => void>();
 	const emit = (e: PiEvent) => {
@@ -1293,6 +1306,7 @@ async function wrap(child: RpcChild, cwd: string): Promise<PiSession> {
 				supportsImages = s.supportsImages;
 				thinkingLevel = s.thinkingLevel;
 				thinkingLevels = s.thinkingLevels;
+				thinkingLevelMap = s.thinkingLevelMap;
 				contextWindow = s.contextWindow;
 				// 0 is "unknown" (right after a compaction), not "empty".
 				if (s.contextTokens > 0) contextTokens = s.contextTokens;
@@ -1571,6 +1585,12 @@ async function wrap(child: RpcChild, cwd: string): Promise<PiSession> {
 		get thinkingLevels() {
 			return thinkingLevels;
 		},
+		get thinkingLevelMap() {
+			return thinkingLevelMap;
+		},
+		get fastMode() {
+			return canFast ? fastMode : undefined;
+		},
 		get contextTokens() {
 			return contextTokens;
 		},
@@ -1744,6 +1764,25 @@ async function wrap(child: RpcChild, cwd: string): Promise<PiSession> {
 			await child.send("set_thinking_level", { level });
 			thinkingLevel = (await fetchState(child)).thinkingLevel;
 		},
+		async setFastMode(enabled: boolean) {
+			if (!canFast) throw new Error("restart this session to use Fast mode");
+			if (streaming) throw new Error("cannot change Fast mode while streaming");
+			if (enabled && !supportsFastMode(model)) throw new Error("Fast mode is not supported for this model");
+			let reply: unknown;
+			const off = child.onFrame((frame) => {
+				if (frame.method === "setStatus" && frame.statusKey === FAST_COMMAND && typeof frame.statusText === "string") {
+					try { reply = JSON.parse(frame.statusText); } catch { /* validated below */ }
+				}
+			});
+			try {
+				await child.send("prompt", { message: `/${FAST_COMMAND} ${enabled ? "on" : "off"}` });
+			} finally {
+				off();
+			}
+			if (isRecord(reply) && typeof reply.error === "string") throw new Error(reply.error);
+			if (!isRecord(reply) || reply.enabled !== enabled) throw new Error("pi did not update Fast mode");
+			fastMode = enabled;
+		},
 		async setName(name: string) {
 			const trimmed = name.trim();
 			// pi rejects an empty name, and the error it returns says nothing
@@ -1828,6 +1867,11 @@ async function fetchState(child: RpcChild): Promise<SessionState> {
 		isStreaming: data.isStreaming === true,
 		thinkingLevel: typeof data.thinkingLevel === "string" ? data.thinkingLevel : undefined,
 		thinkingLevels: all.length > 1 ? all : [],
+		thinkingLevelMap: isRecord(m?.thinkingLevelMap)
+			? Object.fromEntries(Object.entries(m.thinkingLevelMap).filter(
+				(entry): entry is [string, string | null] => typeof entry[1] === "string" || entry[1] === null,
+			))
+			: {},
 		contextWindow: typeof m?.contextWindow === "number" ? m.contextWindow : 0,
 		contextTokens: typeof usage?.tokens === "number" ? usage.tokens : 0,
 	};

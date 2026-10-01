@@ -27,7 +27,8 @@ import { readdir, realpath, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, join, resolve } from "node:path";
 import { createInterface } from "node:readline";
-import type { PiSessionInfo } from "../shared/types.js";
+import type { PiSessionInfo, SessionAttachment } from "../shared/types.js";
+import { sessionPreview } from "../shared/sessionPreview.js";
 
 /** Enough for a title wrapped to several lines in the list; the rest is dead weight. */
 const FIRST_MESSAGE_MAX = 500;
@@ -74,6 +75,8 @@ interface Parsed {
 	firstMessage: string;
 	/** The newest user prompt's text. */
 	lastPrompt?: string;
+	firstAttachments?: SessionAttachment[];
+	lastAttachments?: SessionAttachment[];
 	messageCount: number;
 }
 
@@ -257,10 +260,14 @@ async function parse(
 					// Only user turns count: assistant and toolResult rows scale
 					// with tool use, not with how much the user said.
 					if ((entry.message as { role?: unknown } | undefined)?.role === "user") out.messageCount++;
-					const text = userText(entry.message);
-					if (text) {
-						if (!out.firstMessage) out.firstMessage = text;
-						out.lastPrompt = text;
+					const preview = userPreview(entry.message);
+					if (preview.text || preview.attachments.length) {
+						if (out.firstAttachments === undefined) {
+							out.firstMessage = preview.text;
+							out.firstAttachments = preview.attachments;
+						}
+						out.lastPrompt = preview.text;
+						out.lastAttachments = preview.attachments;
 					}
 					// Last one wins: the entries are in file order, so this ends
 					// up as the newest real conversation activity.
@@ -296,17 +303,23 @@ async function parse(
  * index 0.
  */
 export function userText(message: unknown): string {
-	if (!message || typeof message !== "object") return "";
+	return userPreview(message).text;
+}
+
+function userPreview(message: unknown): ReturnType<typeof sessionPreview> {
+	if (!message || typeof message !== "object") return sessionPreview("");
 	const m = message as { role?: unknown; content?: unknown };
-	if (m.role !== "user" || !Array.isArray(m.content)) return "";
+	if (m.role !== "user" || !Array.isArray(m.content)) return sessionPreview("");
+	let text = "";
+	let images = 0;
 	for (const block of m.content) {
 		if (!block || typeof block !== "object") continue;
 		const b = block as { type?: unknown; text?: unknown };
-		if (b.type === "text" && typeof b.text === "string" && b.text.trim()) {
-			return b.text.trim().slice(0, FIRST_MESSAGE_MAX);
-		}
+		if (b.type === "image") images++;
+		if (!text && b.type === "text" && typeof b.text === "string" && b.text.trim()) text = b.text;
 	}
-	return "";
+	const preview = sessionPreview(text, images);
+	return { ...preview, text: preview.text.slice(0, FIRST_MESSAGE_MAX) };
 }
 
 function project(file: string, p: Parsed): PiSessionInfo {
@@ -325,7 +338,9 @@ function project(file: string, p: Parsed): PiSessionInfo {
 		messageCount: p.messageCount,
 		firstMessage: p.firstMessage,
 	};
-	if (p.lastPrompt) info.lastPrompt = p.lastPrompt;
+	if (p.lastPrompt !== undefined) info.lastPrompt = p.lastPrompt;
+	if (p.firstAttachments) info.firstAttachments = p.firstAttachments;
+	if (p.lastAttachments) info.lastAttachments = p.lastAttachments;
 	if (p.lastAsked) info.lastAsked = p.lastAsked;
 	// Left unset when the session has never been named, because the UI falls
 	// back to `firstMessage` only for a falsy name.

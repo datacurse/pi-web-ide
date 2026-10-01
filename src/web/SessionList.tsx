@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { ArrowsOut, CaretUpDown, ChatCircle, Clock, Eye, EyeSlash, MagnifyingGlass, PushPin, X } from "@phosphor-icons/react";
+import { ArrowsOut, CaretUpDown, ChatCircle, Clock, Eye, EyeSlash, FileText, Image, MagnifyingGlass, PushPin, X } from "@phosphor-icons/react";
 import type { PiSessionInfo } from "../shared/types.js";
 import { SESSION_SORTS, readHiddenSessions, writeHiddenSessions, type SessionSort } from "./prefs.js";
 import { sessionLabel, shortName } from "./sessionName.js";
@@ -65,6 +65,7 @@ export function SessionList({
 	onRename,
 	onAutoName,
 	latestPrompt,
+	showAttachments,
 	onSearch,
 	project,
 	width,
@@ -96,6 +97,7 @@ export function SessionList({
 	onAutoName: (s: PiSessionInfo) => Promise<void>;
 	/** Label unnamed sessions by a short name from the first prompt. */
 	latestPrompt: boolean;
+	showAttachments: boolean;
 	/** Open the search popup (also Ctrl+O). */
 	onSearch: () => void;
 	/** The project whose sessions the search box searches. */
@@ -298,6 +300,7 @@ export function SessionList({
 						const snippet = searching ? snippets.get(s.path) : undefined;
 						const isOpen = openFiles.includes(s.path);
 						const label = sessionLabel(s, latestPrompt);
+						const attachments = (latestPrompt ? s.lastAttachments ?? s.firstAttachments : s.firstAttachments) ?? [];
 						const state = attention.get(s.path) ?? null;
 						const isHidden = hidden.includes(s.path);
 
@@ -364,7 +367,7 @@ export function SessionList({
 								}}
 								aria-current={s.path === activeFile ? "true" : undefined}
 								aria-haspopup="menu"
-								title={s.name || s.firstMessage || s.path}
+								title={label}
 								className={`block w-full border-b border-neutral-800 py-2 pl-3 text-left transition-colors duration-150 ease-out hover:bg-neutral-900 motion-reduce:transition-none ${
 									// Three states worth telling apart: selected, open in a
 									// background tab, and not open at all.
@@ -395,6 +398,16 @@ export function SessionList({
 								  touched an hour ago" is exactly the question the other
 								  sort mode exists to answer.
 								*/}
+								{showAttachments && attachments.length > 0 && (
+									<div className="mt-2 flex flex-wrap gap-1.5 pr-3">
+										{attachments.map((attachment, i) => (
+											<span key={i} className="inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-sm border border-neutral-700 px-2 py-1 text-meta text-neutral-400">
+												{attachment.kind === "text" ? <FileText size={14} className="shrink-0 text-amber-400" /> : <Image size={14} className="shrink-0 text-amber-400" />}
+												<span className="fade-end">{attachment.kind === "text" ? attachment.name : t("Image {n}", { n: attachment.index })}</span>
+											</span>
+										))}
+									</div>
+								)}
 								{snippet ? (
 									<div className="mt-0.5 fade-edge text-meta text-neutral-500">
 										{highlight(snippet, terms)}

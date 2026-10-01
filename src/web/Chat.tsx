@@ -163,6 +163,7 @@ export function Chat({
 	onAbort,
 	onModelChange,
 	onThinkingChange,
+	onFastChange,
 	onCommandMenu,
 	onCompact,
 	compacting,
@@ -202,6 +203,7 @@ export function Chat({
 	onAbort: () => void;
 	onModelChange: (model: string) => void;
 	onThinkingChange: (level: string) => void;
+	onFastChange: (enabled: boolean) => Promise<void>;
 	/** The composer's `/` picker just opened; re-read the command catalog. */
 	onCommandMenu: () => void;
 	/** Fold the conversation into a summary. Refused while a turn is running. */
@@ -1141,7 +1143,10 @@ export function Chat({
 										onChange={onModelChange}
 										thinkingLevel={snapshot.thinkingLevel}
 										thinkingLevels={snapshot.thinkingLevels}
+										thinkingLevelMap={snapshot.thinkingLevelMap}
 										onThinkingChange={onThinkingChange}
+										fastMode={snapshot.fastMode}
+										onFastChange={onFastChange}
 									/>
 								</div>
 								<div className="flex shrink-0 items-center gap-1.5">

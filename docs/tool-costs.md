@@ -22,6 +22,115 @@ the probe results in `docs/plans/tool-metrics.md`.
 
 ## Time
 
+### Action Fusion helps selectively, not a measured task-wide speedup (2026-10-01)
+
+- Same-repo raw history, deduplicated by assistant entry ID: 460
+  `gpt-6.1-sol` requests, 173 edit/write calls, and 14 calls with non-null
+  `then_run` across four sessions. All 14 were sole-tool requests; fusion
+  raw frequency is 8.1% of edit/write calls, not an opportunity-based
+  adoption rate. No corresponding tool result was
+  marked `isError`; this does not prove every nested shell command passed.
+- If each follow-up would otherwise require its own model request, these
+  represent 14 avoided requests: 2.95% versus an estimated 474-request
+  unfused equivalent. This is a counterfactual estimate, not an A/B test;
+  checks could otherwise be batched with other work.
+- 36 short bash-only requests (reported output below 200 tokens) took a
+  median 8.49s, with observed quartiles 6.50–9.89s. Applying that proxy to
+  14 avoided requests suggests about 119s saved (91–139s using quartiles),
+  around 1.4% of the sample's 8319s summed model-request intervals. These
+  intervals include transport/service/reasoning, not just generation.
+  Commands still execute; fusion removes a round trip, not their run time.
+- No matched on/off tasks establish actual end-to-end latency or billed
+  token savings. The supported finding is small likely savings, not a broad
+  demonstrated performance improvement.
+- Follow-up opportunity audit (same day, 142 edit-bearing assistant requests,
+  including the initial measurement's documentation edit): 14 fused requests;
+  71 unfused requests immediately continued editing, and 12 immediately
+  requested only active LSP diagnostics. These are reasonable non-fusion
+  cases: don't run premature checks or replace diagnostic tools with shell
+  commands. Other cases involved reads, discovery, or mixed-tool requests.
+- Ten unfused requests immediately led to bash-only requests. At least four
+  were clear missed opportunities: final SessionTabs edit followed by tests;
+  the measurement documentation edit followed by diff checking; agent test
+  edits followed by diff review; and an intentional-error source probe
+  followed by its preplanned check/cleanup. Multi-file parallel writes and
+  new discovery/probes are not automatically safe/useful fusion candidates.
+- The 14 actual uses were meaningful: six documentation diff checks,
+  four write/edit-and-run analysis probes, two typecheck/test runs, and two
+  compaction smoke runs. Raw edit frequency therefore understated sensible
+  usage; nevertheless, direct safe follow-ups were sometimes missed.
+
+### Request-path probes find little local send overhead (2026-10-01, 5 live Sol requests)
+
+- Temporary RPC children retained global/project extensions, medium reasoning,
+  and current personality/reminder settings; they used private `/tmp` copies
+  of the same completed session with about 40K tokens of reported context.
+  Three prompts requested `OK` without tools; a fourth requested one read of
+  `package.json` and its package name, yielding two more model requests.
+  No production code/settings were changed; temporary observers logged only
+  timings, transport hosts, counts, status, and usage, not credentials/payloads.
+- Monotonic hooks plus Node HTTP diagnostics and WebSocket observation:
+  local preparation from input (or next `turn_start`) to connection creation
+  on cold calls, or `WebSocket.send` on warm calls, took 6.8–23.4ms.
+  Cold connection creation to send took 517.5–521.7ms across two processes;
+  subsequent requests reused the socket. This includes DNS/TCP/TLS/upgrade
+  and cannot be assigned entirely to either side. `send` is the application
+  handoff, not proof that every byte has reached the network/provider.
+- Send to first incoming WebSocket event: 363.6–563.5ms; that event to first
+  model delta: 2.11–4.86s. Send to complete assistant message: 2.77–6.13s.
+  Three no-tool prompt totals: 4.42s / 3.30s / 2.78s; the read-only tool task
+  took 10.83s, including roughly 0.21s between its two model responses.
+  Streaming output was 5 tokens on each `OK` request, then 35 / 6 tokens
+  on the tool-call/final requests. This small probe is not a coding benchmark.
+- Historical recent-sample gaps, user message to first assistant request
+  timestamp: 27 Sol / 60 Opus, median 19ms / 81ms. Last persisted tool
+  result to next assistant request timestamp: 291 / 422 intervals, median
+  11ms / 32.5ms, p90 1.00s / 2.20s. These gaps are outside the previously
+  reported model-request intervals and can include hooks/auth/compaction;
+  they are not pure send-time measurements, but do not show a Sol median
+  local-preparation bottleneck. Browser submit/startup delay is not covered.
+- Provider source confirms model requests are made inside pi, not through
+  pwi's browser/server per tool round trip. The Codex assistant timestamp is
+  created before payload hooks/transport; `message_start` is emitted only
+  after the first incoming WebSocket event. Neither timestamp is TTFT.
+  No per-request provider processing timing was available on this WS path,
+  so post-send time remains provider + network, not proven pure provider time.
+- A live Opus comparison was blocked by Anthropic OAuth refresh returning
+  HTTP 400 `invalid_grant` / `account_on_hold`; all three attempts failed
+  before inference and must not be treated as fast successful Opus replies.
+  Sol's loaded Anthropic authentication extension also attempted a background
+  refresh, but it did not block these successful Sol requests.
+
+### Historical speed comparison refreshed (2026-10-01, 27 Sol / 60 Opus turns)
+
+- Replayed local raw session JSONL, deduplicating identical user/assistant
+  entry sequences and retaining only single-model turns ending in `stop`;
+  active, failed, aborted, and mixed-model turns are excluded. Same-repo
+  sample: all 27 completed `gpt-6.1-sol` turns versus the latest 60
+  `claude-opus-5-5` turns; both record medium reasoning. Opus dates are
+  September 29–30 UTC, Sol October 1; these are different tasks/days.
+- Tool-using subsets (19 Sol / 50 Opus): median completion 209.3s / 94.9s,
+  model requests per turn 12 / 8.5, tool invocations 21 / 7.5. Across their
+  313 / 474 request intervals, median request duration is 11.73s / 5.06s.
+  Median summed request time per turn is 184.0s / 56.6s, versus remaining
+  wall time 25.3s / 43.5s; these separate medians do not add to wall medians.
+- Short requests with 30K–60K reported input + cache context and 1–199
+  output tokens: 66 Sol / 20 Opus, median 7.28s / 2.61s. Median context
+  39.5K / 42.2K and output 65.5 / 162.5 tokens, respectively. Slower Sol
+  request intervals persist within this context band despite shorter output.
+- No-tool turns (8 Sol / 10 Opus) complete at median 15.3s / 7.2s;
+  restricting to 10–30 tool invocations (11 / 17 turns) gives 191.8s /
+  189.3s. Tool-count bands are not equivalent-work benchmarks, but show why
+  the overall 2.2x task gap cannot be attributed to model speed alone.
+- Broader same-repo history: 584 completed Opus turns versus 27 Sol, median
+  43.0s / 128.6s; old Opus turns include differing reasoning levels and
+  workloads, so the recent medium-reasoning sample is more useful.
+- Request intervals use assistant message timestamp to session-entry
+  timestamp, not time to first visible token or isolated generation speed;
+  they cannot distinguish service waits, reasoning, or transport. No completed
+  new task in this snapshot starts after the personality/instructions rollout
+  at 13:57 UTC, so this does not yet measure that change.
+
 ### Split personality and global workflow instructions (2026-10-01)
 
 - Applied the agreed drafts to `~/.config/pi-web-ide/personality.md` and

@@ -13,7 +13,7 @@ import { exerciseText, muscleName, musclesText } from "./Workout.js";
 import { WorkoutFigure } from "./workoutFigures.js";
 import { Button, IconButton, inputClass, PanelHeader, sectionLabel, useBatches } from "./ui.js";
 import { type ProviderUsage, type UsageLimit, type UsageSubscription as Subscription } from "../shared/usage.js";
-import { addDays, callDuration, dayKey, duration, filterTurns, heatmapWeeks, LIMIT_WINDOW_MS, modelComparisons, modelKey, modelLabel, pace, percentile, span, statsProviderLabel, streaks, turnProvider, usageLimitLabel as limitLabel, type Pace } from "./stats.js";
+import { addDays, callDuration, dayKey, duration, filterTurns, heatmapWeeks, LIMIT_WINDOW_MS, modelComparisons, modelKey, modelLabel, pace, percentile, span, statsProviderLabel, streaks, tokensPerSecond, turnProvider, usageLimitLabel as limitLabel, type Pace } from "./stats.js";
 import { api } from "./api.js";
 import { locale, perLocale, plural, t } from "./i18n.js";
 
@@ -587,6 +587,7 @@ function ModelComparison({ turns }: { turns: StatsTurn[] }) {
 								[t("p90"), duration(row.p90)],
 								[t("Input / prompt"), num().format(row.input)],
 								[t("Output / prompt"), num().format(row.output)],
+								[t("Generation TPS"), row.tps === undefined ? "–" : `${row.tps.toFixed(1)} (${row.tpsSamples})`],
 								[t("Tools / prompt"), num().format(row.tools)],
 								[t("Cost / prompt"), usd().format(row.cost)],
 								[t("Errors / aborted"), `${row.errors} / ${row.aborted}`],
@@ -600,6 +601,7 @@ function ModelComparison({ turns }: { turns: StatsTurn[] }) {
 					</div>
 				))}
 			</div>
+			<p className="mt-2 text-meta text-neutral-500">{t("TPS uses output tokens over first-to-last streamed output, including reasoning and tool-call generation, excluding tool waits and initial latency. Provider buffering can affect it. Only fully measured answers count; parentheses show the sample count.")}</p>
 			<p className="mt-2 text-meta text-neutral-500">{t("Recorded metrics are not a quality score. Answer times include tool waits; input includes cached tokens; costs are estimates, not subscription charges. Mixed-model answers are shown separately.")}</p>
 		</div>
 	);
@@ -1489,6 +1491,7 @@ function Answers({ turns }: { turns: StatsTurn[] }) {
 			<ul className="flex flex-col">
 				{turns.slice(0, shown).map((turn) => {
 					const tools = Object.values(turn.tools).reduce((a, b) => a + b, 0);
+					const tps = tokensPerSecond(turn);
 					return (
 						<li key={`${turn.session}-${turn.start}`} className="border-b border-neutral-800 py-1.5">
 							<div className="flex items-center gap-2">
@@ -1507,6 +1510,7 @@ function Answers({ turns }: { turns: StatsTurn[] }) {
 							</div>
 							<div className="fade-end text-meta text-neutral-500">
 								{stampFmt().format(new Date(turn.start))} · {projectName(turn.cwd)} · {modelLabel(turn)}
+								{` · ${t("Generation TPS")}: ${tps === undefined ? "–" : tps.toFixed(1)}`}
 								{tools > 0 && ` · ${plural(tools, "{n} tool", "{n} tools")}`}
 								{turn.cost > 0 && ` · ${usd().format(turn.cost)}`}
 							</div>

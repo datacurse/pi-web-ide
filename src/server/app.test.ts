@@ -23,8 +23,13 @@ mkdirSync(join(project, "sub"));
 
 // Only what the tested routes touch; anything else would throw, which is a
 // test failure pointing at the route that reached further than expected.
+const fastCalls: { id: string; enabled: boolean }[] = [];
 const registry = {
 	get: () => undefined,
+	setFastMode: async (id: string, enabled: boolean) => {
+		if (id !== "fast-session") throw new Error("unknown session");
+		fastCalls.push({ id, enabled });
+	},
 	abort: async () => {
 		throw new Error("pi is gone");
 	},
@@ -62,6 +67,22 @@ const json = (body: string, headers: Record<string, string> = {}) => ({
 	method: "POST",
 	body,
 	headers: { ...HOST, "Content-Type": "application/json", ...headers },
+});
+
+test("Fast mode uses the typed session route and requires an explicit boolean", async () => {
+	for (const enabled of [true, false]) {
+		const r = await api.sessions[":id"].fast.$post({ param: { id: "fast-session" }, json: { enabled } });
+		assert.equal(r.status, 200);
+		assert.deepEqual(fastCalls.at(-1), { id: "fast-session", enabled });
+	}
+	const count = fastCalls.length;
+	for (const enabled of ["true", 1, null, undefined]) {
+		const r = await app.request("/api/sessions/fast-session/fast", json(JSON.stringify({ enabled })));
+		assert.equal(r.status, 400);
+	}
+	assert.equal(fastCalls.length, count);
+	const missing = await api.sessions[":id"].fast.$post({ param: { id: "missing" }, json: { enabled: true } });
+	assert.equal(missing.status, 400);
 });
 
 test("a request with no Origin (curl, the server itself) is served", async () => {

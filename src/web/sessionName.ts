@@ -1,12 +1,19 @@
-import type { PiMessage } from "../shared/types.js";
+import type { PiMessage, PiSessionInfo } from "../shared/types.js";
+import { sessionPreview } from "../shared/sessionPreview.js";
 import { t } from "./i18n.js";
 
-export function sessionPrompts(messages: PiMessage[]): { firstMessage?: string; lastPrompt?: string } {
+export function sessionPrompts(messages: PiMessage[]): Partial<Pick<PiSessionInfo, "firstMessage" | "lastPrompt" | "firstAttachments" | "lastAttachments">> {
 	const prompts = messages
 		.filter((m) => m.role === "user")
-		.map((m) => m.blocks.find((b) => b.kind === "text")?.text.trim())
-		.filter((text): text is string => !!text);
-	return prompts.length ? { firstMessage: prompts[0], lastPrompt: prompts[prompts.length - 1] } : {};
+		.map((m) => sessionPreview(m.blocks.find((b) => b.kind === "text")?.text ?? "", m.blocks.filter((b) => b.kind === "image").length))
+		.filter((preview) => preview.text || preview.attachments.length);
+	if (!prompts.length) return {};
+	return {
+		firstMessage: prompts[0].text,
+		lastPrompt: prompts[prompts.length - 1].text,
+		firstAttachments: prompts[0].attachments,
+		lastAttachments: prompts[prompts.length - 1].attachments,
+	};
 }
 /**
  * What a session is CALLED, in one place.
@@ -25,15 +32,18 @@ export function sessionPrompts(messages: PiMessage[]): { firstMessage?: string; 
  * the row wraps or fades at its edge rather than cutting it short.
  */
 export function sessionLabel(
-	info: { name?: string; firstMessage?: string; lastPrompt?: string } | undefined,
+	info: Partial<Pick<PiSessionInfo, "name" | "firstMessage" | "lastPrompt" | "firstAttachments" | "lastAttachments">> | undefined,
 	latest: boolean,
 ): string {
 	const name = info?.name?.trim();
 	if (name) return name;
 	// One line: this is raw prompt text, and a leading newline would render as
 	// an empty row.
-	const prompt = ((latest && info?.lastPrompt) || info?.firstMessage)?.replace(/\s+/g, " ").trim();
-	return prompt || t("New session");
+	const source = latest ? info?.lastPrompt ?? info?.firstMessage : info?.firstMessage;
+	const preview = sessionPreview(source ?? "");
+	const prompt = preview.text.replace(/\s+/g, " ").trim();
+	const attachments = (latest ? info?.lastAttachments ?? info?.firstAttachments : info?.firstAttachments) ?? preview.attachments;
+	return prompt || (attachments.length ? t("Attachments") : t("New session"));
 }
 
 /**
@@ -65,7 +75,7 @@ const SHORT_CHARS = 48;
  * item, which hands the job to the server's one-shot naming child.
  */
 export function shortName(firstMessage: string): string {
-	const line = firstMessage.replace(/\s+/g, " ").trim();
+	const line = sessionPreview(firstMessage).text.replace(/\s+/g, " ").trim();
 	if (!line) return "";
 	// Up to the first sentence end. `[^.!?]+` and not a split, so a prompt with
 	// no punctuation at all is simply the whole line.

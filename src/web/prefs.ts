@@ -457,6 +457,16 @@ export const SESSION_LINES = [
 
 export type SessionLines = (typeof SESSION_LINES)[number]["id"];
 
+const SESSION_ATTACHMENTS_KEY = "pwi:sessionAttachments";
+
+export function readSessionAttachments(): boolean {
+	return readStored(SESSION_ATTACHMENTS_KEY) !== "0";
+}
+
+export function writeSessionAttachments(show: boolean): void {
+	writeStored(SESSION_ATTACHMENTS_KEY, show ? "1" : "0");
+}
+
 const SESSION_LINES_KEY = "pwi:sessionLines";
 
 export function readSessionLines(): SessionLines {

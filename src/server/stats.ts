@@ -144,6 +144,8 @@ export async function parseLines(
 	let activeProvider = "";
 	let activeModel = "";
 	const identities = new Set<string>();
+	const generation = new Map<number, { ms: number; tokens: number }>();
+	let outputs: { timestamp: number; tokens: number }[] = [];
 	/**
 	 * This turn's calls, sizes in chars until close. Timed by the collector
 	 * when it ran (`measured`), else `sent`/`batch` estimate the wait.
@@ -201,10 +203,18 @@ export async function parseLines(
 				tokens,
 				ms,
 			}));
+			const timed = outputs.map((output) => {
+				const timing = generation.get(output.timestamp);
+				return timing?.tokens === output.tokens ? timing.ms : undefined;
+			});
+			if (timed.length && timed.every((ms) => ms !== undefined))
+				turn.generationMs = timed.reduce<number>((sum, ms) => sum + ms!, 0);
 			out.turns.push({ ...turn, ms: end - turn.start });
 		}
 		turn = undefined;
 		identities.clear();
+		generation.clear();
+		outputs = [];
 		calls = [];
 		pending.clear();
 	};
@@ -230,6 +240,14 @@ export async function parseLines(
 				if (slash > 0) { activeProvider = entry.model.slice(0, slash); activeModel = entry.model.slice(slash + 1); }
 				else activeModel = entry.model;
 			}
+			continue;
+		}
+		if (entry?.type === "custom" && entry.customType === "pwi-generation") {
+			const data = entry.data as { timestamp?: unknown; ms?: unknown; tokens?: unknown } | undefined;
+			if (data && typeof data.timestamp === "number" && Number.isFinite(data.timestamp)
+				&& typeof data.ms === "number" && Number.isFinite(data.ms) && data.ms > 0
+				&& typeof data.tokens === "number" && Number.isFinite(data.tokens) && data.tokens > 0)
+				generation.set(data.timestamp, { ms: data.ms, tokens: data.tokens });
 			continue;
 		}
 		if (entry?.type !== "message") continue;
@@ -293,6 +311,7 @@ export async function parseLines(
 		const amount = (v: unknown) => typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : 0;
 		turn.inputTokens += amount(usage?.input);
 		turn.outputTokens += amount(usage?.output);
+		if (amount(usage?.output) > 0) outputs.push({ timestamp: typeof m.timestamp === "number" ? m.timestamp : at, tokens: amount(usage?.output) });
 		turn.cacheReadTokens += amount(usage?.cacheRead);
 		turn.cacheWriteTokens += amount(usage?.cacheWrite);
 		turn.cost += amount(usage?.cost?.total);

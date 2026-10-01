@@ -15,6 +15,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { listSessions, sameProject, sessionHeaderCwd } from "./sessions.js";
+import { joinPastedText } from "../shared/pastedText.js";
 
 // Set after the import on purpose: listSessions reads PWI_SESSION_ROOT on every
 // call, so there is no load-order coupling to get wrong here.
@@ -277,5 +278,22 @@ assert.equal(await sameProject(projectA, `${projectA}/`), true, "trailing slash 
 assert.equal(await sameProject(projectA, projectB), false, "sibling projects are distinct");
 const gone = join(tmp, "gone");
 assert.equal(await sameProject(gone, gone), true, "a deleted project still matches itself");
+
+const attachmentFile = write({
+	dir: "-attachments", uuid: "attachments", cwd: projectA,
+	created: "2026-09-20T12:00:00.000Z", mtime: 9000,
+	lines: [userMsg(joinPastedText("is this better?", [{ name: "Pasted text 1.txt", text: "pasted content".repeat(1000) }]), true), userMsg("", true)],
+});
+const attachmentSession = (await listSessions(projectA)).find((s) => s.path === attachmentFile)!;
+assert.equal(attachmentSession.firstMessage, "is this better?", "extract attachments before truncating prompt previews");
+assert.equal(attachmentSession.lastPrompt, "", "image-only prompts remain the latest prompt");
+assert.deepEqual(attachmentSession.firstAttachments, [{ kind: "text", name: "Pasted text 1.txt" }, { kind: "image", index: 1 }]);
+assert.deepEqual(attachmentSession.lastAttachments, [{ kind: "image", index: 1 }]);
+assert(!JSON.stringify(attachmentSession).includes("pasted content"), "attachment contents are not sent in list polls");
+assert(!JSON.stringify(attachmentSession).includes("AAA"), "image pixels are not sent in list polls");
+appendFileSync(attachmentFile, `${userMsg("plain follow-up")}\n`);
+const updatedAttachments = (await listSessions(projectA)).find((s) => s.path === attachmentFile)!;
+assert.deepEqual(updatedAttachments.lastAttachments, [], "a plain prompt clears latest attachment chips");
+assert.equal(updatedAttachments.firstMessage, "is this better?");
 
 console.log("ok");

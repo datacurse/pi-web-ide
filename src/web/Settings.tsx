@@ -364,6 +364,8 @@ export function Settings({
 	onNotify,
 	latestPrompt,
 	onLatestPrompt,
+	sessionAttachments,
+	onSessionAttachments,
 	sessionSort,
 	onSessionSort,
 	hideScrollbars,
@@ -388,6 +390,8 @@ export function Settings({
 	onNotify: (on: boolean) => void;
 	latestPrompt: boolean;
 	onLatestPrompt: (on: boolean) => void;
+	sessionAttachments: boolean;
+	onSessionAttachments: (on: boolean) => void;
 	sessionSort: SessionSort;
 	onSessionSort: (sort: SessionSort) => void;
 	hideScrollbars: boolean;
@@ -784,6 +788,20 @@ export function Settings({
 						</OptionRow>
 					))}
 				</div>
+			),
+		},
+		{
+			category: "sessions",
+			label: t("Show attachments in sessions"),
+			text: `text image pasted files thumbnails ${t("Show text and image attachment chips in the session list.")}`,
+			node: (
+				<OptionRow>
+					<input type="checkbox" checked={sessionAttachments} onChange={(e) => onSessionAttachments(e.target.checked)} className="size-4 shrink-0 accent-amber-400" />
+					<span className="flex-1">
+						{t("Show attachments in sessions")}
+						<span className="block text-meta text-neutral-500">{t("Show text and image attachment chips in the session list.")}</span>
+					</span>
+				</OptionRow>
 			),
 		},
 		{

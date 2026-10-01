@@ -67,6 +67,8 @@ import {
 	readChatFade,
 	readFooterLayout,
 	readSessionLines,
+	readSessionAttachments,
+	writeSessionAttachments,
 	readHideScrollbars,
 	readNotify,
 	readScrollPast,
@@ -239,6 +241,7 @@ export default function App() {
 	const [askMode, setAskMode] = useState<AskMode>(readAskMode);
 	const [notify, setNotify] = useState(readNotify);
 	const [latestPrompt, setLatestPrompt] = useState(readLatestPrompt);
+	const [sessionAttachments, setSessionAttachments] = useState(readSessionAttachments);
 	const [hideScrollbars, setHideScrollbars] = useState(readHideScrollbars);
 	/** This pwi's project list: its directories plus the cwd it was launched against. */
 	const [projects, setProjects] = useState<Projects>({ projects: [], seed: "" });
@@ -1433,7 +1436,7 @@ export default function App() {
 		// An attached session's live stream beats the 5s poll, so the tab's π
 		// lights the moment a prompt is sent and dims the moment it ends.
 		// The same for a question: it arrives as an event, long before a poll.
-		const live = new Map<string, { isStreaming: boolean; needsInput: boolean; firstMessage?: string; lastPrompt?: string }>();
+		const live = new Map<string, { isStreaming: boolean; needsInput: boolean } & ReturnType<typeof sessionPrompts>>();
 		for (const c of [left, right])
 			if (c.snapshot)
 				live.set(c.snapshot.file ?? c.snapshot.id, {
@@ -1715,6 +1718,11 @@ export default function App() {
 				onNotify={(on) => void changeNotify(on)}
 				latestPrompt={latestPrompt}
 				onLatestPrompt={changeLatestPrompt}
+				sessionAttachments={sessionAttachments}
+				onSessionAttachments={(show) => {
+					setSessionAttachments(show);
+					writeSessionAttachments(show);
+				}}
 				sessionSort={sessionSort}
 				onSessionSort={changeSessionSort}
 				hideScrollbars={hideScrollbars}
@@ -1745,6 +1753,7 @@ export default function App() {
 			onAbort={s.abort}
 			onModelChange={s.changeModel}
 			onThinkingChange={s.changeThinking}
+			onFastChange={s.changeFast}
 			onCommandMenu={s.refreshCommands}
 			onCompact={s.compact}
 			compacting={s.compacting}
@@ -2044,6 +2053,7 @@ export default function App() {
 				onRename={(s, name) => void renameSession(s, name)}
 				onAutoName={autoNameSession}
 				latestPrompt={latestPrompt}
+				showAttachments={sessionAttachments}
 				onSearch={() => setSearchOpen(true)}
 				project={project}
 			/>

@@ -32,6 +32,12 @@ export function filterTurns(turns: StatsTurn[], provider: string, model: string)
 	return turns.filter((turn) => (!provider || turnProvider(turn) === provider) && (!model || modelKey(turn) === model));
 }
 
+export function tokensPerSecond(turn: StatsTurn): number | undefined {
+	return turn.generationMs && Number.isFinite(turn.generationMs) && turn.generationMs > 0
+		&& Number.isFinite(turn.outputTokens) && turn.outputTokens > 0
+		? turn.outputTokens * 1000 / turn.generationMs : undefined;
+}
+
 export function modelComparisons(turns: StatsTurn[]) {
 	const groups = new Map<string, StatsTurn[]>();
 	for (const turn of turns) {
@@ -42,12 +48,16 @@ export function modelComparisons(turns: StatsTurn[]) {
 	}
 	return [...groups].map(([key, rows]) => {
 		const times = rows.map((turn) => turn.ms).sort((a, b) => a - b);
+		const measured = rows.filter((turn) => tokensPerSecond(turn) !== undefined);
+		const generationMs = measured.reduce((sum, turn) => sum + turn.generationMs!, 0);
 		const average = (value: (turn: StatsTurn) => number) => rows.reduce((sum, turn) => sum + value(turn), 0) / rows.length;
 		return {
 			key, label: modelLabel(rows[0]!), prompts: rows.length,
 			median: percentile(times, 0.5), p90: percentile(times, 0.9),
 			input: average((turn) => (turn.inputTokens ?? 0) + (turn.cacheReadTokens ?? 0) + (turn.cacheWriteTokens ?? 0)),
 			output: average((turn) => turn.outputTokens),
+			tps: generationMs > 0 ? measured.reduce((sum, turn) => sum + turn.outputTokens, 0) * 1000 / generationMs : undefined,
+			tpsSamples: measured.length,
 			tools: average((turn) => Object.values(turn.tools).reduce((a, b) => a + b, 0)),
 			cost: average((turn) => turn.cost),
 			errors: rows.filter((turn) => turn.outcome === "error").length,

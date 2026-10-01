@@ -819,6 +819,30 @@ export function useSession({
 		[snapshot],
 	);
 
+	const changeFast = useCallback(
+		async (enabled: boolean) => {
+			if (!snapshot) return;
+			const id = snapshot.id;
+			setModelError(null);
+			try {
+				const r = await api.sessions[":id"].fast.$post({ param: { id }, json: { enabled } });
+				if (!r.ok) {
+					const body = (await r.json().catch(() => ({}))) as { error?: string };
+					throw new Error(body.error ?? String(r.status));
+				}
+				const rr = await api.sessions[":id"].$get({ param: { id } });
+				if (!rr.ok) throw new Error(String(rr.status));
+				const fresh = toSnapshot(await rr.json());
+				if (snapshotRef.current?.id === id) setSnapshot(fresh);
+			} catch (err) {
+				if (snapshotRef.current?.id === id) setModelError(t("Could not set Fast mode: {error}", {
+					error: err instanceof Error ? err.message : String(err),
+				}));
+			}
+		},
+		[snapshot],
+	);
+
 	return {
 		snapshot,
 		partial,
@@ -841,5 +865,6 @@ export function useSession({
 		answerAsk,
 		changeModel,
 		changeThinking,
+		changeFast,
 	};
 }

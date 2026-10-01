@@ -3,6 +3,8 @@ import { Star } from "@phosphor-icons/react";
 import { Button } from "./ui.js";
 import { api } from "./api.js";
 import { t } from "./i18n.js";
+import { thinkingChoices } from "../shared/thinking.js";
+import { supportsFastMode } from "../shared/fastMode.js";
 
 /**
  * Composer controls for the active session's model: one select for the model
@@ -28,7 +30,10 @@ export function ModelSelector({
 	onChange,
 	thinkingLevel,
 	thinkingLevels,
+	thinkingLevelMap,
 	onThinkingChange,
+	fastMode,
+	onFastChange,
 }: {
 	model: string | undefined;
 	disabled: boolean;
@@ -38,7 +43,10 @@ export function ModelSelector({
 	/** Empty when the model has no reasoning levels; the control then hides. */
 	thinkingLevel: string | undefined;
 	thinkingLevels: string[];
+	thinkingLevelMap?: Record<string, string | null>;
 	onThinkingChange: (level: string) => void;
+	fastMode?: boolean;
+	onFastChange?: (enabled: boolean) => Promise<void>;
 }) {
 	const [models, setModels] = useState<string[]>([]);
 	const [catalogError, setCatalogError] = useState<string | null>(null);
@@ -47,6 +55,7 @@ export function ModelSelector({
 	/** pi's saved startup model, so the star shows the truth after a reload or a switch. */
 	const [defaultModel, setDefaultModel] = useState<string | null>(null);
 	const [defaultThinking, setDefaultThinking] = useState<string | null>(null);
+	const [fastPending, setFastPending] = useState(false);
 
 	useEffect(() => {
 		let cancelled = false;
@@ -83,6 +92,9 @@ export function ModelSelector({
 	}, [attempt]);
 
 	const providers = useMemo(() => [...new Set(models.map((m) => m.split("/")[0]))].sort(), [models]);
+	const thinking = thinkingChoices(thinkingLevels, thinkingLevelMap);
+	const selectedThinking = thinking.resolve(thinkingLevel) ?? undefined;
+	const savedThinking = thinking.resolve(defaultThinking);
 
 	/** Star toggles: save the current value as pi's startup default, or clear it if it already is. */
 	const toggleDefault = async (
@@ -139,10 +151,10 @@ export function ModelSelector({
 				))}
 			</select>
 
-			{thinkingLevels.length > 0 && (
+			{thinking.levels.length > 0 && (
 				<select
 					data-custom="composer pill"
-					value={thinkingLevel ?? ""}
+					value={selectedThinking ?? ""}
 					title={t("Reasoning effort — applies from the next turn")}
 					onChange={(e) => onThinkingChange(e.target.value)}
 					className={`${cls} text-neutral-300 hover:bg-neutral-800`}
@@ -150,20 +162,38 @@ export function ModelSelector({
 					{/* pi can report a level outside the model's own list (a
 					    session resumed under a different model). Show it rather
 					    than silently displaying the wrong one. */}
-					{thinkingLevel !== undefined && !thinkingLevels.includes(thinkingLevel) && (
-						<option value={thinkingLevel}>{thinkingLevel}</option>
+					{selectedThinking !== undefined && !thinking.levels.includes(selectedThinking) && (
+						<option value={selectedThinking}>{selectedThinking}</option>
 					)}
-					{thinkingLevels.map((l) => (
+					{thinking.levels.map((l) => (
 						<option key={l} value={l}>
 							<DefaultStar
 								what="reasoning level"
-								saved={l === defaultThinking}
-								onToggle={() => toggleDefault((level) => api["default-thinking"].$post({ json: { level } }), defaultThinking, l, setDefaultThinking)}
+								saved={l === savedThinking}
+								onToggle={() => toggleDefault((level) => api["default-thinking"].$post({ json: { level } }), savedThinking ?? null, l, setDefaultThinking)}
 							/>
 							{l}
 						</option>
 					))}
 				</select>
+			)}
+
+			{supportsFastMode(model) && onFastChange && (
+				<Button
+					size="sm"
+					variant={fastMode ? "warning" : "ghost"}
+					aria-pressed={fastMode === true}
+					disabled={disabled || fastPending || fastMode === undefined}
+					title={fastMode === undefined
+						? t("Restart this session to use Fast mode")
+						: t("Fast mode — uses 2.5× subscription allowance; availability depends on your account")}
+					onClick={async () => {
+						setFastPending(true);
+						try { await onFastChange(!fastMode); } finally { setFastPending(false); }
+					}}
+				>
+					{t("Fast · 2.5× usage")}
+				</Button>
 			)}
 
 			{catalogError && (

@@ -63,4 +63,12 @@ assert.deepEqual(readExplorerOpen("/obj"), []);
 localStorage.setItem("pwi:explorer:/mixed", '["/p/ok", 7, null]');
 assert.deepEqual(readExplorerOpen("/mixed"), ["/p/ok"]);
 
+assert.equal(prefs.readSessionAttachments(), true, "session attachment chips are shown by default");
+prefs.writeSessionAttachments(false);
+assert.equal(prefs.readSessionAttachments(), false);
+prefs.writeSessionAttachments(true);
+assert.equal(prefs.readSessionAttachments(), true);
+store.set("pwi:sessionAttachments", "invalid");
+assert.equal(prefs.readSessionAttachments(), true);
+
 console.log("prefs ok");

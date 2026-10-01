@@ -170,6 +170,20 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
   `Ask only button`, `pwi:askMode`) to pick `Toggle` (default: stays on until switched
   off) or `One shot` (switches off after each send). The menu marks the current mode
   with a `Check`.
+- GPT-6.1 Sol on `openai-codex` has an opt-in `Fast · 2.5× usage` button
+  beside reasoning. It starts off, turns amber when selected, and persists per
+  session outside model context. The tooltip explains the allowance multiplier
+  and account-dependent availability; it is independent of reasoning effort.
+  It requests `service_tier: "priority"` only for Sol, and Standard requests
+  `"default"`. It is disabled during streaming or saving; old children show
+  a restart hint rather than sending an unknown command to the model. Other
+  models do not show it, and no global default is changed.
+- Reasoning options come from the active session's model, not a universal list.
+  Levels mapping to the same provider effort share one option, preferring the
+  matching level name (Sol's `minimal` and `low` appear only as `low`). Current
+  and starred defaults resolve through that model's aliases without rewriting
+  saved settings; switching models recomputes the choices. Distinct levels on
+  other models remain separate, and missing mapping metadata preserves pi's list.
 - Defaults are starred inside the popups, not in the box: every model and reasoning
   option starts with a star that saves or clears it as pi's startup default
   (`defaultProvider`/`defaultModel`, `defaultThinkingLevel`) without picking it.
@@ -324,6 +338,16 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
 - Alt+J jumps to the next waiting session: needs first, then the longest-waiting reply.
 
 ## Session list
+
+- Pasted text is excluded from prompt-derived titles before previews are shortened.
+  Below the title, compact `rounded-sm` / `text-meta` chips show text filenames
+  (`FileText`) and numbered image attachments (`Image`). They follow the same
+  First prompt / Latest prompt selection as the title, including named sessions;
+  clicking the row opens the chat. Attachment-only prompts are titled `Attachments`.
+- Settings > Sessions > `Show attachments in sessions` (`pwi:sessionAttachments`,
+  per browser, on by default) hides or shows both kinds of chip. It never restores
+  pasted contents into titles or hides attachments in the chat. List polls carry
+  only attachment labels, not pasted text or image pixels.
 
 - A row's subline is two icon + value pairs, `gap-3` apart: a 12px `Clock` with the short
   `timeAgo` of the sort's stamp (`20m`, `now`, no "ago") and a 12px `ChatCircle` with the
@@ -653,7 +677,12 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
 - Model comparison uses a two-column grid of `rounded-sm` bordered cards (one column
   below `md`): provider/model name in `text-ui`, metrics in `text-meta`. Each shows
   sample size, median/p90 answer time, average input/output tokens, tools and estimated
-  cost per prompt, and errors/aborts. Input includes cached tokens. A note says these
+  cost per prompt, generation TPS (with measured sample count), and errors/aborts. Input includes cached tokens.
+  Generation TPS divides output tokens by first-to-last output delta time, including reasoning
+  and tool-call generation but excluding initial latency and tool waits. Provider buffering
+  can affect the measurement. Model TPS is total measured output / total generation seconds,
+  not an average of rates. Each answer shows its TPS; old or incompletely timed answers show `–`.
+  Timing is persisted outside model context by a built-in extension for newly started pwi sessions. A note says these
   are recorded performance metrics, not quality scores or subscription charges;
   answers using multiple models are kept separate rather than credited to the final model.
 - Stats uses the dialog's width: usage beside the summary tiles (1/3 + 2/3), model

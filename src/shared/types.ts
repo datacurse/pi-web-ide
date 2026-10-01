@@ -153,6 +153,8 @@ export type PiEvent =
 	| { type: "idle" }
 	| { type: "error"; message: string };
 
+export type SessionAttachment = { kind: "text"; name: string } | { kind: "image"; index: number };
+
 export interface PiSessionInfo {
 	id: string;
 	path: string;
@@ -171,6 +173,8 @@ export interface PiSessionInfo {
 	firstMessage: string;
 	/** The newest user prompt; absent until the session has one. */
 	lastPrompt?: string;
+	firstAttachments?: SessionAttachment[];
+	lastAttachments?: SessionAttachment[];
 	/** True if this session is currently streaming, even with no client attached. */
 	isStreaming?: boolean;
 	/** True if the session is blocked on a question (`ask`) only the user can answer. */
@@ -208,6 +212,8 @@ export interface StatsTurn {
 	/** Background jobs this turn's commands started, and how long they ran (tool-metrics). */
 	background: { text: string; ms: number }[];
 	outputTokens: number;
+	/** First-to-last streamed delta time, summed across every output message; absent if incomplete. */
+	generationMs?: number;
 	cost: number;
 	/** The last assistant message's `stopReason`: `stop`, `error`, `aborted`\u2026 */
 	outcome: string;
@@ -504,6 +510,10 @@ export interface Snapshot {
 	 */
 	thinkingLevel: string | undefined;
 	thinkingLevels: string[];
+	/** The current model's provider effort mapping; absent on older servers. */
+	thinkingLevelMap?: Record<string, string | null>;
+	/** Requested Codex Fast tier; undefined when the child lacks the extension. */
+	fastMode?: boolean;
 	/**
 	 * Context occupancy against the model's window, as pi itself accounts for
 	 * it (`get_session_stats.contextUsage`): cache reads, system prompt and

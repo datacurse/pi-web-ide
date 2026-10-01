@@ -473,6 +473,17 @@ export function sessionsRoutes({ cwd: CWD, registry }: Deps) {
 			}
 		})
 
+		.post("/sessions/:id/fast", json<{ enabled: boolean }>(), async (c) => {
+			const { enabled } = c.req.valid("json");
+			if (typeof enabled !== "boolean") return c.json({ error: "enabled must be a boolean" }, 400);
+			try {
+				await registry.setFastMode(c.req.param("id"), enabled);
+				return c.json({ ok: true }, 200);
+			} catch (err) {
+				return c.json({ error: err instanceof Error ? err.message : String(err) }, 400);
+			}
+		})
+
 		.post("/sessions/:id/thinking", json<{ level: string }>(), async (c) => {
 			const b = c.req.valid("json");
 			const level = typeof b.level === "string" ? b.level : undefined;

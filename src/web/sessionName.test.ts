@@ -2,6 +2,7 @@
 import assert from "node:assert/strict";
 import { sessionLabel, sessionPrompts, shortName } from "./sessionName.js";
 import type { PiMessage } from "../shared/types.js";
+import { joinPastedText } from "../shared/pastedText.js";
 
 const message = (role: PiMessage["role"], text: string): PiMessage => ({
 	role, blocks: [{ kind: "text", text }], timestamp: 1,
@@ -69,5 +70,20 @@ assert.equal(shortName(`add --${"x".repeat(44)} to it`), "Add");
 assert.equal(shortName("x".repeat(60)), "X".padEnd(48, "x"));
 // Nothing in, nothing out: the caller falls back to the placeholder.
 assert.equal(shortName("   "), "");
+
+const pasted = joinPastedText("is this better?", [{ name: "Pasted text 1.txt", text: "long pasted content".repeat(100) }]);
+const withAttachments = sessionPrompts([{ ...message("user", pasted), blocks: [{ kind: "text", text: pasted }, { kind: "image", data: "AAA", mimeType: "image/png" }] }]);
+assert.equal(sessionLabel(withAttachments, false), "is this better?");
+assert.deepEqual(withAttachments.firstAttachments, [{ kind: "text", name: "Pasted text 1.txt" }, { kind: "image", index: 1 }]);
+assert.equal(sessionLabel({ firstMessage: pasted }, false), "is this better?", "full prompts from older servers are split too");
+const attachmentOnly = sessionPrompts([{ role: "user", blocks: [{ kind: "image", data: "AAA", mimeType: "image/png" }], timestamp: 1 }]);
+assert.equal(sessionLabel(attachmentOnly, false), "Attachments");
+assert.deepEqual(attachmentOnly.firstAttachments, [{ kind: "image", index: 1 }]);
+assert.equal(sessionLabel({ firstMessage: "first request", lastPrompt: "", lastAttachments: [{ kind: "image", index: 1 }] }, true), "Attachments", "latest image-only prompt does not fall back to the first request");
+assert.equal(sessionLabel({ name: "Custom", ...withAttachments }, true), "Custom");
+const laterPlain = sessionPrompts([message("user", pasted), message("user", "plain follow-up")]);
+assert.deepEqual(laterPlain.lastAttachments, []);
+assert.equal(sessionLabel(laterPlain, true), "plain follow-up");
+assert.equal(shortName(pasted), "Is this better");
 
 console.log("ok");

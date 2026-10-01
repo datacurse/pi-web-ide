@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import type { StatsTurn } from "../shared/types.js";
-import { filterTurns, modelComparisons, modelKey, usageLimitLabel } from "./stats.js";
+import { filterTurns, modelComparisons, modelKey, tokensPerSecond, usageLimitLabel } from "./stats.js";
 
 const base: StatsTurn = {
 	session: "s", cwd: "/p", start: 1, ms: 1000,
@@ -19,6 +19,18 @@ const rows = modelComparisons(turns);
 assert.equal(rows.length, 3);
 assert.equal(rows[0]?.key, "openai-codex/same-id");
 assert.equal(rows[0]?.prompts, 2);
+assert.equal(rows[0]?.tps, undefined);
+assert.equal(tokensPerSecond(base), undefined);
+assert.equal(tokensPerSecond({ ...base, generationMs: 0 }), undefined);
+assert.equal(tokensPerSecond({ ...base, generationMs: NaN }), undefined);
+assert.equal(tokensPerSecond({ ...base, generationMs: 500 }), 10);
+const timed = modelComparisons([
+	{ ...base, generationMs: 500 },
+	{ ...base, generationMs: 1500, outputTokens: 15 },
+	base,
+]);
+assert.equal(timed[0]?.tps, 10);
+assert.equal(timed[0]?.tpsSamples, 2);
 assert.equal(rows[0]?.median, 5000);
 assert.equal(rows[0]?.p90, 5000);
 assert.equal(rows[0]?.input, 60);
