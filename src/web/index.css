@@ -319,6 +319,7 @@
 	--color-yellow-500: var(--ct-yellow);
 	--color-blue-400: var(--ct-blue);
 	--color-blue-300: var(--ct-lavender);
+	--color-pink-400: color-mix(in oklab, var(--ct-red), var(--ct-mauve));
 	/* Success. Only ever a tick on a settled call — the eye should be able to
 	   run down a column of them and see that none is red. */
 	--color-green-400: var(--ct-green);

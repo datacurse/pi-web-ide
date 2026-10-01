@@ -163,8 +163,14 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
   network delivery from provider processing. Missing request telemetry is labelled unavailable.
 - Streaming silence of at least three seconds shows “No new output for …”, not an invented
   cause. Phase and total clocks update live even when the provider is silent.
-- The default tool mode is `Phases`: measured work becomes collapsed `Requesting`, `Receiving`,
-  and `Doing` groups. `Requesting` includes preparation, sending and waiting for first output;
+- The default tool mode is `Rounds` (saved ID `phases` is preserved): each user turn contains
+  collapsed `Round 1`, `Round 2`, … disclosures for model-response/tool cycles. Their headers
+  show wall time, observed tool counts, failures, and the active step while running. Opening a
+  round shows its observed `Requesting`, `Thinking`, `Receiving`, and `Doing` steps.
+  Requesting covers recorded preparation up to the provider-request hook; Thinking covers
+  waiting after that hook until visible model output. Tooltips explain that browser delivery
+  and exact upload completion are not measured, and Thinking includes hidden reasoning and
+  network waiting—not isolated reasoning time. Existing recorded timestamps are preserved;
   `Receiving` includes reasoning, prose and tool-call arguments; `Doing` includes consecutive
   tools and their brief intervening bookkeeping. Retry, compaction and user waits remain distinct.
   Explicit live/collapsed/grouped/hidden preferences are preserved; `Answer only` also uses timed
@@ -173,14 +179,19 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
   and failures even while closed. Opening a phase reveals its precise subphases and the actual
   reasoning/tool cards, with each tool's duration beside its name—not a second transcript.
   Only the final assistant message's trailing answer stays outside the phase folds.
-- Requesting is `blue-400` / `ArrowUpRight`; Receiving is `green-400` / `ArrowDownLeft`; Doing is
+- Requesting is `blue-400` / `ArrowUpRight`; Thinking is `pink-400` / `Brain` in phase headers, live status and the elapsed strip/legend.
+  The label and icon are pink; the theme maps `pink-400` to a blend of its red and mauve accents.
+  Receiving is `green-400` / `ArrowDownLeft`; Doing is
   `amber-400` / `Wrench`. Retry and user waits use `red-400` with `ArrowClockwise` / `QuestionMark`;
   compaction uses `neutral-400` / `ArrowsInLineVertical`. Icons and labels accompany colour.
 - A `Timing · Total` disclosure and an always-visible `h-4` history strip sit below the work.
   Each coloured segment spans a consecutive phase, not each tiny tool call. Width is proportional
   to observed elapsed time, never estimated completion; the active segment grows and is outlined.
-  The legend carries icons, names and totals. Clicking or keyboard-activating a segment opens and
-  scrolls to its phase. The strip remains visible with all work folded.
+  The legend carries icons, names and totals. Clicking or keyboard-activating a segment opens
+  its containing round and phase, then scrolls to that phase. The strip remains visible with all work folded.
+  Round and phase disclosures are collapsed by default. Retries before any response remain in
+  their current round; later observed request cycles start another. Missing stages are not
+  invented for older or incomplete telemetry. Model rounds are not new user-prompt turns.
 - Parallel calls overlap and are not added together in wall-clock totals. Individual call
   durations remain available inside their phase.
 - Orchestrated batches (including native codemode) are one expandable tool card inside Doing.

@@ -344,8 +344,8 @@ export function applyChatFade(fade: ChatFade): void {
 /**
  * How much of a tool call the transcript shows.
  *
- * `phases` is the default: measured turns group requesting, receiving and doing,
- * with reasoning and tool cards inside their folds. `live` is the old behaviour:
+ * `phases` is the saved default: model rounds contain requesting, thinking,
+ * receiving and doing steps, with reasoning and tool cards inside their folds. `live` is the old behaviour:
  * a call with no result yet is
  * expanded so progress is visible without clicking, and collapses once it
  * settles. It is also the noisiest, which is the reason this setting exists —
@@ -370,8 +370,8 @@ export function applyChatFade(fade: ChatFade): void {
 export const TOOL_MODES = [
 	{
 		id: "phases",
-		label: "Phases",
-		hint: "Requesting, Receiving and Doing; click a phase for its details.",
+		label: "Rounds",
+		hint: "Model rounds with Requesting, Thinking, Receiving and Doing steps.",
 	},
 	{
 		id: "live",

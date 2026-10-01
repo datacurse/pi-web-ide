@@ -7,7 +7,8 @@ import { runInNewContext } from "node:vm";
 import ts from "typescript";
 import * as sharedActivity from "../shared/activity.js";
 import { renderToStaticMarkup } from "react-dom/server";
-import { ActivityBreakdown, ActivityHistory, ActivityPanel, CompletedActivity, TurnStatus } from "./Activity.js";
+import { Brain, ArrowUpRight } from "@phosphor-icons/react";
+import { ActivityBreakdown, ActivityHistory, ActivityPanel, CompletedActivity, PhaseIcon, TurnStatus } from "./Activity.js";
 import { TurnWork } from "./TurnWork.js";
 import { Tool } from "./Transcript.js";
 import type { TurnActivity } from "../shared/activity.js";
@@ -34,13 +35,43 @@ test("live status shows the actual phase, phase time, total time, and honest str
 	assert.doesNotMatch(html, /Honking|Ruminating/);
 });
 
-test("waiting for the provider is not labelled thinking, and input waits override concurrent output", (t) => {
+test("waiting is labelled Thinking with its measurement caveat, and input waits still override it", (t) => {
 	t.mock.method(Date, "now", () => 5000);
 	const waiting = { ...activity, steps: activity.steps.slice(0, 2).map((step) => ({ ...step, end: undefined })) };
 	const html = renderToStaticMarkup(createElement(TurnStatus, { activity: waiting }));
-	assert.match(html, /Sending request \/ waiting for provider response/);
-	assert.doesNotMatch(html, /No new output for|Thinking/);
+	assert.match(html, /role="status">Thinking</);
+	assert.match(html, /not isolated thinking time/);
+	assert.match(html, /text-pink-400/);
+	assert.doesNotMatch(html, /No new output for/);
 	assert.match(renderToStaticMarkup(createElement(TurnStatus, { activity, waitingForInput: true })), /Waiting for your input/);
+});
+
+test("Requesting and Thinking have separate icons and measured preparation/wait durations", () => {
+	assert.equal(PhaseIcon({kind:"requesting"}).type, ArrowUpRight);
+	assert.equal(PhaseIcon({kind:"thinking"}).type, Brain);
+	assert.match(renderToStaticMarkup(PhaseIcon({kind:"thinking"})), /text-pink-400/);
+	const html = renderToStaticMarkup(createElement(ActivityBreakdown,{activity,now:6000}));
+	assert.match(html,/Thinking/);
+	assert.match(html,/not isolated thinking time/);
+	assert.match(html,/2\.9s/);
+	assert.match(html,/0\.1s/);
+	assert.match(html,/Requesting/);
+	assert.match(html,/Browser delivery and exact upload completion are not measured/);
+});
+test("collapsed live round headers retain the pink Thinking label and total duration", () => {
+	const waiting = {...activity,steps:activity.steps.slice(0,3).map((step,i)=>({...step,end:i === 2 ? undefined : step.end}))};
+	const html = renderToStaticMarkup(createElement(ActivityBreakdown,{activity:waiting,now:4000}));
+	assert.match(html,/Round 1/);
+	assert.match(html,/class="flex items-center gap-1 text-meta text-pink-400"/);
+	assert.match(html,/3\.0s/);
+	assert.doesNotMatch(html,/<details[^>]* open/);
+});
+
+test("streamed reasoning is still Receiving, not an additional waiting phase", () => {
+	const streaming: TurnActivity = {...activity,steps:[...activity.steps.slice(0,3),{kind:"thinking",label:"Receiving reasoning",start:4000}]};
+	const html = renderToStaticMarkup(createElement(TurnStatus,{activity:streaming}));
+	assert.match(html,/role="status">Receiving reasoning</);
+	assert.match(html,/text-green-400/);
 });
 
 test("breakdown preserves observed boundaries and completed durations do not grow after reload", () => {
@@ -59,7 +90,8 @@ test("the elapsed strip remains visible while timing is collapsed and marks the 
 	assert.match(html, /aria-expanded="false"/);
 	assert.match(html, /Elapsed activity history, not completion progress/);
 	assert.match(html, /aria-current="step"/);
-	assert.match(html, /Requesting/);
+	assert.match(html, /Thinking/);
+	assert.match(html, /bg-pink-400\/60/);
 	assert.match(html, /Receiving/);
 	assert.doesNotMatch(html, /Turn timeline|role="progressbar"|aria-valuenow/);
 	const later = renderToStaticMarkup(createElement(ActivityHistory, { activity, now: 13000, onSelect: () => {} }));
@@ -78,7 +110,8 @@ test("integrated work shows collapsed phases and failures without rendering a du
 		{ kind: "thinking", text: "Detailed reasoning" },
 		{ kind: "tool", id: "a", name: "read", args: { path: "a.ts" }, result: "Private output" },
 	] }] }));
-	assert.equal((html.match(/<details/g) ?? []).length, 3);
+	assert.equal((html.match(/<details/g) ?? []).length, 4);
+	assert.match(html,/Round 1/);
 	assert.doesNotMatch(html, /<details[^>]* open|Detailed reasoning|Private output/);
 	assert.match(html, /2 tools/);
 	assert.match(html, /1 failed/);
@@ -106,6 +139,7 @@ test("selecting a history segment opens timing and the corresponding phase, then
 	const slots: unknown[] = [];
 	let cursor = 0;
 	let headers: Map<number, HTMLDetailsElement> | undefined;
+	const refs: Map<number, HTMLDetailsElement>[] = [];
 	const exports = {} as { ActivityPanel: typeof ActivityPanel; ActivityHistory: typeof ActivityHistory; ActivityBreakdown: typeof ActivityBreakdown };
 	runInNewContext(source, {
 		exports, requestAnimationFrame: (callback: () => void) => callback(),
@@ -120,6 +154,7 @@ test("selecting a history segment opens timing and the corresponding phase, then
 					const index = cursor++;
 					if (!(index in slots)) slots[index] = { current: initial };
 					headers = (slots[index] as { current: Map<number, HTMLDetailsElement> }).current;
+					refs.push(headers);
 					return slots[index];
 				},
 				useEffect() {},
@@ -137,8 +172,11 @@ test("selecting a history segment opens timing and the corresponding phase, then
 	assert.ok(headers);
 	let scrolled = false;
 	const detail = { open: false, scrollIntoView() { scrolled = true; } } as HTMLDetailsElement;
+	const roundDetail = {open:false} as HTMLDetailsElement;
+	refs[0].set(0,roundDetail);
 	headers.set(3, detail);
 	(history.props as { onSelect(id: number): void }).onSelect(3);
+	assert.equal(roundDetail.open,true);
 	assert.equal(detail.open, true);
 	assert.equal(scrolled, true);
 	assert.ok(elements(render()).some((node) => node.type === exports.ActivityBreakdown));

@@ -72,7 +72,7 @@ export function activityTotals(activity: TurnActivity, now: number): Partial<Rec
 	return totals;
 }
 
-export type ActivityPhase = "requesting" | "receiving" | "doing" | "retry" | "compaction" | "input";
+export type ActivityPhase = "requesting" | "thinking" | "receiving" | "doing" | "retry" | "compaction" | "input";
 
 export interface ActivityPhaseGroup {
 	/** The first step index stays stable as a live group grows. */
@@ -91,11 +91,13 @@ export function activityGroups(activity: TurnActivity): ActivityPhaseGroup[] {
 		const previous = groups.at(-1);
 		let kind: ActivityPhase;
 		switch (step.kind) {
+			case "preparing": kind = "requesting"; break;
+			case "request": case "response": kind = "thinking"; break;
 			case "thinking": case "text": case "toolcall": kind = "receiving"; break;
 			case "tools": kind = "doing"; break;
 			case "retry": case "compaction": case "input": kind = step.kind; break;
 			case "processing":
-				kind = previous && ["receiving", "doing"].includes(previous.kind) ? previous.kind : "requesting";
+				kind = previous && ["thinking", "receiving", "doing"].includes(previous.kind) ? previous.kind : "requesting";
 				break;
 			default: kind = "requesting";
 		}
@@ -111,6 +113,30 @@ export function activityGroups(activity: TurnActivity): ActivityPhaseGroup[] {
 		group?.tools.push(tool);
 	}
 	return groups;
+}
+
+export interface ActivityRound {
+	id: number;
+	start: number;
+	end?: number;
+	groups: ActivityPhaseGroup[];
+}
+
+/** One model-response/tool cycle; exceptions stay with the surrounding round. */
+export function activityRounds(groups: ActivityPhaseGroup[]): ActivityRound[] {
+	const rounds: ActivityRound[] = [];
+	for (const group of groups) {
+		const previous = rounds.at(-1);
+		const beginsRequest = group.kind === "requesting" || group.kind === "thinking";
+		const afterResponse = previous?.groups.some((phase) => phase.kind === "receiving" || phase.kind === "doing");
+		if (!previous || (beginsRequest && afterResponse)) {
+			rounds.push({ id: group.id, start: group.start, end: group.end, groups: [group] });
+		} else {
+			previous.groups.push(group);
+			previous.end = group.end;
+		}
+	}
+	return rounds;
 }
 
 export function activityDuration(ms: number): string {
