@@ -238,12 +238,26 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
     (`ArrowsOutLineVertical` / `ArrowsInLineVertical`).
   - The panel floats over the transcript (absolute, above the box) and grows with its
     content up to the top of the chat, then scrolls; it never moves the layout.
-- Clicking an image thumbnail (staged or sent) expands it, centered in the area spanning
-  the whole window width (explorer, columns, sessions list) from the top down to just
-  above the line you type on. No backdrop: a `border-2 border-neutral-200` `rounded-md`
-  frame with `shadow-2xl`, and a round ✕ badge at its top right that shows on hover.
-  The composer and the rest of the app stay usable around it. A click on the image or
-  Escape closes it.
+- Clicking an image thumbnail (staged or sent) opens an image workspace, centered across
+  the window above the composer's last line. No backdrop: a `border-2 border-neutral-200`
+  `rounded-md` frame with `shadow-2xl`; the rest of the app stays usable. Only the visible
+  header ✕ or Escape closes it, never a click on the image. Wheel zooms around the cursor;
+  Fit / 100% / + / − control zoom, Pan drags the image, and the bottom-right handle resizes
+  the viewport.
+- Image annotation tools are Select, Arrow, Rectangle and Pen, with color, stroke width,
+  undo, redo and delete. Select drags existing marks; color/width changes in Select apply
+  to the selected mark. Labels are stable English prompt identifiers (Area 1, Arrow 2,
+  Pen 3), never renumbered after deletion. Original pixels remain untouched, under an SVG
+  layer. Editable marks survive closing/reopening in the current chat view, but are not
+  persisted across reloads or session switches.
+- Selecting a mark offers a description and explicit Add to prompt. This stages a PNG
+  snapshot of the image plus all labeled marks, replacing its staged original (or the
+  previously staged snapshot), and appends a visible image/mark reference with color,
+  image-relative percentage bounds and an arrow's tip. A sent image is staged as a new
+  attachment, never changed in the transcript. The composer shows an Annotated image
+  chip with the snapshot's mark count; it and the thumbnail reopen the editable source.
+  Changes after export require Add to prompt again; nothing attaches silently. The staged
+  PNG uses the existing attachment/draft/send path and survives reload when storage allows.
 - Placeholder is `Message pi…`; key hints live in the textarea's `title`. The field
   uses `field-sizing-content max-h-60` and grows as you type.
 

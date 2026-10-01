@@ -263,7 +263,7 @@ export async function parseLines(
 			end = 0;
 			continue;
 		}
-		if (!turn) continue;
+		if (!turn || (m.role !== "assistant" && m.role !== "toolResult")) continue;
 		if (!Number.isNaN(at)) end = at;
 		if (m.role === "toolResult") {
 			const c = pending.get(String(m.toolCallId));

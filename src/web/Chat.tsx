@@ -26,6 +26,7 @@ import {
 	readImage,
 	uploadFile,
 } from "./Attachments.js";
+import type { ImageWorkspace } from "./imageAnnotations.js";
 import {
 	CommandRow,
 	CompactionRow,
@@ -229,6 +230,7 @@ export function Chat({
 	const [attachError, setAttachError] = useState<string | null>(null);
 	/** The expanded attachment, as a data URL, or null. See Lightbox. */
 	const [zoomed, setZoomed] = useState<string | null>(null);
+	const [imageWorkspaces, setImageWorkspaces] = useState<Record<string, ImageWorkspace>>({});
 	const [contextOpen, setContextOpen] = useState(false);
 	const closeContext = useCallback(() => setContextOpen(false), []);
 	const viewport = useRef<HTMLDivElement>(null);
@@ -301,6 +303,8 @@ export function Chat({
 		seenRev.current = draftRev;
 		setImages(draft.images);
 		staged.current = draft.images;
+		setZoomed(null);
+		setImageWorkspaces({});
 		setAttachError(null);
 		setAskOnly(false);
 	}, [draftKey, draftRev]);
@@ -759,7 +763,7 @@ export function Chat({
 		 * `overflow-y-auto` never has anything to scroll, and the DOCUMENT
 		 * scrolls instead — taking the session list and the composer with it.
 		 */
-		<ZoomContext.Provider value={setZoomed}>
+		<ZoomContext.Provider value={(src) => setZoomed(Object.entries(imageWorkspaces).find(([, workspace]) => workspace.exportedSrc === src)?.[0] ?? src)}>
 			<main className="flex min-h-0 flex-1 flex-col">
 				{/* The rows own their top spacing; the last one needs a floor under
 			    it, and the scroll container is the only thing that knows which
@@ -988,6 +992,12 @@ export function Chat({
 								onRemove={(i) => void changeImages(images.filter((_, n) => n !== i))}
 							/>
 
+							{Object.entries(imageWorkspaces).filter(([, workspace]) => workspace.exportedSrc && images.some((image) => `data:${image.mimeType};base64,${image.data}` === workspace.exportedSrc)).map(([src, workspace]) => (
+								<Button key={src} size="sm" variant="subtle" className="mb-2 mr-2" onClick={() => setZoomed(src)}>
+									{t("Annotated image · {n} marks", { n: workspace.exportedCount ?? 0 })}
+								</Button>
+							))}
+
 							{attachError && (
 								<div className="mb-2 text-meta text-red-400">{attachError}</div>
 							)}
@@ -1192,7 +1202,33 @@ export function Chat({
 				</div>
 
 				{/* Last, so it paints over everything: an expanded attachment. */}
-				{zoomed && <Lightbox src={zoomed} above={composer} onClose={() => setZoomed(null)} />}
+				{zoomed && <Lightbox
+					key={zoomed}
+					src={zoomed}
+					above={composer}
+					workspace={imageWorkspaces[zoomed] ?? { marks: [], nextId: 1 }}
+					onChange={(workspace) => setImageWorkspaces((old) => ({ ...old, [zoomed]: workspace }))}
+					onAdd={(image, previousSrc, reference) => {
+						if (!canAttach) {
+							setAttachError(t("This model does not accept images. Switch models to attach one."));
+							return false;
+						}
+						const index = staged.current.findIndex((item) => {
+							const src = `data:${item.mimeType};base64,${item.data}`;
+							return src === zoomed || src === previousSrc;
+						});
+						const next = [...staged.current];
+						if (index < 0) next.push(image);
+						else next[index] = image;
+						const kept = changeImages(next);
+						setAttachError(kept ? null : t("Attached, but too large to keep if the page reloads."));
+						const current = composer.current?.value ?? text;
+						changeText(`${current}${current && !current.endsWith("\n") ? "\n" : ""}[Image ${index < 0 ? next.length : index + 1}] ${reference}`);
+						composer.current?.focus();
+						return true;
+					}}
+					onClose={() => setZoomed(null)}
+				/>}
 			</main>
 		</ZoomContext.Provider>
 	);

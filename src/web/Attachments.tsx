@@ -1,11 +1,5 @@
-import {
-	createContext,
-	type RefObject,
-	useContext,
-	useEffect,
-	useLayoutEffect,
-	useState,
-} from "react";
+import { createContext, useContext } from "react";
+export { Lightbox } from "./ImageLightbox.js";
 import { X } from "@phosphor-icons/react";
 import type { PiImage } from "../shared/types.js";
 import { t } from "./i18n.js";
@@ -119,86 +113,6 @@ export function Thumb({
 					<X size={13} />
 				</button>
 			)}
-		</div>
-	);
-}
-
-/**
- * The expanded image.
- *
- * A thumbnail is deliberately too small to read a screenshot in, so the full
- * size has to be one click away — and it is an overlay rather than a new tab
- * because the data is a base64 URL: a tab would show a megabyte of address
- * bar and, in some browsers, refuse to navigate to it at all.
- *
- * It spans the whole window but stops just above the last line of `above`
- * (the composer's field), the line you type on: you open a picture to
- * describe it, so that line has to stay usable under it. The field grows
- * upward, so its last line, and the overlay's edge, stay put as you type.
- */
-export function Lightbox({
-	src,
-	above,
-	onClose,
-}: {
-	src: string;
-	above: RefObject<HTMLElement | null>;
-	onClose: () => void;
-}) {
-	const [bottom, setBottom] = useState(0);
-	useLayoutEffect(() => {
-		const el = above.current;
-		if (!el) return;
-		const measure = () =>
-			setBottom(
-				window.innerHeight -
-					el.getBoundingClientRect().bottom +
-					parseFloat(getComputedStyle(el).lineHeight),
-			);
-		measure();
-		const ro = new ResizeObserver(measure);
-		ro.observe(el);
-		window.addEventListener("resize", measure);
-		return () => {
-			ro.disconnect();
-			window.removeEventListener("resize", measure);
-		};
-	}, [above]);
-
-	// Escape closes, because that is what every overlay in this app answers to.
-	useEffect(() => {
-		const onKey = (e: KeyboardEvent) => {
-			// Not when the composer already used it (closing the command picker).
-			if (e.key === "Escape" && !e.defaultPrevented) onClose();
-		};
-		window.addEventListener("keydown", onKey);
-		return () => window.removeEventListener("keydown", onKey);
-	}, [onClose]);
-
-	return (
-		// No backdrop: clicks around the image reach the app under it.
-		<div
-			role="dialog"
-			aria-label={t("Attachment")}
-			style={{ bottom }}
-			className="pointer-events-none fixed inset-x-0 top-0 z-50 flex items-center justify-center"
-		>
-			<button
-				data-custom="expanded image, click closes"
-				onClick={onClose}
-				aria-label={t("Close")}
-				className="group pointer-events-auto relative overflow-hidden rounded-md border-2 border-neutral-200 shadow-2xl"
-			>
-				<img
-					src={src}
-					alt={t("Attachment, full size")}
-					style={{ maxHeight: `calc(100vh - ${bottom + 48}px)`, maxWidth: "calc(100vw - 48px)" }}
-					className="block object-contain"
-				/>
-				<span className="absolute top-2 right-2 flex size-7 items-center justify-center rounded-full border border-neutral-700 bg-neutral-900 text-neutral-100 opacity-0 transition-opacity duration-150 ease-out group-hover:opacity-100 motion-reduce:transition-none">
-					<X size={14} />
-				</span>
-			</button>
 		</div>
 	);
 }

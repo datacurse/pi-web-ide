@@ -22,6 +22,62 @@ the probe results in `docs/plans/tool-metrics.md`.
 
 ## Time
 
+### Timing recheck confirms the live Stats fix (2026-10-01, 19 GPT / 60 Opus turns)
+
+- Live `/api/stats` now reports the affected optimization task as 229.406s,
+  matching raw session replay. Completed same-repo GPT turns now number 19;
+  active `toolUse` turns are excluded, as are mixed-model turns in Stats.
+- Tool-using medians (13 GPT / 50 Opus): 216.6s / 94.9s; median request
+  duration 11.89s / 5.06s, with 12 / 8.5 requests per task. Median summed
+  request time remains 184.8s / 56.6s; remaining wall time 28.8s / 43.5s.
+- Restricting to 10–30 tool calls (10 GPT / 17 Opus) gives 200.5s / 189.3s.
+  This remains an unmatched observational sample, not a controlled comparison.
+- Latest completed Stats bug fix: 184.3s total, 155.5s in model-request
+  intervals and 28.8s elsewhere. The timing correction fixes reporting,
+  not generation speed; model/service waits remain the larger contributor.
+
+### Recent GPT turns wait more on model requests, not tools (2026-10-01)
+
+- Same local pwi repo, completed turns only, excluding the active analysis:
+  17 GPT (`gpt-6.1-sol`) turns today versus the latest 60 Opus
+  (`claude-opus-5-5`) turns. Tool-using subsets: 11 GPT and 50 Opus turns.
+  Using actual final-assistant timestamps, median task duration is 216.6s
+  versus 94.9s; no-tool subsets (6 / 10) are 13.0s versus 7.2s.
+- Tool-using turns have median 14 GPT model requests versus 8.5 Opus,
+  and 24 tool invocations versus 7.5. Bash may contain several commands,
+  so invocation counts do not measure equivalent amounts of filesystem work.
+  Median request duration is 11.6s versus 5.1s (assistant message timestamp
+  to session-entry timestamp, not time to first visible token).
+- Short tool-call requests (under 200 reported output tokens): 107 GPT
+  versus 80 Opus requests, median 7.59s versus 2.57s, with similar median
+  input + cache-read context (32.2K / 34.4K). Both session groups record
+  medium reasoning; levels/token accounting are not necessarily equivalent
+  across providers. These intervals include service, reasoning and generation
+  time; the logs cannot isolate queueing, transport or model computation.
+- Median summed request time per tool-using task: 184.8s GPT / 56.6s Opus;
+  median remaining wall time: 29.8s / 43.5s. Measured edit medians improve
+  (63 GPT edits: 1.66s, hook 1.59s; 73 Opus edits: 8.50s, hook 3.27s).
+  Opus edit totals can include `then_run`, so these are not edit-only costs.
+- After optimization finished: just four subsequent tool-using GPT turns,
+  five plain measured typechecks at median 5.10s (2.27–14.80s). Real changed
+  code still needs checking; unchanged-cache speed is not whole-task speed.
+  Task medians before/after (7 / 4 tasks) are 209.3s / 240.0s, but differing
+  tasks and the tiny sample cannot establish a regression caused by tuning.
+- Workload sensitivity: restricting to 10–30 tool invocations gives 9 GPT
+  tasks / 17 Opus tasks with median 209.3s / 189.3s. This observational
+  comparison is not a controlled model benchmark; slower request intervals
+  and more round trips are better-supported findings than a universal 2.3×
+  task slowdown.
+- Found a Stats timing bug: `parseLines` updates its turn end for any
+  message before filtering roles. A system reminder before the next prompt
+  charged idle time to the previous completed turn: the optimization task
+  shows 1570s in Stats but actually completed in 229s. Analysis above uses
+  raw final-assistant timestamps. Fixed on 2026-10-01 by letting only
+  assistant/tool-result messages advance the turn end; regression coverage
+  checks system/custom reminders both before the next prompt and at EOF.
+  Replaying the affected session now yields 229.406s; all seven Stats tests
+  and `pnpm typecheck` pass.
+
 ### Incremental checking enabled; safety checks retained (2026-10-01, this repo)
 
 - Five successful timed full `pnpm typecheck` runs: non-incremental baseline

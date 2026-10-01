@@ -43,6 +43,20 @@ test("one turn per user prompt, timed to its last message", async () => {
 	assert.deepEqual(t?.tools, { bash: 1 });
 });
 
+test("system and custom messages do not extend completed turns", async () => {
+	for (const role of ["system", "custom"]) {
+		const p = await parseLines([
+			msg("2026-01-01T00:00:00Z", { role: "user", content: "first" }),
+			msg("2026-01-01T00:00:05Z", { role: "assistant", stopReason: "stop", content: [] }),
+			msg("2026-01-01T00:25:00Z", { role, content: "reminder" }),
+			msg("2026-01-01T00:25:01Z", { role: "user", content: "second" }),
+			msg("2026-01-01T00:25:03Z", { role: "assistant", stopReason: "stop", content: [] }),
+			msg("2026-01-01T00:50:00Z", { role, content: "reminder" }),
+		]);
+		assert.deepEqual(p.turns.map((t) => t.ms), [5000, 2000], role);
+	}
+});
+
 test("tool calls cost their size and their wait, split across a batch", async () => {
 	const p = await parseLines([
 		msg("2026-01-01T00:00:00Z", { role: "user", content: "go", timestamp: Date.parse("2026-01-01T00:00:00Z") }),
