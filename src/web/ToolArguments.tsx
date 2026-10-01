@@ -24,7 +24,8 @@ export function ToolArguments({ name, args, diff }: { name: string; args: unknow
 		!(key === "command" && command !== undefined) &&
 		!(key === "edits" && edits !== undefined) &&
 		!(key === "content" && content !== undefined) &&
-		!(key === "replacement_lines" && replacementLines !== undefined),
+		!(key === "replacement_lines" && replacementLines !== undefined) &&
+		!(name === "replace" && (key === "remove_from" || key === "remove_to")),
 	);
 	if (command !== undefined) return <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 px-3 py-1 text-neutral-300">
 		<pre className="min-w-0 flex-1 whitespace-pre-wrap wrap-anywhere font-mono"><span className="mr-2 select-none text-amber-400" aria-hidden>$</span>{command}</pre>
@@ -41,8 +42,9 @@ export function ToolArguments({ name, args, diff }: { name: string; args: unknow
 		</div>)}
 		{diff !== undefined ? <pre className="border-b border-neutral-800 font-mono whitespace-pre-wrap wrap-anywhere">{diff.split("\n").map((line, i) => {
 			const row = line.replace(/^\s*\d+\s+│\s*/, "");
+			if (name === "replace" && !row.startsWith("+") && !row.startsWith("-")) return null;
 			const color = row.startsWith("+") && !row.startsWith("+++") ? "text-green-400" : row.startsWith("-") && !row.startsWith("---") ? "text-red-400" : "text-neutral-400";
-			return <span key={i} className={`block px-3 ${color}`}>{line}</span>;
+			return <span key={i} className={`block px-3 ${color}`}>{name === "replace" ? row : line}</span>;
 		})}</pre> : replacementLines !== undefined && <pre className="border-b border-neutral-800 p-3 font-mono whitespace-pre-wrap wrap-anywhere text-green-400">{replacementLines.join("\n")}</pre>}
 		{content !== undefined && <pre className="p-3 font-mono whitespace-pre-wrap wrap-anywhere">{content}</pre>}
 		{rest.length > 0 && <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-2 p-3">

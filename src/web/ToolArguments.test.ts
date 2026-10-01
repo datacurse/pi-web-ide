@@ -32,13 +32,14 @@ test("each edit has a unified diff and execution options stay visible", () => {
 	assert.doesNotMatch(html, /oldText/);
 });
 
-test("replace renders the captured before-and-after diff in red and green", () => {
-	const html = render("replace", { remove_from: "a", remove_to: "b", replacement_lines: ["new"] }, "-old\n+new");
+test("replace shows only removed and added lines", () => {
+	const html = render("replace", { remove_from: "a", remove_to: "b", replacement_lines: ["new"] }, "...\n riy| context\n-fxie| old\n-LaFY| obsolete\n+alSt| new\n+FoZY| added\n");
 	assert.match(html, /text-red-400/);
 	assert.match(html, /text-green-400/);
 	assert.match(html, /-old/);
 	assert.match(html, /\+new/);
-	assert.doesNotMatch(html, /replacement_lines/);
+	assert.match(html, /\+added/);
+	assert.doesNotMatch(html, /context|obsolete|remove_from|remove_to|replacement_lines/);
 });
 
 test("writes render content and unknown or malformed arguments remain readable", () => {

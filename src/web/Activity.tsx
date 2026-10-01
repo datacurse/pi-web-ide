@@ -14,6 +14,13 @@ const PHASE_STYLE = {
 	input: { icon: QuestionMark, text: "text-red-400", background: "bg-red-400/60" },
 };
 
+const breakdownOpenByTurn = new Map<number, boolean>();
+
+function rememberBreakdownOpen(start: number, open: boolean): void {
+	breakdownOpenByTurn.delete(start);
+	breakdownOpenByTurn.set(start, open);
+	if (breakdownOpenByTurn.size > 100) breakdownOpenByTurn.delete(breakdownOpenByTurn.keys().next().value!);
+}
 function phaseTitle(kind: ActivityPhase): string {
 	switch (kind) {
 		case "requesting": return t("Requesting");
@@ -165,8 +172,8 @@ export function ActivityPanel({ activity, renderContent, controls, stickyLeading
 	waitingForInput?: boolean;
 	expandedByDefault?: boolean;
 }) {
-	const [open, setOpen] = useState(expandedByDefault || !!renderContent);
-	useEffect(() => setOpen(expandedByDefault || !!renderContent), [expandedByDefault]);
+	const [openOverride, setOpenOverride] = useState<boolean | null>(() => breakdownOpenByTurn.get(activity.start) ?? null);
+	const open = openOverride ?? (expandedByDefault || !!renderContent);
 	const roundRefs = useRef(new Map<number, HTMLDetailsElement>());
 	const now = useClock(activity.end === undefined);
 	const step = activity.steps.at(-1);
@@ -175,7 +182,8 @@ export function ActivityPanel({ activity, renderContent, controls, stickyLeading
 	const silence = streaming && activity.lastOutputAt !== undefined ? now - activity.lastOutputAt : 0;
 	const breakdown = open ? <ActivityBreakdown activity={activity} now={now} renderContent={renderContent} roundRefs={roundRefs.current} expandedByDefault={expandedByDefault} /> : null;
 	const select = (id: number) => {
-		setOpen(true);
+		rememberBreakdownOpen(activity.start, true);
+		setOpenOverride(true);
 		requestAnimationFrame(() => {
 			const round = activityRounds(activityGroups(activity)).find((item) => item.groups.some((group) => group.id === id));
 			const detail = round && roundRefs.current.get(round.id);
@@ -194,7 +202,7 @@ export function ActivityPanel({ activity, renderContent, controls, stickyLeading
 	const summary = (
 		<div className="mt-2 flex flex-wrap items-center gap-1 text-meta text-neutral-500">
 			{controls}
-			<button type="button" data-custom="inline timing disclosure" className="flex items-center gap-1 hover:text-neutral-300" onClick={() => setOpen(!open)} aria-expanded={open} aria-label={t("Toggle breakdown")}>
+			<button type="button" data-custom="inline timing disclosure" className="flex items-center gap-1 hover:text-neutral-300" onClick={() => { const next = !open; rememberBreakdownOpen(activity.start, next); setOpenOverride(next); }} aria-expanded={open} aria-label={t("Toggle breakdown")}>
 				{open ? <CaretDown size={12} /> : <CaretRight size={12} />}{t("Breakdown")} <Clock size={12} aria-hidden /> <span className="tabular-nums">{activityDuration((activity.end ?? now) - activity.start)}</span>
 			</button>
 			<ActivityHistory activity={activity} now={now} onSelect={select} />
@@ -203,7 +211,7 @@ export function ActivityPanel({ activity, renderContent, controls, stickyLeading
 	);
 	return (
 		<div>
-			{stickyLeading ? <div className="sticky top-0 z-10 bg-neutral-950">{stickyLeading}{status}{summary}</div> : <>{status}{summary}</>}
+			{stickyLeading ? <div className="sticky top-0 z-10 bg-neutral-950">{stickyLeading}{summary}{status}</div> : <>{summary}{status}</>}
 			{renderContent && breakdown}
 			{!renderContent && breakdown}
 		</div>
