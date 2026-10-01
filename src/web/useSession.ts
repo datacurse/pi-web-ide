@@ -448,14 +448,16 @@ export function useSession({
 						worked = true;
 						setPartial((p) => ({
 							...p,
-							tools: [...p.tools, { id: e.id, name: e.name, args: e.args }],
+							tools: [...p.tools, { id: e.id, name: e.name, args: e.args, ...(e.parentId ? { parentId: e.parentId, startedAt: e.at, running: true } : {}) }],
 						}));
 						break;
 					case "tool_end":
 						setPartial((p) => ({
 							...p,
 							tools: p.tools.map((t) =>
-								t.id === e.id ? { ...t, result: e.result, isError: e.isError } : t,
+								t.id === e.id ? { ...t, result: e.result, isError: e.isError,
+									durationMs: e.at !== undefined && t.startedAt !== undefined ? Math.max(0, e.at - t.startedAt) : t.durationMs,
+									running: t.parentId ? false : t.running } : t,
 							),
 						}));
 						// Any tool may have touched the tree; re-read the changed-file count now.

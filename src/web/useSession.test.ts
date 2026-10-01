@@ -82,6 +82,21 @@ function harness() {
 	};
 }
 
+test("nested live calls retain parent IDs, output and server-measured durations", async () => {
+	const h = harness();
+	await h.render().attach("batch-session");
+	const emit = (event: unknown) => h.streams.at(-1)!.onmessage!({data:JSON.stringify(event)});
+	emit({type:"tool_start",id:"batch/1",name:"read",args:{path:"a.ts"},parentId:"batch",at:1000});
+	emit({type:"tool_update",id:"batch/1",result:"partial output"});
+	assert.equal(h.render().partial.tools[0].parentId,"batch");
+	assert.equal(h.render().partial.tools[0].running,true);
+	emit({type:"tool_end",id:"batch/1",name:"read",result:"complete output",isError:false,at:1300});
+	const child = h.render().partial.tools[0];
+	assert.equal(child.durationMs,300);
+	assert.equal(child.running,false);
+	assert.equal(child.result,"complete output");
+});
+
 for (const ok of [true, false]) {
 	test(`compaction ${ok ? "success" : "failure"} stays in its original session`, async () => {
 		const h = harness();

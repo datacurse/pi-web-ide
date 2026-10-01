@@ -51,6 +51,19 @@ test("actual reasoning, intermediate prose and tools attach to the right phase w
 	assert.equal([...blocks.values()].flat().length, 4);
 });
 
+test("a live batch appears once in Doing, with children rather than sibling tool cards", () => {
+	const groups = activityGroups(activity);
+	const parent: PiMessage = {role:"assistant",timestamp:2000,blocks:[{kind:"tool",id:"a",name:"codemode",args:{}}]};
+	const blocks = phaseBlocks(groups,[parent],{thinking:"",text:"",tools:[
+		{id:"a/1",parentId:"a",name:"read",args:{path:"a.ts"},result:"body",durationMs:50},
+	]});
+	const doing = blocks.get(groups[2].id)!;
+	assert.equal(doing.length,1);
+	assert.ok(doing[0].kind === "tool");
+	assert.equal(doing[0].children?.[0].id,"a/1");
+	assert.equal([...blocks.values()].flat().filter(b=>b.kind === "tool").length,1);
+});
+
 test("live reasoning and generated tool arguments are receiving until a tool execution is measured", () => {
 	const groups = activityGroups(activity);
 	const partial = { thinking: "New reasoning", text: "New commentary", tools: [{ id: "pending", name: "read", args: { path: "b.ts" } }] };

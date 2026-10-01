@@ -1,5 +1,9 @@
 /** Russian for every `t`/`plural` key (see i18n.ts). Plurals are `one|few|many`. */
 export const RU: Record<string, string> = {
+	"Interrupted": "Прервано",
+	"Nested output was not retained": "Вывод вложенного вызова не сохранён",
+	"Partial batch": "Неполная группа",
+	"Some nested calls were not retained": "Некоторые вложенные вызовы не сохранены",
 	"Phases": "Этапы",
 	"Requesting, Receiving and Doing; click a phase for its details.": "Запрос, получение и выполнение; нажмите на этап для подробностей.",
 	"Requesting": "Запрос",

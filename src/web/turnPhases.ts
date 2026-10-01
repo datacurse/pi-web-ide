@@ -1,4 +1,5 @@
 import type { ActivityPhaseGroup } from "../shared/activity.js";
+import { mergeLiveTools } from "../shared/toolTree.js";
 import type { PiBlock, PiMessage, PiPartial } from "../shared/types.js";
 
 /** Only the final assistant message's trailing answer stays outside the folds. */
@@ -24,11 +25,12 @@ export function phaseBlocks(groups: ActivityPhaseGroup[], messages: PiMessage[],
 			if (group) result.get(group.id)?.push(block);
 		}
 	};
-	for (const message of messages) if (message.role === "assistant") add(message.blocks, receiving(message.timestamp));
+	const merged = mergeLiveTools(messages, partial?.tools ?? []);
+	for (const message of merged.messages) if (message.role === "assistant") add(message.blocks, receiving(message.timestamp));
 	if (partial) add([
 		...(partial.thinking ? [{ kind: "thinking" as const, text: partial.thinking }] : []),
 		...(partial.text ? [{ kind: "text" as const, text: partial.text }] : []),
-		...partial.tools.map((tool) => ({ kind: "tool" as const, ...tool })),
+		...merged.liveTools.map((tool) => ({ kind: "tool" as const, ...tool })),
 	], groups.findLast((g) => g.kind === "receiving"));
 	return result;
 }

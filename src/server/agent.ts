@@ -58,6 +58,8 @@ import { Socket } from "node:net";
 import { join } from "node:path";
 
 import { isRecord, records } from "./guards.js";
+import { nestTools } from "../shared/toolTree.js";
+import type { PiTool } from "../shared/types.js";
 import { ActivityTracker } from "./activity.js";
 import type { TurnActivity } from "../shared/activity.js";
 import { FAST_COMMAND, supportsFastMode } from "../shared/fastMode.js";
@@ -206,6 +208,28 @@ function toImageContent(img: PiImage): { type: "image"; data: string; mimeType: 
  * messages and tool RESULTS arrive as separate `toolResult` messages; we keep
  * them separate here and let the caller stitch, which keeps this pure.
  */
+function nestedTools(value: unknown, parentId: string): { children?: PiTool[]; childrenIncomplete?: boolean } {
+	if (!isRecord(value) || !Array.isArray(value.calls)) return {};
+	const calls = records(value.calls).slice(0, 256).filter((call) =>
+		typeof call.id === "string" && call.id.length > 0 && typeof call.name === "string" &&
+		["running", "ok", "error"].includes(String(call.status)));
+	const ids = new Set(calls.map((call) => call.id));
+	const children = nestTools(calls.map((call) => {
+		const id = String(call.id);
+		const prefix = id.slice(0, id.lastIndexOf("/"));
+		return {
+			id, name: String(call.name), args: call.arguments,
+			parentId: ids.has(prefix) ? prefix : parentId,
+			result: typeof call.error === "string" ? call.error.slice(0, 500) : "",
+			isError: call.status === "error",
+			interrupted: call.status === "running",
+			outputUnavailable: typeof call.error !== "string",
+			...(typeof call.durationMs === "number" && Number.isFinite(call.durationMs) && call.durationMs >= 0 ? { durationMs: call.durationMs } : {}),
+		};
+	}));
+	return { children, childrenIncomplete: value.complete === false || value.calls.length > 256 || calls.length !== value.calls.length || ids.size !== calls.length };
+}
+
 export function toPiMessage(m: AgentMessage): PiMessage {
 	const timestamp = typeof m.timestamp === "number" ? m.timestamp : Date.now();
 
@@ -263,6 +287,7 @@ export function toPiMessage(m: AgentMessage): PiMessage {
 					args: undefined,
 					result: textOf(m.content),
 					isError: Boolean(m.isError),
+					...nestedTools(m.nestedCalls, String(m.toolCallId ?? "")),
 				},
 			],
 			timestamp,
@@ -368,12 +393,12 @@ export function isConversation(m: AgentMessage): boolean {
  * toolResult messages, so the UI renders one row per tool invocation.
  */
 export function stitch(messages: PiMessage[]): PiMessage[] {
-	const results = new Map<string, { result: string; isError: boolean }>();
+	const results = new Map<string, PiTool>();
 	for (const m of messages) {
 		if (m.role !== "toolResult") continue;
 		for (const b of m.blocks) {
 			if (b.kind === "tool")
-				results.set(b.id, { result: b.result ?? "", isError: Boolean(b.isError) });
+				results.set(b.id, { ...b, result: b.result ?? "", isError: Boolean(b.isError) });
 		}
 	}
 
@@ -384,7 +409,7 @@ export function stitch(messages: PiMessage[]): PiMessage[] {
 			blocks: m.blocks.map((b) => {
 				if (b.kind !== "tool") return b;
 				const r = results.get(b.id);
-				return r ? { ...b, result: r.result, isError: r.isError } : b;
+				return r ? { ...b, result: r.result, isError: r.isError, ...(r.children ? { children: r.children, childrenIncomplete: r.childrenIncomplete } : {}) } : b;
 			}),
 		}));
 }
@@ -1995,6 +2020,7 @@ export function toEvents(frame: Record<string, unknown>): PiEvent[] {
 					id: String(frame.toolCallId ?? ""),
 					name: String(frame.toolName ?? ""),
 					args: frame.args,
+					...(typeof frame.parentToolCallId === "string" ? { parentId: frame.parentToolCallId, at: Date.now() } : {}),
 				},
 			];
 
@@ -2016,6 +2042,7 @@ export function toEvents(frame: Record<string, unknown>): PiEvent[] {
 					name: String(frame.toolName ?? ""),
 					isError: Boolean(frame.isError),
 					result: textOf(isRecord(frame.result) ? frame.result.content : undefined),
+					...(typeof frame.parentToolCallId === "string" ? { at: Date.now() } : {}),
 				},
 			];
 

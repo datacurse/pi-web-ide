@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "re
 import { ArrowsInLineVertical, ArrowsOutLineVertical, CaretDown, CaretRight, CaretUp, Check, Copy, GitFork, PaperPlaneTilt, PencilSimple, X } from "@phosphor-icons/react";
 import { AnsiHtml } from "fancy-ansi/react";
 import { hasAnsi, stripAnsi } from "fancy-ansi";
-import type { ContextBreakdown, ContextItem, ContextPart, PiBlock, PiImage, PiMessage, PiNotice } from "../shared/types.js";
+import type { ContextBreakdown, ContextItem, ContextPart, PiBlock, PiImage, PiMessage, PiNotice, PiTool } from "../shared/types.js";
 import { api, unwrap } from "./api.js";
 import { Button, IconButton, ListRow, sectionLabel } from "./ui.js";
 import { MarkdownText } from "./Markdown.js";
@@ -67,6 +67,13 @@ export function Tool({
 	args,
 	autoOpen,
 	ms,
+	children,
+	childrenIncomplete,
+	nested = false,
+	running: inFlight,
+	interrupted,
+	outputUnavailable,
+	startedAt,
 }: {
 	name: string;
 	isError?: boolean;
@@ -74,8 +81,15 @@ export function Tool({
 	args?: unknown;
 	autoOpen: boolean;
 	ms?: number;
+	children?: PiTool[];
+	childrenIncomplete?: boolean;
+	nested?: boolean;
+	running?: boolean;
+	interrupted?: boolean;
+	outputUnavailable?: boolean;
+	startedAt?: number;
 }) {
-	const running = result === undefined;
+	const running = inFlight ?? result === undefined;
 	const [open, setOpen] = useState(autoOpen && running);
 	/*
 	 * Changing the setting has to reach calls that are ALREADY on screen:
@@ -84,21 +98,40 @@ export function Tool({
 	 * to get rid of. Keyed on the setting alone — a call the user opened by
 	 * hand stays open until the setting itself moves.
 	 */
-	useEffect(() => setOpen(autoOpen && result === undefined), [autoOpen]);
+	useEffect(() => setOpen(autoOpen && running), [autoOpen]);
 	const spinner = useSpinner(running);
-	const preview = !open && result ? resultPreview(result) : "";
+	const elapsed = ms ?? (running && startedAt !== undefined ? Math.max(0, Date.now() - startedAt) : undefined);
+	const target = nested && args && typeof args === "object" ? (args as { path?: unknown; command?: unknown }).path ?? (args as { command?: unknown }).command : undefined;
+	const preview = !open ? result ? resultPreview(result) : typeof target === "string" ? target : "" : "";
+	const counts = new Map<string, number>();
+	let failures = 0;
+	const count = (calls: PiTool[]) => {
+		for (const call of calls) {
+			counts.set(call.name, (counts.get(call.name) ?? 0) + 1);
+			if (call.isError) failures++;
+			count(call.children ?? []);
+		}
+	};
+	count(children ?? []);
+	const summary = [...counts].map(([tool, n]) => tool + " × " + n).join(" · ");
 	return (
-		<div className="chat-wide my-3">
+		<div className={nested ? "my-2" : "chat-wide my-3"}>
 			<button
 				data-custom="transcript disclosure"
+				aria-expanded={open}
 				onClick={() => setOpen((o) => !o)}
 				className={`flex max-w-full items-center gap-1 whitespace-nowrap chat-code font-mono ${isError ? "text-red-400" : running ? "text-amber-400" : "text-neutral-500"} hover:text-neutral-300`}
 			>
 				{open ? <CaretDown size={11} className="shrink-0" /> : <CaretRight size={11} className="shrink-0" />}
 				{name}
-				{ms !== undefined && <span className="shrink-0 text-meta tabular-nums">{activityDuration(ms)}</span>}
+				{summary && <span className="fade-end ml-1 min-w-0 text-neutral-500">{summary}</span>}
+				{failures > 0 && <span className="shrink-0 text-red-400">{t("{n} failed", { n: failures })}</span>}
+				{childrenIncomplete && <span className="shrink-0 text-amber-400">{t("Partial batch")}</span>}
+				{elapsed !== undefined && <span className="shrink-0 text-meta tabular-nums">{activityDuration(elapsed)}</span>}
 				{running ? (
 					<span className="shrink-0">{spinner}</span>
+				) : interrupted ? (
+					<span>{t("Interrupted")}</span>
 				) : isError ? (
 					<X size={11} weight="bold" className="shrink-0" />
 				) : (
@@ -106,6 +139,12 @@ export function Tool({
 				)}
 				{preview && <span className="fade-end ml-1 min-w-0 font-normal text-neutral-600">{preview}</span>}
 			</button>
+			{open && children && children.length > 0 && (
+				<div className="ml-3 border-l border-neutral-800 pl-3">
+					{children.map((child) => <Tool key={child.id} {...child} nested autoOpen={false} ms={child.durationMs} />)}
+				</div>
+			)}
+			{open && childrenIncomplete && <p className="mt-1 text-meta text-amber-400">{t("Some nested calls were not retained")}</p>}
 			{open && (
 				<div className="chat-code mt-1 max-h-80 overflow-auto rounded-sm bg-neutral-900 p-2 text-neutral-400">
 					{args !== undefined && (
@@ -113,6 +152,7 @@ export function Tool({
 							{JSON.stringify(args, null, 2)}
 						</pre>
 					)}
+					{outputUnavailable && <p className="mb-2 text-meta">{t("Nested output was not retained")}</p>}
 					{result !== undefined && (
 						<AnsiOutput className="whitespace-pre-wrap" text={result} />
 					)}
@@ -287,7 +327,13 @@ export function Block({
 			isError={block.isError}
 			result={block.result}
 			args={block.args}
-			ms={toolMs}
+			ms={toolMs ?? block.durationMs}
+			children={block.children}
+			childrenIncomplete={block.childrenIncomplete}
+			running={block.running}
+			interrupted={block.interrupted}
+			outputUnavailable={block.outputUnavailable}
+			startedAt={block.startedAt}
 			autoOpen={autoOpenTools}
 		/>
 	);

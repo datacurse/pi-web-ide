@@ -183,6 +183,15 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
   scrolls to its phase. The strip remains visible with all work folded.
 - Parallel calls overlap and are not added together in wall-clock totals. Individual call
   durations remain available inside their phase.
+- Orchestrated batches (including native codemode) are one expandable tool card inside Doing.
+  The closed card shows the observed tool-name counts, elapsed duration, nested failures, and
+  whether Pi retained only part of the batch. Opening it reveals indented child calls with their
+  own arguments, outcomes, output when available, and measured durations; deeper batches nest
+  recursively. Batch and child disclosures are collapsed by default. Preserve the same tree
+  during streaming, reconnects, and transcript reloads; never render children again as siblings.
+  Do not guess Explore/Modify/Verify stages from tool names or commands. Parent wall time owns
+  the outer timeline; overlapping child durations are not added to it. Retention gaps and missing
+  historical child output are not presented as complete data or fabricated output.
 - Integrated work owns the turn's timing strip; do not duplicate it in the answer footer.
   Other tool modes retain timing next to the answer's copy/fork controls, with the same strip
   visible while collapsed. Timings survive reloads and server restarts in pwi's state directory;

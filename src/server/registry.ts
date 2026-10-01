@@ -228,7 +228,7 @@ export class Registry {
 					entry.partial.thinking += e.delta;
 					break;
 				case "tool_start":
-					entry.partial.tools.push({ id: e.id, name: e.name, args: e.args });
+					entry.partial.tools.push({ id: e.id, name: e.name, args: e.args, ...(e.parentId ? { parentId: e.parentId, startedAt: e.at, running: true } : {}) });
 					break;
 				case "tool_update": {
 					// Cumulative, so replace rather than append.
@@ -241,6 +241,7 @@ export class Registry {
 					if (t) {
 						t.result = e.result;
 						t.isError = e.isError;
+						if (e.at !== undefined && t.startedAt !== undefined) { t.durationMs = Math.max(0, e.at - t.startedAt); t.running = false; }
 					}
 					break;
 				}

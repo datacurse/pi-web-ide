@@ -39,11 +39,27 @@ export interface PiImage {
 	mimeType: string;
 }
 
+export interface PiTool {
+	id: string;
+	name: string;
+	args: unknown;
+	result?: string;
+	isError?: boolean;
+	parentId?: string;
+	startedAt?: number;
+	durationMs?: number;
+	running?: boolean;
+	interrupted?: boolean;
+	outputUnavailable?: boolean;
+	children?: PiTool[];
+	childrenIncomplete?: boolean;
+}
+
 export type PiBlock =
 	| { kind: "text"; text: string }
 	| { kind: "thinking"; text: string }
 	| { kind: "image"; data: string; mimeType: string }
-	| { kind: "tool"; id: string; name: string; args: unknown; result?: string; isError?: boolean };
+	| ({ kind: "tool" } & PiTool);
 
 export interface PiMessage {
 	/**
@@ -140,14 +156,14 @@ export type AskAnswer = { value: string } | { confirmed: boolean } | { cancelled
 export type PiEvent =
 	| { type: "text"; delta: string }
 	| { type: "thinking"; delta: string }
-	| { type: "tool_start"; id: string; name: string; args: unknown }
+	| { type: "tool_start"; id: string; name: string; args: unknown; parentId?: string; at?: number }
 	/**
 	 * Streaming tool output. `result` is CUMULATIVE — pi's `partialResult`
 	 * carries everything produced so far — so a consumer replaces the card's
 	 * output with it rather than appending.
 	 */
 	| { type: "tool_update"; id: string; result: string }
-	| { type: "tool_end"; id: string; name: string; isError: boolean; result: string }
+	| { type: "tool_end"; id: string; name: string; isError: boolean; result: string; at?: number }
 	| { type: "message_done"; message: PiMessage }
 	| { type: "notice"; notice: PiNotice }
 	| { type: "ask"; ask: PiAsk | null }
@@ -403,7 +419,7 @@ export interface FleetMachine {
 export interface PiPartial {
 	text: string;
 	thinking: string;
-	tools: Array<{ id: string; name: string; args: unknown; result?: string; isError?: boolean }>;
+	tools: PiTool[];
 }
 
 /**

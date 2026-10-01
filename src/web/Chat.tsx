@@ -10,6 +10,7 @@ import type {
 	Snapshot,
 } from "../shared/types.js";
 import { Button, ContextMenu, IconButton, MenuItem } from "./ui.js";
+import { mergeLiveTools } from "../shared/toolTree.js";
 import { ModelSelector } from "./ModelSelector.js";
 import { GitActions } from "./GitActions.js";
 import { MarkdownText } from "./Markdown.js";
@@ -406,21 +407,7 @@ export function Chat({
 	const { messages, liveTools } = useMemo(() => {
 		const settled = snapshot?.messages ?? [];
 		if (partial.tools.length === 0) return { messages: settled, liveTools: partial.tools };
-		const live = new Map(partial.tools.map((t) => [t.id, t]));
-		const seen = new Set<string>();
-		const merged = settled.map((m) => {
-			let changed = false;
-			const blocks = m.blocks.map((b) => {
-				if (b.kind !== "tool") return b;
-				seen.add(b.id);
-				const t = live.get(b.id);
-				if (!t || b.result !== undefined) return b;
-				changed = true;
-				return { ...b, result: t.result, isError: t.isError };
-			});
-			return changed ? { ...m, blocks } : m;
-		});
-		return { messages: merged, liveTools: partial.tools.filter((t) => !seen.has(t.id)) };
+		return mergeLiveTools(settled, partial.tools);
 	}, [snapshot?.messages, partial.tools]);
 
 	/**
@@ -893,6 +880,8 @@ export function Chat({
 										result={t.result}
 										args={t.args}
 										autoOpen={toolMode === "live"}
+										children={t.children}
+										childrenIncomplete={t.childrenIncomplete}
 									/>
 								))}
 							{/* optimizeForStreaming suppresses incomplete inline syntax (an
