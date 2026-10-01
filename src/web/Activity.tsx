@@ -72,7 +72,7 @@ export function ActivitySteps({ groups, now, start, onSelect, label, leading, tr
 	const totals = new Map<ActivityPhase, number>();
 	groups.forEach((group, i) => totals.set(group.kind, (totals.get(group.kind) ?? 0) + durations[i]));
 	return (
-		<div className="space-y-1">
+		<div className={showBar ? "space-y-1" : ""}>
 			<div className="flex items-center gap-3">
 				{leading}
 				{showBar && <div className="flex h-2 min-w-0 flex-1 overflow-hidden rounded-sm bg-neutral-800" role="group" aria-label={label}>
@@ -153,7 +153,7 @@ export function ActivityBreakdown({ activity, now = Date.now(), renderContent, r
 }
 
 export function ActivityHistory({ activity, now = Date.now(), onSelect }: { activity: TurnActivity; now?: number; onSelect: (id: number) => void }) {
-	return <ActivitySteps groups={activityGroups(activity)} now={now} start={activity.start} onSelect={onSelect} label={t("Elapsed activity history, not completion progress")} />;
+	return <ActivitySteps groups={activityGroups(activity)} now={now} start={activity.start} onSelect={onSelect} label={t("Elapsed activity history, not completion progress")} showBar={false} />;
 }
 
 /** Round cards own their text and tools; the complete turn keeps one chronological strip. */
@@ -196,11 +196,11 @@ export function ActivityPanel({ activity, renderContent, controls, waitingForInp
 			<div className="mt-2 flex flex-wrap items-center gap-1 text-meta text-neutral-500">
 				{controls}
 				<button type="button" data-custom="inline timing disclosure" className="flex items-center gap-1 hover:text-neutral-300" onClick={() => setOpen(!open)} aria-expanded={open} aria-label={t("Toggle timing breakdown")}>
-					{open ? <CaretDown size={12} /> : <CaretRight size={12} />}{t("Timing")} · {t("Total")} <span className="tabular-nums">{activityDuration((activity.end ?? now) - activity.start)}</span>
+					{open ? <CaretDown size={12} /> : <CaretRight size={12} />}<Clock size={12} aria-hidden />{t("Timing")} · {t("Total")} <span className="tabular-nums">{activityDuration((activity.end ?? now) - activity.start)}</span>
 				</button>
+				<ActivityHistory activity={activity} now={now} onSelect={select} />
 				{activity.end === undefined && silence >= 3000 && <span> · {t("No new output for")} <span className="tabular-nums">{activityDuration(silence)}</span></span>}
 			</div>
-			<ActivityHistory activity={activity} now={now} onSelect={select} />
 			{!renderContent && breakdown}
 		</div>
 	);

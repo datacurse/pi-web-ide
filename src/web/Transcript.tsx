@@ -131,7 +131,8 @@ export function Tool({
 	expandedByDefault?: boolean;
 }) {
 	const running = inFlight ?? result === undefined;
-	const [open, setOpen] = useState(expandedByDefault || (autoOpen && running));
+	const nestedShellOutput = nested && name === "bash" && result !== undefined && result !== "";
+	const [open, setOpen] = useState(expandedByDefault || (autoOpen && running) || nestedShellOutput);
 	/*
 	 * Changing the setting has to reach calls that are ALREADY on screen:
 	 * their `open` was decided at mount, so without this, switching to
@@ -139,7 +140,7 @@ export function Tool({
 	 * to get rid of. Keyed on the setting alone — a call the user opened by
 	 * hand stays open until the setting itself moves.
 	 */
-	useEffect(() => setOpen(expandedByDefault || (autoOpen && running)), [autoOpen, expandedByDefault]);
+	useEffect(() => setOpen(expandedByDefault || (autoOpen && running) || nestedShellOutput), [autoOpen, expandedByDefault, nestedShellOutput]);
 	const spinner = useSpinner(running);
 	const elapsed = ms ?? (running && startedAt !== undefined ? Math.max(0, Date.now() - startedAt) : undefined);
 	const target = args && typeof args === "object" ? (args as { path?: unknown; command?: unknown }).path ?? (args as { command?: unknown }).command : undefined;
@@ -175,8 +176,14 @@ export function Tool({
 			>
 				{open ? <CaretDown size={11} className="shrink-0" /> : <CaretRight size={11} className="shrink-0" />}
 				<ToolIcon name={name} />
-				<span className="min-w-0 max-w-1/2 fade-end" title={name}>{name}</span>
-				{preview && <span className="fade-end min-w-0 flex-1 text-left font-normal text-neutral-400">{preview}</span>}
+				{nested && name === "bash" && typeof target === "string" ? (
+					<span className="min-w-0 flex-1 fade-end text-left text-neutral-300"><span className="text-amber-400">$</span> {target}</span>
+				) : (
+					<>
+						<span className="min-w-0 max-w-1/2 fade-end" title={name}>{name}</span>
+						{preview && <span className="fade-end min-w-0 flex-1 text-left font-normal text-neutral-400">{preview}</span>}
+					</>
+				)}
 				{summary && <span className="fade-end ml-1 min-w-0 text-neutral-500">{summary}</span>}
 				{failures > 0 && <span className="shrink-0 text-red-400">{t("{n} failed", { n: failures })}</span>}
 				{childrenIncomplete && <span className="shrink-0 text-amber-400">{t("Partial batch")}</span>}
@@ -197,7 +204,9 @@ export function Tool({
 				</div>
 			)}
 			{open && childrenIncomplete && <p className="mt-1 text-meta text-amber-400">{t("Some nested calls were not retained")}</p>}
-			{open && name !== "codemode" && (
+			{open && name !== "codemode" && (nestedShellOutput ? (
+				<div className="chat-code mt-1 max-h-96 overflow-auto text-neutral-300"><AnsiOutput className="whitespace-pre-wrap wrap-anywhere pl-7" text={result} /></div>
+			) : (
 				<div className="chat-code mt-1 max-h-96 overflow-auto rounded-sm border border-neutral-800 bg-neutral-900 text-neutral-400">
 					{!(nested && name === "bash") && <ToolArguments name={name} args={args} />}
 					{outputUnavailable && !nested && <p className="border-t border-neutral-800 px-3 py-2 text-meta">{t("Nested output was not retained")}</p>}
@@ -207,7 +216,7 @@ export function Tool({
 						</div>
 					)}
 				</div>
-			)}
+			))}
 		</div>
 	);
 }

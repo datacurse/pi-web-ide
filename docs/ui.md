@@ -195,12 +195,7 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
   Receiving is `green-400` / `ArrowDownLeft`; Doing is
   `amber-400` / `Wrench`. Retry and user waits use `red-400` with `ArrowClockwise` / `QuestionMark`;
   compaction uses `neutral-400` / `ArrowsInLineVertical`. Icons and labels accompany colour.
-- A `Timing · Total` disclosure and an always-visible `h-2` history strip sit below the work.
-  Each coloured segment spans a consecutive phase, not each tiny tool call. Width is proportional
-  to observed elapsed time, never estimated completion; the active segment grows and is outlined.
-  The legend carries icons, names and totals. Clicking or keyboard-activating a segment opens
-  its containing round and scrolls to it. The bottom bar has the same text/icon-free segments
-  and coloured step-time totals as the round bars. The strip remains visible with all work folded.
+- A `Timing · Total` disclosure with a clock icon sits below the work; observed phase icons and elapsed times sit beside it on the same row. No overall progress bar.
   For current design review, `Expand work by default` is on by default (`pwi:workExpanded`).
   Rounds and completed tool arguments/output start open. The Transcript settings checkbox
   changes this immediately and persists it; explicit off is respected. Individual disclosures
@@ -211,8 +206,9 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
   durations remain available inside their phase.
 - Codemode wrappers add no transcript row or disclosure: render child calls directly. Keep its script
   hidden. For a single bash call, strip the codemode completion/wall-time envelope and show its
-  combined stdout in that command's result, without repeating its command arguments. Suppress the
-  wrapper output when it is only a success notice from a non-command tool. For multiple calls,
+  combined stdout in that command's result, without repeating its command arguments. Nested bash
+  calls render as terminal-style `$ command` rows with captured stdout visible underneath. Suppress
+  the wrapper output when it is only a success notice from a non-command tool. For multiple calls,
   combined output may be shown once only when it cannot be attributed to an individual call; never
   claim child output is missing when that combined output is visible. Use each child tool's elapsed
   time, not codemode's separate wall-time string. Read tools use blue `BookOpen` icons; writing

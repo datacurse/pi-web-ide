@@ -15,8 +15,8 @@ test("codemode wrapper adds no row; nested tools render directly", () => {
 	assert.match(html,/Some nested calls were not retained/);
 	assert.match(html,/a\.ts/);
 	assert.match(html,/pnpm test/);
-	assert.equal((html.match(/aria-expanded="false"/g)??[]).length,2);
-	assert.doesNotMatch(html,/secret child output|border-l|aria-expanded="true"|Explore|Modify|Verify/);
+	assert.equal((html.match(/aria-expanded="false"/g)??[]).length,1);
+	assert.doesNotMatch(html,/secret child output|border-l|Explore|Modify|Verify/);
 });
 test("expanded work opens completed child details without exposing the codemode wrapper", () => {
 	const html = renderToStaticMarkup(createElement(Tool,{name:"codemode",autoOpen:false,result:"HIDDEN_AGGREGATE",args:{code:"HIDDEN_SCRIPT"},children,expandedByDefault:true}));
@@ -25,7 +25,7 @@ test("expanded work opens completed child details without exposing the codemode 
 	assert.match(html,/pnpm test/);
 	assert.doesNotMatch(html,/HIDDEN_AGGREGATE|HIDDEN_SCRIPT/);
 	const folded = renderToStaticMarkup(createElement(Tool,{name:"codemode",autoOpen:false,result:"done",children,expandedByDefault:false}));
-	assert.equal((folded.match(/aria-expanded="false"/g)??[]).length,2);
+	assert.equal((folded.match(/aria-expanded="false"/g)??[]).length,1);
 	assert.doesNotMatch(folded,/secret child output|HIDDEN_AGGREGATE/);
 });
 
@@ -77,6 +77,9 @@ test("serialized outputs map to their matching nested bash calls without wrapper
 	assert.match(html,/second/);
 	assert.match(html,/stdout one/);
 	assert.match(html,/stdout two/);
+	assert.ok(html.indexOf(">first<") < html.indexOf("stdout one"));
+	assert.ok(html.indexOf(">second<") < html.indexOf("stdout two"));
+	assert.equal((html.match(/aria-expanded="true"/g)??[]).length,2);
 	assert.doesNotMatch(html,/"output"|exit_code|wall_time_seconds|Nested output was not retained/);
 });
 
