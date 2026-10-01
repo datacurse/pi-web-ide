@@ -163,10 +163,30 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
   network delivery from provider processing. Missing request telemetry is labelled unavailable.
 - Streaming silence of at least three seconds shows “No new output for …”, not an invented
   cause. Phase and total clocks update live even when the provider is silent.
-- The disclosure shows an ordered timeline, wall-clock totals by phase, and individual tool
-  durations. Parallel calls overlap and are not added together in wall-clock totals.
-- Finished answers retain a `Timing` caret next to the duration in their footer. Timings survive
-  reloads and server restarts in pwi's state directory; unobserved historical turns have none.
+- The default tool mode is `Phases`: measured work becomes collapsed `Requesting`, `Receiving`,
+  and `Doing` groups. `Requesting` includes preparation, sending and waiting for first output;
+  `Receiving` includes reasoning, prose and tool-call arguments; `Doing` includes consecutive
+  tools and their brief intervening bookkeeping. Retry, compaction and user waits remain distinct.
+  Explicit live/collapsed/grouped/hidden preferences are preserved; `Answer only` also uses timed
+  phases when available. Unmeasured old turns retain their ordinary work fold.
+- Phase headers use `text-body`, a 14px icon and `text-meta` wall time; `Doing` shows the call count
+  and failures even while closed. Opening a phase reveals its precise subphases and the actual
+  reasoning/tool cards, with each tool's duration beside its name—not a second transcript.
+  Only the final assistant message's trailing answer stays outside the phase folds.
+- Requesting is `blue-400` / `ArrowUpRight`; Receiving is `green-400` / `ArrowDownLeft`; Doing is
+  `amber-400` / `Wrench`. Retry and user waits use `red-400` with `ArrowClockwise` / `QuestionMark`;
+  compaction uses `neutral-400` / `ArrowsInLineVertical`. Icons and labels accompany colour.
+- A `Timing · Total` disclosure and an always-visible `h-4` history strip sit below the work.
+  Each coloured segment spans a consecutive phase, not each tiny tool call. Width is proportional
+  to observed elapsed time, never estimated completion; the active segment grows and is outlined.
+  The legend carries icons, names and totals. Clicking or keyboard-activating a segment opens and
+  scrolls to its phase. The strip remains visible with all work folded.
+- Parallel calls overlap and are not added together in wall-clock totals. Individual call
+  durations remain available inside their phase.
+- Integrated work owns the turn's timing strip; do not duplicate it in the answer footer.
+  Other tool modes retain timing next to the answer's copy/fork controls, with the same strip
+  visible while collapsed. Timings survive reloads and server restarts in pwi's state directory;
+  unobserved historical turns have none.
 
 ## Composer
 

@@ -9,8 +9,8 @@ import { MarkdownText } from "./Markdown.js";
 import { timeAgo } from "./SessionList.js";
 import { Attachments, Thumb } from "./Attachments.js";
 import { t, plural, locale } from "./i18n.js";
-import type { TurnActivity } from "../shared/activity.js";
-import { ActivityBreakdown } from "./Activity.js";
+import { activityDuration, type TurnActivity } from "../shared/activity.js";
+import { ActivityPanel } from "./Activity.js";
 import type { UserMode } from "./prefs.js";
 import { PastedTexts } from "./PastedTexts.js";
 import { addPastedText, isLargePaste, joinPastedText, splitPastedText } from "./pastedText.js";
@@ -66,12 +66,14 @@ export function Tool({
 	result,
 	args,
 	autoOpen,
+	ms,
 }: {
 	name: string;
 	isError?: boolean;
 	result?: string;
 	args?: unknown;
 	autoOpen: boolean;
+	ms?: number;
 }) {
 	const running = result === undefined;
 	const [open, setOpen] = useState(autoOpen && running);
@@ -94,6 +96,7 @@ export function Tool({
 			>
 				{open ? <CaretDown size={11} className="shrink-0" /> : <CaretRight size={11} className="shrink-0" />}
 				{name}
+				{ms !== undefined && <span className="shrink-0 text-meta tabular-nums">{activityDuration(ms)}</span>}
 				{running ? (
 					<span className="shrink-0">{spinner}</span>
 				) : isError ? (
@@ -247,12 +250,14 @@ export function Block({
 	autoOpenTools,
 	userMode = "clamped",
 	foldThinking = false,
+	toolMs,
 }: {
 	block: PiBlock;
 	isUser: boolean;
 	autoOpenTools: boolean;
 	userMode?: UserMode;
 	foldThinking?: boolean;
+	toolMs?: number;
 }) {
 	if (block.kind === "text")
 		// No `chat-measure` on the user branch: the pill IS the column, and a
@@ -282,6 +287,7 @@ export function Block({
 			isError={block.isError}
 			result={block.result}
 			args={block.args}
+			ms={toolMs}
 			autoOpen={autoOpenTools}
 		/>
 	);
@@ -865,36 +871,26 @@ function AnswerFooter({
 	onFork: (at: number) => Promise<void>;
 }) {
 	const [forking, setForking] = useState(false);
-	const [timingOpen, setTimingOpen] = useState(false);
 	const end = footer.endedAt ?? footer.at;
 	const took = footer.endedAt && footer.asked ? footer.endedAt - footer.asked : 0;
+	const controls = <>
+		<CopyButton text={text} />
+		<IconButton
+			size="sm"
+			label={forking ? t("Forking…") : t("Fork from here")}
+			disabled={forking}
+			onClick={() => {
+				setForking(true);
+				void onFork(footer.at).finally(() => setForking(false));
+			}}
+		>
+			<GitFork size={14} />
+		</IconButton>
+		{!footer.activity && took >= 1000 && <span className="msg-footer-time ml-1 tabular-nums" title={new Date(end).toLocaleString(locale())}>{elapsed(took)}</span>}
+	</>;
 	return (
 		<div className="chat-measure mt-1 text-meta text-neutral-500">
-			<div className="flex items-center gap-1">
-				<CopyButton text={text} />
-				<IconButton
-					size="sm"
-					label={forking ? t("Forking…") : t("Fork from here")}
-					disabled={forking}
-					onClick={() => {
-						setForking(true);
-						void onFork(footer.at).finally(() => setForking(false));
-					}}
-				>
-					<GitFork size={14} />
-				</IconButton>
-				{took >= 1000 && (
-					<span className="msg-footer-time ml-1 tabular-nums" title={new Date(end).toLocaleString(locale())}>
-						{elapsed(took)}
-					</span>
-				)}
-				{footer.activity && (
-					<Button size="sm" variant="ghost" className="ml-1" onClick={() => setTimingOpen(!timingOpen)} aria-expanded={timingOpen}>
-						{timingOpen ? <CaretDown size={12} /> : <CaretRight size={12} />}{t("Timing")}
-					</Button>
-				)}
-			</div>
-			{timingOpen && footer.activity && <ActivityBreakdown activity={footer.activity} />}
+			{footer.activity ? <ActivityPanel activity={footer.activity} controls={controls} /> : <div className="flex items-center gap-1">{controls}</div>}
 		</div>
 	);
 }

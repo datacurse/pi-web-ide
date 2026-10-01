@@ -71,4 +71,10 @@ assert.equal(prefs.readSessionAttachments(), true);
 store.set("pwi:sessionAttachments", "invalid");
 assert.equal(prefs.readSessionAttachments(), true);
 
+assert.equal(prefs.readToolMode(), "phases", "phase grouping is the default");
+prefs.writeToolMode("live");
+assert.equal(prefs.readToolMode(), "live", "explicit display preferences are preserved");
+prefs.writeToolMode("phases");
+assert.equal(prefs.readToolMode(), "phases");
+
 console.log("prefs ok");

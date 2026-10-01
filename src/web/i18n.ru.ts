@@ -1,5 +1,12 @@
 /** Russian for every `t`/`plural` key (see i18n.ts). Plurals are `one|few|many`. */
 export const RU: Record<string, string> = {
+	"Phases": "Этапы",
+	"Requesting, Receiving and Doing; click a phase for its details.": "Запрос, получение и выполнение; нажмите на этап для подробностей.",
+	"Requesting": "Запрос",
+	"Receiving": "Получение",
+	"Doing": "Выполнение",
+	"1 tool": "1 инструмент",
+	"Elapsed activity history, not completion progress": "История затраченного времени, не процент выполнения",
 	"Preparing request": "Подготовка запроса",
 	"Sending request / waiting for provider response": "Отправка запроса / ожидание ответа провайдера",
 	"Response received · waiting for model output": "Ответ получен · ожидание вывода модели",

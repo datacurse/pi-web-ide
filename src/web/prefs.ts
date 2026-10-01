@@ -344,7 +344,9 @@ export function applyChatFade(fade: ChatFade): void {
 /**
  * How much of a tool call the transcript shows.
  *
- * `live` is the default and the old behaviour: a call with no result yet is
+ * `phases` is the default: measured turns group requesting, receiving and doing,
+ * with reasoning and tool cards inside their folds. `live` is the old behaviour:
+ * a call with no result yet is
  * expanded so progress is visible without clicking, and collapses once it
  * settles. It is also the noisiest, which is the reason this setting exists —
  * a long run of edits and reads turns the pane into a wall of arguments while
@@ -366,6 +368,11 @@ export function applyChatFade(fade: ChatFade): void {
  * folded line.
  */
 export const TOOL_MODES = [
+	{
+		id: "phases",
+		label: "Phases",
+		hint: "Requesting, Receiving and Doing; click a phase for its details.",
+	},
 	{
 		id: "live",
 		label: "Expand while running",
@@ -397,7 +404,7 @@ export type ToolMode = (typeof TOOL_MODES)[number]["id"];
 
 export function readToolMode(): ToolMode {
 	const stored = readStored(TOOL_KEY);
-	return TOOL_MODES.some((m) => m.id === stored) ? (stored as ToolMode) : "live";
+	return TOOL_MODES.some((m) => m.id === stored) ? (stored as ToolMode) : "phases";
 }
 
 export function writeToolMode(mode: ToolMode): void {

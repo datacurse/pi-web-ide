@@ -44,6 +44,9 @@ import {
 } from "./Transcript.js";
 import { t } from "./i18n.js";
 import { CompletedActivity, TurnStatus } from "./Activity.js";
+import { TurnWork } from "./TurnWork.js";
+import { partitionPhaseTurn } from "./turnPhases.js";
+import type { TurnActivity } from "../shared/activity.js";
 import { PiMark } from "./piMark.js";
 import { PastedTexts } from "./PastedTexts.js";
 import { addPastedText, isLargePaste, joinPastedText, splitPastedText } from "./pastedText.js";
@@ -141,7 +144,8 @@ type Row =
 			/** The message's start timestamp; see `at` on Message. */
 			at?: number;
 	  }
-	| { kind: "tools"; blocks: PiBlock[]; labelled: boolean };
+	| { kind: "tools"; blocks: PiBlock[]; labelled: boolean }
+	| { kind: "phases"; activity: TurnActivity; messages: PiMessage[] };
 
 /** Page-wide: with two columns, only the first composer to show takes the load focus. */
 let focusedOnLoad = false;
@@ -453,6 +457,8 @@ export function Chat({
 		let pending: PiBlock[] = [];
 		/** The turn being accumulated. Never non-empty outside "answer" mode. */
 		let turn: PiBlock[] = [];
+		let turnMessages: PiMessage[] = [];
+		let turnAsked: number | undefined;
 		/** The last question's timestamp, for the footer's duration. */
 		let asked: number | undefined;
 		/** The accumulated turn's footer, set by its last assistant message. */
@@ -472,7 +478,7 @@ export function Chat({
 			if (!last) return undefined;
 			// A group is always the assistant's, so it breaks the label the same
 			// way a message from the assistant does.
-			return last.kind === "tools" ? "assistant" : last.role;
+			return last.kind !== "message" ? "assistant" : last.role;
 		};
 		const flushGroup = () => {
 			if (pending.length === 0) return;
@@ -491,6 +497,19 @@ export function Chat({
 		 * the last paragraph means the turn did not end on prose.
 		 */
 		const flushTurn = (live = false) => {
+			const activity = turnMessages.length > 0 ? snapshot?.activity?.find((trace) => trace.asked === turnAsked) : undefined;
+			if (activity) {
+				const { work, answer } = partitionPhaseTurn(turnMessages, live && activity.end === undefined);
+				out.push({ kind: "phases", activity, messages: work });
+				if (answer) out.push({ kind: "message", role: "assistant", blocks: answer.blocks, labelled: false, at: answer.timestamp, footer: turnFooter ? { ...turnFooter, activity: undefined } : undefined });
+				turn = [];
+				turnMessages = [];
+				turnAsked = undefined;
+				turnFooter = undefined;
+				return;
+			}
+			turnMessages = [];
+			turnAsked = undefined;
 			if (turn.length === 0) return;
 			let cut = turn.length;
 			// Mid-turn, prose is never the answer yet: splitting it out made each
@@ -520,19 +539,24 @@ export function Chat({
 		};
 
 		for (const m of messages) {
-			if (m.role === "user") asked = m.timestamp;
+			if (m.role === "user") {
+				flushTurn();
+				asked = m.timestamp;
+			}
 			const before = out.length;
 			const blocks = m.blocks.filter(
 				(b) =>
 					(showThinking || b.kind !== "thinking") &&
 					(toolMode !== "hidden" || b.kind !== "tool"),
 			);
-			if (blocks.length === 0) continue;
+			if (blocks.length === 0 && !((toolMode === "phases" || toolMode === "answer") && m.role === "assistant")) continue;
 
-			if (toolMode === "answer") {
+			if (toolMode === "phases" || toolMode === "answer") {
 				// The assistant's blocks pile up until someone else speaks; see
 				// flushTurn below for where the answer is split back out.
 				if (m.role === "assistant") {
+					if (turnMessages.length === 0) turnAsked = asked;
+					turnMessages.push({ ...m, blocks });
 					turn.push(...blocks);
 					turnFooter = footerFor(m);
 					continue;
@@ -597,6 +621,10 @@ export function Chat({
 		}
 		flushGroup();
 		flushTurn(busy);
+		if (busy && (toolMode === "phases" || toolMode === "answer")) {
+			const current = snapshot?.activity?.findLast((trace) => trace.end === undefined);
+			if (current && !out.some((row) => row.kind === "phases" && row.activity.start === current.start)) out.push({ kind: "phases", activity: current, messages: [] });
+		}
 		return out;
 	}, [messages, showThinking, toolMode, busy, snapshot?.activity]);
 
@@ -723,7 +751,8 @@ export function Chat({
 	 * twenty. The fold's own line says it is thinking, and the status line
 	 * below still names the running tool.
 	 */
-	const folds = toolMode === "grouped" || toolMode === "answer";
+	const folds = toolMode === "grouped" || toolMode === "answer" || toolMode === "phases";
+	const phasedLive = busy && rows.some((row) => row.kind === "phases" && row.activity.end === undefined);
 	const hasPartial =
 		partial.text ||
 		(showThinking && partial.thinking) ||
@@ -740,7 +769,7 @@ export function Chat({
 						? [{ kind: "thinking", text: partial.thinking } as PiBlock]
 						: []),
 					// "Answer only" folds live prose too; it leaves the fold once the turn ends.
-					...(toolMode === "answer" && partial.text
+					...((toolMode === "answer" || toolMode === "phases") && partial.text
 						? [{ kind: "text", text: partial.text } as PiBlock]
 						: []),
 					...liveTools.map((t) => ({ kind: "tool", ...t }) as PiBlock),
@@ -799,7 +828,9 @@ export function Chat({
 						</div>
 					)}
 					{rows.map((r, i) =>
-						r.kind === "tools" ? (
+						r.kind === "phases" ? (
+							<TurnWork key={`${snapshot.id}:${r.activity.start}`} activity={r.activity} messages={r.messages} partial={busy && r.activity.end === undefined ? { text: partial.text, thinking: showThinking ? partial.thinking : "", tools: liveTools } : undefined} waitingForInput={r.activity.end === undefined && !!snapshot.ask} />
+						) : r.kind === "tools" ? (
 							<TranscriptRow key={i} role="assistant" labelled={r.labelled}>
 								{joinFold && i === rows.length - 1 ? (
 									<ToolGroup blocks={[...r.blocks, ...partialFold]} streaming />
@@ -832,7 +863,7 @@ export function Chat({
 						),
 					)}
 
-					{hasPartial && (
+					{hasPartial && !phasedLive && (
 						<TranscriptRow role="assistant" labelled={partialLabelled}>
 							{/*
 							 * Grouped while it streams, not just once it settles: the group
@@ -867,14 +898,14 @@ export function Chat({
 							{/* optimizeForStreaming suppresses incomplete inline syntax (an
 						    unclosed ** or a half-typed fence) instead of rendering the raw
 						    markers until the closing delimiter arrives next delta. */}
-							{partial.text && toolMode !== "answer" && (
+							{partial.text && toolMode !== "answer" && toolMode !== "phases" && (
 								<MarkdownText text={partial.text} streaming />
 							)}
 						</TranscriptRow>
 					)}
 
-					{busy && <TurnStatus key={snapshot.id} activity={snapshot.activity?.findLast((turn) => turn.end === undefined)} since={turnStart(snapshot.messages)} waitingForInput={!!snapshot.ask} />}
-					{!busy && snapshot.activity?.at(-1)?.end !== undefined && !rows.some((r) => r.kind === "message" && r.footer?.activity?.start === snapshot.activity?.at(-1)?.start) && (
+					{busy && !phasedLive && <TurnStatus key={snapshot.id} activity={snapshot.activity?.findLast((turn) => turn.end === undefined)} since={turnStart(snapshot.messages)} waitingForInput={!!snapshot.ask} />}
+					{!busy && snapshot.activity?.at(-1)?.end !== undefined && !rows.some((r) => (r.kind === "message" && r.footer?.activity?.start === snapshot.activity?.at(-1)?.start) || (r.kind === "phases" && r.activity.start === snapshot.activity?.at(-1)?.start)) && (
 						<CompletedActivity activity={snapshot.activity.at(-1)!} />
 					)}
 

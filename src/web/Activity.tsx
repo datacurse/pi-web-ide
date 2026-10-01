@@ -1,7 +1,27 @@
-import { useEffect, useState } from "react";
-import { CaretDown, CaretRight } from "@phosphor-icons/react";
-import { activityDuration, activityLabel, activityTotals, type ActivityStep, type TurnActivity } from "../shared/activity.js";
-import { t } from "./i18n.js";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { ArrowUpRight, ArrowDownLeft, Wrench, ArrowClockwise, ArrowsInLineVertical, QuestionMark, CaretDown, CaretRight } from "@phosphor-icons/react";
+import { activityDuration, activityGroups, type ActivityPhase, type ActivityPhaseGroup, type ActivityStep, type TurnActivity } from "../shared/activity.js";
+import { t, plural } from "./i18n.js";
+
+const PHASE_STYLE = {
+	requesting: { icon: ArrowUpRight, text: "text-blue-400", background: "bg-blue-400/60" },
+	receiving: { icon: ArrowDownLeft, text: "text-green-400", background: "bg-green-400/60" },
+	doing: { icon: Wrench, text: "text-amber-400", background: "bg-amber-400/60" },
+	retry: { icon: ArrowClockwise, text: "text-red-400", background: "bg-red-400/60" },
+	compaction: { icon: ArrowsInLineVertical, text: "text-neutral-400", background: "bg-neutral-400/60" },
+	input: { icon: QuestionMark, text: "text-red-400", background: "bg-red-400/60" },
+};
+
+function phaseTitle(kind: ActivityPhase): string {
+	switch (kind) {
+		case "requesting": return t("Requesting");
+		case "receiving": return t("Receiving");
+		case "doing": return t("Doing");
+		case "retry": return t("Waiting to retry");
+		case "compaction": return t("Compacting conversation");
+		case "input": return t("Waiting for your input");
+	}
+}
 
 function phaseLabel(step: ActivityStep): string {
 	if (step.kind === "tools") return t("Running {tools}", { tools: step.label.replace(/^Running /, "") });
@@ -9,6 +29,11 @@ function phaseLabel(step: ActivityStep): string {
 	if (status) return t("Provider responded (HTTP {status})", { status: status[1] });
 	if (step.kind === "retry") return step.label.replace("Waiting to retry", t("Waiting to retry"));
 	return t(step.label);
+}
+
+export function PhaseIcon({ kind, size = 14, onBar = false }: { kind: ActivityPhase; size?: number; onBar?: boolean }) {
+	const { icon: Icon, text } = PHASE_STYLE[kind];
+	return <Icon size={size} className={`shrink-0 ${onBar ? "text-neutral-950" : text}`} aria-hidden />;
 }
 
 function useClock(active: boolean): number {
@@ -21,83 +46,145 @@ function useClock(active: boolean): number {
 	return now;
 }
 
-export function ActivityBreakdown({ activity, now = Date.now() }: { activity: TurnActivity; now?: number }) {
-	const end = activity.end ?? now;
-	const total = Math.max(1, end - activity.start);
-	const totals = activityTotals(activity, now);
+type PhaseContent = (group: ActivityPhaseGroup, now: number) => ReactNode;
+
+function PhaseGroup({ group, now, renderContent, detailsRefs }: {
+	group: ActivityPhaseGroup;
+	now: number;
+	renderContent?: PhaseContent;
+	detailsRefs?: Map<number, HTMLDetailsElement>;
+}) {
+	const [open, setOpen] = useState(false);
+	const failed = group.tools.filter((tool) => tool.isError).length;
 	return (
-		<div className="mt-2 space-y-3 border-l border-neutral-700 pl-3 text-meta text-neutral-400">
-			<div className="flex flex-wrap gap-x-4 gap-y-1">
-				{Object.entries(totals).map(([kind, ms]) => (
-					<span key={kind}>{t(activityLabel(kind as keyof typeof totals))}: <span className="tabular-nums text-neutral-300">{activityDuration(ms)}</span></span>
-				))}
-			</div>
-			<ol className="space-y-1" aria-label={t("Turn timeline")}>
-				{activity.steps.map((step, i) => {
-					const duration = Math.max(0, (step.end ?? end) - step.start);
-					return (
-						<li key={i} className="space-y-1">
-							<div className="flex items-baseline gap-2">
-								<span className="w-12 shrink-0 tabular-nums text-neutral-500" title={new Date(step.start).toLocaleTimeString()}>+{activityDuration(step.start - activity.start)}</span>
-								<span className="min-w-0 flex-1 break-words">{phaseLabel(step)}{step.end === undefined && activity.end === undefined ? ` · ${t("now")}` : ""}</span>
-								<span className="shrink-0 tabular-nums">{activityDuration(duration)}</span>
-							</div>
-							<div className="h-0.5 bg-neutral-800" aria-hidden>
-								<div className="h-full bg-amber-400/60" style={{ marginLeft: `${Math.max(0, (step.start - activity.start) / total * 100)}%`, width: `${Math.min(100, duration / total * 100)}%` }} />
-							</div>
-						</li>
-					);
-				})}
-			</ol>
-			{activity.tools.length > 0 && (
-				<div className="space-y-1">
-					<div className="text-neutral-500">{t("Tool calls (parallel calls overlap; totals use wall time)")}</div>
-					{activity.tools.map((tool) => (
-						<div key={tool.id} className="flex items-baseline gap-2">
+		<details ref={(element) => { if (element) detailsRefs?.set(group.id, element); else detailsRefs?.delete(group.id); }} className="group/phase" onToggle={(event) => setOpen(event.currentTarget.open)}>
+			<summary className="flex cursor-pointer list-none items-center gap-2 text-body text-neutral-400 hover:text-neutral-300 [&::-webkit-details-marker]:hidden">
+				<CaretRight size={14} className="shrink-0 group-open/phase:rotate-90" aria-hidden />
+				<PhaseIcon kind={group.kind} />
+				<span>{phaseTitle(group.kind)}</span>
+				{group.tools.length > 0 && <span className="text-meta">· {plural(group.tools.length, "1 tool", "{n} tools")}</span>}
+				{failed > 0 && <span className="text-meta text-red-400">· {t("{n} failed", { n: failed })}</span>}
+				<span className="ml-auto shrink-0 text-meta tabular-nums">{activityDuration((group.end ?? now) - group.start)}</span>
+				{group.end === undefined && <span className="text-meta">{t("now")}</span>}
+			</summary>
+			{open && (
+				<div className="chat-nested flow-trim mt-2 flow-root border-l border-neutral-700 pl-3 text-meta text-neutral-400">
+					{group.steps.filter((step) => !renderContent || step.kind !== "tools").map((step, i) => (
+						<div key={i} className="flex items-baseline gap-2 py-0.5">
+							<span className="min-w-0 flex-1 break-words">{phaseLabel(step)}</span>
+							<span className="shrink-0 tabular-nums">{activityDuration((step.end ?? group.end ?? now) - step.start)}</span>
+						</div>
+					))}
+					{renderContent ? renderContent(group, now) : group.tools.map((tool) => (
+						<div key={tool.id} className="flex items-baseline gap-2 py-0.5">
 							<span className="min-w-0 flex-1 break-words font-mono">{tool.label}{tool.isError ? ` · ${t("failed")}` : ""}</span>
-							<span className="shrink-0 tabular-nums">{activityDuration((tool.end ?? end) - tool.start)}</span>
+							<span className="shrink-0 tabular-nums">{activityDuration((tool.end ?? now) - tool.start)}</span>
 						</div>
 					))}
 				</div>
 			)}
-			<p className="text-neutral-500">{t("Observed timings. Sending includes connection setup and waiting; provider processing and network delivery cannot be separated.")}</p>
+		</details>
+	);
+}
+
+export function ActivityBreakdown({ activity, now = Date.now(), renderContent, detailsRefs }: {
+	activity: TurnActivity;
+	now?: number;
+	renderContent?: PhaseContent;
+	detailsRefs?: Map<number, HTMLDetailsElement>;
+}) {
+	return (
+		<div className="mt-2 space-y-3">
+			<ol className="space-y-2" aria-label={t("Turn timeline")}>
+				{activityGroups(activity).map((group) => <li key={group.id}><PhaseGroup group={group} now={now} renderContent={renderContent} detailsRefs={detailsRefs} /></li>)}
+			</ol>
+			<p className="text-meta text-neutral-500">{t("Observed timings. Sending includes connection setup and waiting; provider processing and network delivery cannot be separated.")}</p>
+		</div>
+	);
+}
+
+export function ActivityHistory({ activity, now = Date.now(), onSelect }: { activity: TurnActivity; now?: number; onSelect: (id: number) => void }) {
+	const groups = activityGroups(activity);
+	const totals = new Map<ActivityPhase, number>();
+	const durations = groups.map((group) => Math.max(0, (group.end ?? now) - group.start));
+	const total = Math.max(1, durations.reduce((sum, ms) => sum + ms, 0));
+	groups.forEach((group, i) => totals.set(group.kind, (totals.get(group.kind) ?? 0) + durations[i]));
+	return (
+		<div className="mt-2 space-y-1">
+			<div className="flex h-4 overflow-hidden rounded-sm" aria-label={t("Elapsed activity history, not completion progress")}>
+				{groups.map((group, i) => (
+					<button key={group.id} type="button" data-custom="proportional elapsed phase segment" onClick={() => onSelect(group.id)} title={`${phaseTitle(group.kind)} · +${activityDuration(group.start - activity.start)} · ${activityDuration(durations[i])}`} aria-label={`${phaseTitle(group.kind)} · ${activityDuration(durations[i])}`} aria-current={group.end === undefined ? "step" : undefined} className={`flex min-w-0 items-center justify-center overflow-hidden focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-neutral-100 ${PHASE_STYLE[group.kind].background} ${group.end === undefined ? "ring-1 ring-inset ring-neutral-100" : ""}`} style={{ flexGrow: durations[i], flexBasis: 0 }}>
+						{durations[i] / total >= 0.04 && <PhaseIcon kind={group.kind} size={12} onBar />}
+					</button>
+				))}
+			</div>
+			<div className="flex flex-wrap gap-x-3 gap-y-1 text-meta text-neutral-500">
+				{[...totals].map(([kind, ms]) => <span key={kind} className="flex items-center gap-1"><PhaseIcon kind={kind} size={12} />{phaseTitle(kind)} <span className="tabular-nums">{activityDuration(ms)}</span></span>)}
+			</div>
+		</div>
+	);
+}
+
+/** One disclosure owns the strip and its phase folds, optionally with transcript content. */
+export function ActivityPanel({ activity, renderContent, controls, waitingForInput = false }: {
+	activity: TurnActivity;
+	renderContent?: PhaseContent;
+	controls?: ReactNode;
+	waitingForInput?: boolean;
+}) {
+	const [open, setOpen] = useState(!!renderContent);
+	const refs = useRef(new Map<number, HTMLDetailsElement>());
+	const now = useClock(activity.end === undefined);
+	const step = activity.steps.at(-1);
+	const current = activityGroups(activity).at(-1);
+	const streaming = step && ["thinking", "text", "toolcall"].includes(step.kind);
+	const silence = streaming && activity.lastOutputAt !== undefined ? now - activity.lastOutputAt : 0;
+	const breakdown = open ? <ActivityBreakdown activity={activity} now={now} renderContent={renderContent} detailsRefs={refs.current} /> : null;
+	const select = (id: number) => {
+		setOpen(true);
+		requestAnimationFrame(() => {
+			const detail = refs.current.get(id);
+			if (!detail) return;
+			detail.open = true;
+			detail.scrollIntoView({ block: "nearest", behavior: "smooth" });
+		});
+	};
+	return (
+		<div>
+			{renderContent && breakdown}
+			{activity.end === undefined && current && step && (
+				<div className="mt-2 flex items-baseline gap-2 text-body text-neutral-400">
+					<PhaseIcon kind={waitingForInput ? "input" : current.kind} />
+					<span className="min-w-0 flex-1 break-words" role="status">{waitingForInput ? t("Waiting for your input") : phaseLabel(step)}</span>
+					<span className="shrink-0 tabular-nums">{activityDuration(now - current.start)}</span>
+				</div>
+			)}
+			<div className="mt-2 flex flex-wrap items-center gap-1 text-meta text-neutral-500">
+				{controls}
+				<button type="button" data-custom="inline timing disclosure" className="flex items-center gap-1 hover:text-neutral-300" onClick={() => setOpen(!open)} aria-expanded={open} aria-label={t("Toggle timing breakdown")}>
+					{open ? <CaretDown size={12} /> : <CaretRight size={12} />}{t("Timing")} · {t("Total")} <span className="tabular-nums">{activityDuration((activity.end ?? now) - activity.start)}</span>
+				</button>
+				{activity.end === undefined && silence >= 3000 && <span> · {t("No new output for")} <span className="tabular-nums">{activityDuration(silence)}</span></span>}
+			</div>
+			<ActivityHistory activity={activity} now={now} onSelect={select} />
+			{!renderContent && breakdown}
 		</div>
 	);
 }
 
 export function CompletedActivity({ activity }: { activity: TurnActivity }) {
-	return (
-		<div className="chat-gutter my-3">
-			<details className="chat-measure text-meta text-neutral-500">
-				<summary className="cursor-pointer hover:text-neutral-300">{t("Timing")} · {activityDuration((activity.end ?? activity.start) - activity.start)}</summary>
-				<ActivityBreakdown activity={activity} />
-			</details>
-		</div>
-	);
+	return <div className="chat-gutter my-3"><div className="chat-measure"><ActivityPanel activity={activity} /></div></div>;
 }
 
 export function TurnStatus({ activity, since, waitingForInput = false }: { activity?: TurnActivity; since?: number; waitingForInput?: boolean }) {
-	const [open, setOpen] = useState(false);
 	const [mounted] = useState(Date.now);
-	const now = useClock(true);
-	const step = activity?.steps.at(-1);
-	const start = activity?.start ?? since ?? mounted;
-	const phase = waitingForInput ? t("Waiting for your input") : step ? phaseLabel(step) : t("Waiting for pi activity");
-	const streaming = step && ["thinking", "text", "toolcall"].includes(step.kind);
-	const silence = streaming && activity?.lastOutputAt !== undefined ? now - activity.lastOutputAt : 0;
+	const now = useClock(!activity);
 	return (
 		<div className="chat-gutter my-3">
 			<div className="chat-measure">
-				<button type="button" data-custom="live phase disclosure with wrapping status and clocks" className="flex w-full items-baseline gap-2 text-left text-body text-neutral-400 hover:text-neutral-300 disabled:cursor-default" onClick={() => setOpen(!open)} aria-expanded={open} aria-label={t("Toggle timing breakdown")} disabled={!activity}>
-					<span className="shrink-0 self-center text-amber-400" aria-hidden>{open ? <CaretDown size={14} /> : <CaretRight size={14} />}</span>
-					<span className="min-w-0 flex-1 break-words" role="status">{phase}</span>
-					<span className="shrink-0 tabular-nums">{activityDuration(now - (step?.start ?? start))}</span>
-				</button>
-				<div className="mt-1 pl-6 text-meta text-neutral-500">
-					{t("Total")} <span className="tabular-nums">{activityDuration(now - start)}</span>
-					{silence >= 3000 && <span> · {t("No new output for")} <span className="tabular-nums">{activityDuration(silence)}</span></span>}
-				</div>
-				{open && activity && <ActivityBreakdown activity={activity} now={now} />}
+				{activity ? <ActivityPanel activity={activity} waitingForInput={waitingForInput} /> : (
+					<div className="text-body text-neutral-400" role="status">{waitingForInput ? t("Waiting for your input") : t("Waiting for pi activity")} · {activityDuration(now - (since ?? mounted))}</div>
+				)}
 			</div>
 		</div>
 	);

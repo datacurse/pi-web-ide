@@ -72,6 +72,47 @@ export function activityTotals(activity: TurnActivity, now: number): Partial<Rec
 	return totals;
 }
 
+export type ActivityPhase = "requesting" | "receiving" | "doing" | "retry" | "compaction" | "input";
+
+export interface ActivityPhaseGroup {
+	/** The first step index stays stable as a live group grows. */
+	id: number;
+	kind: ActivityPhase;
+	start: number;
+	end?: number;
+	steps: ActivityStep[];
+	tools: ActivityTool[];
+}
+
+/** Merge subphases and gaps, including short waits between consecutive tool calls. */
+export function activityGroups(activity: TurnActivity): ActivityPhaseGroup[] {
+	const groups: ActivityPhaseGroup[] = [];
+	for (const [id, step] of activity.steps.entries()) {
+		const previous = groups.at(-1);
+		let kind: ActivityPhase;
+		switch (step.kind) {
+			case "thinking": case "text": case "toolcall": kind = "receiving"; break;
+			case "tools": kind = "doing"; break;
+			case "retry": case "compaction": case "input": kind = step.kind; break;
+			case "processing":
+				kind = previous && ["receiving", "doing"].includes(previous.kind) ? previous.kind : "requesting";
+				break;
+			default: kind = "requesting";
+		}
+		if (previous?.kind === kind) {
+			previous.steps.push(step);
+			previous.end = step.end ?? activity.end;
+		} else groups.push({ id, kind, start: step.start, end: step.end ?? activity.end, steps: [step], tools: [] });
+	}
+	for (const tool of activity.tools) {
+		const containsStart = (g: ActivityPhaseGroup) => tool.start >= g.start && (g.end === undefined || tool.start < g.end);
+		const group = groups.find((g) => g.kind === "doing" && containsStart(g)) ??
+			groups.find((g) => g.kind === "doing" && g.start === tool.start && g.end === tool.start) ?? groups.find(containsStart);
+		group?.tools.push(tool);
+	}
+	return groups;
+}
+
 export function activityDuration(ms: number): string {
 	const seconds = Math.max(0, ms) / 1000;
 	return seconds < 60 ? `${seconds.toFixed(1)}s` : `${Math.floor(seconds / 60)}m ${(seconds % 60).toFixed(1)}s`;
