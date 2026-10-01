@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { ArrowsInLineVertical, ArrowsOutLineVertical, CaretDown, CaretRight, CaretUp, Check, Copy, GitFork, PaperPlaneTilt, PencilSimple, X } from "@phosphor-icons/react";
 import { AnsiHtml } from "fancy-ansi/react";
 import { hasAnsi, stripAnsi } from "fancy-ansi";
@@ -8,13 +8,16 @@ import { Button, IconButton, ListRow, sectionLabel } from "./ui.js";
 import { MarkdownText } from "./Markdown.js";
 import { timeAgo } from "./SessionList.js";
 import { Attachments, Thumb } from "./Attachments.js";
-import { t, plural, locale, getLanguage } from "./i18n.js";
+import { t, plural, locale } from "./i18n.js";
+import type { TurnActivity } from "../shared/activity.js";
+import { ActivityBreakdown } from "./Activity.js";
 import type { UserMode } from "./prefs.js";
 import { PastedTexts } from "./PastedTexts.js";
 import { addPastedText, isLargePaste, joinPastedText, splitPastedText } from "./pastedText.js";
 
 /** Braille spinner, same visual language as the TUI. */
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+const STAR_FRAMES = ["·", "✢", "∗", "✶", "✻", "✽", "✻", "✶", "∗", "✢"];
 
 function useSpinner(active: boolean, frames = SPINNER_FRAMES, ms = 80): string {
 	const [i, setI] = useState(0);
@@ -777,43 +780,6 @@ function Compacting() {
 	);
 }
 
-/** Claude Code's glyph cycle, there and back. */
-// No ✳ (U+2733): it has emoji presentation and Windows draws it as a green
-// square. Claude Code swaps it for `*` on Windows for the same reason; ours is
-// ∗ (U+2217) because ASCII `*` sits at the top of the line, not the middle.
-const STAR_FRAMES = ["·", "✢", "∗", "✶", "✻", "✽", "✻", "✶", "∗", "✢"];
-/** Claude Code's spinner verbs. */
-const VERBS = [
-	"Accomplishing", "Actioning", "Actualizing", "Baking", "Booping", "Brewing",
-	"Calculating", "Cerebrating", "Channelling", "Churning", "Clauding", "Coalescing",
-	"Cogitating", "Combobulating", "Computing", "Concocting", "Conjuring", "Considering",
-	"Contemplating", "Cooking", "Crafting", "Creating", "Crunching", "Deciphering",
-	"Deliberating", "Determining", "Discombobulating", "Divining", "Doing", "Effecting",
-	"Elucidating", "Enchanting", "Envisioning", "Finagling", "Flibbertigibbeting",
-	"Forging", "Forming", "Frolicking", "Generating", "Germinating", "Hatching",
-	"Herding", "Honking", "Hustling", "Ideating", "Imagining", "Incubating", "Inferring",
-	"Jiving", "Manifesting", "Marinating", "Meandering", "Moseying", "Mulling",
-	"Mustering", "Musing", "Noodling", "Percolating", "Perusing", "Philosophising",
-	"Pondering", "Pontificating", "Processing", "Puttering", "Puzzling", "Reticulating",
-	"Ruminating", "Scheming", "Schlepping", "Shimmying", "Shucking", "Simmering",
-	"Smooshing", "Spelunking", "Spinning", "Stewing", "Sussing", "Synthesizing",
-	"Thinking", "Tinkering", "Transmuting", "Unfurling", "Unravelling", "Vibing",
-	"Wandering", "Whirring", "Wibbling", "Wizarding", "Working", "Wrangling",
-];
-const VERB_MS = 4000;
-/** Russian stand-ins: the English list is wordplay that does not translate word for word. */
-const VERBS_RU = [
-	"Думаю", "Размышляю", "Соображаю", "Колдую", "Вычисляю", "Прикидываю", "Мозгую",
-	"Кумекаю", "Варю", "Стряпаю", "Кручу", "Верчу", "Разбираюсь", "Копаю", "Творю",
-	"Химичу", "Мастерю", "Собираю", "Взвешиваю", "Обдумываю", "Смекаю", "Шаманю",
-	"Ворожу", "Паяю", "Настраиваю", "Распутываю", "Вникаю", "Сочиняю", "Выдумываю",
-	"Перевариваю", "Шуршу", "Жонглирую", "Медитирую", "Созерцаю", "Выстраиваю",
-];
-const randomVerb = () => {
-	const verbs = getLanguage() === "ru" ? VERBS_RU : VERBS;
-	return verbs[Math.floor(Math.random() * verbs.length)];
-};
-
 /**
  * When the running turn was asked: the first user message after the last
  * assistant message that ended a turn (one with no tool calls). Undefined when
@@ -830,37 +796,6 @@ export function turnStart(messages: PiMessage[]): number | undefined {
 	return start;
 }
 
-/**
- * The live turn, as the last line of the transcript: a verb that changes
- * every few seconds and the elapsed time. Timed from the question, not from
- * mount, so a reload mid-turn does not restart the clock.
- * The folded tool line above it already names what is running.
- */
-export function TurnStatus({ since }: { since: number | undefined }) {
-	const spinner = useSpinner(true, STAR_FRAMES, 120);
-	const [mounted] = useState(Date.now);
-	const start = Math.min(since ?? mounted, mounted);
-	const [now, setNow] = useState(mounted);
-	useEffect(() => {
-		const id = setInterval(() => setNow(Date.now()), 1000);
-		return () => clearInterval(id);
-	}, []);
-	const secs = Math.floor((now - start) / 1000);
-	const slot = Math.floor((now - start) / VERB_MS);
-	const verb = useMemo(randomVerb, [slot]);
-	return (
-		<div className="chat-gutter my-3" role="status">
-			<div className="chat-measure flex items-center gap-2 text-body text-neutral-500">
-				<span aria-hidden className="w-4 text-center text-amber-400">
-					{spinner}
-				</span>
-				<span>{verb}…</span>
-				{secs > 0 && <span className="tabular-nums">{elapsed(now - start)}</span>}
-			</div>
-		</div>
-	);
-}
-
 /** 75000 -> "1m 15s". */
 function elapsed(ms: number): string {
 	const secs = Math.floor(ms / 1000);
@@ -874,6 +809,7 @@ export interface Footer {
 	endedAt?: number;
 	/** When the question was asked: the turn's duration runs from here. */
 	asked?: number;
+	activity?: TurnActivity;
 }
 
 /** Copy `text`; the icon swaps to a check for 1.2s. */
@@ -929,27 +865,36 @@ function AnswerFooter({
 	onFork: (at: number) => Promise<void>;
 }) {
 	const [forking, setForking] = useState(false);
+	const [timingOpen, setTimingOpen] = useState(false);
 	const end = footer.endedAt ?? footer.at;
 	const took = footer.endedAt && footer.asked ? footer.endedAt - footer.asked : 0;
 	return (
-		<div className="chat-measure mt-1 flex items-center gap-1 text-meta text-neutral-500">
-			<CopyButton text={text} />
-			<IconButton
-				size="sm"
-				label={forking ? t("Forking…") : t("Fork from here")}
-				disabled={forking}
-				onClick={() => {
-					setForking(true);
-					void onFork(footer.at).finally(() => setForking(false));
-				}}
-			>
-				<GitFork size={14} />
-			</IconButton>
-			{took >= 1000 && (
-				<span className="msg-footer-time ml-1 tabular-nums" title={new Date(end).toLocaleString(locale())}>
-					{elapsed(took)}
-				</span>
-			)}
+		<div className="chat-measure mt-1 text-meta text-neutral-500">
+			<div className="flex items-center gap-1">
+				<CopyButton text={text} />
+				<IconButton
+					size="sm"
+					label={forking ? t("Forking…") : t("Fork from here")}
+					disabled={forking}
+					onClick={() => {
+						setForking(true);
+						void onFork(footer.at).finally(() => setForking(false));
+					}}
+				>
+					<GitFork size={14} />
+				</IconButton>
+				{took >= 1000 && (
+					<span className="msg-footer-time ml-1 tabular-nums" title={new Date(end).toLocaleString(locale())}>
+						{elapsed(took)}
+					</span>
+				)}
+				{footer.activity && (
+					<Button size="sm" variant="ghost" className="ml-1" onClick={() => setTimingOpen(!timingOpen)} aria-expanded={timingOpen}>
+						{timingOpen ? <CaretDown size={12} /> : <CaretRight size={12} />}{t("Timing")}
+					</Button>
+				)}
+			</div>
+			{timingOpen && footer.activity && <ActivityBreakdown activity={footer.activity} />}
 		</div>
 	);
 }

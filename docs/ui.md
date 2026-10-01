@@ -150,6 +150,24 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
   (`--etk-*`, chrome `--ed-*`). Settings > Appearance > `Editor theme` defaults to `Match app theme`
   (`pwi:editorTheme`). `data-light` on `<html>` marks any light app theme.
 
+## Turn activity and timing
+
+- Replace playful running verbs with an always-visible factual phase and its elapsed time,
+  with total turn time underneath. A caret on that line opens the live timing breakdown
+  in place; it is not a separate Stats window. Use `text-body` for the current phase and
+  `text-meta` for timing details, in the existing chat gutter and measure.
+- Distinguish preparing, sending/waiting for a provider response, response received/waiting
+  for model output, receiving reasoning/answer/tool-call arguments, specific running tools,
+  retry backoff, compaction, and waiting for user input. Only observed phases are labelled.
+  Request hooks do not prove upload completion: do not claim “request delivered”, or separate
+  network delivery from provider processing. Missing request telemetry is labelled unavailable.
+- Streaming silence of at least three seconds shows “No new output for …”, not an invented
+  cause. Phase and total clocks update live even when the provider is silent.
+- The disclosure shows an ordered timeline, wall-clock totals by phase, and individual tool
+  durations. Parallel calls overlap and are not added together in wall-clock totals.
+- Finished answers retain a `Timing` caret next to the duration in their footer. Timings survive
+  reloads and server restarts in pwi's state directory; unobserved historical turns have none.
+
 ## Composer
 
 - Text pasted at 2,000 characters or 20 lines becomes a compact `Pasted text N.txt`

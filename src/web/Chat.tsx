@@ -40,10 +40,10 @@ import {
 	Tool,
 	ToolGroup,
 	TranscriptRow,
-	TurnStatus,
 	turnStart,
 } from "./Transcript.js";
 import { t } from "./i18n.js";
+import { CompletedActivity, TurnStatus } from "./Activity.js";
 import { PiMark } from "./piMark.js";
 import { PastedTexts } from "./PastedTexts.js";
 import { addPastedText, isLargePaste, joinPastedText, splitPastedText } from "./pastedText.js";
@@ -464,7 +464,7 @@ export function Chat({
 		 */
 		const footerFor = (m: PiMessage): Footer | undefined =>
 			m.role === "assistant" && !m.blocks.some((b) => b.kind === "tool")
-				? { at: m.timestamp, endedAt: m.endedAt, asked }
+				? { at: m.timestamp, endedAt: m.endedAt, asked, activity: snapshot?.activity?.find((turn) => turn.asked === asked && turn.end !== undefined) }
 				: undefined;
 
 		const lastRole = (): PiMessage["role"] | undefined => {
@@ -598,7 +598,7 @@ export function Chat({
 		flushGroup();
 		flushTurn(busy);
 		return out;
-	}, [messages, showThinking, toolMode, busy]);
+	}, [messages, showThinking, toolMode, busy, snapshot?.activity]);
 
 
 	if (!snapshot) {
@@ -873,7 +873,10 @@ export function Chat({
 						</TranscriptRow>
 					)}
 
-					{busy && <TurnStatus since={turnStart(snapshot.messages)} />}
+					{busy && <TurnStatus key={snapshot.id} activity={snapshot.activity?.findLast((turn) => turn.end === undefined)} since={turnStart(snapshot.messages)} waitingForInput={!!snapshot.ask} />}
+					{!busy && snapshot.activity?.at(-1)?.end !== undefined && !rows.some((r) => r.kind === "message" && r.footer?.activity?.start === snapshot.activity?.at(-1)?.start) && (
+						<CompletedActivity activity={snapshot.activity.at(-1)!} />
+					)}
 
 					{/* Below the transcript: a local command answers after the last
 				    message, and before the next prompt clears it. */}

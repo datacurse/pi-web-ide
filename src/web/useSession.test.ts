@@ -4,6 +4,7 @@ import { test } from "node:test";
 import { runInNewContext } from "node:vm";
 import ts from "typescript";
 import * as shared from "../shared/types.js";
+import * as activity from "../shared/activity.js";
 import type { useSession } from "./useSession.js";
 
 const source = ts.transpileModule(readFileSync(new URL("./useSession.ts", import.meta.url), "utf8"), {
@@ -58,6 +59,7 @@ function harness() {
 			switch (name) {
 				case "react": return hooks;
 				case "../shared/types.js": return shared;
+				case "../shared/activity.js": return activity;
 				case "./api.js": return { api };
 				case "./i18n.js": return { t: (text: string) => text };
 				case "./GitActions.js": return { gitChanged: () => {} };
@@ -137,4 +139,22 @@ test("an old event-stream refresh cannot overwrite the new session", async () =>
 	assert.equal(h.render().snapshot?.id, "new");
 	oldStream.onmessage!({ data: JSON.stringify({ type: "error", message: "old error" }) });
 	assert.equal(h.render().snapshot?.error, null);
+});
+
+test("live timing updates replace their turn, survive completion, and cannot leak into another session", async () => {
+	const h = harness();
+	await h.render().attach("old");
+	const stream = h.streams[0]!;
+	const turn: activity.TurnActivity = { start: 1000, asked: 1000, steps: [{ kind: "request", label: "Sending request / waiting for provider response", start: 1000 }], tools: [] };
+	stream.onmessage!({ data: JSON.stringify({ type: "activity", activity: turn }) });
+	assert.equal(h.render().snapshot?.activity?.length, 1);
+	const completed = { ...turn, end: 4000, steps: [{ ...turn.steps[0], end: 4000 }] };
+	stream.onmessage!({ data: JSON.stringify({ type: "activity", activity: completed }) });
+	assert.equal(h.render().snapshot?.activity?.length, 1);
+	assert.equal(h.render().snapshot?.activity?.[0].end, 4000);
+	stream.onmessage!({ data: JSON.stringify({ type: "activity", activity: { start: "bad" } }) });
+	assert.equal(h.render().snapshot?.activity?.length, 1);
+	await h.render().attach();
+	stream.onmessage!({ data: JSON.stringify({ type: "activity", activity: turn }) });
+	assert.equal(h.render().snapshot?.activity?.length, 0);
 });

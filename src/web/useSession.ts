@@ -1,6 +1,7 @@
 import type { Tabs } from "./tabStore.js";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { addNotice, ASK_ONLY } from "../shared/types.js";
+import { parseActivity } from "../shared/activity.js";
 import type {
 	AskAnswer,
 	PiAsk,
@@ -46,6 +47,7 @@ function toSnapshot(raw: Partial<Snapshot>): Snapshot {
 		model: typeof raw.model === "string" ? raw.model : undefined,
 		messages: Array.isArray(raw.messages) ? raw.messages : [],
 		partial: raw.partial ?? null,
+		activity: Array.isArray(raw.activity) ? raw.activity.flatMap((v) => { const turn = parseActivity(v); return turn ? [turn] : []; }) : [],
 		isStreaming: raw.isStreaming === true,
 		error: typeof raw.error === "string" ? raw.error : null,
 		notices: Array.isArray(raw.notices) ? raw.notices : [],
@@ -464,6 +466,15 @@ export function useSession({
 						// into the session, and its copy is the one that matters.
 						void refetch();
 						break;
+					case "activity": {
+						const activity = parseActivity(e.activity);
+						if (!activity) break;
+						setSnapshot((s) => s ? {
+							...s,
+							activity: [...(s.activity ?? []).filter((turn) => turn.start !== activity.start), activity],
+						} : s);
+						break;
+					}
 					case "notice":
 						// Appended locally rather than refetched: the answer to a
 						// command is the whole event, and a refetch of a long

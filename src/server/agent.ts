@@ -58,6 +58,8 @@ import { Socket } from "node:net";
 import { join } from "node:path";
 
 import { isRecord, records } from "./guards.js";
+import { ActivityTracker } from "./activity.js";
+import type { TurnActivity } from "../shared/activity.js";
 import { FAST_COMMAND, supportsFastMode } from "../shared/fastMode.js";
 import { hunkFromWrite, hunksFromEdit, type Hunk } from "../shared/hunks.js";
 import { fileURLToPath } from "node:url";
@@ -939,6 +941,7 @@ export interface PiSession {
 	readonly commands: PiCommand[];
 	/** The question pi is blocked on, or null if it is not waiting on one. */
 	readonly ask: PiAsk | null;
+	readonly activity?: TurnActivity[];
 	/**
 	 * Every change this session's agent made to a file, oldest first, for
 	 * diff tabs. Already applied to disk: pi's edit tool writes during
@@ -1037,6 +1040,7 @@ const CONTEXT_COMMAND = "pwi-context";
 const COMPACTION_EXTENSION = fileURLToPath(new URL("./compaction-extension.ts", import.meta.url));
 const GENERATION_EXTENSION = fileURLToPath(new URL("./generation-extension.ts", import.meta.url));
 const FAST_EXTENSION = fileURLToPath(new URL("./fast-extension.ts", import.meta.url));
+const ACTIVITY_EXTENSION = fileURLToPath(new URL("./activity-extension.ts", import.meta.url));
 const TOOL_METRICS_EXTENSION = fileURLToPath(new URL("../tool-metrics/collector.ts", import.meta.url));
 const CONTEXT_KEYS: ContextPart["key"][] = ["system", "tools", "rules", "skills", "personality", "conversation"];
 
@@ -1060,7 +1064,7 @@ export function spawnArgs(opts: {
 	args.push("--approve");
 	// First among extensions, so it sees each result before other packages' hooks.
 	if (opts.toolMetrics !== false) args.push("-e", TOOL_METRICS_EXTENSION);
-	args.push("-e", REWIND_EXTENSION, "-e", CONTEXT_EXTENSION, "-e", COMPACTION_EXTENSION, "-e", GENERATION_EXTENSION, "-e", FAST_EXTENSION);
+	args.push("-e", REWIND_EXTENSION, "-e", CONTEXT_EXTENSION, "-e", COMPACTION_EXTENSION, "-e", GENERATION_EXTENSION, "-e", FAST_EXTENSION, "-e", ACTIVITY_EXTENSION);
 	if (opts.file) args.push("--session", opts.file);
 	else if (opts.fork) args.push("--fork", opts.fork);
 	if (opts.model) args.push("--model", opts.model);
@@ -1293,6 +1297,9 @@ async function wrap(child: RpcChild, cwd: string): Promise<PiSession> {
 		}
 	};
 
+	const activity = new ActivityTracker(state.sessionFile ?? state.sessionId, (turn) => emit({ type: "activity", activity: turn }));
+	if (!streaming) activity.finish();
+
 	/**
 	 * Re-read everything the SESSION decides: which modalities the model takes,
 	 * which reasoning levels it offers, how big its window is, and how much of
@@ -1352,6 +1359,7 @@ async function wrap(child: RpcChild, cwd: string): Promise<PiSession> {
 		localTimer = setTimeout(() => {
 			localTimer = undefined;
 			streaming = false;
+			activity.finish();
 			void Promise.all([resyncMessages(), refreshState()]).then(() => emit({ type: "idle" }));
 		}, LOCAL_COMMAND_MS);
 		localTimer.unref();
@@ -1393,6 +1401,7 @@ async function wrap(child: RpcChild, cwd: string): Promise<PiSession> {
 		clearTimeout(askTimer);
 		if (!pendingAsk) return;
 		pendingAsk = null;
+		activity.resumeInput();
 		emit({ type: "ask", ask: null });
 	};
 
@@ -1402,6 +1411,7 @@ async function wrap(child: RpcChild, cwd: string): Promise<PiSession> {
 		disarmLocal();
 		clearAsk();
 		streaming = false;
+		activity.finish();
 		emit({ type: "error", message });
 	});
 
@@ -1412,6 +1422,7 @@ async function wrap(child: RpcChild, cwd: string): Promise<PiSession> {
 	 * is what lets a recorded transcript exercise the first (agent.test.ts).
 	 */
 	const unsubscribe = child.onFrame((frame) => {
+		if (!replaying || streaming) activity.record(frame);
 		switch (frame.type) {
 			case "agent_start":
 				// The prompt DID reach the model, so this was not a local command.
@@ -1515,6 +1526,7 @@ async function wrap(child: RpcChild, cwd: string): Promise<PiSession> {
 
 			case "compaction_end":
 				compactionEnds++;
+				if (!streaming) activity.finish();
 				// Compaction rewrites history into a summary. The event stream only
 				// ever appends, so a resync is the only way the transcript learns
 				// that older messages are gone — and the freed context only shows
@@ -1606,6 +1618,10 @@ async function wrap(child: RpcChild, cwd: string): Promise<PiSession> {
 		get hunks() {
 			return hunks;
 		},
+		get activity() {
+			const users = new Set(messages.filter((m) => m.role === "user").map((m) => m.timestamp));
+			return activity.history.filter((turn) => turn.asked === undefined || users.has(turn.asked));
+		},
 		/**
 		 * Record a review decision. The STATE is all that is stored here; the
 		 * bytes are written by the caller through files.ts, because this module
@@ -1658,6 +1674,7 @@ async function wrap(child: RpcChild, cwd: string): Promise<PiSession> {
 			if (!isRecord(after) || after.leafId !== (target.parentId ?? null))
 				throw new Error("pi could not rewind to that message");
 			generation++;
+			activity.rewind(at);
 			messages = healDanglingToolCalls(await fetchMessages(child));
 			await refreshState();
 		},
@@ -1800,6 +1817,7 @@ async function wrap(child: RpcChild, cwd: string): Promise<PiSession> {
 			return () => listeners.delete(listener);
 		},
 		dispose() {
+			activity.finish();
 			unsubscribe();
 			unsubscribeExit();
 			listeners.clear();
@@ -1808,6 +1826,7 @@ async function wrap(child: RpcChild, cwd: string): Promise<PiSession> {
 			child.close();
 		},
 		detach() {
+			activity.save();
 			unsubscribe();
 			unsubscribeExit();
 			listeners.clear();

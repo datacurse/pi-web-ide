@@ -6,11 +6,12 @@
  * boundary and node:child_process into the browser bundle. Here that is
  * impossible.
  *
- * The one import is `type`-only and points at hunks.ts, which is held to the
- * same rule — so it erases at compile time and drags nothing with it.
+ * Imports are `type`-only, so they erase at compile time and drag nothing
+ * into the browser bundle.
  */
 
 import type { Hunk } from "./hunks.js";
+import type { TurnActivity } from "./activity.js";
 
 /**
  * What this server is. `/api/health` reports it, and the port takeover
@@ -150,6 +151,7 @@ export type PiEvent =
 	| { type: "message_done"; message: PiMessage }
 	| { type: "notice"; notice: PiNotice }
 	| { type: "ask"; ask: PiAsk | null }
+	| { type: "activity"; activity: TurnActivity }
 	| { type: "idle" }
 	| { type: "error"; message: string };
 
@@ -462,6 +464,8 @@ export interface Snapshot {
 	model: string | undefined;
 	messages: PiMessage[];
 	partial: PiPartial | null;
+	/** Measured turn timelines; absent on older servers and for unobserved history. */
+	activity?: TurnActivity[];
 	isStreaming: boolean;
 	error: string | null;
 	/**

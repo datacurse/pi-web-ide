@@ -387,6 +387,7 @@ export class Registry {
 			model: entry.session.model,
 			messages: entry.session.messages(),
 			partial: hasPartial ? partial : null,
+			activity: entry.session.activity ?? [],
 			isStreaming: entry.streaming || entry.session.isStreaming,
 			error: entry.error,
 			notices: entry.notices,
