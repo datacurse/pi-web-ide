@@ -430,7 +430,7 @@ export function SessionList({
 										{s.messageCount}
 									</span>
 									{pins.includes(s.path) && (
-										<PushPin size={12} weight="fill" className="shrink-0 text-amber-400" aria-label={t("Pinned")} />
+										<PushPin size={12} weight="fill" className="shrink-0 text-neutral-500" aria-label={t("Pinned")} />
 									)}
 									{isHidden && (
 										<EyeSlash size={12} className="shrink-0 text-neutral-500" aria-label={t("Hidden session")} />

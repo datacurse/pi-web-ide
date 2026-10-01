@@ -377,6 +377,10 @@ export class Registry {
 		}
 	}
 
+	async setAutoCompaction(enabled: boolean): Promise<void> {
+		await Promise.all([...this.entries.values()].map((entry) => entry.session.setAutoCompaction(enabled)));
+	}
+
 	snapshot(entry: Entry, id: string): Snapshot {
 		const partial = entry.partial;
 		const hasPartial = partial.text || partial.thinking || partial.tools.length > 0;

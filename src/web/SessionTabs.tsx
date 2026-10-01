@@ -524,7 +524,7 @@ export function SessionTabs({
 									<GitDiff size={13} weight="bold" className="shrink-0 text-neutral-400" />
 								)}
 								{!isFile && pinned.includes(file) && (
-									<PushPin size={12} weight="fill" className="shrink-0 text-amber-400" aria-label={t("Pinned")} />
+									<PushPin size={12} weight="fill" className="shrink-0 text-neutral-500" aria-label={t("Pinned")} />
 								)}
 								{/* Marks an AI session so it never reads as a code tab, and
 								    doubles as its live signal: grey when idle, glowing amber and

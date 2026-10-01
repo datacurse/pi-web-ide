@@ -1,4 +1,4 @@
-import { automaticModel } from "./automaticModelConfig.ts";
+import { automaticModel, autoCompactionEnabled } from "./automaticModelConfig.ts";
 
 interface Pi {
 	on(event: "session_before_compact", handler: (
@@ -6,6 +6,7 @@ interface Pi {
 			preparation: { fileOps: { read: Set<string>; edited: Set<string> } };
 			branchEntries?: { type: string; details?: { readFiles?: unknown; modifiedFiles?: unknown } }[];
 			customInstructions?: string;
+			reason: "manual" | "threshold" | "overflow";
 			signal: AbortSignal;
 		},
 		ctx: {
@@ -21,6 +22,7 @@ interface Pi {
 export default function compaction(pi: Pi) {
 	pi.on("session_before_compact", async (event, ctx) => {
 		try {
+			if (event.reason !== "manual" && !autoCompactionEnabled()) return { cancel: true };
 			const selector = automaticModel("compaction");
 			const slash = selector.indexOf("/");
 			const model = ctx.modelRegistry.find(selector.slice(0, slash), selector.slice(slash + 1));

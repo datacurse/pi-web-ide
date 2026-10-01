@@ -71,6 +71,17 @@ function refreshCase(opts: { fileAt: number; oursAt: number; streaming?: boolean
 	return { registry, calls };
 }
 
+test("automatic compaction changes reach every live session, including streaming sessions", async () => {
+	const calls: boolean[] = [];
+	const entry = { session: { setAutoCompaction: async (enabled: boolean) => { calls.push(enabled); } }, streaming: true };
+	const registry = registryWith("s1", entry);
+	const entries = (registry as unknown as { entries: Map<string, unknown> }).entries;
+	entries.set("s2", { ...entry, streaming: false });
+	await registry.setAutoCompaction(false);
+	await registry.setAutoCompaction(true);
+	assert.deepEqual(calls, [false, false, true, true]);
+});
+
 test("an error from a settled turn is cleared", () => {
 	const entry = fakeEntry("Anthropic API error 400: tool_use ids were found without", false);
 	registryWith("s1", entry).clearDeadError("s1");

@@ -6,6 +6,41 @@ new; correct an entry rather than leave a stale one. How pi itself behaves
 (event order, extension loading, bash tracing) is in `docs/pi-facts.md` and
 the probe results in `docs/plans/tool-metrics.md`.
 
+## Native codemode experiment
+
+### 2026-10-01 — compatible, but no aggregate latency win in the first three pairs
+
+- Pi **0.99.2**, `openai-codex/gpt-6.1-sol`, medium reasoning; six fresh
+  persistent RPC sessions, three matched read-only tasks against one frozen
+  source snapshot. Ordinary tools versus native `codemode.mode: "only"`;
+  same instructions, alternating arm order (ordinary first, codemode first,
+  ordinary first). All configured packages and PWI extensions stayed loaded.
+- Ordinary tools: **16 provider requests, 120.0 s total**, with 80.6 s
+  Requesting and 38.6 s Receiving. Codemode-only: **18 requests, 125.6 s**,
+  with 60.1 s Requesting and 63.9 s Receiving: **4.7% slower overall**.
+  Task pairs (ordinary → codemode): 4 → 7 requests / 31.3 → 51.1 s;
+  6 → 6 / 40.2 → 42.8 s; 6 → 5 / 48.5 → 31.7 s.
+  These three pairs do not establish a general performance result; fewer
+  Requesting milliseconds alone did not mean a faster completed task.
+- Provider payload inspection confirmed only `codemode` was declared in that
+  arm. Nested execution events retained `parentToolCallId`; PWI persisted
+  parent and child tool spans without double-counting their wall time.
+  Codemode-only still made several small programs rather than one large
+  exploration batch. One nested bash command exited 1 and was recovered.
+- A separate local, no-provider sandbox probe confirmed that pi-lens blocked
+  an unread nested edit, credited a nested read, reported an introduced
+  TypeScript error through edit hooks and active LSP diagnostics, and checked
+  its repair. No guards were disabled. This was not a coding-task benchmark.
+- These Codex requests emitted request markers but no HTTP response marker;
+  Requesting therefore ran until observed output. No HTTP receipt was
+  invented. An initial ordinary-arm startup probe exposed no tools and was
+  excluded; the valid ordinary arm explicitly selected the normal tool set.
+- Raw results, session logs, saved activity JSON, and probe scripts are local
+  to `~/.cache/pwi-codemode-dNttBX/` (`benchmark-results.json`,
+  `benchmark-state/`, `sessions/`, `smoke-results.json`). Code-mode only is
+  enabled for further real-task trials; this measurement does **not** support
+  claiming that it is faster than ordinary batching.
+
 ## How to measure
 
 - **Stats page, Tool calls:** per tool and per bash command, tokens, time,

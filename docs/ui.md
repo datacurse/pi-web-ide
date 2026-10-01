@@ -394,14 +394,15 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
   count of user messages. Icons `neutral-500`, values `neutral-400`. The full date lives
   only in the tooltip.
 - Right-click a row → `Pin to top` / `Unpin`. Pinned rows sort first (in either sort mode)
-  and lead with a 12px filled amber `PushPin`. Pins are per-browser (`localStorage`).
+  and show a 12px filled `neutral-500` `PushPin` in the metadata subline, matching
+  the clock and message icons. Pins are per-browser (`localStorage`).
 - Right-click a row → `Hide from list` drops it from the list and its search (per browser,
   `pwi:hiddenSessions`; tabs and the search popup are unaffected). While any are hidden, an
   `EyeSlash` `StripCell` at the count row's left of the sort toggle shows them (`Eye` in
   `amber-400`, `aria-pressed`): hidden rows at `opacity-50` with a 12px `neutral-500`
   `EyeSlash` in the subline, and `Unhide` in their menu.
 - The same pins apply to the tab strips: a pinned session's tab moves to the front of
-  its column and shows the same `PushPin` before the `π`.
+  its column and shows the same filled `neutral-500` `PushPin` before the `π`.
 
 ## Session search
 
@@ -638,7 +639,12 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
   reducer), all defaulting to `openai-codex/gpt-6.1-sol`. Each saves on pick, independently
   of the chat model, machine-wide. Naming settings override `PWI_NAMING_MODEL`;
   compaction settings are re-read for each operation in sessions started with the pwi
-  compaction extension. Reducer changes apply to new sessions and trusted project
+  compaction extension. `Automatic compaction` is an `OptionRow` checkbox above the
+  model selects, off by default and persisted per machine. It controls pi's threshold
+  and overflow compaction for open, resumed, adopted and new sessions; manual compaction
+  remains available. Changing it updates live children without restarting their turns.
+  SoL-Pi online compaction remains a separate opt-in in Packages.
+  Reducer changes apply to new sessions and trusted project
   SoL-Pi config can override them. Failed model loads show an error and Retry.
 - Shortcuts lists every app-wide shortcut (`SHORTCUTS` in `shortcuts.ts`), one row each,
   like Obsidian's Hotkeys: the name, the keys as a `kbd` chip (`rounded-sm bg-neutral-800

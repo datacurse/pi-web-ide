@@ -15,6 +15,11 @@ export function automaticModels(cwd: string): AutomaticModels {
 	};
 }
 
+export function setAutoCompaction(enabled: unknown): void {
+	if (typeof enabled !== "boolean") throw new Error("autoCompaction must be a boolean");
+	writeStateFile(statePath("automatic-models.json"), `${JSON.stringify({ ...readAutomaticModels(), autoCompaction: enabled }, null, 2)}\n`);
+}
+
 export async function setAutomaticModel(action: unknown, model: unknown, cwd: string): Promise<void> {
 	if (!AUTOMATIC_ACTIONS.includes(action as AutomaticAction)) throw new Error("unknown automatic action");
 	if (typeof model !== "string" || !(await modelCatalog()).has(model)) throw new Error(`unknown model: ${String(model)}`);

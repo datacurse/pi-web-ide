@@ -463,7 +463,7 @@ export function Settings({
 		{
 			category: "automatic",
 			label: t("Automatic actions"),
-			text: `${t("Commit naming")} ${t("Session naming")} ${t("Compaction")} ${t("Log reduction")} model provider gpt reducer compact rename`,
+			text: `${t("Commit naming")} ${t("Session naming")} ${t("Compaction")} ${t("Automatic compaction")} ${t("Log reduction")} model provider gpt reducer compact rename context automatic summarize`,
 			node: <AutomaticActions />,
 		},
 		{

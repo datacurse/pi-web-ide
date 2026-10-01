@@ -91,6 +91,8 @@ export const RU: Record<string, string> = {
 	"Commit naming": "Названия коммитов",
 	"Session naming": "Названия сессий",
 	"Compaction": "Сжатие контекста",
+	"Automatic compaction": "Автоматическое сжатие контекста",
+	"Off by default. Allow pi to summarize the conversation automatically when context fills up. Applies to open and new sessions; manual compaction is always available.": "По умолчанию выключено. Разрешить pi автоматически сокращать разговор при заполнении контекста. Применяется к открытым и новым сессиям; ручное сжатие доступно всегда.",
 	"Log reduction": "Сокращение логов",
 	"Models for background actions, independent of the chat model. Default: {model}.": "Модели для фоновых действий, независимо от модели чата. По умолчанию: {model}.",
 	"Compaction applies to sessions started from now on. Log reduction uses SoL-Pi settings; trusted projects can override it.": "Сжатие применяется к новым сессиям. Сокращение логов использует настройки SoL-Pi; доверенные проекты могут их переопределять.",

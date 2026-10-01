@@ -66,6 +66,7 @@ import { fileURLToPath } from "node:url";
 import { personalityPath, readRemind } from "./personality.js";
 import { readToolMetrics } from "./pwiExtensions.js";
 import { ensureSolPiReducer } from "./solPi.js";
+import { autoCompactionEnabled } from "./automaticModelConfig.js";
 import { repairSessionFile } from "./repair.js";
 import { sessionHeaderCwd } from "./sessions.js";
 import { stateDir, statePath } from "./state.js";
@@ -970,6 +971,7 @@ export interface PiSession {
 	 * paid for at full width.
 	 */
 	compact(customInstructions?: string): Promise<void>;
+	setAutoCompaction(enabled: boolean): Promise<void>;
 	/** Re-read the slash command catalog. The composer calls this when its menu opens. */
 	refreshCommands(): Promise<PiCommand[]>;
 	/**
@@ -1225,6 +1227,7 @@ export async function adoptSessions(fallbackCwd: string): Promise<PiSession[]> {
 
 /** The session mirror around a live child, spawned here or adopted. */
 async function wrap(child: RpcChild, cwd: string): Promise<PiSession> {
+	await child.send("set_auto_compaction", { enabled: autoCompactionEnabled() });
 	const state = await fetchState(child);
 	let messages = healDanglingToolCalls(await fetchMessages(child));
 
@@ -1648,6 +1651,7 @@ async function wrap(child: RpcChild, cwd: string): Promise<PiSession> {
 
 			// streamingBehavior is REQUIRED while streaming or the command fails.
 			const wasStreaming = streaming;
+			await child.send("set_auto_compaction", { enabled: autoCompactionEnabled() });
 			await child.send<unknown>("prompt", {
 				message,
 				...(attachments ? { images: attachments } : {}),
@@ -1754,6 +1758,9 @@ async function wrap(child: RpcChild, cwd: string): Promise<PiSession> {
 			}
 			// The caller refetches on return, so the resync must have landed.
 			await compacted;
+		},
+		async setAutoCompaction(enabled: boolean) {
+			await child.send("set_auto_compaction", { enabled });
 		},
 		async setModel(spec: string) {
 			const slash = spec.indexOf("/");

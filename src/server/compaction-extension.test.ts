@@ -20,17 +20,27 @@ const ctx = {
 };
 try {
 	assert.ok(handler);
-	const event = { preparation: { fileOps: { read: new Set<string>(), edited: new Set<string>() } }, signal: new AbortController().signal };
+	const event = { reason: "manual" as const, preparation: { fileOps: { read: new Set<string>(), edited: new Set<string>() } }, signal: new AbortController().signal };
+	for (const reason of ["threshold", "overflow"] as const) {
+		assert.deepEqual(await handler({ ...event, reason }, ctx), { cancel: true });
+	}
+	assert.equal(seen.length, 0);
+	assert.equal(errors.length, 0);
 	assert.deepEqual(await handler(event, ctx), { cancel: true });
 	assert.equal(seen.at(-1), "openai-codex/gpt-6.1-sol");
 	assert.match(errors.at(-1)!, /unknown compaction model/);
 	writeFileSync(join(dir, "automatic-models.json"), JSON.stringify({ compaction: "new-provider/summary" }));
 	assert.deepEqual(await handler(event, ctx), { cancel: true });
 	assert.equal(seen.at(-1), "new-provider/summary");
+	writeFileSync(join(dir, "automatic-models.json"), JSON.stringify({ autoCompaction: true, compaction: "enabled/summary" }));
+	for (const reason of ["threshold", "overflow"] as const) {
+		assert.deepEqual(await handler({ ...event, reason }, ctx), { cancel: true });
+		assert.equal(seen.at(-1), "enabled/summary");
+	}
 	writeFileSync(join(dir, "automatic-models.json"), "bad json");
 	assert.deepEqual(await handler(event, ctx), { cancel: true });
 	assert.match(errors.at(-1)!, /not a valid JSON object/);
-	assert.equal(seen.length, 2);
+	assert.equal(seen.length, 4);
 } finally {
 	rmSync(dir, { recursive: true, force: true });
 }

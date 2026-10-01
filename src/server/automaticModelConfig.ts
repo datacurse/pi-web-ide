@@ -19,6 +19,10 @@ export function readAutomaticModels(): Record<string, unknown> {
 	}
 }
 
+export function autoCompactionEnabled(): boolean {
+	return readAutomaticModels().autoCompaction === true;
+}
+
 export function automaticModel(action: Exclude<AutomaticAction, "reducer">): string {
 	const saved = readAutomaticModels()[action];
 	if (typeof saved === "string" && saved) return saved;

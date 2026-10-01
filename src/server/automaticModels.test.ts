@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { automaticModel } from "./automaticModelConfig.js";
-import { automaticModels, setAutomaticModel } from "./automaticModels.js";
+import { automaticModel, autoCompactionEnabled } from "./automaticModelConfig.js";
+import { automaticModels, setAutomaticModel, setAutoCompaction } from "./automaticModels.js";
 import { ensureSolPiReducer, readSolPi, writeSolPi } from "./solPi.js";
 import { DEFAULT_AUTOMATIC_MODEL } from "../shared/automaticModels.js";
 
@@ -12,6 +12,7 @@ process.env.PWI_STATE_DIR = dir;
 process.env.PI_CODING_AGENT_DIR = dir;
 delete process.env.PWI_NAMING_MODEL;
 try {
+	assert.equal(autoCompactionEnabled(), false);
 	assert.deepEqual(automaticModels(dir), {
 		commitNaming: DEFAULT_AUTOMATIC_MODEL,
 		sessionNaming: DEFAULT_AUTOMATIC_MODEL,
@@ -26,10 +27,22 @@ try {
 	assert.equal(automaticModel("commitNaming"), "custom/commit");
 	assert.equal(automaticModel("sessionNaming"), "custom/title");
 	assert.equal(automaticModel("compaction"), "custom/compact");
+	assert.equal(autoCompactionEnabled(), false);
+	setAutoCompaction(true);
+	assert.equal(autoCompactionEnabled(), true);
+	assert.equal(automaticModel("compaction"), "custom/compact");
+	setAutoCompaction(false);
+	assert.equal(autoCompactionEnabled(), false);
+	const saved = readFileSync(file, "utf8");
+	assert.throws(() => setAutoCompaction("true"), /must be a boolean/);
+	assert.equal(readFileSync(file, "utf8"), saved);
+	writeFileSync(file, JSON.stringify({ autoCompaction: "true" }));
+	assert.equal(autoCompactionEnabled(), false);
 	await assert.rejects(setAutomaticModel("bogus", DEFAULT_AUTOMATIC_MODEL, dir), /unknown automatic action/);
 	await assert.rejects(setAutomaticModel("compaction", null, dir), /unknown model/);
 	writeFileSync(file, "bad json");
 	assert.throws(() => automaticModel("compaction"), /not a valid JSON object/);
+	assert.throws(() => setAutoCompaction(true), /not a valid JSON object/);
 	assert.equal(readFileSync(file, "utf8"), "bad json");
 	writeSolPi({ evidencePreservingReducer: true }, dir);
 	assert.equal(readSolPi(dir).config.evidencePreservingReducerModel, "gpt-6.1-sol");
