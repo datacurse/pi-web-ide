@@ -71,9 +71,10 @@ fits none of the existing ones, and record it here.
 - Expanded tool calls use structured argument views, not JSON dumps: file paths
   and metadata for reads, terminal-style commands for shell calls, the editor's
   read-only unified diff for each edit replacement (content-height, capped at
-  `max-h-64`), and content previews for writes. Other arguments stay visible as
-  key/value rows. Results are separated from inputs. Unified diffs in tool output use the same
-  added/removed color convention as review diffs.
+  `max-h-64`), content previews for writes, and a red/green before-and-after
+  diff for completed anchor-based `replace` calls. Other arguments stay visible
+  as key/value rows. Results are separated from inputs. Unified diffs in tool
+  output use the same added/removed color convention as review diffs.
 - Tool call lines are always one line; the result preview fades. Tool and group
   chevrons and status indicators never shrink when the preview or label is long.
 - Anything that scrolls fades out over 2em at each edge it can still scroll past, so

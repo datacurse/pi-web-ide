@@ -112,6 +112,7 @@ export function Tool({
 	running: inFlight,
 	interrupted,
 	outputUnavailable,
+	diff,
 	startedAt,
 	expandedByDefault = false,
 }: {
@@ -127,6 +128,7 @@ export function Tool({
 	running?: boolean;
 	interrupted?: boolean;
 	outputUnavailable?: boolean;
+	diff?: string;
 	startedAt?: number;
 	expandedByDefault?: boolean;
 }) {
@@ -160,7 +162,7 @@ export function Tool({
 	const outputMatchesCalls = children?.length === batchOutputs.length;
 	if (name === "codemode") return <div className={nested ? "my-1" : "chat-wide my-3"}>
 		{children?.map((child, index) => {
-			const output = outputMatchesCalls && child.name === "bash" ? batchOutputs[index] : undefined;
+			const output = outputMatchesCalls ? batchOutputs[index] : undefined;
 			return <Tool key={child.id} {...child} {...(output !== undefined ? { result: output, outputUnavailable: false } : {})} nested autoOpen={false} expandedByDefault={expandedByDefault} ms={child.durationMs} />;
 		})}
 		{childrenIncomplete && <p className="mt-1 text-meta text-amber-400">{t("Some nested calls were not retained")}</p>}
@@ -208,7 +210,7 @@ export function Tool({
 				<div className="chat-code mt-1 max-h-96 overflow-auto text-neutral-300"><AnsiOutput className="whitespace-pre-wrap wrap-anywhere pl-7" text={result} /></div>
 			) : (
 				<div className="chat-code mt-1 max-h-96 overflow-auto rounded-sm border border-neutral-800 bg-neutral-900 text-neutral-400">
-					{!(nested && name === "bash") && <ToolArguments name={name} args={args} />}
+					{!(nested && name === "bash") && <ToolArguments name={name} args={args} diff={diff} />}
 					{outputUnavailable && !nested && <p className="border-t border-neutral-800 px-3 py-2 text-meta">{t("Nested output was not retained")}</p>}
 					{result !== undefined && result !== "" && (
 						<div className="border-t border-neutral-800 p-3">

@@ -141,7 +141,10 @@ export function activityRounds(groups: ActivityPhaseGroup[]): ActivityRound[] {
 
 export function activityDuration(ms: number): string {
 	ms = Math.max(0, ms);
-	if (ms < 1000) return `${(ms / 1000).toFixed(3).replace(/0+$/, "").replace(/\.$/, "")}s`;
+	if (ms < 1000) {
+		const seconds = (ms / 1000).toFixed(1);
+		return `${seconds}s`;
+	}
 	const seconds = ms / 1000;
 	return seconds < 60 ? `${seconds.toFixed(1)}s` : `${Math.floor(seconds / 60)}m ${(seconds % 60).toFixed(1)}s`;
 }

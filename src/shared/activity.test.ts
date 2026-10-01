@@ -80,9 +80,11 @@ test("live round IDs and completed timings survive growth and serialized telemet
 
 test("request dispatch is labelled as waiting afterward, and short tool times remain readable", () => {
 	assert.equal(activityLabel("request"),"Waiting for model output");
-	assert.equal(activityDuration(0),"0.000s");
-	assert.equal(activityDuration(12),"0.012s");
-	assert.equal(activityDuration(856),"0.856s");
+	assert.equal(activityDuration(0),"0.0s");
+	assert.equal(activityDuration(12),"0.0s");
+	assert.equal(activityDuration(49),"0.0s");
+	assert.equal(activityDuration(50),"0.1s");
+	assert.equal(activityDuration(856),"0.9s");
 	assert.equal(activityDuration(1000),"1.0s");
 	assert.equal(activityDuration(60000),"1m 0.0s");
 });

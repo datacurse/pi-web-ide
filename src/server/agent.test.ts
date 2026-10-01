@@ -333,6 +333,16 @@ assert.deepEqual(compacted.blocks, [{ kind: "text", text: "## Goal\nShip the thi
 const branch = toPiMessage({ role: "branchSummary", summary: "abandoned the retry idea", timestamp: 8 });
 assert.equal(branch.role, "other");
 assert.deepEqual(branch.blocks, [{ kind: "text", text: "abandoned the retry idea" }]);
+const replaced = toPiMessage({
+	role: "toolResult",
+	toolCallId: "replace-1",
+	toolName: "replace",
+	content: [{ type: "text", text: "Successfully replaced." }],
+	details: { diff: "-old\n+new" },
+	timestamp: 8,
+});
+assert.equal(replaced.blocks[0]?.kind === "tool" ? replaced.blocks[0].diff : undefined, "-old\n+new");
+
 
 // A resumed session's images have to survive the round trip, or the
 // transcript loses the thing the question was about.

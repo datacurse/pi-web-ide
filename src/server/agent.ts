@@ -286,6 +286,7 @@ export function toPiMessage(m: AgentMessage): PiMessage {
 					name: String(m.toolName ?? ""),
 					args: undefined,
 					result: textOf(m.content),
+					diff: isRecord(m.details) && typeof m.details.diff === "string" ? m.details.diff : undefined,
 					isError: Boolean(m.isError),
 					...nestedTools(m.nestedCalls, String(m.toolCallId ?? "")),
 				},

@@ -865,6 +865,7 @@ export function Chat({
 							key={`${snapshot.id}:${toolMode}:${thinkingMode}`}
 							customScrollParent={scrollParent}
 							data={rows}
+							initialTopMostItemIndex={rows.length - 1}
 							increaseViewportBy={200}
 							computeItemKey={(i, row) => row.kind === "phases" ? `phases:${row.activity.start}` : `${row.kind}:${row.kind === "message" ? row.at ?? "" : ""}:${i}`}
 							itemContent={(i, row) => (

@@ -130,6 +130,7 @@ test("history is passed to Virtuoso without eagerly mounting message rows", () =
 	const env = harness();
 	const list = env.nodes.find((node) => node.type === Virtuoso)!;
 	assert.equal(list.props.data.length, 1000);
+	assert.equal(list.props.initialTopMostItemIndex, 999);
 	assert.equal(list.props.customScrollParent, env.viewport);
 		assert.ok(list.props.increaseViewportBy > 0);
 	assert.equal(env.nodes.filter((node) => node.props.row).length, 0);

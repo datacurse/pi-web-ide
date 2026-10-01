@@ -44,6 +44,7 @@ export interface PiTool {
 	name: string;
 	args: unknown;
 	result?: string;
+	diff?: string;
 	isError?: boolean;
 	parentId?: string;
 	startedAt?: number;
