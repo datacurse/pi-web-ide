@@ -74,7 +74,9 @@ fits none of the existing ones, and record it here.
   `max-h-64`), content previews for writes, and a red/green before-and-after
   diff for completed anchor-based `replace` calls. Other arguments stay visible
   as key/value rows. Results are separated from inputs. Unified diffs in tool
-  output use the same added/removed color convention as review diffs.
+  output use the same added/removed color convention as review diffs. Source-reading
+  tool results use the returned file extension for syntax-highlighted code; unknown
+  extensions remain plain text.
 - Tool call lines are always one line; the result preview fades. Tool and group
   chevrons and status indicators never shrink when the preview or label is long.
 - Anything that scrolls fades out over 2em at each edge it can still scroll past, so

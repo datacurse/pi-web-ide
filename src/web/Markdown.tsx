@@ -7,6 +7,7 @@ import { Math } from "./Math.js";
 import { Button, ContextMenu, MenuItem } from "./ui.js";
 import { t } from "./i18n.js";
 import { highlightLines, type Token } from "./codeHighlight.js";
+export { CodeBox };
 
 /** Leading whitespace in columns, tabs at 4, for the wrapped rows' hanging indent. */
 function indentCols(line: string) {

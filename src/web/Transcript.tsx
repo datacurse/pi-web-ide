@@ -5,7 +5,7 @@ import { hasAnsi, stripAnsi } from "fancy-ansi";
 import type { ContextBreakdown, ContextItem, ContextPart, PiBlock, PiImage, PiMessage, PiNotice, PiTool } from "../shared/types.js";
 import { api, unwrap } from "./api.js";
 import { Button, IconButton, ListRow, sectionLabel } from "./ui.js";
-import { MarkdownText } from "./Markdown.js";
+import { CodeBox, MarkdownText } from "./Markdown.js";
 import { timeAgo } from "./SessionList.js";
 import { Attachments, Thumb } from "./Attachments.js";
 import { t, plural, locale } from "./i18n.js";
@@ -146,6 +146,7 @@ export function Tool({
 	const spinner = useSpinner(running);
 	const elapsed = ms ?? (running && startedAt !== undefined ? Math.max(0, Date.now() - startedAt) : undefined);
 	const target = args && typeof args === "object" ? (args as { path?: unknown; command?: unknown }).path ?? (args as { command?: unknown }).command : undefined;
+	const codeLanguage = (name === "read" || name === "read_symbol" || name === "read_enclosing") && typeof target === "string" ? target.split(".").at(-1) : undefined;
 	const preview = name !== "codemode" ? typeof target === "string" ? target : !open && result ? resultPreview(result) : "" : "";
 	const counts = new Map<string, number>();
 	let failures = 0;
@@ -214,7 +215,7 @@ export function Tool({
 					{outputUnavailable && !nested && <p className="border-t border-neutral-800 px-3 py-2 text-meta">{t("Nested output was not retained")}</p>}
 					{result !== undefined && result !== "" && (
 						<div className="border-t border-neutral-800 p-3">
-							<AnsiOutput className="whitespace-pre-wrap wrap-anywhere" text={result} />
+							{codeLanguage ? <CodeBox lang={codeLanguage} text={result} className="" /> : <AnsiOutput className="whitespace-pre-wrap wrap-anywhere" text={result} />}
 						</div>
 					)}
 				</div>

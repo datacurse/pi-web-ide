@@ -185,7 +185,7 @@ export function ActivityPanel({ activity, renderContent, controls, waitingForInp
 	};
 	return (
 		<div>
-			{renderContent && breakdown}
+
 			{activity.end === undefined && current && step && (
 				<div className="mt-2 flex items-baseline gap-2 text-body text-neutral-400">
 					<PhaseIcon kind={waitingForInput ? "input" : current.kind} />
@@ -201,6 +201,7 @@ export function ActivityPanel({ activity, renderContent, controls, waitingForInp
 				<ActivityHistory activity={activity} now={now} onSelect={select} />
 				{activity.end === undefined && silence >= 3000 && <span> · {t("No new output for")} <span className="tabular-nums">{activityDuration(silence)}</span></span>}
 			</div>
+			{renderContent && breakdown}
 			{!renderContent && breakdown}
 		</div>
 	);
