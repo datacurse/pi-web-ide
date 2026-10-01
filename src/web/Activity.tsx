@@ -195,8 +195,8 @@ export function ActivityPanel({ activity, renderContent, controls, waitingForInp
 			)}
 			<div className="mt-2 flex flex-wrap items-center gap-1 text-meta text-neutral-500">
 				{controls}
-				<button type="button" data-custom="inline timing disclosure" className="flex items-center gap-1 hover:text-neutral-300" onClick={() => setOpen(!open)} aria-expanded={open} aria-label={t("Toggle timing breakdown")}>
-					{open ? <CaretDown size={12} /> : <CaretRight size={12} />}<Clock size={12} aria-hidden />{t("Timing")} · {t("Total")} <span className="tabular-nums">{activityDuration((activity.end ?? now) - activity.start)}</span>
+				<button type="button" data-custom="inline timing disclosure" className="flex items-center gap-1 hover:text-neutral-300" onClick={() => setOpen(!open)} aria-expanded={open} aria-label={t("Toggle breakdown")}>
+					{open ? <CaretDown size={12} /> : <CaretRight size={12} />}<Clock size={12} aria-hidden />{t("Breakdown")} <span className="tabular-nums">{activityDuration((activity.end ?? now) - activity.start)}</span>
 				</button>
 				<ActivityHistory activity={activity} now={now} onSelect={select} />
 				{activity.end === undefined && silence >= 3000 && <span> · {t("No new output for")} <span className="tabular-nums">{activityDuration(silence)}</span></span>}

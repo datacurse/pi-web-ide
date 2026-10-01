@@ -41,6 +41,8 @@ export const RU: Record<string, string> = {
 	"Waiting for your input": "Ожидание вашего ввода",
 	"Waiting for pi activity": "Ожидание событий pi",
 	"Toggle timing breakdown": "Показать или скрыть хронометраж",
+	"Toggle breakdown": "Показать или скрыть сводку",
+	"Breakdown": "Сводка",
 	"Turn timeline": "Хронология ответа",
 	"Timing": "Хронометраж",
 	"No new output for": "Нет новых данных уже",

@@ -147,6 +147,7 @@ export function Tool({
 	const elapsed = ms ?? (running && startedAt !== undefined ? Math.max(0, Date.now() - startedAt) : undefined);
 	const target = args && typeof args === "object" ? (args as { path?: unknown; command?: unknown }).path ?? (args as { command?: unknown }).command : undefined;
 	const codeLanguage = (name === "read" || name === "read_symbol" || name === "read_enclosing") && typeof target === "string" ? target.split(".").at(-1) : undefined;
+	const displayedResult = codeLanguage && result ? result.replace(/^[A-Za-z0-9]{4}│/gm, "") : result;
 	const preview = name !== "codemode" ? typeof target === "string" ? target : !open && result ? resultPreview(result) : "" : "";
 	const counts = new Map<string, number>();
 	let failures = 0;
@@ -215,7 +216,7 @@ export function Tool({
 					{outputUnavailable && !nested && <p className="border-t border-neutral-800 px-3 py-2 text-meta">{t("Nested output was not retained")}</p>}
 					{result !== undefined && result !== "" && (
 						<div className="border-t border-neutral-800 p-3">
-							{codeLanguage ? <CodeBox lang={codeLanguage} text={result} className="" /> : <AnsiOutput className="whitespace-pre-wrap wrap-anywhere" text={result} />}
+							{codeLanguage ? <CodeBox lang={codeLanguage} text={displayedResult ?? result} className="" /> : <AnsiOutput className="whitespace-pre-wrap wrap-anywhere" text={result} />}
 						</div>
 					)}
 				</div>

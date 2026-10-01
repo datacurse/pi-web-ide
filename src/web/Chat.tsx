@@ -147,7 +147,7 @@ type Row =
 			at?: number;
 	  }
 	| { kind: "tools"; blocks: PiBlock[]; labelled: boolean }
-	| { kind: "phases"; activity: TurnActivity; messages: PiMessage[] };
+	| { kind: "phases"; activity: TurnActivity; messages: PiMessage[]; prompt?: PiMessage };
 
 const HistoryRow = memo(function HistoryRow({
 	row, live, liveBlocks, waitingForInput, workExpanded, toolMode, userMode, thinkingMode, onFork, onEdit,
