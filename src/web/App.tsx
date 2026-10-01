@@ -89,6 +89,8 @@ import {
 	readEditorTheme,
 	readTheme,
 	readToolMode,
+	readWorkExpanded,
+	writeWorkExpanded,
 	readUserMode,
 	readAskMode,
 	TERMINAL_MAX_PERCENT,
@@ -237,6 +239,7 @@ export default function App() {
 	const [language, setLanguageState] = useState<Language>(getLanguage);
 	const [thinkingMode, setThinkingMode] = useState<ThinkingMode>(readThinkingMode);
 	const [toolMode, setToolMode] = useState<ToolMode>(readToolMode);
+	const [workExpanded, setWorkExpanded] = useState(readWorkExpanded);
 	const [userMode, setUserMode] = useState<UserMode>(readUserMode);
 	const [askMode, setAskMode] = useState<AskMode>(readAskMode);
 	const [notify, setNotify] = useState(readNotify);
@@ -1700,6 +1703,8 @@ export default function App() {
 			);
 		return (
 			<Settings
+				cwd={project}
+				open={active}
 				theme={theme}
 				editorTheme={editorTheme}
 				onEditorTheme={setEditorTheme}
@@ -1710,6 +1715,8 @@ export default function App() {
 				onThinkingMode={changeThinkingMode}
 				toolMode={toolMode}
 				onToolMode={changeToolMode}
+				workExpanded={workExpanded}
+				onWorkExpanded={(on) => { setWorkExpanded(on); writeWorkExpanded(on); }}
 				userMode={userMode}
 				onUserMode={changeUserMode}
 				askMode={askMode}
@@ -1743,6 +1750,7 @@ export default function App() {
 			opening={s.opening}
 			thinkingMode={thinkingMode}
 			toolMode={toolMode}
+			workExpanded={workExpanded}
 			userMode={userMode}
 			askMode={askMode}
 			onAskMode={changeAskMode}

@@ -68,6 +68,11 @@ fits none of the existing ones, and record it here.
 - Cut-off text fades out over its end (`.fade-end`), never `…`. `truncate`,
   `text-ellipsis` and `line-clamp-*` fail the check (except `<select>`/inputs,
   where a mask cannot follow the text). Multi-line: `.fade-clamp` (3 lines).
+- Expanded tool calls use structured argument views, not JSON dumps: file paths
+  and metadata for reads, terminal-style commands for shell calls, the editor's
+  read-only unified diff for each edit replacement, and content previews for
+  writes. Other arguments stay visible as key/value rows. Results are separated
+  from inputs, and unavailable nested output stays explicitly marked.
 - Tool call lines are always one line; the result preview fades. Tool and group
   chevrons and status indicators never shrink when the preview or label is long.
 - Anything that scrolls fades out over 2em at each edge it can still scroll past, so
@@ -164,9 +169,9 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
 - Streaming silence of at least three seconds shows “No new output for …”, not an invented
   cause. Phase and total clocks update live even when the provider is silent.
 - The default tool mode is `Rounds` (saved ID `phases` is preserved): each user turn contains
-  collapsed `Round 1`, `Round 2`, … disclosures for model-response/tool cycles. Their headers
-  show wall time, observed tool counts, failures, and the active step while running. Each round
-  is a `rounded-sm` bordered card with one always-visible `h-control-sm` timed step bar and
+  `Round 1`, `Round 2`, … disclosures for model-response/tool cycles. Their compact summaries
+  show wall time, observed tool counts, failures, and highlight the active segment while running. Each round
+  is a compact `rounded-sm` bordered card with one always-visible `h-2` timed step bar and
   coloured labels/durations for its observed `Requesting`, `Thinking`, `Receiving`, and `Doing`
   steps. No empty phase/subphase disclosures. Opening a round shows received prose/reasoning
   first, then tool calls; omit missing text rather than show empty sections.
@@ -178,24 +183,29 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
   tools and their brief intervening bookkeeping. Retry, compaction and user waits remain distinct.
   Explicit live/collapsed/grouped/hidden preferences are preserved; `Answer only` also uses timed
   phases when available. Unmeasured old turns retain their ordinary work fold.
-- Round headers use `text-body`, a 14px caret and `text-meta` wall time. Their bars show
-  durations in wide segments; the compact legend keeps every observed step and its time readable,
+- The separate round header is removed: the `text-meta` round number and a 12px caret sit
+  left of the thin bar, with total wall time to its right. Summary padding is `px-2 py-1`;
+  round gaps use `space-y-2`. Bars contain no text or icons; hover/accessible labels retain
+  individual segment timing. The compact legend below keeps observed steps and times readable,
   including tiny Requesting intervals. Sub-second times use milliseconds instead of `0.0s`.
   Actual tool rows show the target/path, semantic icon, elapsed duration, and outcome; their
   own arguments/output remain individually expandable. Tool durations do not form a second log.
   Only the final assistant message's trailing answer stays outside the phase folds.
-- Requesting is `blue-400` / `ArrowUpRight`; Thinking is `pink-400` / `Brain` in phase headers, live status and the elapsed strip/legend.
+- Requesting is `blue-400` / `ArrowUpRight`; Thinking is `pink-400` / `Brain` in live status and step legends; the bar segments use pink without icons.
   The label and icon are pink; the theme maps `pink-400` to a blend of its red and mauve accents.
   Receiving is `green-400` / `ArrowDownLeft`; Doing is
   `amber-400` / `Wrench`. Retry and user waits use `red-400` with `ArrowClockwise` / `QuestionMark`;
   compaction uses `neutral-400` / `ArrowsInLineVertical`. Icons and labels accompany colour.
-- A `Timing · Total` disclosure and an always-visible `h-control-sm` history strip sit below the work.
+- A `Timing · Total` disclosure and an always-visible `h-2` history strip sit below the work.
   Each coloured segment spans a consecutive phase, not each tiny tool call. Width is proportional
   to observed elapsed time, never estimated completion; the active segment grows and is outlined.
   The legend carries icons, names and totals. Clicking or keyboard-activating a segment opens
-  its containing round and scrolls to it. The bottom bar has the same labelled/timed segments
-  and coloured step totals as the round bars. The strip remains visible with all work folded.
-  Round and individual tool disclosures are collapsed by default. Retries before any response remain in
+  its containing round and scrolls to it. The bottom bar has the same text/icon-free segments
+  and coloured step-time totals as the round bars. The strip remains visible with all work folded.
+  For current design review, `Expand work by default` is on by default (`pwi:workExpanded`).
+  Rounds and completed tool arguments/output start open. The Transcript settings checkbox
+  changes this immediately and persists it; explicit off is respected. Individual disclosures
+  can still be collapsed by hand without being forced open by clock/stream updates. Retries before any response remain in
   their current round; later observed request cycles start another. Missing stages are not
   invented for older or incomplete telemetry. Model rounds are not new user-prompt turns.
 - Parallel calls overlap and are not added together in wall-clock totals. Individual call
@@ -664,8 +674,13 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
   pwi extensions tab stays mounted (hidden) on the other tabs so an unsaved edit survives. Changes
   apply to sessions started afterwards. pwi's own plumbing (rewind, context) is not listed.
 - Settings has a `w-48` category nav on the left (`NavItem`s: Appearance, Transcript,
-  Sessions, Automatic actions, Notifications, Shortcuts), like Obsidian; the right side shows only the
+  Sessions, Agent instructions, Automatic actions, Notifications, Shortcuts), like Obsidian; the right side shows only the
   chosen category, `max-w-xl p-6`. Opens on Appearance.
+- Agent instructions shows read-only global and selected-project `AGENTS.md` files side by side
+  (`md:grid-cols-2`, stacked on narrow screens), using the full Settings content width.
+  Each has its full path and scrollable plain-text contents; missing, empty and unreadable files
+  are distinguished. Global uses pi’s agent directory; project uses the selected project root.
+  Files reload when Settings opens or the project changes. No editing controls.
 - Automatic actions has provider-grouped model selects for Commit naming, Session naming,
   Compaction (manual, automatic and SoL-Pi online compaction), and Log reduction (SoL-Pi's
   reducer), all defaulting to `openai-codex/gpt-6.1-sol`. Each saves on pick, independently

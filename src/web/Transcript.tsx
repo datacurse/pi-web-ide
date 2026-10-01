@@ -13,6 +13,7 @@ import { activityDuration, type TurnActivity } from "../shared/activity.js";
 import { ActivityPanel } from "./Activity.js";
 import type { UserMode } from "./prefs.js";
 import { PastedTexts } from "./PastedTexts.js";
+import { ToolArguments } from "./ToolArguments.js";
 import { addPastedText, isLargePaste, joinPastedText, splitPastedText } from "./pastedText.js";
 
 /** Braille spinner, same visual language as the TUI. */
@@ -56,7 +57,7 @@ function resultPreview(result: string): string {
  *
  * `autoOpen` is the "Expand while running" setting: a call with no result yet
  * is IN FLIGHT, and opening it shows progress without a click, mirroring the
- * TUI. Settled calls are always collapsed, whatever the setting — the
+ * TUI. Unless expanded work is requested, settled calls start collapsed — the
  * one-liner carries the name, the outcome and a preview of the result, which
  * is what scanning a finished transcript needs.
  */
@@ -84,6 +85,7 @@ export function Tool({
 	interrupted,
 	outputUnavailable,
 	startedAt,
+	expandedByDefault = false,
 }: {
 	name: string;
 	isError?: boolean;
@@ -98,9 +100,10 @@ export function Tool({
 	interrupted?: boolean;
 	outputUnavailable?: boolean;
 	startedAt?: number;
+	expandedByDefault?: boolean;
 }) {
 	const running = inFlight ?? result === undefined;
-	const [open, setOpen] = useState(autoOpen && running);
+	const [open, setOpen] = useState(expandedByDefault || (autoOpen && running));
 	/*
 	 * Changing the setting has to reach calls that are ALREADY on screen:
 	 * their `open` was decided at mount, so without this, switching to
@@ -108,11 +111,11 @@ export function Tool({
 	 * to get rid of. Keyed on the setting alone — a call the user opened by
 	 * hand stays open until the setting itself moves.
 	 */
-	useEffect(() => setOpen(autoOpen && running), [autoOpen]);
+	useEffect(() => setOpen(expandedByDefault || (autoOpen && running)), [autoOpen, expandedByDefault]);
 	const spinner = useSpinner(running);
 	const elapsed = ms ?? (running && startedAt !== undefined ? Math.max(0, Date.now() - startedAt) : undefined);
 	const target = args && typeof args === "object" ? (args as { path?: unknown; command?: unknown }).path ?? (args as { command?: unknown }).command : undefined;
-	const preview = !open && name !== "codemode" ? typeof target === "string" ? target : result ? resultPreview(result) : "" : "";
+	const preview = name !== "codemode" ? typeof target === "string" ? target : !open && result ? resultPreview(result) : "" : "";
 	const counts = new Map<string, number>();
 	let failures = 0;
 	const count = (calls: PiTool[]) => {
@@ -124,7 +127,7 @@ export function Tool({
 	};
 	count(children ?? []);
 	const summary = [...counts].map(([tool, n]) => tool + " × " + n).join(" · ");
-	if (name === "codemode") return <div className={nested ? "my-2" : "chat-wide my-3"}>
+	if (name === "codemode") return <div className={nested ? "my-1" : "chat-wide my-3"}>
 		<div className="flex items-center gap-2 text-meta text-neutral-500">
 			<Code size={14} className="shrink-0" aria-hidden />
 			<span>{t("via codemode")}</span>
@@ -133,11 +136,11 @@ export function Tool({
 			{elapsed !== undefined && <span className="ml-auto tabular-nums">{activityDuration(elapsed)}</span>}
 			{running ? <span>{spinner}</span> : isError ? <X size={12} className="text-red-400" aria-label={t("failed")} /> : interrupted ? <span>{t("Interrupted")}</span> : <Check size={12} className="text-green-400" aria-hidden />}
 		</div>
-		{children?.map((child) => <Tool key={child.id} {...child} nested autoOpen={false} ms={child.durationMs} />)}
+		{children?.map((child) => <Tool key={child.id} {...child} nested autoOpen={false} expandedByDefault={expandedByDefault} ms={child.durationMs} />)}
 		{childrenIncomplete && <p className="mt-1 text-meta text-amber-400">{t("Some nested calls were not retained")}</p>}
 	</div>;
 	return (
-		<div className={nested ? "my-2" : "chat-wide my-3"}>
+		<div className={nested ? "my-1" : "chat-wide my-3"}>
 			<button
 				data-custom="transcript disclosure"
 				aria-expanded={open}
@@ -164,20 +167,18 @@ export function Tool({
 			</button>
 			{open && children && children.length > 0 && (
 				<div className="ml-3 border-l border-neutral-800 pl-3">
-					{children.map((child) => <Tool key={child.id} {...child} nested autoOpen={false} ms={child.durationMs} />)}
+					{children.map((child) => <Tool key={child.id} {...child} nested autoOpen={false} expandedByDefault={expandedByDefault} ms={child.durationMs} />)}
 				</div>
 			)}
 			{open && childrenIncomplete && <p className="mt-1 text-meta text-amber-400">{t("Some nested calls were not retained")}</p>}
 			{open && name !== "codemode" && (
-				<div className="chat-code mt-1 max-h-80 overflow-auto rounded-sm bg-neutral-900 p-2 text-neutral-400">
-					{args !== undefined && (
-						<pre className="mb-2 whitespace-pre-wrap">
-							{JSON.stringify(args, null, 2)}
-						</pre>
-					)}
-					{outputUnavailable && <p className="mb-2 text-meta">{t("Nested output was not retained")}</p>}
-					{result !== undefined && (
-						<AnsiOutput className="whitespace-pre-wrap" text={result} />
+				<div className="chat-code mt-1 max-h-96 overflow-auto rounded-sm border border-neutral-800 bg-neutral-900 text-neutral-400">
+					<ToolArguments name={name} args={args} />
+					{outputUnavailable && <p className="border-t border-neutral-800 px-3 py-2 text-meta">{t("Nested output was not retained")}</p>}
+					{result !== undefined && result !== "" && (
+						<div className="border-t border-neutral-800 p-3">
+							<AnsiOutput className="whitespace-pre-wrap wrap-anywhere" text={result} />
+						</div>
 					)}
 				</div>
 			)}
@@ -314,6 +315,7 @@ export function Block({
 	userMode = "clamped",
 	foldThinking = false,
 	toolMs,
+	expandedByDefault = false,
 }: {
 	block: PiBlock;
 	isUser: boolean;
@@ -321,6 +323,7 @@ export function Block({
 	userMode?: UserMode;
 	foldThinking?: boolean;
 	toolMs?: number;
+	expandedByDefault?: boolean;
 }) {
 	if (block.kind === "text")
 		// No `chat-measure` on the user branch: the pill IS the column, and a
@@ -358,6 +361,7 @@ export function Block({
 			outputUnavailable={block.outputUnavailable}
 			startedAt={block.startedAt}
 			autoOpen={autoOpenTools}
+			expandedByDefault={expandedByDefault}
 		/>
 	);
 }

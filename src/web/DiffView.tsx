@@ -46,7 +46,7 @@ interface FileDiff {
  * two that survives a phone screen, which is where checking on a running
  * agent actually happens.
  */
-function Merge({ path, before, after }: { path: string; before: string; after: string }) {
+export function Merge({ path, before, after }: { path: string; before: string; after: string }) {
 	const host = useRef<HTMLDivElement | null>(null);
 	const view = useRef<EditorView | null>(null);
 

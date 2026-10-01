@@ -26,6 +26,8 @@ import { PRODUCT, type WorkoutProfile } from "../../shared/types.js";
 import { query, json, type Deps, type Env } from "../http.js";
 import { automaticModels, setAutomaticModel, setAutoCompaction } from "../automaticModels.js";
 import { autoCompactionEnabled } from "../automaticModelConfig.js";
+import { agentInstructions } from "../agentInstructions.js";
+import { safePath } from "../files.js";
 
 /** Machine-level routes: health, models, usage, stats, fleet, projects, favourites, personality. */
 export function systemRoutes({ cwd: CWD, model: MODEL, registry, piVersion: PI_VERSION, pwiVersion: PWI_VERSION, boot: BOOT, degraded }: Deps) {
@@ -56,6 +58,15 @@ export function systemRoutes({ cwd: CWD, model: MODEL, registry, piVersion: PI_V
 				}, 200);
 			} catch (err) {
 				return c.json({ error: err instanceof Error ? err.message : String(err) }, 500);
+			}
+		})
+
+		.get("/agent-instructions", query<{ cwd?: string }>(), async (c) => {
+			try {
+				const cwd = safePath(CWD, c.req.query("cwd") || CWD);
+				return c.json(await agentInstructions(cwd), 200);
+			} catch (err) {
+				return c.json({ error: err instanceof Error ? err.message : String(err) }, 400);
 			}
 		})
 

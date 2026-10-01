@@ -6,6 +6,37 @@ new; correct an entry rather than leave a stale one. How pi itself behaves
 (event order, extension loading, bash tracing) is in `docs/pi-facts.md` and
 the probe results in `docs/plans/tool-metrics.md`.
 
+## Codemode round trips
+
+### 2026-10-01 — batching works; lookup/edit/verify is not yet achieved
+
+- Sample: 13 completed codemode-using turns across six of the ten most
+  recently modified top-level repo session logs, excluding the active audit
+  and unfinished turns. 476 nested operations across 113 tool-call rounds:
+  4.2 operations per round, median seven rounds. Eleven turns edit/write;
+  their median is nine rounds. No matched before/after sample establishes
+  a causal speedup.
+- Latest completed UI tasks (sidebar indicators / global agent instructions
+  in Settings / drawn tool arguments): 9 / 14 / 13 rounds, respectively;
+  8 / 10 / 8 rounds before the first edit/write. Wall time:
+  131.6s / 248.2s / 221.3s. Summed assistant request intervals:
+  88.1s / 165.8s / 166.2s, about 67% / 67% / 75% of wall time.
+  These intervals include service, reasoning and generation, not just latency.
+- Those tasks have 2 / 3 / 3 explicitly truncated codemode results.
+  Sidebar reads `docs/ui.md` eight times and `SessionList.tsx` four times;
+  Settings reads its main component six times. Slices differ, but scripts
+  also repeat overlapping regions after dumping oversized docs/source batches.
+- Settings aborts two discovery scripts on a guessed nonexistent
+  `src/server/routes/helpers.ts` and a read beyond App.tsx EOF.
+  Drawn arguments requires a test-failure follow-up. Nonzero
+  `git diff --no-index` exits are expected differences, not failed validation.
+- Sidebar already batches edits, active changed-file LSP diagnostics, tests,
+  typecheck and diff into its final round. Discovery is the bottleneck.
+  Next target: bounded relevant context, resolve then read paths inside one
+  script, reuse stored results, and isolate independent lookup failures.
+  Existing codemode supports this; only consider a context-bundle helper if
+  it remains unreliable, not another batching/edit extension.
+
 ## Test-suite timeout investigation
 
 ### 2026-10-01 — one shutdown hang, not five minutes of assertion work

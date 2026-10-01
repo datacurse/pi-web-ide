@@ -1,5 +1,11 @@
 /** Russian for every `t`/`plural` key (see i18n.ts). Plurals are `one|few|many`. */
 export const RU: Record<string, string> = {
+	"Loading…": "Загрузка…",
+	"Agent instructions": "Инструкции агента",
+	"Global AGENTS.md": "Глобальный AGENTS.md",
+	"Project AGENTS.md": "AGENTS.md проекта",
+	"File not found.": "Файл не найден.",
+	"File is empty.": "Файл пуст.",
 	"Interrupted": "Прервано",
 	"Nested output was not retained": "Вывод вложенного вызова не сохранён",
 	"Partial batch": "Неполная группа",
@@ -9,6 +15,8 @@ export const RU: Record<string, string> = {
 	"Round {n}": "Раунд {n}",
 	"Round step timings, not completion progress": "Хронометраж этапов раунда, не процент выполнения",
 	"via codemode": "через codemode",
+	"Expand work by default": "Разворачивать работу по умолчанию",
+	"Rounds and tool details start open; individual rows can still be collapsed.": "Раунды и подробности инструментов раскрыты сразу; отдельные строки можно свернуть.",
 	"Waiting for model output": "Ожидание вывода модели",
 	"Model rounds with Requesting, Thinking, Receiving and Doing steps.": "Раунды модели с этапами запроса, размышлений, получения и выполнения.",
 	"Requesting": "Запрос",

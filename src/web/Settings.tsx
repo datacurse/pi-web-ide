@@ -45,11 +45,13 @@ import {
 import { t } from "./i18n.js";
 import { SYNTAX_ROLES } from "./vscodeTheme.js";
 import { AutomaticActions } from "./AutomaticActions.js";
+import { AgentInstructions } from "./AgentInstructions.js";
 
 const CATEGORIES = [
 	{ id: "appearance", label: "Appearance", icon: <Palette size={16} /> },
 	{ id: "transcript", label: "Transcript", icon: <ChatText size={16} /> },
 	{ id: "sessions", label: "Sessions", icon: <ListBullets size={16} /> },
+	{ id: "instructions", label: "Agent instructions", icon: <ListBullets size={16} /> },
 	{ id: "automatic", label: "Automatic actions", icon: <GearSix size={16} /> },
 	{ id: "notifications", label: "Notifications", icon: <Bell size={16} /> },
 	{ id: "shortcuts", label: "Shortcuts", icon: <Keyboard size={16} /> },
@@ -346,6 +348,8 @@ function ChatFadePreview({ fade }: { fade: ChatFade }) {
  * in Packages with the other pwi extensions.
  */
 export function Settings({
+	cwd,
+	open,
 	theme,
 	editorTheme,
 	onEditorTheme,
@@ -356,6 +360,8 @@ export function Settings({
 	onThinkingMode,
 	toolMode,
 	onToolMode,
+	workExpanded,
+	onWorkExpanded,
 	userMode,
 	onUserMode,
 	askMode,
@@ -372,6 +378,8 @@ export function Settings({
 	onHideScrollbars,
 	onClose,
 }: {
+	cwd?: string;
+	open: boolean;
 	theme: ThemeId;
 	editorTheme: string;
 	onEditorTheme: (theme: string) => void;
@@ -382,6 +390,8 @@ export function Settings({
 	onThinkingMode: (mode: ThinkingMode) => void;
 	toolMode: ToolMode;
 	onToolMode: (mode: ToolMode) => void;
+	workExpanded: boolean;
+	onWorkExpanded: (on: boolean) => void;
 	userMode: UserMode;
 	onUserMode: (mode: UserMode) => void;
 	askMode: AskMode;
@@ -460,6 +470,12 @@ export function Settings({
 	 * category order, so a search result reads like the pages it came from.
 	 */
 	const items: { category: Category; label: string; text: string; node: ReactNode }[] = [
+		{
+			category: "instructions",
+			label: t("Agent instructions"),
+			text: "global local project AGENTS.md agent.md instructions",
+			node: <AgentInstructions cwd={cwd} open={open} />,
+		},
 		{
 			category: "automatic",
 			label: t("Automatic actions"),
@@ -589,6 +605,20 @@ export function Settings({
 						</OptionRow>
 					))}
 				</div>
+			),
+		},
+		{
+			category: "transcript",
+			label: t("Expand work by default"),
+			text: `rounds tools output unfolded ${t("Rounds and tool details start open; individual rows can still be collapsed.")}`,
+			node: (
+				<OptionRow selected={workExpanded}>
+					<input type="checkbox" checked={workExpanded} onChange={(e) => onWorkExpanded(e.target.checked)} className="size-4 shrink-0 accent-amber-400" />
+					<span className="flex-1">
+						{t("Expand work by default")}
+						<span className="block text-meta text-neutral-500">{t("Rounds and tool details start open; individual rows can still be collapsed.")}</span>
+					</span>
+				</OptionRow>
 			),
 		},
 		{
@@ -967,7 +997,7 @@ export function Settings({
 					))}
 				</nav>
 				<div className="min-h-0 min-w-0 flex-1 overflow-y-auto">
-					<div ref={results} className="mx-auto w-full max-w-xl p-6">
+					<div ref={results} className={`mx-auto w-full p-6 ${shown.some((item) => item.category === "instructions") ? "" : "max-w-xl"}`}>
 						{searching && !shown.length && (
 							<p className="px-2 text-ui text-neutral-500">{t("No settings match “{query}”.", { query: query.trim() })}</p>
 						)}

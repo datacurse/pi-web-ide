@@ -31,7 +31,7 @@ test("live status shows the actual phase, phase time, total time, and honest str
 	assert.match(html, /Total/);
 	assert.match(html, /9\.0s/);
 	assert.match(html, /No new output for/);
-	assert.match(html, /aria-expanded="false"/);
+	assert.match(html, /aria-expanded="true"/);
 	assert.doesNotMatch(html, /Honking|Ruminating/);
 });
 
@@ -58,13 +58,13 @@ test("Requesting and Thinking have separate icons and measured preparation/wait 
 	assert.match(html,/Requesting/);
 	assert.match(html,/Browser delivery and exact upload completion are not measured/);
 });
-test("collapsed live round headers retain the pink Thinking label and total duration", () => {
+test("compact live round legends retain the pink Thinking label and total duration", () => {
 	const waiting = {...activity,steps:activity.steps.slice(0,3).map((step,i)=>({...step,end:i === 2 ? undefined : step.end}))};
 	const html = renderToStaticMarkup(createElement(ActivityBreakdown,{activity:waiting,now:4000}));
 	assert.match(html,/Round 1/);
-	assert.match(html,/class="flex items-center gap-1 text-meta text-pink-400"/);
+	assert.match(html,/class="flex items-center gap-1 text-pink-400"/);
 	assert.match(html,/3\.0s/);
-	assert.doesNotMatch(html,/<details[^>]* open/);
+	assert.match(html,/<details[^>]* open/);
 });
 
 test("streamed reasoning is still Receiving, not an additional waiting phase", () => {
@@ -86,7 +86,7 @@ test("breakdown preserves observed boundaries and completed durations do not gro
 
 test("the elapsed strip remains visible while timing is collapsed and marks the live segment without a completion percentage", (t) => {
 	t.mock.method(Date, "now", () => 10000);
-	const html = renderToStaticMarkup(createElement(ActivityPanel, { activity }));
+	const html = renderToStaticMarkup(createElement(ActivityPanel, { activity, expandedByDefault:false }));
 	assert.match(html, /aria-expanded="false"/);
 	assert.match(html, /Elapsed activity history, not completion progress/);
 	assert.match(html, /aria-current="step"/);
@@ -98,7 +98,7 @@ test("the elapsed strip remains visible while timing is collapsed and marks the 
 	assert.match(later, /flex-grow:9000/);
 });
 
-test("integrated work shows collapsed phases and failures without rendering a duplicate log or final answer", () => {
+test("integrated work starts expanded and preserves failures without a duplicate transcript", () => {
 	const timed: TurnActivity = { start: 1000, end: 6000, steps: [
 		{ kind: "request", label: "request", start: 1000, end: 2000 },
 		{ kind: "thinking", label: "thinking", start: 2000, end: 3000 },
@@ -112,7 +112,9 @@ test("integrated work shows collapsed phases and failures without rendering a du
 	] }] }));
 	assert.equal((html.match(/<details/g) ?? []).length, 1);
 	assert.match(html,/Round 1/);
-	assert.doesNotMatch(html, /<details[^>]* open|Detailed reasoning|Private output/);
+	assert.match(html, /<details[^>]* open/);
+	assert.match(html,/Detailed reasoning/);
+	assert.match(html,/Private output/);
 	assert.match(html, /2 tools/);
 	assert.match(html, /1 failed/);
 	assert.match(html, /Doing/);
@@ -127,7 +129,7 @@ function elements(value: unknown): ReactElement[] {
 	return [value, ...elements(value.props.children)];
 }
 
-test("each round shows a single timed bar even while collapsed, not empty phase disclosures", () => {
+test("each round has one thin label-free bar beside its name, not empty phase disclosures", () => {
 	const completed = {...activity,end:6000,steps:activity.steps.map(step=>({...step,end:step.end??6000}))};
 	const html = renderToStaticMarkup(createElement(ActivityBreakdown,{activity:completed,now:6000}));
 	assert.equal((html.match(/<details/g)??[]).length,1);
@@ -138,6 +140,13 @@ test("each round shows a single timed bar even while collapsed, not empty phase 
 	assert.match(html,/100ms/);
 	assert.match(html,/2\.9s/);
 	assert.doesNotMatch(html,/Sending request|Processing between requests|Preparing request|role="progressbar"/);
+	assert.match(html,/flex h-2/);
+	const start = html.indexOf('role="group"');
+	const bar = html.slice(html.indexOf(">",start)+1,html.indexOf("</div>",start));
+	assert.ok(bar.length > 0);
+	assert.doesNotMatch(bar,/<svg/);
+	assert.equal(bar.replace(/<[^>]*>/g,"").trim(),"");
+	assert.ok(html.indexOf("Round 1") < html.indexOf("flex h-2"));
 });
 test("round body shows received prose before flat tool calls, without phase or codemode folds", () => {
 	const timed: TurnActivity = {start:1000,end:6000,steps:[
@@ -147,7 +156,7 @@ test("round body shows received prose before flat tool calls, without phase or c
 		{kind:"tools",label:"tools",start:3000,end:6000},
 	],tools:[{id:"batch",label:"codemode",start:3000,end:6000},{id:"batch/1",label:"read: a.ts",start:3000,end:3120}]};
 	const round = sharedActivity.activityRounds(sharedActivity.activityGroups(timed))[0];
-	const html = renderToStaticMarkup(createElement(RoundWork,{round,now:6000,blocks:[
+	const html = renderToStaticMarkup(createElement(RoundWork,{round,now:6000,expandedByDefault:false,blocks:[
 		{kind:"tool",id:"batch",name:"codemode",args:{code:"hidden script"},result:"hidden aggregate",children:[
 			{id:"batch/1",name:"read",args:{path:"a.ts"},result:"body",durationMs:120},
 		]},
@@ -197,6 +206,7 @@ test("selecting a history segment opens timing and the corresponding round, then
 			};
 			if (name === "../shared/activity.js") return sharedActivity;
 			if (name === "./i18n.js") return { t: (key: string) => key, plural: () => "tools" };
+			if (name === "./prefs.js") return { readWorkExpanded: () => false };
 			if (name in modules) return modules[name];
 			throw new Error(`Unexpected import: ${name}`);
 		},
@@ -210,7 +220,7 @@ test("selecting a history segment opens timing and the corresponding round, then
 	const detail = { open: false, scrollIntoView() { scrolled = true; } } as HTMLDetailsElement;
 	refs[0].set(0,detail);
 	(history.props as { onSelect(id: number): void }).onSelect(3);
-		assert.equal(detail.open, true);
+	assert.equal(detail.open, true);
 	assert.equal(scrolled, true);
 	assert.ok(elements(render()).some((node) => node.type === exports.ActivityBreakdown));
 });

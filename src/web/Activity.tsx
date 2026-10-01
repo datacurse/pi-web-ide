@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Brain, ArrowUpRight, ArrowDownLeft, Wrench, ArrowClockwise, ArrowsInLineVertical, QuestionMark, CaretDown, CaretRight } from "@phosphor-icons/react";
 import { activityDuration, activityGroups, activityRounds, type ActivityRound, type ActivityPhase, type ActivityPhaseGroup, type ActivityStep, type TurnActivity } from "../shared/activity.js";
 import { t, plural } from "./i18n.js";
+import { readWorkExpanded } from "./prefs.js";
 
 const PHASE_STYLE = {
 	requesting: { icon: ArrowUpRight, text: "text-blue-400", background: "bg-blue-400/60" },
@@ -56,73 +57,71 @@ function useClock(active: boolean): number {
 type RoundContent = (round: ActivityRound, now: number) => ReactNode;
 
 /** The same timed steps power each round and the complete turn; never a completion estimate. */
-export function ActivitySteps({ groups, now, start, onSelect, label }: {
+export function ActivitySteps({ groups, now, start, onSelect, label, leading, trailing, status }: {
 	groups: ActivityPhaseGroup[];
 	now: number;
 	start: number;
 	onSelect?: (id: number) => void;
 	label: string;
+	leading?: ReactNode;
+	trailing?: ReactNode;
+	status?: ReactNode;
 }) {
 	const durations = groups.map((group) => Math.max(0, (group.end ?? now) - group.start));
-	const total = Math.max(1, durations.reduce((sum, ms) => sum + ms, 0));
 	const totals = new Map<ActivityPhase, number>();
 	groups.forEach((group, i) => totals.set(group.kind, (totals.get(group.kind) ?? 0) + durations[i]));
 	return (
-		<div className="mt-2 space-y-2">
-			<div className="flex h-control-sm overflow-hidden rounded-sm bg-neutral-800" role="group" aria-label={label}>
+		<div className="space-y-1">
+			<div className="flex items-center gap-2">
+				{leading}
+			<div className="flex h-2 min-w-0 flex-1 overflow-hidden rounded-sm bg-neutral-800" role="group" aria-label={label}>
 				{groups.map((group, i) => {
-					const share = durations[i] / total;
 					const props = {
 						title: `${phaseTitle(group.kind)} · +${activityDuration(group.start - start)} · ${activityDuration(durations[i])}${phaseHint(group.kind) ? ` · ${phaseHint(group.kind)}` : ""}`,
 						"aria-label": `${phaseTitle(group.kind)} · ${activityDuration(durations[i])}`,
 						"aria-current": group.end === undefined ? "step" as const : undefined,
-						className: `flex min-w-0 items-center justify-center gap-1 overflow-hidden whitespace-nowrap text-meta text-neutral-950 ring-1 ring-inset ${PHASE_STYLE[group.kind].background} ${group.end === undefined ? "ring-neutral-100" : "ring-neutral-950/30"}`,
+						className: `min-w-0 overflow-hidden ring-1 ring-inset ${PHASE_STYLE[group.kind].background} ${group.end === undefined ? "ring-neutral-100" : "ring-neutral-950/30"}`,
 						style: { flexGrow: durations[i], flexBasis: 0 },
 					};
-					const content = <>
-						{share >= 0.04 && <PhaseIcon kind={group.kind} size={12} onBar />}
-						{share >= 0.2 && <span>{phaseTitle(group.kind)}</span>}
-						{share >= 0.08 && <span className="tabular-nums">{activityDuration(durations[i])}</span>}
-					</>;
 					return onSelect
-						? <button key={group.id} type="button" data-custom="proportional elapsed phase segment" {...props} onClick={() => onSelect(group.id)}>{content}</button>
-						: <span key={group.id} {...props}>{content}</span>;
+						? <button key={group.id} type="button" data-custom="proportional elapsed phase segment" {...props} onClick={() => onSelect(group.id)} />
+						: <span key={group.id} {...props} />;
 				})}
+			</div>
+				{trailing}
 			</div>
 			<div className="flex flex-wrap gap-x-3 gap-y-1 text-meta">
 				{[...totals].map(([kind, ms]) => <span key={kind} title={phaseHint(kind)} className={`flex items-center gap-1 ${PHASE_STYLE[kind].text}`}><PhaseIcon kind={kind} size={12} />{phaseTitle(kind)} <span className="tabular-nums">{activityDuration(ms)}</span></span>)}
+				{status}
 			</div>
 		</div>
 	);
 }
 
-function RoundGroup({ round, number, now, renderContent, roundRefs }: {
+function RoundGroup({ round, number, now, renderContent, roundRefs, expandedByDefault }: {
 	round: ActivityRound;
 	number: number;
 	now: number;
 	renderContent?: RoundContent;
 	roundRefs?: Map<number, HTMLDetailsElement>;
+	expandedByDefault: boolean;
 }) {
-	const [open, setOpen] = useState(false);
+	const [open, setOpen] = useState(expandedByDefault);
+	useEffect(() => setOpen(expandedByDefault), [expandedByDefault]);
 	const tools = round.groups.flatMap((group) => group.tools);
 	const wrappers = tools.filter((tool) => tool.label === "codemode" && tools.some((child) => child.id.startsWith(tool.id + "/")));
 	const calls = tools.filter((tool) => !wrappers.includes(tool));
 	const failed = calls.filter((tool) => tool.isError).length + wrappers.filter((tool) => tool.isError && !calls.some((child) => child.id.startsWith(tool.id + "/") && child.isError)).length;
-	const current = round.groups.at(-1)!;
 	return (
-		<details ref={(element) => { if (element) roundRefs?.set(round.id, element); else roundRefs?.delete(round.id); }} className="group/round overflow-hidden rounded-sm border border-neutral-800" onToggle={(event) => setOpen(event.currentTarget.open)}>
-			<summary className="cursor-pointer list-none px-3 py-2 hover:bg-neutral-800/30 [&::-webkit-details-marker]:hidden">
-				<div className="flex items-center gap-2 text-body text-neutral-400">
-					<CaretRight size={14} className="shrink-0 group-open/round:rotate-90" aria-hidden />
-					<span className="text-neutral-300">{t("Round {n}", { n: number })}</span>
-					{calls.length > 0 && <span className="text-meta">· {plural(calls.length, "1 tool", "{n} tools")}</span>}
-					{failed > 0 && <span className="text-meta text-red-400">· {t("{n} failed", { n: failed })}</span>}
-					{round.end === undefined && <span className={`flex items-center gap-1 text-meta ${PHASE_STYLE[current.kind].text}`}><PhaseIcon kind={current.kind} size={12} />{phaseTitle(current.kind)}</span>}
-					<span className="ml-auto shrink-0 text-meta tabular-nums">{activityDuration((round.end ?? now) - round.start)}</span>
-				</div>
-				<ActivitySteps groups={round.groups} now={now} start={round.start} label={t("Round step timings, not completion progress")} />
+		<details ref={(element) => { if (element) roundRefs?.set(round.id, element); else roundRefs?.delete(round.id); }} className="group/round overflow-hidden rounded-sm border border-neutral-800" open={open} onToggle={(event) => setOpen(event.currentTarget.open)}>
+			<summary className="cursor-pointer list-none px-2 py-1 hover:bg-neutral-800/30 [&::-webkit-details-marker]:hidden">
+				<ActivitySteps groups={round.groups} now={now} start={round.start} label={t("Round step timings, not completion progress")}
+					leading={<span className="flex shrink-0 items-center gap-1 text-meta text-neutral-300"><CaretRight size={12} className="group-open/round:rotate-90" aria-hidden />{t("Round {n}", { n: number })}</span>}
+					trailing={<span className="shrink-0 text-meta tabular-nums text-neutral-500">{activityDuration((round.end ?? now) - round.start)}</span>}
+					status={<>{calls.length > 0 && <span className="text-neutral-500">{plural(calls.length, "1 tool", "{n} tools")}</span>}{failed > 0 && <span className="text-red-400">{t("{n} failed", { n: failed })}</span>}</>}
+				/>
 			</summary>
-			{open && <div className="chat-nested flow-trim flow-root border-t border-neutral-800 px-3 py-2">
+			{open && <div className="chat-nested flow-trim flow-root border-t border-neutral-800 px-2 py-1">
 				{renderContent ? renderContent(round, now) : <>
 					{tools.some((tool) => tool.label === "codemode") && <p className="mb-2 text-meta text-neutral-500">{t("via codemode")}</p>}
 					{calls.map((tool) => <div key={tool.id} className="flex items-baseline gap-2 py-1 text-meta">
@@ -135,15 +134,16 @@ function RoundGroup({ round, number, now, renderContent, roundRefs }: {
 	);
 }
 
-export function ActivityBreakdown({ activity, now = Date.now(), renderContent, roundRefs }: {
+export function ActivityBreakdown({ activity, now = Date.now(), renderContent, roundRefs, expandedByDefault = readWorkExpanded() }: {
 	activity: TurnActivity;
 	now?: number;
 	renderContent?: RoundContent;
 	roundRefs?: Map<number, HTMLDetailsElement>;
+	expandedByDefault?: boolean;
 }) {
 	return (
-		<ol className="mt-2 space-y-3" aria-label={t("Turn timeline")}>
-			{activityRounds(activityGroups(activity)).map((round, i) => <li key={round.id}><RoundGroup round={round} number={i + 1} now={now} renderContent={renderContent} roundRefs={roundRefs} /></li>)}
+		<ol className="mt-1 space-y-2" aria-label={t("Turn timeline")}>
+			{activityRounds(activityGroups(activity)).map((round, i) => <li key={round.id}><RoundGroup round={round} number={i + 1} now={now} renderContent={renderContent} roundRefs={roundRefs} expandedByDefault={expandedByDefault} /></li>)}
 		</ol>
 	);
 }
@@ -153,20 +153,22 @@ export function ActivityHistory({ activity, now = Date.now(), onSelect }: { acti
 }
 
 /** Round cards own their text and tools; the complete turn keeps one chronological strip. */
-export function ActivityPanel({ activity, renderContent, controls, waitingForInput = false }: {
+export function ActivityPanel({ activity, renderContent, controls, waitingForInput = false, expandedByDefault = readWorkExpanded() }: {
 	activity: TurnActivity;
 	renderContent?: RoundContent;
 	controls?: ReactNode;
 	waitingForInput?: boolean;
+	expandedByDefault?: boolean;
 }) {
-	const [open, setOpen] = useState(!!renderContent);
+	const [open, setOpen] = useState(expandedByDefault || !!renderContent);
+	useEffect(() => setOpen(expandedByDefault || !!renderContent), [expandedByDefault]);
 	const roundRefs = useRef(new Map<number, HTMLDetailsElement>());
 	const now = useClock(activity.end === undefined);
 	const step = activity.steps.at(-1);
 	const current = activityGroups(activity).at(-1);
 	const streaming = step && ["thinking", "text", "toolcall"].includes(step.kind);
 	const silence = streaming && activity.lastOutputAt !== undefined ? now - activity.lastOutputAt : 0;
-	const breakdown = open ? <ActivityBreakdown activity={activity} now={now} renderContent={renderContent} roundRefs={roundRefs.current} /> : null;
+	const breakdown = open ? <ActivityBreakdown activity={activity} now={now} renderContent={renderContent} roundRefs={roundRefs.current} expandedByDefault={expandedByDefault} /> : null;
 	const select = (id: number) => {
 		setOpen(true);
 		requestAnimationFrame(() => {
@@ -200,8 +202,8 @@ export function ActivityPanel({ activity, renderContent, controls, waitingForInp
 	);
 }
 
-export function CompletedActivity({ activity }: { activity: TurnActivity }) {
-	return <div className="chat-gutter my-3"><div className="chat-measure"><ActivityPanel activity={activity} /></div></div>;
+export function CompletedActivity({ activity, expandedByDefault }: { activity: TurnActivity; expandedByDefault?: boolean }) {
+	return <div className="chat-gutter my-3"><div className="chat-measure"><ActivityPanel activity={activity} expandedByDefault={expandedByDefault} /></div></div>;
 }
 
 export function TurnStatus({ activity, since, waitingForInput = false }: { activity?: TurnActivity; since?: number; waitingForInput?: boolean }) {

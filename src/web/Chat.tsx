@@ -158,6 +158,7 @@ export function Chat({
 	opening,
 	thinkingMode,
 	toolMode,
+	workExpanded,
 	userMode,
 	askMode,
 	onAskMode,
@@ -191,6 +192,7 @@ export function Chat({
 	thinkingMode: ThinkingMode;
 	/** How much of a tool call to show; see prefs.ts. */
 	toolMode: ToolMode;
+	workExpanded: boolean;
 	/** How long user messages fold; see prefs.ts. */
 	userMode: UserMode;
 	/** Whether Ask only switches off after a send; see prefs.ts. */
@@ -816,7 +818,7 @@ export function Chat({
 					)}
 					{rows.map((r, i) =>
 						r.kind === "phases" ? (
-							<TurnWork key={`${snapshot.id}:${r.activity.start}`} activity={r.activity} messages={r.messages} partial={busy && r.activity.end === undefined ? { text: partial.text, thinking: showThinking ? partial.thinking : "", tools: liveTools } : undefined} waitingForInput={r.activity.end === undefined && !!snapshot.ask} />
+							<TurnWork key={`${snapshot.id}:${r.activity.start}`} activity={r.activity} messages={r.messages} partial={busy && r.activity.end === undefined ? { text: partial.text, thinking: showThinking ? partial.thinking : "", tools: liveTools } : undefined} waitingForInput={r.activity.end === undefined && !!snapshot.ask} expandedByDefault={workExpanded} />
 						) : r.kind === "tools" ? (
 							<TranscriptRow key={i} role="assistant" labelled={r.labelled}>
 								{joinFold && i === rows.length - 1 ? (
@@ -895,7 +897,7 @@ export function Chat({
 
 					{busy && !phasedLive && <TurnStatus key={snapshot.id} activity={snapshot.activity?.findLast((turn) => turn.end === undefined)} since={turnStart(snapshot.messages)} waitingForInput={!!snapshot.ask} />}
 					{!busy && snapshot.activity?.at(-1)?.end !== undefined && !rows.some((r) => (r.kind === "message" && r.footer?.activity?.start === snapshot.activity?.at(-1)?.start) || (r.kind === "phases" && r.activity.start === snapshot.activity?.at(-1)?.start)) && (
-						<CompletedActivity activity={snapshot.activity.at(-1)!} />
+						<CompletedActivity activity={snapshot.activity.at(-1)!} expandedByDefault={workExpanded} />
 					)}
 
 					{/* Below the transcript: a local command answers after the last

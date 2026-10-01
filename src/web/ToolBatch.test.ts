@@ -20,6 +20,17 @@ test("codemode is a context label, not another fold or indented layer", () => {
 	assert.equal((html.match(/aria-expanded="false"/g)??[]).length,2);
 	assert.doesNotMatch(html,/secret child output|border-l|aria-expanded="true"|Explore|Modify|Verify/);
 });
+test("expanded work opens completed child details without exposing the codemode wrapper", () => {
+	const html = renderToStaticMarkup(createElement(Tool,{name:"codemode",autoOpen:false,result:"HIDDEN_AGGREGATE",args:{code:"HIDDEN_SCRIPT"},children,expandedByDefault:true}));
+	assert.equal((html.match(/aria-expanded="true"/g)??[]).length,2);
+	assert.match(html,/secret child output/);
+	assert.match(html,/pnpm test/);
+	assert.doesNotMatch(html,/HIDDEN_AGGREGATE|HIDDEN_SCRIPT/);
+	const folded = renderToStaticMarkup(createElement(Tool,{name:"codemode",autoOpen:false,result:"done",children,expandedByDefault:false}));
+	assert.equal((folded.match(/aria-expanded="false"/g)??[]).length,2);
+	assert.doesNotMatch(folded,/secret child output/);
+});
+
 test("tool types have distinct read, write, and command icons", () => {
 	assert.equal(ToolIcon({name:"read"}).type,BookOpen);
 	assert.equal(ToolIcon({name:"read_symbol"}).type,BookOpen);

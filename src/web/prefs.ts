@@ -315,6 +315,16 @@ export function applyScrollPast(on: boolean, amount: number): void {
 	document.documentElement.style.setProperty("--chat-scroll-past", on ? `${amount}vh` : "0px");
 }
 
+const WORK_EXPANDED_KEY = "pwi:workExpanded";
+
+export function readWorkExpanded(): boolean {
+	return readStored(WORK_EXPANDED_KEY) !== "0";
+}
+
+export function writeWorkExpanded(on: boolean): void {
+	writeStored(WORK_EXPANDED_KEY, on ? "1" : "0");
+}
+
 const SETTINGS_EXPANDED_KEY = "pwi:settingsExpanded";
 
 /** Whether settings with a details panel (Chat fade) start expanded. On by default. */
