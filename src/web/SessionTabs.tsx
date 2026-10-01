@@ -158,6 +158,7 @@ export function SessionTabs({
 	onAutoName?: (session: PiSessionInfo) => Promise<void>;
 }) {
 	const buttons = useRef<Array<HTMLButtonElement | null>>([]);
+	const strip = useRef<HTMLDivElement | null>(null);
 	/** A tab's right-click menu: which tab entry, and where the pointer was. */
 	const [menu, setMenu] = useState<{ file: string; x: number; y: number; closeOnly?: boolean } | null>(null);
 	/*
@@ -185,6 +186,20 @@ export function SessionTabs({
 	 * tab's close button lands under the pointer. Released on pointer leave.
 	 */
 	const [slack, setSlack] = useState(0);
+	useEffect(() => {
+		const el = strip.current;
+		if (!el) return;
+		const targets = [el, ...el.querySelectorAll<HTMLElement>(".fade-end")];
+		const update = () => {
+			for (const target of targets) {
+				target.toggleAttribute("data-overflow", target.scrollWidth > target.clientWidth);
+			}
+		};
+		const observer = new ResizeObserver(update);
+		for (const target of targets) observer.observe(target);
+		update();
+		return () => observer.disconnect();
+	});
 	/*
 	 * The tab being renamed in place, and its text — the same inline rename as
 	 * the session list: Enter saves, Escape or a click elsewhere cancels.
@@ -336,6 +351,7 @@ export function SessionTabs({
 				// it is pushed into the middle of the strip. It does claim it when it
 				// is a drop target, because an empty column needs somewhere to aim.
 				// -mb-px: the active tab's underline sits on the strip's border.
+				ref={strip}
 				className={`tab-strip scroll-fade-x -mb-px flex min-w-0 items-stretch overflow-x-auto ${
 					tabs.length > 0 || onAdopt ? "flex-1" : "flex-none"
 				}`}

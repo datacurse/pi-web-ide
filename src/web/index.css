@@ -801,6 +801,12 @@ body {
 	}
 }
 
+.tab-strip:not([data-overflow]),
+.tab-strip .fade-end:not([data-overflow]) {
+	animation: none;
+	mask-image: none;
+}
+
 @keyframes fade-end {
 	from,
 	to {

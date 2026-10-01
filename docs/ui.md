@@ -262,7 +262,8 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
   slide left. Closed width is kept as trailing space until the pointer leaves the strip.
 - A cut-off tab label fades out over its last 2em (`.fade-end`, see Overflowing text).
 - When tabs overflow the strip, a tab cut off at either end fades out (`.scroll-fade-x`,
-  see Overflowing text).
+  see Overflowing text). The strip and its labels explicitly disable fades when they
+  fit, including after tabs close or the strip resizes.
 - Right-click any tab → `ContextMenu`, groups split by `MenuSeparator`:
   1. Session tabs: the session list's menu — `Pin Tab` / `Unpin Tab` (the list's pins),
      `Rename…` (inline in the tab, never `window.prompt`; Enter saves, Escape or blur
