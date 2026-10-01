@@ -11,6 +11,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "
 import { dirname, join } from "node:path";
 import type { SolPiConfig, SolPiSettings } from "../shared/types.js";
 import { agentDir } from "./packages.js";
+import { DEFAULT_AUTOMATIC_MODEL } from "../shared/automaticModels.js";
 
 const FLAGS = ["actionFusion", "observationPack", "evidencePreservingReducer", "onlineContextCompact"] as const;
 const ROUTE = ["evidencePreservingReducerProvider", "evidencePreservingReducerModel"] as const;
@@ -37,6 +38,13 @@ function readRaw(): Record<string, unknown> | null {
 		throw new Error(`${path()} is not a JSON object`);
 	}
 	return parsed as Record<string, unknown>;
+}
+
+export function ensureSolPiReducer(): void {
+	const raw = readRaw();
+	if (raw?.evidencePreservingReducer === true && !raw.evidencePreservingReducerProvider && !raw.evidencePreservingReducerModel) {
+		writeSolPi({}, process.cwd());
+	}
 }
 
 export function readSolPi(cwd: string): SolPiSettings {
@@ -75,6 +83,11 @@ export function writeSolPi(change: Record<string, unknown>, cwd: string): SolPiS
 		} else {
 			throw new Error(`unknown setting: ${key}`);
 		}
+	}
+	if (next.evidencePreservingReducer === true && !next.evidencePreservingReducerProvider && !next.evidencePreservingReducerModel) {
+		const slash = DEFAULT_AUTOMATIC_MODEL.indexOf("/");
+		next.evidencePreservingReducerProvider = DEFAULT_AUTOMATIC_MODEL.slice(0, slash);
+		next.evidencePreservingReducerModel = DEFAULT_AUTOMATIC_MODEL.slice(slash + 1);
 	}
 	const file = path();
 	mkdirSync(dirname(file), { recursive: true });

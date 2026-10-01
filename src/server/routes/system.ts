@@ -24,6 +24,7 @@ import {
 import { addWorkout, isWorkoutKind, skipWorkout, snoozeWorkout, workoutPlan } from "../workouts.js";
 import { PRODUCT, type WorkoutProfile } from "../../shared/types.js";
 import { query, json, type Deps, type Env } from "../http.js";
+import { automaticModels, setAutomaticModel } from "../automaticModels.js";
 
 /** Machine-level routes: health, models, usage, stats, fleet, projects, favourites, personality. */
 export function systemRoutes({ cwd: CWD, model: MODEL, registry, piVersion: PI_VERSION, pwiVersion: PWI_VERSION, boot: BOOT, degraded }: Deps) {
@@ -54,6 +55,27 @@ export function systemRoutes({ cwd: CWD, model: MODEL, registry, piVersion: PI_V
 				}, 200);
 			} catch (err) {
 				return c.json({ error: err instanceof Error ? err.message : String(err) }, 500);
+			}
+		})
+
+		.get("/automatic-models", query<{ cwd?: string }>(), async (c) => {
+			try {
+				const cwd = c.req.query("cwd") || CWD;
+				return c.json({ models: await listModels(), selected: automaticModels(cwd) }, 200);
+			} catch (err) {
+				return c.json({ error: err instanceof Error ? err.message : String(err) }, 500);
+			}
+		})
+
+		.put("/automatic-models", query<{ cwd?: string }>(), json<{ action: string; model: string }>(), async (c) => {
+			try {
+				const { action, model } = c.req.valid("json");
+				const cwd = c.req.query("cwd") || CWD;
+				await setAutomaticModel(action, model, cwd);
+				registry.discardSpares();
+				return c.json({ selected: automaticModels(cwd) }, 200);
+			} catch (err) {
+				return c.json({ error: err instanceof Error ? err.message : String(err) }, 400);
 			}
 		})
 

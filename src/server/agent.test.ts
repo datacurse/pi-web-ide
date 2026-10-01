@@ -37,7 +37,9 @@ const CONTEXT = spawnArgs({})[8]!;
 assert.equal(METRICS.endsWith("/tool-metrics/collector.ts"), true);
 assert.equal(REWIND.endsWith("/rewind-extension.ts"), true);
 assert.equal(CONTEXT.endsWith("/context-extension.ts"), true);
-const BASE = ["--mode", "rpc", "--approve", "-e", METRICS, "-e", REWIND, "-e", CONTEXT];
+const COMPACTION = spawnArgs({})[10]!;
+assert.equal(COMPACTION.endsWith("/compaction-extension.ts"), true);
+const BASE = ["--mode", "rpc", "--approve", "-e", METRICS, "-e", REWIND, "-e", CONTEXT, "-e", COMPACTION];
 assert.deepEqual(spawnArgs({}), BASE);
 assert.deepEqual(
 	spawnArgs({ file: "/s/x.jsonl", model: "anthropic/claude-opus-5", personality: "/p.md" }),
@@ -54,7 +56,7 @@ assert.deepEqual(
 // The reminder repeats the personality file, so without one it adds nothing.
 assert.deepEqual(spawnArgs({ remind: true }), BASE);
 // Switched off in Packages: the collector is left out, nothing else changes.
-assert.deepEqual(spawnArgs({ toolMetrics: false }), ["--mode", "rpc", "--approve", "-e", REWIND, "-e", CONTEXT]);
+assert.deepEqual(spawnArgs({ toolMetrics: false }), ["--mode", "rpc", "--approve", "-e", REWIND, "-e", CONTEXT, "-e", COMPACTION]);
 {
 	const args = spawnArgs({ personality: "/p.md", remind: true });
 	assert.equal(args[args.lastIndexOf("-e") + 1]!.endsWith("/remind-extension.ts"), true);

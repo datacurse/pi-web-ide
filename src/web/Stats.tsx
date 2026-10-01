@@ -171,9 +171,15 @@ export function Stats({ open, revision, onClose }: { open: boolean; revision?: u
 				{syncing && <span className="text-meta text-neutral-500">{t("Syncing machines…")}</span>}
 			</PanelHeader>
 
-			{tab === "workouts" && view && (
-				<Workouts sets={workouts} plan={view.workoutPlan} profile={view.workoutProfile} />
-			)}
+			{tab === "workouts" &&
+				// A server older than the page sends no plan: say so rather than render nothing.
+				(view?.workoutPlan ? (
+					<Workouts sets={workouts} plan={view.workoutPlan} profile={view.workoutProfile} />
+				) : (
+					<p className={`p-4 text-meta ${error ? "text-red-400" : "text-neutral-500"}`}>
+						{error ?? (view ? t("The server is older than this page. Restart pwi.") : t("Reading sessions…"))}
+					</p>
+				))}
 			{/* Laid out for the page dialog's width; the grids stack on a narrow window. */}
 			<div className={`${tab === "overview" ? "flex" : "hidden"} min-h-0 flex-1 flex-col gap-6 overflow-y-auto p-4`}>
 				{error && <p className="text-meta text-red-400">{error}</p>}

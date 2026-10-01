@@ -82,9 +82,6 @@ export const DEFAULT_THEME: ThemeId = "mocha";
 /** The editor follows the app theme unless the user picks one of its own. */
 export const MATCH_APP = "app";
 
-/** Every VS Code theme can color the editor, Catppuccin included. */
-export const EDITOR_THEMES = darkThenLight(vscodeList(() => false));
-
 /** The VS Code theme whose syntax colors go with an app theme. */
 export function syntaxThemeOf(app: ThemeId): string {
 	if (VSCODE_THEMES[app]) return app;

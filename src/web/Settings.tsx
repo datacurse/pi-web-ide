@@ -24,7 +24,6 @@ import {
 	writeChatFadeOn,
 	writeSettingsExpanded,
 	type ChatFade,
-	EDITOR_THEMES,
 	editorThemeOf,
 	LANGUAGES,
 	MATCH_APP,
@@ -45,11 +44,13 @@ import {
 } from "./prefs.js";
 import { t } from "./i18n.js";
 import { SYNTAX_ROLES } from "./vscodeTheme.js";
+import { AutomaticActions } from "./AutomaticActions.js";
 
 const CATEGORIES = [
 	{ id: "appearance", label: "Appearance", icon: <Palette size={16} /> },
 	{ id: "transcript", label: "Transcript", icon: <ChatText size={16} /> },
 	{ id: "sessions", label: "Sessions", icon: <ListBullets size={16} /> },
+	{ id: "automatic", label: "Automatic actions", icon: <GearSix size={16} /> },
 	{ id: "notifications", label: "Notifications", icon: <Bell size={16} /> },
 	{ id: "shortcuts", label: "Shortcuts", icon: <Keyboard size={16} /> },
 ] as const;
@@ -93,62 +94,6 @@ function EditorSwatch({ theme }: { theme: string }) {
 				<span key={i} className="block size-4" style={{ background: c }} />
 			))}
 		</span>
-	);
-}
-
-/**
- * A radio list of themes in two groups, Dark then Light, capped in height:
- * with VS Code's themes it runs to sixty rows, which would bury every setting
- * below it. `lead` is an optional first row outside the groups.
- */
-function ThemeList({
-	name,
-	label,
-	themes,
-	value,
-	onChange,
-	swatch,
-	lead,
-}: {
-	name: string;
-	label: string;
-	themes: { id: string; label: string; light: boolean }[];
-	value: string;
-	onChange: (id: string) => void;
-	swatch: (id: string) => ReactNode;
-	lead?: { id: string; label: string; swatch: ReactNode };
-}) {
-	const row = (id: string, text: string, sw: ReactNode) => (
-		<OptionRow key={id} selected={id === value}>
-			<input
-				type="radio"
-				name={name}
-				value={id}
-				checked={id === value}
-				onChange={() => onChange(id)}
-				className="sr-only"
-			/>
-			{sw}
-			<span className="flex-1">{text}</span>
-			<span aria-hidden className={id === value ? "text-amber-400" : "invisible"}>
-				{"\u2713"}
-			</span>
-		</OptionRow>
-	);
-	return (
-		// Real radios, visually hidden: the group gets arrow-key navigation,
-		// roving focus and the right screen reader announcement for free.
-		<div role="radiogroup" aria-label={label} className="flex max-h-96 flex-col gap-0.5 overflow-y-auto">
-			{lead && row(lead.id, lead.label, lead.swatch)}
-			{themes.map((th, i) => [
-				th.light !== themes[i - 1]?.light && (
-					<div key={th.light ? "light" : "dark"} className="px-2 pt-1 pb-1 text-ui text-neutral-300">
-						{th.light ? t("Light") : t("Dark")}
-					</div>
-				),
-				row(th.id, th.label, swatch(th.id)),
-			])}
-		</div>
 	);
 }
 
@@ -402,9 +347,9 @@ function ChatFadePreview({ fade }: { fade: ChatFade }) {
  */
 export function Settings({
 	theme,
-	onTheme,
 	editorTheme,
 	onEditorTheme,
+	onBrowseThemes,
 	language,
 	onLanguage,
 	thinkingMode,
@@ -426,9 +371,9 @@ export function Settings({
 	onClose,
 }: {
 	theme: ThemeId;
-	onTheme: (theme: ThemeId) => void;
 	editorTheme: string;
 	onEditorTheme: (theme: string) => void;
+	onBrowseThemes: () => void;
 	language: Language;
 	onLanguage: (language: Language) => void;
 	thinkingMode: ThinkingMode;
@@ -512,38 +457,49 @@ export function Settings({
 	 */
 	const items: { category: Category; label: string; text: string; node: ReactNode }[] = [
 		{
+			category: "automatic",
+			label: t("Automatic actions"),
+			text: `${t("Commit naming")} ${t("Session naming")} ${t("Compaction")} ${t("Log reduction")} model provider gpt reducer compact rename`,
+			node: <AutomaticActions />,
+		},
+		{
 			category: "appearance",
 			label: t("Theme"),
-			text: `color colour palette dark light ${THEMES.map((th) => th.label).join(" ")}`,
+			text: `color colour palette dark light vs code browse ${THEMES.map((th) => th.label).join(" ")}`,
 			node: (
-				<ThemeList
-					name="theme"
-					label={t("Theme")}
-					themes={THEMES}
-					value={theme}
-					onChange={onTheme}
-					swatch={(id) => <Swatch theme={id} />}
-				/>
+				<div className="flex items-center gap-3 px-2 py-2 text-ui">
+					<Swatch theme={theme} />
+					<span className="flex-1">
+						{t("Theme")}
+						<span className="block text-meta text-neutral-500">
+							{THEMES.find((th) => th.id === theme)?.label}
+						</span>
+					</span>
+					<Button size="sm" variant="subtle" onClick={onBrowseThemes}>
+						{t("Browse themes")}
+					</Button>
+				</div>
 			),
 		},
 		{
 			category: "appearance",
 			label: t("Editor theme"),
-			text: `code editor syntax color colour highlighting vs code ${EDITOR_THEMES.map((th) => th.label).join(" ")}`,
+			text: "code editor syntax color colour highlighting vs code match",
 			node: (
-				<ThemeList
-					name="editor-theme"
-					label={t("Editor theme")}
-					themes={EDITOR_THEMES}
-					value={editorTheme}
-					onChange={onEditorTheme}
-					swatch={(id) => <EditorSwatch theme={id} />}
-					lead={{
-						id: MATCH_APP,
-						label: t("Match app theme"),
-						swatch: <EditorSwatch theme={editorThemeOf(theme, MATCH_APP)} />,
-					}}
-				/>
+				<div className="flex items-center gap-3 px-2 py-2 text-ui">
+					<EditorSwatch theme={editorThemeOf(theme, editorTheme)} />
+					<span className="flex-1">
+						{t("Editor theme")}
+						<span className="block text-meta text-neutral-500">
+							{editorTheme === MATCH_APP ? t("Match app theme") : VSCODE_THEMES[editorTheme].label}
+						</span>
+					</span>
+					{editorTheme !== MATCH_APP && (
+						<Button size="sm" variant="ghost" onClick={() => onEditorTheme(MATCH_APP)}>
+							{t("Match app theme")}
+						</Button>
+					)}
+				</div>
 			),
 		},
 		{

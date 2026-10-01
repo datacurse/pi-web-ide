@@ -2,8 +2,14 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { t } from "./i18n.js";
 
 /** The rail's bottom group: places you visit, not work beside, so a popup rather than a tab. */
-export type PageId = "fleet" | "stats" | "packages" | "settings";
-const TITLE: Record<PageId, string> = { fleet: "Fleet", stats: "Stats", packages: "Packages", settings: "Settings" };
+export type PageId = "fleet" | "stats" | "packages" | "settings" | "themes";
+const TITLE: Record<PageId, string> = {
+	fleet: "Fleet",
+	stats: "Stats",
+	packages: "Packages",
+	settings: "Settings",
+	themes: "Themes",
+};
 
 /**
  * One large modal for whichever page is open. A page stays mounted once opened,

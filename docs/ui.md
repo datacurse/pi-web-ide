@@ -68,7 +68,8 @@ fits none of the existing ones, and record it here.
 - Cut-off text fades out over its end (`.fade-end`), never `…`. `truncate`,
   `text-ellipsis` and `line-clamp-*` fail the check (except `<select>`/inputs,
   where a mask cannot follow the text). Multi-line: `.fade-clamp` (3 lines).
-- Tool call lines are always one line; the result preview fades.
+- Tool call lines are always one line; the result preview fades. Tool and group
+  chevrons and status indicators never shrink when the preview or label is long.
 - Anything that scrolls fades out over 2em at each edge it can still scroll past, so
   you can see there is more: `.scroll-fade-y` on every `ScrollPane` list, `.scroll-fade-x`
   on the tab strips. Each fade grows over the first 2em of scroll and goes over the last.
@@ -122,8 +123,17 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
 - Accent and primary action: `amber-*`. Errors: `red-*`. Success: `green-*`.
 - Every separator (panel edges, list row rules, table rows) is `border-neutral-800`; no fainter `neutral-900` rules.
 - The side panel's, the session list's (px width, 180–640, default 288; replaces the list's `border-l` on wide) and the terminal's resize dividers are 1px `neutral-800` lines like any other edge, drawn as a `border` on a zero-size box (a 1px `bg` box straddles two device pixels under display scaling and looks thicker than the bordered edges); their hit area is an invisible `after` box (9px; 13px on the side panel's), `z-10` so neighbors cannot cover it; the side panel's and session list's lean 2px left (and 10px / 6px right) to stay off the scrollbar to their left. They use the scrollbar's timing: amber after 300ms of hover (100ms fade), timed in JS by `hoverIntent` (ui.tsx) because a CSS `hover:delay-300` still flashed on a fast pass, the resize cursor shows on the same 300ms (a press shows both at once), then 1s after the pointer leaves they fade back over 500ms.
-- Settings lists themes in two groups, Dark then Light (`light` flag in `prefs.ts`), built-ins first,
-  in a `max-h-96` scroll box because VS Code's themes make it sixty rows.
+- Themes are picked on the Themes page (`Themes.tsx`, a `PageDialog` page opened from Settings >
+  Appearance > `Browse themes`), not in a list: a `repeat(auto-fill,minmax(16rem,1fr))` grid of cards,
+  each the app chrome in the theme's palette (title bar, rail with the accent dot, `amber-400` status
+  bar) around a fixed pre-tokenized JS snippet in its syntax colors, name under it. Clicking the preview
+  sets the app theme (`border-amber-400` when current); `Use for editor` (`Button sm ghost`) gives the
+  editor that theme alone, shown as an amber `Editor` label. The header has a search field and
+  All / Dark / Light (`subtle` when on, else `ghost`). Order: dark then light (`light` flag in
+  `prefs.ts`), built-ins first.
+- Appearance shows two rows instead: `Theme` (swatch, current name, `Browse themes`) and `Editor
+  theme` (editor swatch, `Match app theme` or the theme's name, and a `Match app theme` reset while
+  overridden). One gallery, not two lists, because most people want one theme everywhere.
 - VS Code themes (`@shikijs/themes`, converted at build time by `scripts/vscode-themes.ts` into
   `vscodeThemes.json`; mapping in `vscodeTheme.ts`) fill the same 18 `--ct-*` slots, as inline
   variables on `<html>`: editor background → base, a darker sidebar (or the editor darkened) → mantle,
@@ -158,7 +168,9 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
   Their popup is styled like a menu via `.pill-select` (index.css, customizable
   `<select>`, Chromium 135+): `rounded-md` neutral-900 surface, `text-ui` rows,
   provider labels as uppercase captions, current option in amber. Other browsers
-  show the native popup.
+  show the native popup. Model-catalog requests have a 15-second timeout; a failed
+  load shows an error above the composer and a `Retry` button beside the picker,
+  rather than leaving it silently disabled until reload.
 - The context meter sits in the composer's left group, right of Attach. Git stays in
   the row above the box.
 - That row (jump-to-latest and git) floats over the transcript's bottom edge with no
@@ -486,8 +498,7 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
   click to `~/.pi/agent/sol-pi.json`), and the file path as status under them. A
   mechanism's own settings sit under its checkbox, lined up with its text, only while it
   is on: the reducer model as one `<select>` of pi's models grouped by provider, saved on
-  pick (first option `Built-in: …`, or a disabled `Not selected` when pi cannot reach the
-  built-in model; no warning), and the compact's cost ratio as a `w-24` input with `Save`. Tool metrics is an `OptionRow` checkbox (on by default) with
+  pick (default `openai-codex/gpt-6.1-sol`, shared with Settings > Automatic actions), and the compact's cost ratio as a `w-24` input with `Save`. Tool metrics is an `OptionRow` checkbox (on by default) with
   a `text-meta` line saying what it does. Workout (off by default, applies at once) is one too. It is not tied to
   prompts (tried first: a set after each send made prompting feel like a cost). A set is due `Every, min`
   after the last one done or skipped, only between `From, h` and `To, h` (`workoutSchedule`, default 30 min,
@@ -522,8 +533,15 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
   pwi extensions tab stays mounted (hidden) on the other tabs so an unsaved edit survives. Changes
   apply to sessions started afterwards. pwi's own plumbing (rewind, context) is not listed.
 - Settings has a `w-48` category nav on the left (`NavItem`s: Appearance, Transcript,
-  Sessions, Notifications, Shortcuts), like Obsidian; the right side shows only the
+  Sessions, Automatic actions, Notifications, Shortcuts), like Obsidian; the right side shows only the
   chosen category, `max-w-xl p-6`. Opens on Appearance.
+- Automatic actions has provider-grouped model selects for Commit naming, Session naming,
+  Compaction (manual, automatic and SoL-Pi online compaction), and Log reduction (SoL-Pi's
+  reducer), all defaulting to `openai-codex/gpt-6.1-sol`. Each saves on pick, independently
+  of the chat model, machine-wide. Naming settings override `PWI_NAMING_MODEL`;
+  compaction settings are re-read for each operation in sessions started with the pwi
+  compaction extension. Reducer changes apply to new sessions and trusted project
+  SoL-Pi config can override them. Failed model loads show an error and Retry.
 - Shortcuts lists every app-wide shortcut (`SHORTCUTS` in `shortcuts.ts`), one row each,
   like Obsidian's Hotkeys: the name, the keys as a `kbd` chip (`rounded-sm bg-neutral-800
   px-1.5 py-0.5 font-mono text-meta`, `Blank` in `neutral-500` when unset), then `sm`

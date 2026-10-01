@@ -1,5 +1,6 @@
 import { type SyntheticEvent, useEffect, useMemo, useState } from "react";
 import { Star } from "@phosphor-icons/react";
+import { Button } from "./ui.js";
 import { api } from "./api.js";
 import { t } from "./i18n.js";
 
@@ -40,25 +41,46 @@ export function ModelSelector({
 	onThinkingChange: (level: string) => void;
 }) {
 	const [models, setModels] = useState<string[]>([]);
+	const [catalogError, setCatalogError] = useState<string | null>(null);
+	const [loading, setLoading] = useState(true);
+	const [attempt, setAttempt] = useState(0);
 	/** pi's saved startup model, so the star shows the truth after a reload or a switch. */
 	const [defaultModel, setDefaultModel] = useState<string | null>(null);
 	const [defaultThinking, setDefaultThinking] = useState<string | null>(null);
 
 	useEffect(() => {
 		let cancelled = false;
+		const controller = new AbortController();
+		const timeout = window.setTimeout(() => controller.abort(), 15_000);
+		setLoading(true);
+		setCatalogError(null);
 		void (async () => {
-			const r = await api.models.$get().catch(() => null);
-			if (!r?.ok) return;
-			const d = await r.json().catch(() => null);
-			if (cancelled || !d) return;
-			setModels(d.models ?? []);
-			setDefaultModel(d.default ?? null);
-			setDefaultThinking(d.defaultThinking ?? null);
+			try {
+				const r = await api.models.$get({}, { init: { signal: controller.signal } });
+				const d = await r.json();
+				if (!r.ok || "error" in d) {
+					throw new Error("error" in d ? d.error : String(r.status));
+				}
+				if (cancelled) return;
+				if (!d.models?.length) throw new Error(t("No authenticated models available"));
+				setModels(d.models);
+				setDefaultModel(d.default ?? null);
+				setDefaultThinking(d.defaultThinking ?? null);
+			} catch (err) {
+				if (!cancelled) setCatalogError(controller.signal.aborted
+					? t("Model list timed out. Close other app browser tabs and retry.")
+					: t("Could not load models: {error}", { error: err instanceof Error ? err.message : String(err) }));
+			} finally {
+				window.clearTimeout(timeout);
+				if (!cancelled) setLoading(false);
+			}
 		})();
 		return () => {
 			cancelled = true;
+			controller.abort();
+			window.clearTimeout(timeout);
 		};
-	}, []);
+	}, [attempt]);
 
 	const providers = useMemo(() => [...new Set(models.map((m) => m.split("/")[0]))].sort(), [models]);
 
@@ -92,7 +114,7 @@ export function ModelSelector({
 				data-custom="composer pill"
 				value={model ?? ""}
 				disabled={disabled || models.length === 0}
-				title={disabled ? t("Cannot switch models while streaming") : (model ?? t("Switch model"))}
+				title={disabled ? t("Cannot switch models while streaming") : loading ? t("Loading models…") : (catalogError ?? model ?? t("Switch model"))}
 				onChange={(e) => onChange(e.target.value)}
 				className={`${cls} ${tone}`}
 			>
@@ -144,9 +166,14 @@ export function ModelSelector({
 				</select>
 			)}
 
-			{error && (
-				<div className="absolute right-0 top-full mt-1 w-80 rounded-sm border border-red-900 bg-red-950/80 px-2 py-1 text-meta text-red-300">
-					{error}
+			{catalogError && (
+				<Button size="sm" variant="ghost" onClick={() => setAttempt((n) => n + 1)}>
+					{t("Retry")}
+				</Button>
+			)}
+			{(error || catalogError) && (
+				<div role="alert" className="absolute bottom-full right-0 mb-1 w-80 rounded-sm border border-red-900 bg-red-950/80 px-2 py-1 text-meta text-red-300">
+					{error || catalogError}
 				</div>
 			)}
 		</div>

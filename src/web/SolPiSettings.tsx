@@ -47,8 +47,7 @@ const FLAGS: { key: Flag; name: () => string; hint: () => string }[] = [
 	},
 ];
 
-/** SoL-Pi's reducer when `sol-pi.json` names none (its `DEFAULT_REDUCER_*`). */
-const BUILT_IN = "openai-codex/gpt-5.6-luna";
+import { DEFAULT_AUTOMATIC_MODEL } from "../shared/automaticModels.js";
 
 const ratioText = (c: SolPiConfig) => (c.cacheWriteReadRatio === undefined ? "" : String(c.cacheWriteReadRatio));
 
@@ -92,7 +91,7 @@ export function SolPiSettings({ cwd }: { cwd: string }) {
 		return true;
 	};
 
-	/** "" is SoL-Pi's built-in route; anything else is "provider/id". */
+	/** The same reducer route shown in Settings > Automatic actions. */
 	const saveReducer = (selector: string) => {
 		const slash = selector.indexOf("/");
 		void save({
@@ -111,7 +110,7 @@ export function SolPiSettings({ cwd }: { cwd: string }) {
 	const reducer =
 		c?.evidencePreservingReducerProvider && c.evidencePreservingReducerModel
 			? `${c.evidencePreservingReducerProvider}/${c.evidencePreservingReducerModel}`
-			: "";
+			: DEFAULT_AUTOMATIC_MODEL;
 	const providers = [...new Set((models ?? []).map((m) => m.split("/")[0]))].sort();
 	const dirty = c !== undefined && ratio.trim() !== ratioText(c);
 
@@ -147,10 +146,6 @@ export function SolPiSettings({ cwd }: { cwd: string }) {
 									onChange={(e) => saveReducer(e.target.value)}
 									className={`mt-1 w-full font-mono ${inputClass.sm}`}
 								>
-									{/* No route saved means SoL-Pi's built-in one; greyed out when pi cannot reach it. */}
-									<option value="" disabled={!models?.includes(BUILT_IN)}>
-										{models?.includes(BUILT_IN) ? t("Built-in: {model}", { model: BUILT_IN }) : t("Not selected")}
-									</option>
 									{reducer && !models?.includes(reducer) && (
 										<option value={reducer} disabled>
 											{reducer}

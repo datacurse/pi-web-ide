@@ -39,12 +39,17 @@ left alone and startup fails.
 | `PWI_VITE_PORT` | dev server port | `5480` |
 | `PWI_MODEL` | startup model, `provider/id` | pi's default |
 | `PWI_PI_BIN` | path to the pi binary | `pi` on `PATH` |
-| `PWI_NAMING_MODEL` | model for auto-named commits and sessions | pi's default |
+| `PWI_NAMING_MODEL` | fallback for commit/session naming unless selected in Settings | `openai-codex/gpt-6.1-sol` |
 | `PWI_STATE_DIR` | pwi's own state (projects, favorites, personality) | `~/.config/pi-web-ide` |
 | `PWI_PREWARM` | `0` disables the pre-spawned session behind `+ New` | on |
 | `PWI_TAKEOVER` | `0` fails instead of taking over the port | on |
 | `PWI_PACKAGES_TIMEOUT_MS` | limit for one `pi install/remove/update` | `300000` |
 | `PWI_SEARCH_CACHE_MS` | npm package gallery cache lifetime | `600000` |
+
+Settings > Automatic actions selects separate models for commit naming, session naming,
+compaction and SoL-Pi log reduction. All default to `openai-codex/gpt-6.1-sol`,
+independently of the chat model. Compaction and reducer support applies to newly
+started sessions; trusted project SoL-Pi settings can override the reducer.
 
 ## Features
 

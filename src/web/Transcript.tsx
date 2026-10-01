@@ -87,14 +87,14 @@ export function Tool({
 				onClick={() => setOpen((o) => !o)}
 				className={`flex max-w-full items-center gap-1 whitespace-nowrap chat-code font-mono ${isError ? "text-red-400" : running ? "text-amber-400" : "text-neutral-500"} hover:text-neutral-300`}
 			>
-				{open ? <CaretDown size={11} /> : <CaretRight size={11} />}
+				{open ? <CaretDown size={11} className="shrink-0" /> : <CaretRight size={11} className="shrink-0" />}
 				{name}
 				{running ? (
-					<span>{spinner}</span>
+					<span className="shrink-0">{spinner}</span>
 				) : isError ? (
-					<X size={11} weight="bold" />
+					<X size={11} weight="bold" className="shrink-0" />
 				) : (
-					<Check size={11} weight="bold" className="text-green-400" />
+					<Check size={11} weight="bold" className="shrink-0 text-green-400" />
 				)}
 				{preview && <span className="fade-end ml-1 min-w-0 font-normal text-neutral-600">{preview}</span>}
 			</button>
@@ -206,18 +206,18 @@ export function ToolGroup({ blocks, streaming }: { blocks: PiBlock[]; streaming?
 				onClick={() => setOpen((o) => !o)}
 				className="flex max-w-full items-center gap-1 whitespace-nowrap chat-code font-mono text-neutral-500 hover:text-neutral-300"
 			>
-				{open ? <CaretDown size={11} /> : <CaretRight size={11} />}
+				{open ? <CaretDown size={11} className="shrink-0" /> : <CaretRight size={11} className="shrink-0" />}
 				<span className="fade-end min-w-0">{label}</span>
 				{/* No spinner while running: TurnStatus below already animates, and a
 				    second one on a line that joins and splits between messages
 				    flickered. */}
 				{running ? null : failed > 0 ? (
-					<span className="flex items-center gap-1 text-red-400">
-						<X size={11} weight="bold" />
+					<span className="flex shrink-0 items-center gap-1 text-red-400">
+						<X size={11} weight="bold" className="shrink-0" />
 						{t("{n} failed", { n: failed })}
 					</span>
 				) : (
-					<Check size={11} weight="bold" className="text-green-400" />
+					<Check size={11} weight="bold" className="shrink-0 text-green-400" />
 				)}
 			</button>
 			{open && (

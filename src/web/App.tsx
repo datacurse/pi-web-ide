@@ -47,6 +47,7 @@ import {
 } from "./tabs.js";
 import type { Side } from "./tabs.js";
 import { PageDialog, type PageId } from "./PageDialog.js";
+import { Themes } from "./Themes.js";
 import { EMPTY_LAYOUT, addTab, allTerminals, reconcile, type TermLayout } from "./termLayout.js";
 import { Settings } from "./Settings.js";
 import { Packages } from "./Packages.js";
@@ -1662,6 +1663,16 @@ export default function App() {
 		const onClose = () => setPage(null);
 		if (page === "stats") return <Stats open={active} revision={replies} onClose={onClose} />;
 		if (page === "fleet") return <Fleet open={active} onClose={onClose} />;
+		if (page === "themes")
+			return (
+				<Themes
+					theme={theme}
+					onTheme={setTheme}
+					editorTheme={editorTheme}
+					onEditorTheme={setEditorTheme}
+					onClose={onClose}
+				/>
+			);
 		if (page === "packages")
 			return (
 				<Packages
@@ -1677,9 +1688,9 @@ export default function App() {
 		return (
 			<Settings
 				theme={theme}
-				onTheme={setTheme}
 				editorTheme={editorTheme}
 				onEditorTheme={setEditorTheme}
+				onBrowseThemes={() => setPage("themes")}
 				language={language}
 				onLanguage={changeLanguage}
 				thinkingMode={thinkingMode}

@@ -456,7 +456,8 @@ The child is the same shape as the commit namer in `autoname.ts` — no tools,
 no extensions, no skills, no prompt templates, no context files, no thinking
 — because the job is one short label about text that is already in the
 prompt, and every discovery pass is pure latency on a click.
-`PWI_NAMING_MODEL` picks the model; unset means pi's default. A session with
+Settings > Automatic actions picks the naming model, defaulting to
+`openai-codex/gpt-6.1-sol`; `PWI_NAMING_MODEL` is a fallback when no selection is saved. A session with
 no messages yet has nothing to summarise and is refused as such, and while
 the request is in flight the row reads `Naming…`.
 
@@ -999,8 +1000,8 @@ every action anybody asks for is a subset of those four:
   skills, no prompt templates, no context files, no thinking — because the
   job is one sentence about a diff that is already in the prompt: 4.9s
   instead of 22.5s on this repo's own 20 kB diff, which is also the cap on
-  how much patch is sent. `PWI_NAMING_MODEL` picks the model; unset means
-  pi's default.
+  how much patch is sent. Settings > Automatic actions picks the model,
+  defaulting to `openai-codex/gpt-6.1-sol`; `PWI_NAMING_MODEL` is a fallback.
 - **`Auto-name commits` in the menu skips the dialog entirely.** Toggled on,
   `Commit & Push` is one click: the message is written by the model and the
   branch (for the `Create Branch` actions) is the dated `pwi/` suggestion.

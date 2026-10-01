@@ -62,6 +62,7 @@ import { hunkFromWrite, hunksFromEdit, type Hunk } from "../shared/hunks.js";
 import { fileURLToPath } from "node:url";
 import { personalityPath, readRemind } from "./personality.js";
 import { readToolMetrics } from "./pwiExtensions.js";
+import { ensureSolPiReducer } from "./solPi.js";
 import { repairSessionFile } from "./repair.js";
 import { sessionHeaderCwd } from "./sessions.js";
 import { stateDir, statePath } from "./state.js";
@@ -1028,6 +1029,7 @@ const REWIND_EXTENSION = fileURLToPath(new URL("./rewind-extension.ts", import.m
 const REWIND_COMMAND = "pwi-rewind";
 const CONTEXT_EXTENSION = fileURLToPath(new URL("./context-extension.ts", import.meta.url));
 const CONTEXT_COMMAND = "pwi-context";
+const COMPACTION_EXTENSION = fileURLToPath(new URL("./compaction-extension.ts", import.meta.url));
 const TOOL_METRICS_EXTENSION = fileURLToPath(new URL("../tool-metrics/collector.ts", import.meta.url));
 const CONTEXT_KEYS: ContextPart["key"][] = ["system", "tools", "rules", "skills", "personality", "conversation"];
 
@@ -1041,6 +1043,7 @@ export function spawnArgs(opts: {
 	/** Load the tool-metrics collector; on unless false (Packages switches it). */
 	toolMetrics?: boolean;
 }): string[] {
+	ensureSolPiReducer();
 	const args = ["--mode", "rpc"];
 	// Project-local extensions, skills and prompt templates are silently
 	// skipped in RPC mode without this — no prompt, no warning, they are just
@@ -1050,7 +1053,7 @@ export function spawnArgs(opts: {
 	args.push("--approve");
 	// First among extensions, so it sees each result before other packages' hooks.
 	if (opts.toolMetrics !== false) args.push("-e", TOOL_METRICS_EXTENSION);
-	args.push("-e", REWIND_EXTENSION, "-e", CONTEXT_EXTENSION);
+	args.push("-e", REWIND_EXTENSION, "-e", CONTEXT_EXTENSION, "-e", COMPACTION_EXTENSION);
 	if (opts.file) args.push("--session", opts.file);
 	else if (opts.fork) args.push("--fork", opts.fork);
 	if (opts.model) args.push("--model", opts.model);

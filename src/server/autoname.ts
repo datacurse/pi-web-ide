@@ -24,13 +24,7 @@
 import { spawn } from "node:child_process";
 import { changeSummary } from "./git.js";
 import { PI_BIN } from "./agent.js";
-
-/**
- * Which model writes the line. Unset means pi's configured default; set it to
- * a cheap one, because this runs on a button press and the answer is one
- * sentence.
- */
-const NAMING_MODEL = process.env.PWI_NAMING_MODEL;
+import { automaticModel } from "./automaticModelConfig.js";
 
 /** A cold model plus a slow link. Past this, the click has failed. */
 const TIMEOUT_MS = 90_000;
@@ -63,8 +57,7 @@ const SESSION_INPUT_MAX = 2_000;
  * extra usage"), because pi had fallen back to a credential the package
  * normally supersedes; without it, the same prompt answers in 3.2 s.
  *
- * Unset PWI_NAMING_MODEL means pi's own default model, which is never wrong
- * — just slower and dearer than a small one for a one-sentence chore.
+ * The automatic-action settings choose the model independently of the chat.
  */
 const ONESHOT = [
 	"-p",
@@ -114,7 +107,7 @@ export async function nameCommit(cwd: string): Promise<string> {
 	const summary = await changeSummary(cwd);
 	if (!summary) throw new Error("nothing to describe: the working tree is clean");
 
-	const args = [...ONESHOT, ...(NAMING_MODEL ? ["--model", NAMING_MODEL] : [])];
+	const args = [...ONESHOT, "--model", automaticModel("commitNaming")];
 	args.push(`${COMMIT_PROMPT}\n\n${summary}`);
 
 	const message = subjectAndBody(await runPi(cwd, args));
@@ -160,7 +153,7 @@ export async function nameSession(cwd: string, opening: string): Promise<string>
 	const text = opening.trim();
 	if (!text) throw new Error("nothing to name: this session has no messages yet");
 
-	const args = [...ONESHOT, ...(NAMING_MODEL ? ["--model", NAMING_MODEL] : [])];
+	const args = [...ONESHOT, "--model", automaticModel("sessionNaming")];
 	args.push(`${SESSION_PROMPT}\n\n${text.slice(0, SESSION_INPUT_MAX)}`);
 
 	const name = firstLine(await runPi(cwd, args), MAX_NAME_CHARS);
