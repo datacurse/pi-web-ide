@@ -200,9 +200,9 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
   `amber-400` / `Wrench`. Retry and user waits use `red-400` with `ArrowClockwise` / `QuestionMark`;
   compaction uses `neutral-400` / `ArrowsInLineVertical`. Icons and labels accompany colour.
 - A `Breakdown` disclosure with a clock icon and total elapsed time sits above the work; observed
-  phase icons and elapsed times sit beside it on the same row. The current action stays directly
-  underneath this row. No overall progress bar. In Rounds mode, the preceding user prompt and its
-  breakdown stick together at the top while scrolling through the turn's work, without duplicating
+  phase icons and elapsed times sit beside it on the same row. The current action sits
+  below the breakdown, including its expanded rounds. No overall progress bar. In Rounds mode,
+  the preceding user prompt and its breakdown stick together at the top while scrolling through the turn's work, without duplicating
   the prompt.
   For current design review, `Expand work by default` is on by default (`pwi:workExpanded`).
   Rounds and completed tool arguments/output start open. The Transcript settings checkbox

@@ -211,9 +211,10 @@ export function ActivityPanel({ activity, renderContent, controls, stickyLeading
 	);
 	return (
 		<div>
-			{stickyLeading ? <div className="sticky top-0 z-10 bg-neutral-950">{stickyLeading}{summary}{status}</div> : <>{summary}{status}</>}
+			{stickyLeading ? <div className="sticky top-0 z-10 bg-neutral-950">{stickyLeading}{summary}</div> : summary}
 			{renderContent && breakdown}
 			{!renderContent && breakdown}
+			{status}
 		</div>
 	);
 }

@@ -170,3 +170,21 @@ test("a measured bash call counts per command, the shell's own time apart", asyn
 	assert.deepEqual(t?.background, [{ text: "sleep 1", ms: 1000 }]);
 	assert.equal(t?.outliers.find((o) => o.ms === 19.9)?.preview, "cat f");
 });
+
+test("codemode nested tools are broken out from the wrapper", async () => {
+	const p = await parseLines([
+		msg("2026-01-01T00:00:00Z", { role: "user", content: "go", timestamp: Date.parse("2026-01-01T00:00:00Z") }),
+		msg("2026-01-01T00:00:01Z", { role: "assistant", stopReason: "toolUse", content: [{ type: "toolCall", id: "parent", name: "codemode", arguments: { code: "await tools.read({path: 'a'})" } }] }),
+		msg("2026-01-01T00:00:03Z", { role: "toolResult", toolCallId: "parent", content: [{ type: "text", text: "done" }], nestedCalls: { complete: true, calls: [
+			{ id: "parent/1", name: "read", arguments: { path: "a.ts" }, status: "ok", durationMs: 120 },
+			{ id: "parent/2", name: "bash", arguments: { command: "git status" }, status: "ok", durationMs: 80 },
+		] } }),
+		msg("2026-01-01T00:00:04Z", { role: "assistant", stopReason: "stop", content: [] }),
+	]);
+	const costs = p.turns[0]?.costs;
+	assert.equal(costs?.read?.calls, 1);
+	assert.equal(costs?.read?.ms, 120);
+	assert.equal(costs?.["bash: git status"]?.ms, 80);
+	assert.equal(costs?.["codemode: (wrapper)"]?.calls, 1);
+	assert.equal(costs?.codemode, undefined);
+});

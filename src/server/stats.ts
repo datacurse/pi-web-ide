@@ -298,6 +298,24 @@ export async function parseLines(
 			if (!c) continue;
 			pending.delete(String(m.toolCallId));
 			c.tokens += contentChars(m.content);
+			const nested = m.nestedCalls as { calls?: unknown } | undefined;
+			if (c.key === "codemode" && Array.isArray(nested?.calls) && nested.calls.length) {
+				c.key = "codemode: (wrapper)";
+				for (const raw of nested.calls.slice(0, 256)) {
+					if (!raw || typeof raw !== "object") continue;
+					const child = raw as { name?: unknown; arguments?: unknown; durationMs?: unknown };
+					if (typeof child.name !== "string") continue;
+					const args = JSON.stringify(child.arguments ?? {});
+					const sub = child.name === "bash" ? subKey(child.name, child.arguments) : undefined;
+					calls.push({
+						key: sub ? `bash: ${sub}` : child.name,
+						preview: preview(child.name, child.arguments),
+						tokens: child.name.length + args.length,
+						ms: typeof child.durationMs === "number" && Number.isFinite(child.durationMs) && child.durationMs >= 0 ? child.durationMs : 0,
+						sent: c.sent, batch: 1, hookMs: 0, measured: false,
+					});
+				}
+			}
 			const exact = metrics.calls.get(String(m.toolCallId));
 			if (exact) {
 				c.ms = exact.ms;
