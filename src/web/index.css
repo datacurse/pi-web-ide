@@ -944,6 +944,11 @@ input[type="number"]::-webkit-outer-spin-button {
 .flow-trim > :last-child {
 	margin-bottom: 0;
 }
+/* Dense work folds use tighter Markdown spacing than the main transcript. */
+.chat-round-work :is(p, ul, ol, blockquote, h1, h2, h3, h4, pre, table) {
+	margin-block: var(--spacing-1);
+}
+
 
 /*
  * The streaming dot pulses to mean "live". Under reduced motion the amber dot

@@ -255,7 +255,7 @@ export function Stats({ open, revision, onClose }: { open: boolean; revision?: u
 				{usage.limits && !usage.stale && <Paces limits={usage.limits} history={usage.history} turns={(view?.turns ?? []).filter((turn) => !turn.machine && !turn.mixedModels && turn.provider === usage.provider)} />}
 				{view && (
 					<>
-						<ModelComparison turns={turns} />
+						{new Set(turns.map(modelKey)).size > 1 && <ModelComparison turns={turns} />}
 						<Heatmap turns={turns} />
 						<div className="grid gap-6 md:grid-cols-2">
 							<AnswerTimes turns={turns} />

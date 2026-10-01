@@ -64,7 +64,7 @@ function useClock(active: boolean): number {
 type RoundContent = (round: ActivityRound, now: number) => ReactNode;
 
 /** The same timed steps power each round and the complete turn; never a completion estimate. */
-export function ActivitySteps({ groups, now, start, onSelect, label, leading, trailing, status, showBar = true }: {
+export function ActivitySteps({ groups, now, start, onSelect, label, leading, trailing, status, showBar = true, showPhases = true }: {
 	groups: ActivityPhaseGroup[];
 	now: number;
 	start: number;
@@ -74,6 +74,7 @@ export function ActivitySteps({ groups, now, start, onSelect, label, leading, tr
 	trailing?: ReactNode;
 	status?: ReactNode;
 	showBar?: boolean;
+	showPhases?: boolean;
 }) {
 	const durations = groups.map((group) => Math.max(0, (group.end ?? now) - group.start));
 	const totals = new Map<ActivityPhase, number>();
@@ -96,12 +97,17 @@ export function ActivitySteps({ groups, now, start, onSelect, label, leading, tr
 							: <span key={group.id} {...props} />;
 					})}
 				</div>}
-				{!showBar && <div className="flex shrink-0 items-center gap-1 text-meta">
-					{(["requesting", "thinking", "receiving", "doing"] as ActivityPhase[]).map((kind) => {
-						const ms = totals.get(kind);
-						return <span key={kind} title={`${phaseTitle(kind)}${phaseHint(kind) ? ` · ${phaseHint(kind)}` : ""}`} aria-label={`${phaseTitle(kind)} · ${activityDuration(ms ?? 0)}`} className={`flex w-16 items-center gap-1 ${ms === undefined ? "text-neutral-600" : PHASE_STYLE[kind].text}`}><PhaseIcon kind={kind} size={12} /><span className="tabular-nums">{ms === undefined ? "0s" : activityDuration(ms)}</span></span>;
-					})}
-					{[...totals].filter(([kind]) => !["requesting", "thinking", "receiving", "doing"].includes(kind)).map(([kind, ms]) => <span key={kind} title={`${phaseTitle(kind)}${phaseHint(kind) ? ` · ${phaseHint(kind)}` : ""}`} aria-label={`${phaseTitle(kind)} · ${activityDuration(ms)}`} className={`flex items-center gap-1 ${PHASE_STYLE[kind].text}`}><PhaseIcon kind={kind} size={12} /><span className="tabular-nums">{activityDuration(ms)}</span></span>)}
+				{!showBar && <div className="flex shrink-0 items-center gap-2 text-meta">
+					{showPhases && (
+						<>
+							{(["requesting", "thinking", "receiving", "doing"] as ActivityPhase[]).map((kind) => {
+								const ms = totals.get(kind);
+								const current = groups.some((group) => group.kind === kind && group.end === undefined);
+								return <span key={kind} title={`${phaseTitle(kind)}${phaseHint(kind) ? ` · ${phaseHint(kind)}` : ""}`} aria-label={`${phaseTitle(kind)} · ${activityDuration(ms ?? 0)}`} className={`flex items-center gap-1 ${current ? PHASE_STYLE[kind].text : ms === undefined ? "text-neutral-600" : "text-neutral-500"}`}><PhaseIcon kind={kind} size={12} /><span className="tabular-nums">{ms === undefined ? "0s" : activityDuration(ms)}</span></span>;
+							})}
+							{[...totals].filter(([kind]) => !["requesting", "thinking", "receiving", "doing"].includes(kind)).map(([kind, ms]) => <span key={kind} title={`${phaseTitle(kind)}${phaseHint(kind) ? ` · ${phaseHint(kind)}` : ""}`} aria-label={`${phaseTitle(kind)} · ${activityDuration(ms)}`} className={`flex items-center gap-1 ${PHASE_STYLE[kind].text}`}><PhaseIcon kind={kind} size={12} /><span className="tabular-nums">{activityDuration(ms)}</span></span>)}
+						</>
+					)}
 					{status}
 				</div>}
 				{trailing}
@@ -127,13 +133,13 @@ function RoundGroup({ round, number, now, renderContent, roundRefs }: {
 	const failed = calls.filter((tool) => tool.isError).length + wrappers.filter((tool) => tool.isError && !calls.some((child) => child.id.startsWith(tool.id + "/") && child.isError)).length;
 	return (
 		<div ref={(element) => { if (element) roundRefs?.set(round.id, element); else roundRefs?.delete(round.id); }}>
-			<div className="px-2 py-1">
-				<ActivitySteps groups={round.groups} now={now} start={round.start} label={t("Round step timings, not completion progress")} showBar={false}
+			<div className="px-2">
+				<ActivitySteps groups={round.groups} now={now} start={round.start} label={t("Round duration")} showBar={false} showPhases={false}
 					leading={<span className="flex items-center gap-1 text-meta text-neutral-300">{t("Round {n}", { n: number })}<span className="ml-1 flex items-center gap-1 text-neutral-500"><Clock size={12} aria-hidden /><span className="tabular-nums">{activityDuration((round.end ?? now) - round.start)}</span></span></span>}
 					status={<>{calls.length > 0 && <span className="text-neutral-500">{plural(calls.length, "1 tool", "{n} tools")}</span>}{failed > 0 && <span className="text-red-400">{t("{n} failed", { n: failed })}</span>}</>}
 				/>
 			</div>
-			<div className="chat-nested flow-trim flow-root px-2 py-1">
+			<div className="chat-nested flow-trim flow-root px-2">
 				{renderContent ? renderContent(round, now) : <>
 					{tools.some((tool) => tool.label === "codemode") && <p className="mb-2 text-meta text-neutral-500">{t("via codemode")}</p>}
 					{calls.map((tool) => <div key={tool.id} className="flex items-baseline gap-2 py-1 text-meta">
@@ -153,7 +159,7 @@ export function ActivityBreakdown({ activity, now = Date.now(), renderContent, r
 	roundRefs?: Map<number, HTMLElement>;
 }) {
 	return (
-		<ol className="mt-1 space-y-2" aria-label={t("Turn timeline")}>
+		<ol className="mt-1 space-y-0" aria-label={t("Turn timeline")}>
 			{activityRounds(activityGroups(activity)).map((round, i) => <li key={round.id}><RoundGroup round={round} number={i + 1} now={now} renderContent={renderContent} roundRefs={roundRefs} /></li>)}
 		</ol>
 	);
@@ -164,24 +170,27 @@ export function ActivityHistory({ activity, now = Date.now(), onSelect }: { acti
 	const totals = new Map<ActivityPhase, number>();
 	for (const group of groups) totals.set(group.kind, (totals.get(group.kind) ?? 0) + Math.max(0, (group.end ?? now) - group.start));
 	const phases: ActivityPhase[] = ["requesting", "thinking", "receiving", "doing", ...(["retry", "compaction", "input"] as ActivityPhase[]).filter((kind) => totals.has(kind))];
-	return <div className="flex min-w-0 items-center justify-end gap-1" aria-label={t("Elapsed activity history, not completion progress")}>
+	return <div className="flex min-w-0 items-center gap-3" aria-label={t("Elapsed activity history, not completion progress")}>
 		{phases.map((kind) => {
 			const Icon = PHASE_STYLE[kind].icon;
 			const ms = totals.get(kind);
-			const group = groups.find((item) => item.kind === kind);
-			return <button key={kind} type="button" disabled={!group} onClick={() => group && onSelect(group.id)} title={`${phaseTitle(kind)}${phaseHint(kind) ? ` · ${phaseHint(kind)}` : ""}`} aria-label={`${phaseTitle(kind)} · ${activityDuration(ms ?? 0)}`} className={`flex w-16 shrink-0 items-center gap-1 text-left disabled:cursor-default ${ms === undefined ? "text-neutral-600" : PHASE_STYLE[kind].text}`}><Icon size={12} className="shrink-0" aria-hidden /><span className="tabular-nums">{ms === undefined ? "0s" : activityDuration(ms)}</span></button>;
+			const group = groups.find((item) => item.kind === kind && item.end === undefined) ?? groups.find((item) => item.kind === kind);
+			const active = group?.end === undefined;
+			return <button key={kind} type="button" disabled={!group} onClick={() => group && onSelect(group.id)} title={`${phaseTitle(kind)}${phaseHint(kind) ? ` · ${phaseHint(kind)}` : ""}`} aria-label={`${phaseTitle(kind)} · ${activityDuration(ms ?? 0)}`} className={`flex shrink-0 items-center gap-1 text-left disabled:cursor-default ${active ? PHASE_STYLE[kind].text : ms === undefined ? "text-neutral-600" : "text-neutral-500"}`}><span className="flex w-3 shrink-0 justify-center"><Icon size={12} aria-hidden /></span><span className="tabular-nums">{ms === undefined ? "0s" : activityDuration(ms)}</span></button>;
 		})}
 	</div>;
 }
 
 /** Round cards own their text and tools; the complete turn keeps one chronological strip. */
-export function ActivityPanel({ activity, renderContent, controls, stickyLeading, waitingForInput = false, expandedByDefault = readWorkExpanded() }: {
+export function ActivityPanel({ activity, renderContent, liveContent, controls, stickyLeading, waitingForInput = false, expandedByDefault = readWorkExpanded(), breakdownAvailable = true }: {
 	activity: TurnActivity;
 	renderContent?: RoundContent;
+	liveContent?: ReactNode;
 	controls?: ReactNode;
 	stickyLeading?: ReactNode;
 	waitingForInput?: boolean;
 	expandedByDefault?: boolean;
+	breakdownAvailable?: boolean;
 }) {
 	const [openOverride, setOpenOverride] = useState<boolean | null>(() => breakdownOpenByTurn.get(activity.start) ?? null);
 	const open = openOverride ?? expandedByDefault;
@@ -213,10 +222,14 @@ export function ActivityPanel({ activity, renderContent, controls, stickyLeading
 	const summary = (
 		<div className="mt-2 flex items-center gap-2 text-meta text-neutral-500">
 			{controls}
-			<button type="button" data-custom="inline timing disclosure" className="flex shrink-0 items-center gap-1 hover:text-neutral-300" onClick={() => { const next = !open; rememberBreakdownOpen(activity.start, next); setOpenOverride(next); }} aria-expanded={open} aria-label={t("Toggle breakdown")}>
-				{open ? <CaretDown size={12} /> : <CaretRight size={12} />}<ListNumbers size={12} aria-hidden /><span aria-label={plural(roundCount, "1 round", "{n} rounds")} className="tabular-nums">{roundCount}</span> <Clock size={12} aria-hidden /> <span className="tabular-nums">{activityDuration((activity.end ?? now) - activity.start)}</span>
-			</button>
-			<div className="min-w-0 flex-1" />
+{breakdownAvailable ? <button type="button" data-custom="inline timing disclosure" className="flex shrink-0 items-center gap-3 hover:text-neutral-300" onClick={() => { const next = !open; rememberBreakdownOpen(activity.start, next); setOpenOverride(next); }} aria-expanded={open} aria-label={t("Toggle breakdown")}>
+<span className="flex items-center gap-1">{open ? <CaretDown size={12} /> : <CaretRight size={12} />}<span className="flex items-center gap-1"><span className="flex w-3 shrink-0 justify-center"><ListNumbers size={12} aria-hidden /></span><span aria-label={plural(roundCount, "1 round", "{n} rounds")} className="tabular-nums">{roundCount}</span></span></span>
+<span className="flex items-center gap-1"><span className="flex w-3 shrink-0 justify-center"><Clock size={12} aria-hidden /></span><span className="tabular-nums">{activityDuration((activity.end ?? now) - activity.start)}</span></span>
+</button> : <span className="flex shrink-0 items-center gap-3">
+<span className="flex items-center gap-1"><span className="flex w-3 shrink-0 justify-center"><ListNumbers size={12} aria-hidden /></span><span aria-label={plural(roundCount, "1 round", "{n} rounds")} className="tabular-nums">{roundCount}</span></span>
+<span className="flex items-center gap-1"><span className="flex w-3 shrink-0 justify-center"><Clock size={12} aria-hidden /></span><span className="tabular-nums">{activityDuration((activity.end ?? now) - activity.start)}</span></span>
+</span>
+}
 			<ActivityHistory activity={activity} now={now} onSelect={select} />
 			{activity.end === undefined && silence >= 3000 && <span className="shrink-0"> · {t("No new output for")} <span className="tabular-nums">{activityDuration(silence)}</span></span>}
 		</div>
@@ -226,6 +239,7 @@ export function ActivityPanel({ activity, renderContent, controls, stickyLeading
 			{stickyLeading ? <div className="sticky top-0 z-10 bg-neutral-950">{stickyLeading}{summary}</div> : summary}
 			{renderContent && breakdown}
 			{!renderContent && breakdown}
+			{liveContent}
 			{status}
 		</div>
 	);

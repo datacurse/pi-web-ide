@@ -171,14 +171,14 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
   retry backoff, compaction, and waiting for user input. Only observed phases are labelled.
   Request hooks do not prove upload completion: do not claim “request delivered”, or separate
   network delivery from provider processing. Missing request telemetry is labelled unavailable.
+- While reasoning is set to Shown, its live streamed text appears directly below the Breakdown disclosure and above the current phase/status; it leaves the round detail while streaming so it is not duplicated.
 - Streaming silence of at least three seconds shows “No new output for …”, not an invented
   cause. Phase and total clocks update live even when the provider is silent.
 - The default tool mode is `Rounds` (saved ID `phases` is preserved): each user turn contains
   `Round 1`, `Round 2`, … disclosures for model-response/tool cycles. Their compact summaries
   show wall time, observed tool counts, failures, and highlight the active segment while running. Each round
-  is a compact `rounded-sm` bordered card with one always-visible `h-2` timed step bar and
-  coloured labels/durations for its observed `Requesting`, `Thinking`, `Receiving`, and `Doing`
-  steps. No empty phase/subphase disclosures. Opening a round shows received prose/reasoning
+  is a compact `rounded-sm` bordered card with one always-visible `text-meta` round duration beside its number; phase-by-phase timings stay in the complete-turn breakdown, not each round summary.
+  No empty phase/subphase disclosures. Opening a round shows received prose/reasoning
   first, then tool calls; omit missing text rather than show empty sections.
   Requesting covers recorded preparation up to the provider-request hook; Thinking covers
   waiting after that hook until visible model output. Tooltips explain that browser delivery
@@ -188,10 +188,8 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
   tools and their brief intervening bookkeeping. Retry, compaction and user waits remain distinct.
   Explicit live/collapsed/grouped/hidden preferences are preserved; `Answer only` also uses timed
   phases when available. Unmeasured old turns retain their ordinary work fold.
-- The separate round header is removed: the `text-meta` round number, a 12px caret and a clock icon with total wall time sit together at the left. Summary padding is `px-2 py-1`;
-  round gaps use `space-y-2`. Round summaries have no progress bar. The compact legend shows each observed step as
-  its icon and elapsed time (phase names remain available to assistive technology and tooltips).
-  Actual tool rows show the target/path, semantic icon, elapsed duration, and outcome; their
+- The separate round header is removed: the `text-meta` round number, a 12px caret and a clock icon with total wall time sit together at the left. Summary padding is `px-2`;
+  round gaps use `space-y-0`. Round work keeps Markdown blocks at `my-1` margins for a tighter reading rhythm. Round summaries have no progress bar. Actual tool rows show the target/path, semantic icon, elapsed duration, and outcome; their
   own arguments/output remain individually expandable. Tool durations do not form a second log.
   Only the final assistant message's trailing answer stays outside the phase folds.
 - Requesting is `blue-400` / `ArrowUpRight`; Thinking is `pink-400` / `Brain` in live status and step legends; the bar segments use pink without icons.
@@ -199,9 +197,10 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
   Receiving is `green-400` / `ArrowDownLeft`; Doing is
   `amber-400` / `Wrench`. Retry and user waits use `red-400` with `ArrowClockwise` / `QuestionMark`;
   compaction uses `neutral-400` / `ArrowsInLineVertical`. Icons and labels accompany colour.
-- The left disclosure omits a text label: its chevron, `ListNumbers` icon and round count, then total-time clock make the control. Phase icons and durations occupy fixed-width slots on the right; unobserved requesting/thinking/receiving/doing phases remain dimmed at `0s` so observed timings fill their slots without shifting the row.
-- A `Breakdown` disclosure with a clock icon and total elapsed time sits above the work; observed
-  phase icons and elapsed times sit beside it on the same row. The current action sits
+- The left disclosure has its chevron, `ListNumbers` icon, round count and total-time clock; complete-turn phase icons/durations follow immediately at their natural widths. No fixed-width slots or spacer push them to the right.
+- A `Breakdown` disclosure with a clock icon and total elapsed time sits at the left, immediately followed by the complete-turn phase icons and durations; each takes only its natural width. The current action sits
+- Compact phase timings use `gap-2` between icon-and-duration pairs so their colours and values read as separate groups.
+- The elapsed-history strip centers each icon in a `w-3` slot; `gap-1` keeps it close to its duration, while `gap-3` separates neighboring pairs.
   below the breakdown, including its expanded rounds. No overall progress bar. In Rounds mode,
   the preceding user prompt and its breakdown stick together at the top while scrolling through the turn's work, without duplicating
   the prompt.

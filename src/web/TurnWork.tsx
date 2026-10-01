@@ -3,7 +3,7 @@ import { activityGroups } from "../shared/activity.js";
 import type { PiBlock, PiMessage, PiPartial } from "../shared/types.js";
 import { ActivityPanel } from "./Activity.js";
 import type { ThinkingMode, UserMode } from "./prefs.js";
-import { Block, Message } from "./Transcript.js";
+import { Block, Message, Reasoning } from "./Transcript.js";
 import { phaseBlocks } from "./turnPhases.js";
 import { readWorkExpanded } from "./prefs.js";
 
@@ -12,7 +12,7 @@ export function RoundWork({ round, blocks, now, expandedByDefault = readWorkExpa
 	const tools = new Map(round.groups.flatMap((group) => group.tools).map((tool) => [tool.id, tool]));
 	const received = blocks.filter((block) => block.kind !== "tool");
 	const calls = blocks.filter((block) => block.kind === "tool");
-	return <div className="chat-nested chat-prose flow-trim flow-root">
+	return <div className="chat-nested chat-prose chat-round-work flow-trim flow-root">
 		{received.map((block, i) => <Block key={i} block={block} isUser={false} autoOpenTools={false} expandedByDefault={expandedByDefault} />)}
 		{calls.map((block) => {
 			const tool = tools.get(block.id);
@@ -35,15 +35,19 @@ export function TurnWork({ activity, messages, prompt, partial, waitingForInput,
 	onEdit?: (at: number, text: string, images: { data: string; mimeType: string }[]) => void;
 }) {
 	const blocks = phaseBlocks(activityGroups(activity), messages, partial);
+	const liveThinking = thinkingMode === "shown" ? partial?.thinking : undefined;
+	const breakdownAvailable = [...blocks.values()].some((items) => items.some((block) => !(liveThinking && block.kind === "thinking" && block.text === liveThinking)));
 	return (
 		<div className="chat-gutter my-3">
 			<div className="chat-measure">
 				<ActivityPanel
 					activity={activity}
+					breakdownAvailable={breakdownAvailable}
 					waitingForInput={waitingForInput}
 					expandedByDefault={expandedByDefault}
+					liveContent={liveThinking && <Reasoning text={liveThinking} className="my-3" />}
 					stickyLeading={prompt && <Message role="user" blocks={prompt.blocks} labelled={false} autoOpenTools={false} userMode={userMode} foldThinking={thinkingMode === "folded"} onFork={onFork} at={prompt.timestamp} onEdit={onEdit} />}
-					renderContent={(round, now) => <RoundWork round={round} blocks={round.groups.flatMap((group) => blocks.get(group.id) ?? [])} now={now} expandedByDefault={expandedByDefault} />}
+					renderContent={(round, now) => <RoundWork round={round} blocks={round.groups.flatMap((group) => (blocks.get(group.id) ?? []).filter((block) => !(liveThinking && block.kind === "thinking" && block.text === liveThinking)))} now={now} expandedByDefault={expandedByDefault} />}
 				/>
 			</div>
 		</div>
