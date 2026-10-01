@@ -78,8 +78,9 @@ fits none of the existing ones, and record it here.
   added/removed color convention as review diffs. Source-reading tool results strip
   read anchors and common indentation before syntax highlighting; unknown extensions
   remain plain text.
-- Tool call lines are always one line; the result preview fades. Tool and group
-  chevrons and status indicators never shrink when the preview or label is long.
+- Tool call lines are always one line; the result preview fades. Tool rows have no
+  chevron, but the whole row remains clickable to expand or collapse. Group chevrons
+  and status indicators never shrink when the preview or label is long.
 - Anything that scrolls fades out over 2em at each edge it can still scroll past, so
   you can see there is more: `.scroll-fade-y` on every `ScrollPane` list, `.scroll-fade-x`
   on the tab strips. Each fade grows over the first 2em of scroll and goes over the last.
@@ -189,7 +190,9 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
   Explicit live/collapsed/grouped/hidden preferences are preserved; `Answer only` also uses timed
   phases when available. Unmeasured old turns retain their ordinary work fold.
 - The separate round header is removed: the `text-meta` round number, a 12px caret and a clock icon with total wall time sit together at the left. Summary padding is `px-2`;
-  round gaps use `space-y-0`. Round work keeps Markdown blocks at `my-1` margins for a tighter reading rhythm. Round summaries have no progress bar. Actual tool rows show the target/path, semantic icon, elapsed duration, and outcome; their
+  round gaps use `space-y-0`. Round work keeps Markdown blocks at `my-1` margins,
+  with no margin between its text and tool rows. Round summaries have no progress bar.
+  Actual tool rows show the target/path, semantic icon, elapsed duration, and outcome; their
   own arguments/output remain individually expandable. Tool durations do not form a second log.
   Only the final assistant message's trailing answer stays outside the phase folds.
 - Requesting is `blue-400` / `ArrowUpRight`; Thinking is `pink-400` / `Brain` in live status and step legends; the bar segments use pink without icons.

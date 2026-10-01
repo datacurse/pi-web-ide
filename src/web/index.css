@@ -948,6 +948,9 @@ input[type="number"]::-webkit-outer-spin-button {
 .chat-round-work :is(p, ul, ol, blockquote, h1, h2, h3, h4, pre, table) {
 	margin-block: var(--spacing-1);
 }
+.chat-round-work > .chat-wide {
+	margin-block: 0;
+}
 
 
 /*

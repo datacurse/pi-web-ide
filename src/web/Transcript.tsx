@@ -186,7 +186,6 @@ export function Tool({
 				onClick={() => setOpen((o) => !o)}
 				className={`flex w-full items-center gap-2 whitespace-nowrap chat-code font-mono ${isError ? "text-red-400" : running ? "text-amber-400" : "text-neutral-500"} hover:text-neutral-300`}
 			>
-				{open ? <CaretDown size={11} className="shrink-0" /> : <CaretRight size={11} className="shrink-0" />}
 				<ToolIcon name={name} />
 				{nested && name === "bash" && typeof target === "string" ? (
 					<span className="min-w-0 flex-1 fade-end text-left text-neutral-300"><span className="text-amber-400">$</span> {target}</span>
