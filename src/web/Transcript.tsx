@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import { ArrowsInLineVertical, ArrowsOutLineVertical, CaretDown, CaretRight, CaretUp, Check, Copy, GitFork, PaperPlaneTilt, PencilSimple, X } from "@phosphor-icons/react";
+import { ArrowsInLineVertical, ArrowsOutLineVertical, CaretDown, CaretRight, CaretUp, Check, Copy, GitFork, PaperPlaneTilt, PencilSimple, X, BookOpen, NotePencil, TerminalWindow, MagnifyingGlass, Wrench, Code } from "@phosphor-icons/react";
 import { AnsiHtml } from "fancy-ansi/react";
 import { hasAnsi, stripAnsi } from "fancy-ansi";
 import type { ContextBreakdown, ContextItem, ContextPart, PiBlock, PiImage, PiMessage, PiNotice, PiTool } from "../shared/types.js";
@@ -60,6 +60,16 @@ function resultPreview(result: string): string {
  * one-liner carries the name, the outcome and a preview of the result, which
  * is what scanning a finished transcript needs.
  */
+export function ToolIcon({ name }: { name: string }) {
+	switch (name) {
+		case "read": case "read_symbol": case "read_enclosing": return <BookOpen size={14} className="shrink-0 text-blue-400" aria-hidden />;
+		case "write": case "edit": case "ast_grep_replace": return <NotePencil size={14} className="shrink-0 text-amber-400" aria-hidden />;
+		case "bash": case "powershell": return <TerminalWindow size={14} className="shrink-0 text-neutral-400" aria-hidden />;
+		case "grep": case "ffgrep": case "find": case "fffind": case "symbol_search": return <MagnifyingGlass size={14} className="shrink-0 text-neutral-400" aria-hidden />;
+		default: return <Wrench size={14} className="shrink-0 text-neutral-400" aria-hidden />;
+	}
+}
+
 export function Tool({
 	name,
 	isError,
@@ -101,8 +111,8 @@ export function Tool({
 	useEffect(() => setOpen(autoOpen && running), [autoOpen]);
 	const spinner = useSpinner(running);
 	const elapsed = ms ?? (running && startedAt !== undefined ? Math.max(0, Date.now() - startedAt) : undefined);
-	const target = nested && args && typeof args === "object" ? (args as { path?: unknown; command?: unknown }).path ?? (args as { command?: unknown }).command : undefined;
-	const preview = !open && name !== "codemode" ? result ? resultPreview(result) : typeof target === "string" ? target : "" : "";
+	const target = args && typeof args === "object" ? (args as { path?: unknown; command?: unknown }).path ?? (args as { command?: unknown }).command : undefined;
+	const preview = !open && name !== "codemode" ? typeof target === "string" ? target : result ? resultPreview(result) : "" : "";
 	const counts = new Map<string, number>();
 	let failures = 0;
 	const count = (calls: PiTool[]) => {
@@ -114,20 +124,34 @@ export function Tool({
 	};
 	count(children ?? []);
 	const summary = [...counts].map(([tool, n]) => tool + " × " + n).join(" · ");
+	if (name === "codemode") return <div className={nested ? "my-2" : "chat-wide my-3"}>
+		<div className="flex items-center gap-2 text-meta text-neutral-500">
+			<Code size={14} className="shrink-0" aria-hidden />
+			<span>{t("via codemode")}</span>
+			{failures > 0 && <span className="text-red-400">{t("{n} failed", { n: failures })}</span>}
+			{childrenIncomplete && <span className="text-amber-400">{t("Partial batch")}</span>}
+			{elapsed !== undefined && <span className="ml-auto tabular-nums">{activityDuration(elapsed)}</span>}
+			{running ? <span>{spinner}</span> : isError ? <X size={12} className="text-red-400" aria-label={t("failed")} /> : interrupted ? <span>{t("Interrupted")}</span> : <Check size={12} className="text-green-400" aria-hidden />}
+		</div>
+		{children?.map((child) => <Tool key={child.id} {...child} nested autoOpen={false} ms={child.durationMs} />)}
+		{childrenIncomplete && <p className="mt-1 text-meta text-amber-400">{t("Some nested calls were not retained")}</p>}
+	</div>;
 	return (
 		<div className={nested ? "my-2" : "chat-wide my-3"}>
 			<button
 				data-custom="transcript disclosure"
 				aria-expanded={open}
 				onClick={() => setOpen((o) => !o)}
-				className={`flex max-w-full items-center gap-1 whitespace-nowrap chat-code font-mono ${isError ? "text-red-400" : running ? "text-amber-400" : "text-neutral-500"} hover:text-neutral-300`}
+				className={`flex w-full items-center gap-2 whitespace-nowrap chat-code font-mono ${isError ? "text-red-400" : running ? "text-amber-400" : "text-neutral-500"} hover:text-neutral-300`}
 			>
 				{open ? <CaretDown size={11} className="shrink-0" /> : <CaretRight size={11} className="shrink-0" />}
-				{name}
+				<ToolIcon name={name} />
+				<span className="min-w-0 max-w-1/2 fade-end" title={name}>{name}</span>
+				{preview && <span className="fade-end min-w-0 flex-1 text-left font-normal text-neutral-400">{preview}</span>}
 				{summary && <span className="fade-end ml-1 min-w-0 text-neutral-500">{summary}</span>}
 				{failures > 0 && <span className="shrink-0 text-red-400">{t("{n} failed", { n: failures })}</span>}
 				{childrenIncomplete && <span className="shrink-0 text-amber-400">{t("Partial batch")}</span>}
-				{elapsed !== undefined && <span className="shrink-0 text-meta tabular-nums">{activityDuration(elapsed)}</span>}
+				{elapsed !== undefined && <span className="ml-auto shrink-0 text-meta tabular-nums">{activityDuration(elapsed)}</span>}
 				{running ? (
 					<span className="shrink-0">{spinner}</span>
 				) : interrupted ? (
@@ -137,7 +161,6 @@ export function Tool({
 				) : (
 					<Check size={11} weight="bold" className="shrink-0 text-green-400" />
 				)}
-				{preview && <span className="fade-end ml-1 min-w-0 font-normal text-neutral-600">{preview}</span>}
 			</button>
 			{open && children && children.length > 0 && (
 				<div className="ml-3 border-l border-neutral-800 pl-3">

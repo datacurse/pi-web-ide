@@ -9,7 +9,7 @@ import * as sharedActivity from "../shared/activity.js";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Brain, ArrowUpRight } from "@phosphor-icons/react";
 import { ActivityBreakdown, ActivityHistory, ActivityPanel, CompletedActivity, PhaseIcon, TurnStatus } from "./Activity.js";
-import { TurnWork } from "./TurnWork.js";
+import { TurnWork, RoundWork } from "./TurnWork.js";
 import { Tool } from "./Transcript.js";
 import type { TurnActivity } from "../shared/activity.js";
 
@@ -54,7 +54,7 @@ test("Requesting and Thinking have separate icons and measured preparation/wait 
 	assert.match(html,/Thinking/);
 	assert.match(html,/not isolated thinking time/);
 	assert.match(html,/2\.9s/);
-	assert.match(html,/0\.1s/);
+	assert.match(html,/100ms/);
 	assert.match(html,/Requesting/);
 	assert.match(html,/Browser delivery and exact upload completion are not measured/);
 });
@@ -79,8 +79,8 @@ test("breakdown preserves observed boundaries and completed durations do not gro
 	const html = renderToStaticMarkup(createElement(ActivityBreakdown, { activity: completed, now: 999999 }));
 	assert.match(html, /Turn timeline/);
 	assert.match(html, /2\.0s/);
-	assert.match(html, /provider processing and network delivery cannot be separated/);
-	assert.doesNotMatch(html, /993\.9s|now/);
+	assert.match(html, /not isolated thinking time/);
+	assert.doesNotMatch(html, /993\.9s|aria-current="step"/);
 	assert.match(renderToStaticMarkup(createElement(CompletedActivity, { activity: completed })), /Timing.*5\.0s/);
 });
 
@@ -110,7 +110,7 @@ test("integrated work shows collapsed phases and failures without rendering a du
 		{ kind: "thinking", text: "Detailed reasoning" },
 		{ kind: "tool", id: "a", name: "read", args: { path: "a.ts" }, result: "Private output" },
 	] }] }));
-	assert.equal((html.match(/<details/g) ?? []).length, 4);
+	assert.equal((html.match(/<details/g) ?? []).length, 1);
 	assert.match(html,/Round 1/);
 	assert.doesNotMatch(html, /<details[^>]* open|Detailed reasoning|Private output/);
 	assert.match(html, /2 tools/);
@@ -118,7 +118,7 @@ test("integrated work shows collapsed phases and failures without rendering a du
 	assert.match(html, /Doing/);
 	assert.match(html, /Turn timeline/);
 	assert.equal((html.match(/Elapsed activity history, not completion progress/g) ?? []).length, 1);
-	assert.match(renderToStaticMarkup(createElement(Tool, { name: "read", args: {}, result: "done", autoOpen: false, ms: 400 })), /0\.4s/);
+	assert.match(renderToStaticMarkup(createElement(Tool, { name: "read", args: {}, result: "done", autoOpen: false, ms: 400 })), /400ms/);
 });
 
 function elements(value: unknown): ReactElement[] {
@@ -127,7 +127,43 @@ function elements(value: unknown): ReactElement[] {
 	return [value, ...elements(value.props.children)];
 }
 
-test("selecting a history segment opens timing and the corresponding phase, then scrolls to it", () => {
+test("each round shows a single timed bar even while collapsed, not empty phase disclosures", () => {
+	const completed = {...activity,end:6000,steps:activity.steps.map(step=>({...step,end:step.end??6000}))};
+	const html = renderToStaticMarkup(createElement(ActivityBreakdown,{activity:completed,now:6000}));
+	assert.equal((html.match(/<details/g)??[]).length,1);
+	assert.match(html,/Round step timings, not completion progress/);
+	assert.match(html,/Requesting/);
+	assert.match(html,/Thinking/);
+	assert.match(html,/Receiving/);
+	assert.match(html,/100ms/);
+	assert.match(html,/2\.9s/);
+	assert.doesNotMatch(html,/Sending request|Processing between requests|Preparing request|role="progressbar"/);
+});
+test("round body shows received prose before flat tool calls, without phase or codemode folds", () => {
+	const timed: TurnActivity = {start:1000,end:6000,steps:[
+		{kind:"preparing",label:"preparing",start:1000,end:1100},
+		{kind:"request",label:"Sending request / waiting for provider response",start:1100,end:2000},
+		{kind:"text",label:"text",start:2000,end:3000},
+		{kind:"tools",label:"tools",start:3000,end:6000},
+	],tools:[{id:"batch",label:"codemode",start:3000,end:6000},{id:"batch/1",label:"read: a.ts",start:3000,end:3120}]};
+	const round = sharedActivity.activityRounds(sharedActivity.activityGroups(timed))[0];
+	const html = renderToStaticMarkup(createElement(RoundWork,{round,now:6000,blocks:[
+		{kind:"tool",id:"batch",name:"codemode",args:{code:"hidden script"},result:"hidden aggregate",children:[
+			{id:"batch/1",name:"read",args:{path:"a.ts"},result:"body",durationMs:120},
+		]},
+		{kind:"text",text:"Received prose"},
+	]}));
+	assert.ok(html.indexOf("Received prose") < html.indexOf("via codemode"));
+	assert.match(html,/a\.ts/);
+	assert.match(html,/120ms/);
+	assert.doesNotMatch(html,/<details|border-l|hidden script|hidden aggregate|Sending request/);
+	assert.equal((html.match(/aria-expanded="false"/g)??[]).length,1);
+	const header = renderToStaticMarkup(createElement(ActivityBreakdown,{activity:timed,now:6000}));
+	assert.match(header,/1 tool/);
+	assert.doesNotMatch(header,/2 tools/);
+});
+
+test("selecting a history segment opens timing and the corresponding round, then scrolls to it", () => {
 	const require = createRequire(import.meta.url);
 	const modules: Record<string, unknown> = {
 		"react/jsx-runtime": require("react/jsx-runtime"),
@@ -172,12 +208,9 @@ test("selecting a history segment opens timing and the corresponding phase, then
 	assert.ok(headers);
 	let scrolled = false;
 	const detail = { open: false, scrollIntoView() { scrolled = true; } } as HTMLDetailsElement;
-	const roundDetail = {open:false} as HTMLDetailsElement;
-	refs[0].set(0,roundDetail);
-	headers.set(3, detail);
+	refs[0].set(0,detail);
 	(history.props as { onSelect(id: number): void }).onSelect(3);
-	assert.equal(roundDetail.open,true);
-	assert.equal(detail.open, true);
+		assert.equal(detail.open, true);
 	assert.equal(scrolled, true);
 	assert.ok(elements(render()).some((node) => node.type === exports.ActivityBreakdown));
 });

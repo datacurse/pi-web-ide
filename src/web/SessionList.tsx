@@ -368,15 +368,7 @@ export function SessionList({
 								aria-current={s.path === activeFile ? "true" : undefined}
 								aria-haspopup="menu"
 								title={label}
-								className={`block w-full border-b border-neutral-800 py-2 pl-3 text-left transition-colors duration-150 ease-out hover:bg-neutral-900 motion-reduce:transition-none ${
-									// Three states worth telling apart: selected, open in a
-									// background tab, and not open at all.
-									s.path === activeFile
-										? "bg-neutral-800"
-										: isOpen
-											? "bg-neutral-900/60"
-											: ""
-								} ${isHidden ? "opacity-50" : ""}`}
+								className={`block w-full border-b border-neutral-800 py-2 pl-3 text-left transition-colors duration-150 ease-out hover:bg-neutral-900 motion-reduce:transition-none ${isHidden ? "opacity-50" : ""}`}
 							>
 								<div className="session-title text-ui text-neutral-200">
 									{/* The session's state, the same colors as its tab π: amber
@@ -408,13 +400,14 @@ export function SessionList({
 										))}
 									</div>
 								)}
+								<div className="mt-0.5 flex items-center gap-3 pr-3">
 								{snippet ? (
-									<div className="mt-0.5 fade-edge text-meta text-neutral-500">
+									<div className="min-w-0 flex-1 fade-edge text-meta text-neutral-500">
 										{highlight(snippet, terms)}
 									</div>
 								) : (
 								<div
-									className="mt-0.5 flex items-center gap-3 text-meta text-neutral-400"
+									className="min-w-0 flex-1 flex items-center gap-3 text-meta text-neutral-400"
 									title={t("Created {date}, {ago} · last active {active}", {
 										date: dateFmt().format(new Date(s.created)),
 										ago: timeAgo(s.created),
@@ -437,6 +430,12 @@ export function SessionList({
 									)}
 								</div>
 								)}
+								{isOpen && (
+									<span className="shrink-0 text-neutral-500" title={t("Open in a tab")}>
+										<Eye size={14} aria-label={t("Open in a tab")} />
+									</span>
+								)}
+								</div>
 							</button>
 						);
 					})}

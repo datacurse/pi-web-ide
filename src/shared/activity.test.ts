@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { activityGroups, activityRounds, type ActivityKind, type TurnActivity } from "./activity.js";
+import { activityGroups, activityRounds, activityDuration, activityLabel, type ActivityKind, type TurnActivity } from "./activity.js";
 
 function trace(kinds: ActivityKind[], live = false): TurnActivity {
 	return {
@@ -78,6 +78,14 @@ test("live round IDs and completed timings survive growth and serialized telemet
 	assert.deepEqual(activityRounds(activityGroups(trace(["text"]))).map(r=>r.groups.map(g=>g.kind)),[["receiving"]]);
 });
 
+test("request dispatch is labelled as waiting afterward, and short tool times remain readable", () => {
+	assert.equal(activityLabel("request"),"Waiting for model output");
+	assert.equal(activityDuration(0),"0ms");
+	assert.equal(activityDuration(12),"12ms");
+	assert.equal(activityDuration(999),"999ms");
+	assert.equal(activityDuration(1000),"1.0s");
+	assert.equal(activityDuration(60000),"1m 0.0s");
+});
 test("a zero-duration call belongs to its doing phase, not the request beginning at the same instant", () => {
 	const activity: TurnActivity = { start: 1000, end: 2000, steps: [
 		{ kind: "tools", label: "read", start: 1000, end: 1000 },

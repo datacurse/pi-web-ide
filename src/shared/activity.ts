@@ -52,7 +52,7 @@ export function parseActivity(value: unknown): TurnActivity | undefined {
 export function activityLabel(kind: ActivityKind): string {
 	switch (kind) {
 		case "preparing": return "Preparing request";
-		case "request": return "Sending request / waiting for provider response";
+		case "request": return "Waiting for model output";
 		case "response": return "Response received · waiting for model output";
 		case "thinking": return "Receiving reasoning";
 		case "text": return "Receiving answer";
@@ -140,6 +140,8 @@ export function activityRounds(groups: ActivityPhaseGroup[]): ActivityRound[] {
 }
 
 export function activityDuration(ms: number): string {
-	const seconds = Math.max(0, ms) / 1000;
+	ms = Math.max(0, ms);
+	if (ms < 1000) return `${Math.round(ms)}ms`;
+	const seconds = ms / 1000;
 	return seconds < 60 ? `${seconds.toFixed(1)}s` : `${Math.floor(seconds / 60)}m ${(seconds % 60).toFixed(1)}s`;
 }

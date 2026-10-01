@@ -53,137 +53,125 @@ function useClock(active: boolean): number {
 	return now;
 }
 
-type PhaseContent = (group: ActivityPhaseGroup, now: number) => ReactNode;
+type RoundContent = (round: ActivityRound, now: number) => ReactNode;
 
-function PhaseGroup({ group, now, renderContent, detailsRefs }: {
-	group: ActivityPhaseGroup;
+/** The same timed steps power each round and the complete turn; never a completion estimate. */
+export function ActivitySteps({ groups, now, start, onSelect, label }: {
+	groups: ActivityPhaseGroup[];
 	now: number;
-	renderContent?: PhaseContent;
-	detailsRefs?: Map<number, HTMLDetailsElement>;
+	start: number;
+	onSelect?: (id: number) => void;
+	label: string;
 }) {
-	const [open, setOpen] = useState(false);
-	const failed = group.tools.filter((tool) => tool.isError).length;
+	const durations = groups.map((group) => Math.max(0, (group.end ?? now) - group.start));
+	const total = Math.max(1, durations.reduce((sum, ms) => sum + ms, 0));
+	const totals = new Map<ActivityPhase, number>();
+	groups.forEach((group, i) => totals.set(group.kind, (totals.get(group.kind) ?? 0) + durations[i]));
 	return (
-		<details ref={(element) => { if (element) detailsRefs?.set(group.id, element); else detailsRefs?.delete(group.id); }} className="group/phase" onToggle={(event) => setOpen(event.currentTarget.open)}>
-			<summary title={phaseHint(group.kind)} className="flex cursor-pointer list-none items-center gap-2 text-body text-neutral-400 hover:text-neutral-300 [&::-webkit-details-marker]:hidden">
-				<CaretRight size={14} className="shrink-0 group-open/phase:rotate-90" aria-hidden />
-				<PhaseIcon kind={group.kind} />
-				<span className={group.kind === "thinking" ? PHASE_STYLE[group.kind].text : undefined}>{phaseTitle(group.kind)}</span>
-				{group.tools.length > 0 && <span className="text-meta">· {plural(group.tools.length, "1 tool", "{n} tools")}</span>}
-				{failed > 0 && <span className="text-meta text-red-400">· {t("{n} failed", { n: failed })}</span>}
-				<span className="ml-auto shrink-0 text-meta tabular-nums">{activityDuration((group.end ?? now) - group.start)}</span>
-				{group.end === undefined && <span className="text-meta">{t("now")}</span>}
-			</summary>
-			{open && (
-				<div className="chat-nested flow-trim mt-2 flow-root border-l border-neutral-700 pl-3 text-meta text-neutral-400">
-					{group.steps.filter((step) => !renderContent || step.kind !== "tools").map((step, i) => (
-						<div key={i} className="flex items-baseline gap-2 py-0.5">
-							<span className="min-w-0 flex-1 break-words">{phaseLabel(step)}</span>
-							<span className="shrink-0 tabular-nums">{activityDuration((step.end ?? group.end ?? now) - step.start)}</span>
-						</div>
-					))}
-					{renderContent ? renderContent(group, now) : group.tools.map((tool) => (
-						<div key={tool.id} className="flex items-baseline gap-2 py-0.5">
-							<span className="min-w-0 flex-1 break-words font-mono">{tool.label}{tool.isError ? ` · ${t("failed")}` : ""}</span>
-							<span className="shrink-0 tabular-nums">{activityDuration((tool.end ?? now) - tool.start)}</span>
-						</div>
-					))}
-				</div>
-			)}
-		</details>
+		<div className="mt-2 space-y-2">
+			<div className="flex h-control-sm overflow-hidden rounded-sm bg-neutral-800" role="group" aria-label={label}>
+				{groups.map((group, i) => {
+					const share = durations[i] / total;
+					const props = {
+						title: `${phaseTitle(group.kind)} · +${activityDuration(group.start - start)} · ${activityDuration(durations[i])}${phaseHint(group.kind) ? ` · ${phaseHint(group.kind)}` : ""}`,
+						"aria-label": `${phaseTitle(group.kind)} · ${activityDuration(durations[i])}`,
+						"aria-current": group.end === undefined ? "step" as const : undefined,
+						className: `flex min-w-0 items-center justify-center gap-1 overflow-hidden whitespace-nowrap text-meta text-neutral-950 ring-1 ring-inset ${PHASE_STYLE[group.kind].background} ${group.end === undefined ? "ring-neutral-100" : "ring-neutral-950/30"}`,
+						style: { flexGrow: durations[i], flexBasis: 0 },
+					};
+					const content = <>
+						{share >= 0.04 && <PhaseIcon kind={group.kind} size={12} onBar />}
+						{share >= 0.2 && <span>{phaseTitle(group.kind)}</span>}
+						{share >= 0.08 && <span className="tabular-nums">{activityDuration(durations[i])}</span>}
+					</>;
+					return onSelect
+						? <button key={group.id} type="button" data-custom="proportional elapsed phase segment" {...props} onClick={() => onSelect(group.id)}>{content}</button>
+						: <span key={group.id} {...props}>{content}</span>;
+				})}
+			</div>
+			<div className="flex flex-wrap gap-x-3 gap-y-1 text-meta">
+				{[...totals].map(([kind, ms]) => <span key={kind} title={phaseHint(kind)} className={`flex items-center gap-1 ${PHASE_STYLE[kind].text}`}><PhaseIcon kind={kind} size={12} />{phaseTitle(kind)} <span className="tabular-nums">{activityDuration(ms)}</span></span>)}
+			</div>
+		</div>
 	);
 }
 
-function RoundGroup({ round, number, now, renderContent, detailsRefs, roundRefs }: {
+function RoundGroup({ round, number, now, renderContent, roundRefs }: {
 	round: ActivityRound;
 	number: number;
 	now: number;
-	renderContent?: PhaseContent;
-	detailsRefs?: Map<number, HTMLDetailsElement>;
+	renderContent?: RoundContent;
 	roundRefs?: Map<number, HTMLDetailsElement>;
 }) {
+	const [open, setOpen] = useState(false);
 	const tools = round.groups.flatMap((group) => group.tools);
-	const failed = tools.filter((tool) => tool.isError).length;
+	const wrappers = tools.filter((tool) => tool.label === "codemode" && tools.some((child) => child.id.startsWith(tool.id + "/")));
+	const calls = tools.filter((tool) => !wrappers.includes(tool));
+	const failed = calls.filter((tool) => tool.isError).length + wrappers.filter((tool) => tool.isError && !calls.some((child) => child.id.startsWith(tool.id + "/") && child.isError)).length;
 	const current = round.groups.at(-1)!;
 	return (
-		<details ref={(element) => { if (element) roundRefs?.set(round.id, element); else roundRefs?.delete(round.id); }} className="group/round">
-			<summary className="flex cursor-pointer list-none items-center gap-2 text-body text-neutral-400 hover:text-neutral-300 [&::-webkit-details-marker]:hidden">
-				<CaretRight size={14} className="shrink-0 group-open/round:rotate-90" aria-hidden />
-				<span>{t("Round {n}", { n: number })}</span>
-				{tools.length > 0 && <span className="text-meta">· {plural(tools.length, "1 tool", "{n} tools")}</span>}
-				{failed > 0 && <span className="text-meta text-red-400">· {t("{n} failed", { n: failed })}</span>}
-				{round.end === undefined && <span className={`flex items-center gap-1 text-meta ${current.kind === "thinking" ? PHASE_STYLE[current.kind].text : ""}`}><PhaseIcon kind={current.kind} size={12} />{phaseTitle(current.kind)}</span>}
-				<span className="ml-auto shrink-0 text-meta tabular-nums">{activityDuration((round.end ?? now) - round.start)}</span>
+		<details ref={(element) => { if (element) roundRefs?.set(round.id, element); else roundRefs?.delete(round.id); }} className="group/round overflow-hidden rounded-sm border border-neutral-800" onToggle={(event) => setOpen(event.currentTarget.open)}>
+			<summary className="cursor-pointer list-none px-3 py-2 hover:bg-neutral-800/30 [&::-webkit-details-marker]:hidden">
+				<div className="flex items-center gap-2 text-body text-neutral-400">
+					<CaretRight size={14} className="shrink-0 group-open/round:rotate-90" aria-hidden />
+					<span className="text-neutral-300">{t("Round {n}", { n: number })}</span>
+					{calls.length > 0 && <span className="text-meta">· {plural(calls.length, "1 tool", "{n} tools")}</span>}
+					{failed > 0 && <span className="text-meta text-red-400">· {t("{n} failed", { n: failed })}</span>}
+					{round.end === undefined && <span className={`flex items-center gap-1 text-meta ${PHASE_STYLE[current.kind].text}`}><PhaseIcon kind={current.kind} size={12} />{phaseTitle(current.kind)}</span>}
+					<span className="ml-auto shrink-0 text-meta tabular-nums">{activityDuration((round.end ?? now) - round.start)}</span>
+				</div>
+				<ActivitySteps groups={round.groups} now={now} start={round.start} label={t("Round step timings, not completion progress")} />
 			</summary>
-			<div className="chat-nested mt-2 space-y-2 border-l border-neutral-800 pl-3">
-				{round.groups.map((group) => <PhaseGroup key={group.id} group={group} now={now} renderContent={renderContent} detailsRefs={detailsRefs} />)}
-			</div>
+			{open && <div className="chat-nested flow-trim flow-root border-t border-neutral-800 px-3 py-2">
+				{renderContent ? renderContent(round, now) : <>
+					{tools.some((tool) => tool.label === "codemode") && <p className="mb-2 text-meta text-neutral-500">{t("via codemode")}</p>}
+					{calls.map((tool) => <div key={tool.id} className="flex items-baseline gap-2 py-1 text-meta">
+						<span className={`min-w-0 flex-1 break-words font-mono ${tool.isError ? "text-red-400" : "text-neutral-400"}`}>{tool.label}{tool.isError ? ` · ${t("failed")}` : ""}</span>
+						<span className="shrink-0 tabular-nums text-neutral-500">{activityDuration((tool.end ?? now) - tool.start)}</span>
+					</div>)}
+				</>}
+			</div>}
 		</details>
 	);
 }
 
-export function ActivityBreakdown({ activity, now = Date.now(), renderContent, detailsRefs, roundRefs }: {
+export function ActivityBreakdown({ activity, now = Date.now(), renderContent, roundRefs }: {
 	activity: TurnActivity;
 	now?: number;
-	renderContent?: PhaseContent;
-	detailsRefs?: Map<number, HTMLDetailsElement>;
+	renderContent?: RoundContent;
 	roundRefs?: Map<number, HTMLDetailsElement>;
 }) {
 	return (
-		<div className="mt-2 space-y-3">
-			<ol className="space-y-2" aria-label={t("Turn timeline")}>
-				{activityRounds(activityGroups(activity)).map((round, i) => <li key={round.id}><RoundGroup round={round} number={i + 1} now={now} renderContent={renderContent} detailsRefs={detailsRefs} roundRefs={roundRefs} /></li>)}
-			</ol>
-			<p className="text-meta text-neutral-500">{t("Observed timings. Sending includes connection setup and waiting; provider processing and network delivery cannot be separated.")}</p>
-		</div>
+		<ol className="mt-2 space-y-3" aria-label={t("Turn timeline")}>
+			{activityRounds(activityGroups(activity)).map((round, i) => <li key={round.id}><RoundGroup round={round} number={i + 1} now={now} renderContent={renderContent} roundRefs={roundRefs} /></li>)}
+		</ol>
 	);
 }
 
 export function ActivityHistory({ activity, now = Date.now(), onSelect }: { activity: TurnActivity; now?: number; onSelect: (id: number) => void }) {
-	const groups = activityGroups(activity);
-	const totals = new Map<ActivityPhase, number>();
-	const durations = groups.map((group) => Math.max(0, (group.end ?? now) - group.start));
-	const total = Math.max(1, durations.reduce((sum, ms) => sum + ms, 0));
-	groups.forEach((group, i) => totals.set(group.kind, (totals.get(group.kind) ?? 0) + durations[i]));
-	return (
-		<div className="mt-2 space-y-1">
-			<div className="flex h-4 overflow-hidden rounded-sm" aria-label={t("Elapsed activity history, not completion progress")}>
-				{groups.map((group, i) => (
-					<button key={group.id} type="button" data-custom="proportional elapsed phase segment" onClick={() => onSelect(group.id)} title={`${phaseTitle(group.kind)} · +${activityDuration(group.start - activity.start)} · ${activityDuration(durations[i])}${phaseHint(group.kind) ? ` · ${phaseHint(group.kind)}` : ""}`} aria-label={`${phaseTitle(group.kind)} · ${activityDuration(durations[i])}`} aria-current={group.end === undefined ? "step" : undefined} className={`flex min-w-0 items-center justify-center overflow-hidden focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-neutral-100 ${PHASE_STYLE[group.kind].background} ${group.end === undefined ? "ring-1 ring-inset ring-neutral-100" : ""}`} style={{ flexGrow: durations[i], flexBasis: 0 }}>
-						{durations[i] / total >= 0.04 && <PhaseIcon kind={group.kind} size={12} onBar />}
-					</button>
-				))}
-			</div>
-			<div className="flex flex-wrap gap-x-3 gap-y-1 text-meta text-neutral-500">
-				{[...totals].map(([kind, ms]) => <span key={kind} title={phaseHint(kind)} className={`flex items-center gap-1 ${kind === "thinking" ? PHASE_STYLE[kind].text : ""}`}><PhaseIcon kind={kind} size={12} />{phaseTitle(kind)} <span className="tabular-nums">{activityDuration(ms)}</span></span>)}
-			</div>
-		</div>
-	);
+	return <ActivitySteps groups={activityGroups(activity)} now={now} start={activity.start} onSelect={onSelect} label={t("Elapsed activity history, not completion progress")} />;
 }
 
-/** One disclosure owns the strip and its phase folds, optionally with transcript content. */
+/** Round cards own their text and tools; the complete turn keeps one chronological strip. */
 export function ActivityPanel({ activity, renderContent, controls, waitingForInput = false }: {
 	activity: TurnActivity;
-	renderContent?: PhaseContent;
+	renderContent?: RoundContent;
 	controls?: ReactNode;
 	waitingForInput?: boolean;
 }) {
 	const [open, setOpen] = useState(!!renderContent);
 	const roundRefs = useRef(new Map<number, HTMLDetailsElement>());
-	const refs = useRef(new Map<number, HTMLDetailsElement>());
 	const now = useClock(activity.end === undefined);
 	const step = activity.steps.at(-1);
 	const current = activityGroups(activity).at(-1);
 	const streaming = step && ["thinking", "text", "toolcall"].includes(step.kind);
 	const silence = streaming && activity.lastOutputAt !== undefined ? now - activity.lastOutputAt : 0;
-	const breakdown = open ? <ActivityBreakdown activity={activity} now={now} renderContent={renderContent} detailsRefs={refs.current} roundRefs={roundRefs.current} /> : null;
+	const breakdown = open ? <ActivityBreakdown activity={activity} now={now} renderContent={renderContent} roundRefs={roundRefs.current} /> : null;
 	const select = (id: number) => {
 		setOpen(true);
 		requestAnimationFrame(() => {
 			const round = activityRounds(activityGroups(activity)).find((item) => item.groups.some((group) => group.id === id));
-			const roundDetail = round && roundRefs.current.get(round.id);
-			if (roundDetail) roundDetail.open = true;
-			const detail = refs.current.get(id);
+			const detail = round && roundRefs.current.get(round.id);
 			if (!detail) return;
 			detail.open = true;
 			detail.scrollIntoView({ block: "nearest", behavior: "smooth" });

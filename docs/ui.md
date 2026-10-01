@@ -156,7 +156,7 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
   with total turn time underneath. A caret on that line opens the live timing breakdown
   in place; it is not a separate Stats window. Use `text-body` for the current phase and
   `text-meta` for timing details, in the existing chat gutter and measure.
-- Distinguish preparing, sending/waiting for a provider response, response received/waiting
+- Distinguish request preparation/dispatch, waiting for model output, response received/waiting
   for model output, receiving reasoning/answer/tool-call arguments, specific running tools,
   retry backoff, compaction, and waiting for user input. Only observed phases are labelled.
   Request hooks do not prove upload completion: do not claim “request delivered”, or separate
@@ -165,8 +165,11 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
   cause. Phase and total clocks update live even when the provider is silent.
 - The default tool mode is `Rounds` (saved ID `phases` is preserved): each user turn contains
   collapsed `Round 1`, `Round 2`, … disclosures for model-response/tool cycles. Their headers
-  show wall time, observed tool counts, failures, and the active step while running. Opening a
-  round shows its observed `Requesting`, `Thinking`, `Receiving`, and `Doing` steps.
+  show wall time, observed tool counts, failures, and the active step while running. Each round
+  is a `rounded-sm` bordered card with one always-visible `h-control-sm` timed step bar and
+  coloured labels/durations for its observed `Requesting`, `Thinking`, `Receiving`, and `Doing`
+  steps. No empty phase/subphase disclosures. Opening a round shows received prose/reasoning
+  first, then tool calls; omit missing text rather than show empty sections.
   Requesting covers recorded preparation up to the provider-request hook; Thinking covers
   waiting after that hook until visible model output. Tooltips explain that browser delivery
   and exact upload completion are not measured, and Thinking includes hidden reasoning and
@@ -175,34 +178,36 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
   tools and their brief intervening bookkeeping. Retry, compaction and user waits remain distinct.
   Explicit live/collapsed/grouped/hidden preferences are preserved; `Answer only` also uses timed
   phases when available. Unmeasured old turns retain their ordinary work fold.
-- Phase headers use `text-body`, a 14px icon and `text-meta` wall time; `Doing` shows the call count
-  and failures even while closed. Opening a phase reveals its precise subphases and the actual
-  reasoning/tool cards, with each tool's duration beside its name—not a second transcript.
+- Round headers use `text-body`, a 14px caret and `text-meta` wall time. Their bars show
+  durations in wide segments; the compact legend keeps every observed step and its time readable,
+  including tiny Requesting intervals. Sub-second times use milliseconds instead of `0.0s`.
+  Actual tool rows show the target/path, semantic icon, elapsed duration, and outcome; their
+  own arguments/output remain individually expandable. Tool durations do not form a second log.
   Only the final assistant message's trailing answer stays outside the phase folds.
 - Requesting is `blue-400` / `ArrowUpRight`; Thinking is `pink-400` / `Brain` in phase headers, live status and the elapsed strip/legend.
   The label and icon are pink; the theme maps `pink-400` to a blend of its red and mauve accents.
   Receiving is `green-400` / `ArrowDownLeft`; Doing is
   `amber-400` / `Wrench`. Retry and user waits use `red-400` with `ArrowClockwise` / `QuestionMark`;
   compaction uses `neutral-400` / `ArrowsInLineVertical`. Icons and labels accompany colour.
-- A `Timing · Total` disclosure and an always-visible `h-4` history strip sit below the work.
+- A `Timing · Total` disclosure and an always-visible `h-control-sm` history strip sit below the work.
   Each coloured segment spans a consecutive phase, not each tiny tool call. Width is proportional
   to observed elapsed time, never estimated completion; the active segment grows and is outlined.
   The legend carries icons, names and totals. Clicking or keyboard-activating a segment opens
-  its containing round and phase, then scrolls to that phase. The strip remains visible with all work folded.
-  Round and phase disclosures are collapsed by default. Retries before any response remain in
+  its containing round and scrolls to it. The bottom bar has the same labelled/timed segments
+  and coloured step totals as the round bars. The strip remains visible with all work folded.
+  Round and individual tool disclosures are collapsed by default. Retries before any response remain in
   their current round; later observed request cycles start another. Missing stages are not
   invented for older or incomplete telemetry. Model rounds are not new user-prompt turns.
 - Parallel calls overlap and are not added together in wall-clock totals. Individual call
   durations remain available inside their phase.
-- Orchestrated batches (including native codemode) are one expandable tool card inside Doing.
-  The closed card shows the observed tool-name counts, elapsed duration, nested failures, and
-  whether Pi retained only part of the batch. Opening it reveals indented child calls with their
-  own arguments, outcomes, output when available, and measured durations; deeper batches nest
-  recursively. Codemode cards never show their wrapper script or aggregate output, including
-  in collapsed previews: these duplicate the nested calls. Keep counts, timings, outcomes, and
-  retention notices; ordinary child calls still expose their own arguments and output.
-  Batch and child disclosures are collapsed by default. Preserve the same tree
-  during streaming, reconnects, and transcript reloads; never render children again as siblings.
+- Codemode has no separate disclosure or extra indentation: a muted `via codemode` context
+  line shows its duration/outcome/retention gaps, followed by child tool rows at the same level.
+  Its script and aggregate output remain hidden. Read tools use blue `BookOpen` icons; writing
+  and editing use amber `NotePencil`; commands use `TerminalWindow`; searches use
+  `MagnifyingGlass`; other tools use `Wrench`. Prefer paths/commands over output previews.
+  Round call counts omit codemode wrappers when child calls are observed. Keep wrapper failures
+  visible even without a failed child. The saved parent/child tree is retained for streaming,
+  reconnects and reloads, but codemode's display is flat; never duplicate calls in both forms.
   Do not guess Explore/Modify/Verify stages from tool names or commands. Parent wall time owns
   the outer timeline; overlapping child durations are not added to it. Retention gaps and missing
   historical child output are not presented as complete data or fabricated output.
@@ -412,6 +417,10 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
   pasted contents into titles or hides attachments in the chat. List polls carry
   only attachment labels, not pasted text or image pixels.
 
+- Sessions open in tabs show a 14px `neutral-500` `Eye` at the bottom-right of
+  their row, with an `Open in a tab` tooltip and accessible label. Neither the active
+  session nor background tabs get a persistent row highlight; hover stays unchanged.
+  The eye sits outside the subline's fade, including in search results.
 - A row's subline is two icon + value pairs, `gap-3` apart: a 12px `Clock` with the short
   `timeAgo` of the sort's stamp (`20m`, `now`, no "ago") and a 12px `ChatCircle` with the
   count of user messages. Icons `neutral-500`, values `neutral-400`. The full date lives
