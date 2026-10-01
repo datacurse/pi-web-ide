@@ -113,7 +113,7 @@ function RoundGroup({ round, number, now, renderContent, roundRefs, expandedByDe
 	const calls = tools.filter((tool) => !wrappers.includes(tool));
 	const failed = calls.filter((tool) => tool.isError).length + wrappers.filter((tool) => tool.isError && !calls.some((child) => child.id.startsWith(tool.id + "/") && child.isError)).length;
 	return (
-		<details ref={(element) => { if (element) roundRefs?.set(round.id, element); else roundRefs?.delete(round.id); }} className="group/round overflow-hidden rounded-sm border border-neutral-800" open={open} onToggle={(event) => setOpen(event.currentTarget.open)}>
+		<details ref={(element) => { if (element) roundRefs?.set(round.id, element); else roundRefs?.delete(round.id); }} className="group/round" open={open} onToggle={(event) => setOpen(event.currentTarget.open)}>
 			<summary className="cursor-pointer list-none px-2 py-1 hover:bg-neutral-800/30 [&::-webkit-details-marker]:hidden">
 				<ActivitySteps groups={round.groups} now={now} start={round.start} label={t("Round step timings, not completion progress")}
 					leading={<span className="flex shrink-0 items-center gap-1 text-meta text-neutral-300"><CaretRight size={12} className="group-open/round:rotate-90" aria-hidden />{t("Round {n}", { n: number })}</span>}
@@ -121,7 +121,7 @@ function RoundGroup({ round, number, now, renderContent, roundRefs, expandedByDe
 					status={<>{calls.length > 0 && <span className="text-neutral-500">{plural(calls.length, "1 tool", "{n} tools")}</span>}{failed > 0 && <span className="text-red-400">{t("{n} failed", { n: failed })}</span>}</>}
 				/>
 			</summary>
-			{open && <div className="chat-nested flow-trim flow-root border-t border-neutral-800 px-2 py-1">
+			{open && <div className="chat-nested flow-trim flow-root px-2 py-1">
 				{renderContent ? renderContent(round, now) : <>
 					{tools.some((tool) => tool.label === "codemode") && <p className="mb-2 text-meta text-neutral-500">{t("via codemode")}</p>}
 					{calls.map((tool) => <div key={tool.id} className="flex items-baseline gap-2 py-1 text-meta">

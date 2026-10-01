@@ -23,12 +23,13 @@ export function ToolArguments({ name, args }: { name: string; args: unknown }) {
 		!(key === "edits" && edits !== undefined) &&
 		!(key === "content" && content !== undefined),
 	);
+	if (command !== undefined) return <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 px-3 py-1 text-neutral-300">
+		<pre className="min-w-0 flex-1 whitespace-pre-wrap wrap-anywhere font-mono"><span className="mr-2 select-none text-amber-400" aria-hidden>$</span>{command}</pre>
+		{rest.map(([key, value]) => <div key={key} className="flex gap-2 text-meta"><span className="text-neutral-500">{key}</span><pre className="whitespace-pre-wrap wrap-anywhere">{valueText(value)}</pre></div>)}
+	</div>;
 	return <div className="text-neutral-300">
 		{path !== undefined && <div className="border-b border-neutral-800 px-3 py-2 font-mono whitespace-pre-wrap wrap-anywhere text-blue-400">{path}</div>}
-		{command !== undefined && <div className="p-3">
-			<div className="mb-2 text-caption uppercase tracking-wide text-neutral-500">{t("Command")}</div>
-			<pre className="whitespace-pre-wrap wrap-anywhere font-mono"><span className="mr-2 select-none text-amber-400" aria-hidden>$</span>{command}</pre>
-		</div>}
+
 		{edits?.map((edit, i) => <div key={i} className="border-b border-neutral-800">
 			<div className="px-3 py-1 text-caption text-neutral-500">{t("Changes")} · {i + 1} / {edits.length}</div>
 			<div className="flex max-h-64 min-h-0 flex-col overflow-hidden">
