@@ -80,11 +80,15 @@ fits none of the existing ones, and record it here.
 - Session rows and tabs show the name, else the whole first prompt (or the latest,
   Settings > Sessions > `Session titles`; `sessionLabel`), which runs on to the edge and fades there. Session
   rows have no right padding (`pl-3` only), so that fade sits on the panel's edge.
+- Prompt-derived session titles update from the live chat immediately on Send,
+  including the first prompt, without waiting for a reply or the disk listing.
 - Session list titles (`.session-title`) wrap to Settings > Sessions > `Title lines`
   (1, 2, 3 or All; `pwi:sessionLines`, `data-session-lines` on `<html>`, default 1).
   The last shown line fades at the edge; the pin and state dot sit inline on the first line.
 - Code (editor and diff tabs) soft-wraps; continuation rows keep the line's own
   indent and start with a dim `↳` marker (`wrapIndent()`, `.cm-wrapIndent`).
+- The file editor shows the active-line background only with an empty selection;
+  selecting text hides it so the line and selection highlights do not overlap.
 
 | Token            | Size | Use                                              |
 | ---------------- | ---- | ------------------------------------------------ |

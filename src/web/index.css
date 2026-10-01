@@ -1064,6 +1064,10 @@ input[type="number"]::-webkit-outer-spin-button {
 	background: var(--ed-line);
 }
 
+.cm-editor-host .cm-hasSelection .cm-activeLine {
+	background: transparent;
+}
+
 .cm-editor-host .cm-activeLineGutter {
 	background: transparent;
 	color: var(--ed-gutter-active);

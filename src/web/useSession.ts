@@ -401,6 +401,7 @@ export function useSession({
 				}
 				if (!rr.ok) return undefined;
 				const s = toSnapshot(await rr.json());
+				if (superseded() || esRef.current !== es) return undefined;
 				setSnapshot({ ...s, error: s.error ?? seenErrorRef.current });
 				setPartial(s.partial ?? emptyPartial());
 				setBusy(s.isStreaming);
@@ -417,6 +418,7 @@ export function useSession({
 			let worked = snap.isStreaming;
 
 			es.onmessage = (raw) => {
+				if (superseded() || esRef.current !== es) return;
 				let e: PiEvent;
 				try {
 					e = JSON.parse(raw.data);
@@ -547,10 +549,12 @@ export function useSession({
 	 * it is what moves the transcript and the meter. A refusal (mid-turn) is
 	 * shown where every other session error is.
 	 */
-	const [compacting, setCompacting] = useState(false);
+	const [compactingIds, setCompactingIds] = useState<Set<string>>(() => new Set());
+	const compacting = snapshot ? compactingIds.has(snapshot.id) : false;
 	const compact = useCallback(async (instructions?: string) => {
 		if (!snapshot) return;
-		setCompacting(true);
+		const seq = attachSeq.current;
+		setCompactingIds((ids) => new Set(ids).add(snapshot.id));
 		try {
 			const r = await api.sessions[":id"].compact.$post({
 				param: { id: snapshot.id },
@@ -558,13 +562,24 @@ export function useSession({
 			});
 			if (r.ok) {
 				const fresh = await api.sessions[":id"].$get({ param: { id: snapshot.id } });
-				if (fresh.ok) setSnapshot(toSnapshot(await fresh.json()));
+				if (fresh.ok) {
+					const updated = toSnapshot(await fresh.json());
+					if (attachSeq.current === seq) {
+						setSnapshot((s) => (s?.id === snapshot.id ? updated : s));
+					}
+				}
 				return;
 			}
 			const body = await r.json().catch(() => ({}) as { error?: string });
-			setSnapshot((s) => (s ? { ...s, error: body.error ?? t("could not compact") } : s));
+			if (attachSeq.current === seq) {
+				setSnapshot((s) => (s?.id === snapshot.id ? { ...s, error: body.error ?? t("could not compact") } : s));
+			}
 		} finally {
-			setCompacting(false);
+			setCompactingIds((ids) => {
+				const remaining = new Set(ids);
+				remaining.delete(snapshot.id);
+				return remaining;
+			});
 		}
 	}, [snapshot]);
 

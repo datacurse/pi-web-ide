@@ -1,6 +1,25 @@
 // Run: node --import tsx src/web/sessionName.test.ts
 import assert from "node:assert/strict";
-import { sessionLabel, shortName } from "./sessionName.js";
+import { sessionLabel, sessionPrompts, shortName } from "./sessionName.js";
+import type { PiMessage } from "../shared/types.js";
+
+const message = (role: PiMessage["role"], text: string): PiMessage => ({
+	role, blocks: [{ kind: "text", text }], timestamp: 1,
+});
+const live = sessionPrompts([message("user", "  fix the image viewer  ")]);
+assert.equal(sessionLabel({ firstMessage: "", ...live }, false), "fix the image viewer");
+assert.equal(sessionLabel({ firstMessage: "", ...live }, true), "fix the image viewer");
+assert.equal(sessionLabel({ name: "Custom name", ...live }, false), "Custom name");
+const followup = sessionPrompts([
+	message("user", "fix the image viewer"),
+	message("assistant", "working on it"),
+	message("user", "also add resize"),
+]);
+assert.equal(sessionLabel(followup, false), "fix the image viewer");
+assert.equal(sessionLabel(followup, true), "also add resize");
+assert.deepEqual(sessionPrompts([]), {});
+assert.deepEqual(sessionPrompts([message("user", "  "), message("assistant", "reply")]), {});
+assert.equal(sessionLabel({ firstMessage: "stored prompt", ...sessionPrompts([]) }, false), "stored prompt");
 
 // Precedence: a name always wins, and it wins in both modes.
 const info = {

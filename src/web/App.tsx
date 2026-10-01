@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { X } from "@phosphor-icons/react";
 import { useSession } from "./useSession.js";
+import { sessionPrompts } from "./sessionName.js";
 import { EditorColumn } from "./EditorColumn.js";
 import {
 	LAST_PROJECT_KEY,
@@ -1431,14 +1432,18 @@ export default function App() {
 		// An attached session's live stream beats the 5s poll, so the tab's π
 		// lights the moment a prompt is sent and dims the moment it ends.
 		// The same for a question: it arrives as an event, long before a poll.
-		const live = new Map<string, { isStreaming: boolean; needsInput: boolean }>();
+		const live = new Map<string, { isStreaming: boolean; needsInput: boolean; firstMessage?: string; lastPrompt?: string }>();
 		for (const c of [left, right])
 			if (c.snapshot)
-				live.set(c.snapshot.file ?? c.snapshot.id, { isStreaming: c.busy, needsInput: c.snapshot.ask !== null });
+				live.set(c.snapshot.file ?? c.snapshot.id, {
+					isStreaming: c.busy,
+					needsInput: c.snapshot.ask !== null,
+					...sessionPrompts(c.snapshot.messages),
+				});
 		if (!live.size) return all;
 		return all.map((s) => {
 			const l = live.get(s.path);
-			return l && (l.isStreaming !== s.isStreaming || l.needsInput !== s.needsInput) ? { ...s, ...l } : s;
+			return l ? { ...s, ...l } : s;
 		});
 	}, [
 		sessions,
@@ -1448,10 +1453,12 @@ export default function App() {
 		left.snapshot?.file,
 		left.snapshot?.id,
 		left.snapshot?.ask,
+		left.snapshot?.messages,
 		left.busy,
 		right.snapshot?.file,
 		right.snapshot?.id,
 		right.snapshot?.ask,
+		right.snapshot?.messages,
 		right.busy,
 	]);
 

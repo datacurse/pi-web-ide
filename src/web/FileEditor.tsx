@@ -106,6 +106,9 @@ export function FileEditor({
 						cm.history(),
 						cm.drawSelection(),
 						cm.highlightActiveLine(),
+						cm.EditorView.contentAttributes.of((view) => ({
+							class: view.state.selection.ranges.some((range) => !range.empty) ? "cm-hasSelection" : "",
+						})),
 						cm.highlightSelectionMatches(),
 						cm.bracketMatching(),
 						cm.closeBrackets(),

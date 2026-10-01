@@ -1,4 +1,13 @@
+import type { PiMessage } from "../shared/types.js";
 import { t } from "./i18n.js";
+
+export function sessionPrompts(messages: PiMessage[]): { firstMessage?: string; lastPrompt?: string } {
+	const prompts = messages
+		.filter((m) => m.role === "user")
+		.map((m) => m.blocks.find((b) => b.kind === "text")?.text.trim())
+		.filter((text): text is string => !!text);
+	return prompts.length ? { firstMessage: prompts[0], lastPrompt: prompts[prompts.length - 1] } : {};
+}
 /**
  * What a session is CALLED, in one place.
  *
