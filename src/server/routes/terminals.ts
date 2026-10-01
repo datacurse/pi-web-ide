@@ -40,8 +40,8 @@ export function terminalsRoutes({ cwd: CWD, terminals }: Deps) {
 			}
 		})
 
-		.delete("/terminals/:id", (c) => {
-			terminals.close(c.req.param("id"));
+		.delete("/terminals/:id", async (c) => {
+			await terminals.close(c.req.param("id"));
 			return c.json({ ok: true }, 200);
 		});
 }

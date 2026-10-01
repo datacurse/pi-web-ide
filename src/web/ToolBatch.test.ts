@@ -27,6 +27,24 @@ test("opening a running batch reveals collapsed children with measured timings a
 	assert.match(html,/0\.3s/);
 	assert.doesNotMatch(html,/secret child output/);
 });
+test("codemode cards omit the script and aggregate output whether open, collapsed, or without retained children", () => {
+	for (const open of [false,true]) for (const calls of [children,undefined]) {
+		const html = renderToStaticMarkup(createElement(Tool,{name:"codemode",autoOpen:open,running:open,args:{code:"REDUNDANT_SCRIPT"},result:"REDUNDANT_AGGREGATE_OUTPUT",children:calls,ms:400}));
+		assert.doesNotMatch(html,/REDUNDANT_SCRIPT|REDUNDANT_AGGREGATE_OUTPUT/);
+		assert.match(html,/codemode/);
+		assert.match(html,/0\.4s/);
+		if(calls) {
+			assert.match(html,/read × 1/);
+			assert.match(html,/1 failed/);
+			if(open) assert.match(html,/exit 1/);
+		}
+	}
+});
+test("ordinary calls still show their own arguments and output when opened", () => {
+	const html = renderToStaticMarkup(createElement(Tool,{name:"bash",autoOpen:true,running:true,args:{command:"pnpm test"},result:"ACTUAL_TOOL_OUTPUT"}));
+	assert.match(html,/pnpm test/);
+	assert.match(html,/ACTUAL_TOOL_OUTPUT/);
+});
 test("retention gaps are explicit and partial output does not stop a running child", () => {
 	const html = renderToStaticMarkup(createElement(Tool,{name:"read",autoOpen:true,result:"partial body",running:true,outputUnavailable:true}));
 	assert.match(html,/aria-expanded="true"/);

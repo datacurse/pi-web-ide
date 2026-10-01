@@ -102,7 +102,7 @@ export function Tool({
 	const spinner = useSpinner(running);
 	const elapsed = ms ?? (running && startedAt !== undefined ? Math.max(0, Date.now() - startedAt) : undefined);
 	const target = nested && args && typeof args === "object" ? (args as { path?: unknown; command?: unknown }).path ?? (args as { command?: unknown }).command : undefined;
-	const preview = !open ? result ? resultPreview(result) : typeof target === "string" ? target : "" : "";
+	const preview = !open && name !== "codemode" ? result ? resultPreview(result) : typeof target === "string" ? target : "" : "";
 	const counts = new Map<string, number>();
 	let failures = 0;
 	const count = (calls: PiTool[]) => {
@@ -145,7 +145,7 @@ export function Tool({
 				</div>
 			)}
 			{open && childrenIncomplete && <p className="mt-1 text-meta text-amber-400">{t("Some nested calls were not retained")}</p>}
-			{open && (
+			{open && name !== "codemode" && (
 				<div className="chat-code mt-1 max-h-80 overflow-auto rounded-sm bg-neutral-900 p-2 text-neutral-400">
 					{args !== undefined && (
 						<pre className="mb-2 whitespace-pre-wrap">

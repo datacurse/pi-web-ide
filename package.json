@@ -11,7 +11,7 @@
 		"build": "vite build",
 		"start": "node --import tsx src/server/index.ts",
 		"typecheck": "tsc --noEmit && sh scripts/check-ui.sh && sh scripts/check-api.sh",
-		"test": "node --import tsx --test src/**/*.test.ts"
+		"test": "timeout --kill-after=5s 30s node --import tsx --test --test-timeout=10000 src/**/*.test.ts"
 	},
 	"dependencies": {
 		"@codemirror/autocomplete": "^6.20.3",

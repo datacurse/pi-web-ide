@@ -187,7 +187,10 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
   The closed card shows the observed tool-name counts, elapsed duration, nested failures, and
   whether Pi retained only part of the batch. Opening it reveals indented child calls with their
   own arguments, outcomes, output when available, and measured durations; deeper batches nest
-  recursively. Batch and child disclosures are collapsed by default. Preserve the same tree
+  recursively. Codemode cards never show their wrapper script or aggregate output, including
+  in collapsed previews: these duplicate the nested calls. Keep counts, timings, outcomes, and
+  retention notices; ordinary child calls still expose their own arguments and output.
+  Batch and child disclosures are collapsed by default. Preserve the same tree
   during streaming, reconnects, and transcript reloads; never render children again as siblings.
   Do not guess Explore/Modify/Verify stages from tool names or commands. Parent wall time owns
   the outer timeline; overlapping child durations are not added to it. Retention gaps and missing

@@ -84,7 +84,7 @@ async function suite(): Promise<void> {
 	terminals.write(inSub.id, "pwd\n");
 	await subClient.match(new RegExp(sub));
 	subClient.detach();
-	terminals.close(inSub.id);
+	await terminals.close(inSub.id);
 	rmSync(sub, { recursive: true, force: true });
 	assert.throws(() => terminals.create(CWD, 80, 24, "/tmp/pwi-does-not-exist-ever"), /not a directory/);
 
@@ -155,11 +155,11 @@ async function suite(): Promise<void> {
 	survivor.detach();
 	assert.equal(terminals.list(CWD).find((t) => t.id === one.id)?.running, true);
 
-	terminals.close(one.id);
-	terminals.close(two.id);
+	await terminals.close(one.id);
+	await terminals.close(two.id);
 	assert.deepEqual(terminals.list(CWD), []);
 
-	terminals.disposeAll();
+	await terminals.disposeAll();
 }
 
 // Plain PTYs, then the same shells inside tmux, which is what the server runs.
@@ -180,7 +180,7 @@ try {
 	terminals.write(kept.id, "echo before-$((6*7))\n");
 	await before.match(/before-42/);
 	before.detach();
-	terminals.disposeAll();
+	await terminals.disposeAll();
 
 	terminals = new Terminals(SOCKET);
 	assert.deepEqual(terminals.list(CWD), [{ id: kept.id, cwd: CWD, running: true }]);
@@ -189,11 +189,11 @@ try {
 	terminals.write(kept.id, "echo after-$((6*7))\n");
 	await after.match(/after-42/);
 	after.detach();
-	terminals.close(kept.id);
+	await terminals.close(kept.id);
 	assert.deepEqual(new Terminals(SOCKET).list(CWD), []);
 } finally {
 	try {
-		execFileSync("tmux", ["-L", SOCKET, "kill-server"], { stdio: "ignore" });
+		execFileSync("tmux", ["-L", SOCKET, "kill-server"], { stdio: "ignore", timeout: 5_000 });
 	} catch {
 		/* no server left, which is the point */
 	}

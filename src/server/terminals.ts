@@ -105,6 +105,7 @@ const TMUX_OPTIONS = [
 
 export class Terminals {
 	private terms = new Map<string, Term>();
+	private closing = new Set<Promise<void>>();
 	/**
 	 * The tmux socket each shell lives on, so a shell outlives this server and
 	 * the next one re-attaches it. Undefined without tmux: shells are then
@@ -114,7 +115,7 @@ export class Terminals {
 
 	constructor(socket?: string) {
 		try {
-			if (socket) execFileSync("tmux", ["-V"], { stdio: "ignore" });
+			if (socket) execFileSync("tmux", ["-V"], { stdio: "ignore", timeout: 5_000 });
 			this.socket = socket;
 		} catch {
 			this.socket = undefined;
@@ -126,6 +127,7 @@ export class Terminals {
 		return execFileSync("tmux", ["-L", this.socket ?? "", "-f", "/dev/null", ...args], {
 			encoding: "utf8",
 			stdio: ["ignore", "pipe", "pipe"],
+			timeout: 5_000,
 		});
 	}
 
@@ -324,9 +326,9 @@ export class Terminals {
 	 * away — the same signal closing a terminal window sends, which is what
 	 * `nohup` and a shell's own job handling expect.
 	 */
-	close(id: string): void {
+	close(id: string): Promise<void> {
 		const term = this.terms.get(id);
-		if (!term) return;
+		if (!term) return Promise.resolve();
 		this.terms.delete(id);
 		if (this.socket) {
 			try {
@@ -335,21 +337,15 @@ export class Terminals {
 				// Already gone.
 			}
 		}
-		if (!term.exit) {
-			try {
-				term.pty.kill("SIGHUP");
-			} catch {
-				// Already gone; the exit handler has the rest.
-			}
-		}
 		term.listeners.clear();
+		return this.stop(term);
 	}
 
 	/**
 	 * Called on server exit. Under tmux this only detaches, so the next server
 	 * adopts the shells; without it every shell is killed, so none are orphaned.
 	 */
-	disposeAll(): void {
+	disposeAll(): Promise<void> {
 		for (const [id, term] of [...this.terms]) {
 			if (!this.socket) {
 				this.close(id);
@@ -357,11 +353,31 @@ export class Terminals {
 			}
 			this.terms.delete(id);
 			term.listeners.clear();
-			try {
-				term.pty.kill("SIGHUP");
-			} catch {
-				/* already gone */
-			}
+			this.stop(term);
 		}
+		return Promise.all([...this.closing]).then(() => undefined);
+	}
+
+	private stop(term: Term): Promise<void> {
+		if (term.exit) return Promise.resolve();
+		let subscription: { dispose(): void } | undefined;
+		let escalate: ReturnType<typeof setTimeout> | undefined;
+		let deadline: ReturnType<typeof setTimeout> | undefined;
+		const exit = new Promise<void>((resolve, reject) => {
+			subscription = term.pty.onExit(() => resolve());
+			escalate = setTimeout(() => {
+				try { term.pty.kill("SIGKILL"); } catch { /* Exit may already be queued. */ }
+			}, 1_000);
+			deadline = setTimeout(() => reject(new Error(`Terminal ${term.id} (PTY pid ${term.pty.pid}) did not exit within 2000ms`)), 2_000);
+			try { term.pty.kill("SIGHUP"); } catch { /* Await the exit event even if the process is already gone. */ }
+		});
+		const stopped = exit.finally(() => {
+			clearTimeout(escalate);
+			clearTimeout(deadline);
+			subscription?.dispose();
+		});
+		this.closing.add(stopped);
+		void stopped.then(() => this.closing.delete(stopped), () => this.closing.delete(stopped));
+		return stopped;
 	}
 }

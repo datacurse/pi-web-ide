@@ -6,6 +6,40 @@ new; correct an entry rather than leave a stale one. How pi itself behaves
 (event order, extension loading, bash tracing) is in `docs/pi-facts.md` and
 the probe results in `docs/plans/tool-metrics.md`.
 
+## Test-suite timeout investigation
+
+### 2026-10-01 — one shutdown hang, not five minutes of assertion work
+
+- One full `pnpm test` run reached the terminal test's final `ok`, after
+  its assertions and synchronous tmux cleanup, but never reported that test
+  file as completed. The outer shell deadline killed the run at **300 s**;
+  the package test script itself has no Node test timeout.
+- A subsequent full run passed all **190 tests in 6.6 s**. Four more full
+  runs, instrumented with a five-second per-worker active-handle report and
+  a 12-second Node test timeout, all passed in **4.5–6.8 s**. No worker hang
+  was reproduced or captured. Isolated terminal/usage tests also passed.
+- The log points to `src/server/terminals.test.ts` failing to exit after its
+  work, consistent with a PTY/tmux shutdown handle race. `Terminals.close()`
+  and `disposeAll()` send SIGHUP without awaiting PTY exit. The exact retained
+  handle is **not confirmed** from the original killed process.
+- Diagnostic logs: `/tmp/pwi-codemode-ui-tests.log`,
+  `/tmp/pwi-timeout-investigation.tap`, and `/tmp/pwi-hang-trial-{1..4}.log`.
+  This investigation changed no runtime or test behavior.
+- Follow-up: a deliberately leaking worker printed its completion marker but
+  remained alive past a 300 ms Node `--test-timeout`; an outer five-second
+  deadline ended it with exit 124. Per-test deadlines alone do not cover this
+  post-script shutdown failure. The test command now has a 30-second outer
+  deadline with five seconds of kill grace, plus ten-second individual-test
+  deadlines. Terminal cleanup waits for exit, escalates after one second,
+  and reports a missing exit event after two seconds. Runtime tmux commands
+  and integration-test tmux cleanup are also bounded at five seconds.
+- Final validation: all **196 tests passed in 14.5 s** with the new command,
+  including five mocked PTY shutdown cases and one leaking-worker deadline
+  regression; typecheck passed. The real tmux integration still confirmed that
+  server disposal preserves shells for adoption. This bounds and hardens the
+  suspected shutdown path; it does not prove which handle caused the original
+  intermittent hang.
+
 ## Native codemode experiment
 
 ### 2026-10-01 — compatible, but no aggregate latency win in the first three pairs

@@ -275,8 +275,11 @@ for (const sig of ["SIGINT", "SIGTERM"] as const) {
 		registry.shutdown();
 		// Shells in tmux are detached for the next server to adopt; without
 		// tmux each gets SIGHUP, so none is orphaned holding the project's ports.
-		terminals.disposeAll();
-		server.close(() => process.exit(0));
+		const stopped = terminals.disposeAll().then(() => 0, (err: unknown) => {
+			console.error("[pwi] terminal cleanup failed:", err);
+			return 1;
+		});
+		server.close(() => { void stopped.then((code) => process.exit(code)); });
 		/*
 		 * closeAllConnections is not belt-and-braces here, it is the only thing
 		 * that makes shutdown terminate. server.close() stops accepting new
@@ -301,6 +304,6 @@ for (const sig of ["SIGINT", "SIGTERM"] as const) {
 		 * cannot delay a shutdown that completes on its own; it only bounds
 		 * one that does not.
 		 */
-		setTimeout(() => process.exit(0), 2_000).unref();
+		setTimeout(() => process.exit(0), 3_000).unref();
 	});
 }
