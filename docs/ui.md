@@ -885,6 +885,18 @@ New UI uses these; convert raw markup when you touch it. Tune styles in
   and are not `PanelHeader`. Candidate: `Dialog`.
 - Candidates once they repeat: `Badge`, segmented tabs (Packages).
 
+## Conversation rendering
+
+- Settled conversation rows use the free MIT-licensed `react-virtuoso`, with a 200px
+  buffer above and below the visible area. Variable heights are measured automatically.
+- Keep the existing transcript scroll container, overlay scrollbar, and scroll-past floor.
+  Follow growing content only while pinned within 24px of the bottom; jumping to latest
+  resumes following. A session opens at its latest turn.
+- Memoize history rows. Live content, notices, and the question panel remain mounted
+  outside the virtual history so a typed question answer survives scrolling.
+- Native browser find only sees mounted history; offscreen row-local disclosures can
+  reset when remounted. Virtualization is per row, not inside a single large tool output.
+
 ## Chat code blocks
 
 - Code blocks keep to the reading column (`chat-measure`) and soft-wrap like the editor:

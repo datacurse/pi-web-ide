@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Virtuoso } from "react-virtuoso";
 import { ArrowDown, Check, PaperPlaneTilt, Paperclip, QuestionMark, Square } from "@phosphor-icons/react";
 import type {
 	AskAnswer,
@@ -148,6 +149,30 @@ type Row =
 	| { kind: "tools"; blocks: PiBlock[]; labelled: boolean }
 	| { kind: "phases"; activity: TurnActivity; messages: PiMessage[] };
 
+const HistoryRow = memo(function HistoryRow({
+	row, live, liveBlocks, waitingForInput, workExpanded, toolMode, userMode, thinkingMode, onFork, onEdit,
+}: {
+	row: Row;
+	live?: PiPartial;
+	liveBlocks?: PiBlock[];
+	waitingForInput: boolean;
+	workExpanded: boolean;
+	toolMode: ToolMode;
+	userMode: UserMode;
+	thinkingMode: ThinkingMode;
+	onFork: (at: number) => Promise<void>;
+	onEdit?: (at: number, text: string, images: PiImage[]) => void;
+}) {
+	if (row.kind === "phases") return <TurnWork activity={row.activity} messages={row.messages} partial={live} waitingForInput={waitingForInput} expandedByDefault={workExpanded} />;
+	if (row.kind === "tools") return (
+		<TranscriptRow role="assistant" labelled={row.labelled}>
+			<ToolGroup blocks={liveBlocks ? [...row.blocks, ...liveBlocks] : row.blocks} streaming={!!liveBlocks} />
+		</TranscriptRow>
+	);
+	if (row.role === "compaction") return <CompactionRow text={row.blocks.map((block) => block.kind === "text" ? block.text : "").join("\n").trim()} />;
+	return <Message role={row.role} blocks={row.blocks} labelled={row.labelled} autoOpenTools={toolMode === "live"} userMode={userMode} foldThinking={thinkingMode === "folded"} footer={row.footer} onFork={onFork} at={row.at} onEdit={onEdit} />;
+});
+
 /** Page-wide: with two columns, only the first composer to show takes the load focus. */
 let focusedOnLoad = false;
 
@@ -246,6 +271,12 @@ export function Chat({
 	const [contextOpen, setContextOpen] = useState(false);
 	const closeContext = useCallback(() => setContextOpen(false), []);
 	const viewport = useRef<HTMLDivElement>(null);
+	const content = useRef<HTMLDivElement>(null);
+	const [scrollParent, setScrollParent] = useState<HTMLDivElement | null>(null);
+	const attachViewport = useCallback((element: HTMLDivElement | null) => {
+		viewport.current = element;
+		setScrollParent(element);
+	}, []);
 	const fileInput = useRef<HTMLInputElement>(null);
 	/**
 	 * The staged images, readable synchronously. A paste is async (the blob has
@@ -398,6 +429,17 @@ export function Chat({
 		const el = viewport.current;
 		if (el && pinned.current) el.scrollTop = el.scrollHeight;
 	}, [snapshot?.messages.length, partial.text, partial.thinking]);
+
+	useEffect(() => {
+		const el = viewport.current;
+		const body = content.current;
+		if (!el || !body) return;
+		const resize = new ResizeObserver(() => {
+			if (pinned.current) el.scrollTop = el.scrollHeight;
+		});
+		resize.observe(body);
+		return () => resize.disconnect();
+	}, [snapshot?.id, scrollParent]);
 
 	/**
 	 * A call settles into the transcript with the message that made it, then
@@ -794,7 +836,7 @@ export function Chat({
 			    row that is. */}
 				<div className="relative flex min-h-0 flex-1 flex-col">
 				<div
-					ref={viewport}
+					ref={attachViewport}
 					onScroll={(e) => {
 						const el = e.currentTarget;
 						const bottom =
@@ -804,6 +846,7 @@ export function Chat({
 						// otherwise, which React would coalesce but still has to diff.
 						setAtBottom((was) => (was === bottom ? was : bottom));
 					}}
+					style={{ overflowAnchor: "none" }}
 					className="no-scrollbar fade-bottom min-h-0 flex-1 overflow-y-auto pb-[max(3rem,var(--chat-scroll-past,0px))]"
 				>
 					{snapshot.messages.length === 0 && !hasPartial && !busy && !command && (
@@ -816,40 +859,29 @@ export function Chat({
 							</div>
 						</div>
 					)}
-					{rows.map((r, i) =>
-						r.kind === "phases" ? (
-							<TurnWork key={`${snapshot.id}:${r.activity.start}`} activity={r.activity} messages={r.messages} partial={busy && r.activity.end === undefined ? { text: partial.text, thinking: showThinking ? partial.thinking : "", tools: liveTools } : undefined} waitingForInput={r.activity.end === undefined && !!snapshot.ask} expandedByDefault={workExpanded} />
-						) : r.kind === "tools" ? (
-							<TranscriptRow key={i} role="assistant" labelled={r.labelled}>
-								{joinFold && i === rows.length - 1 ? (
-									<ToolGroup blocks={[...r.blocks, ...partialFold]} streaming />
-								) : (
-									<ToolGroup blocks={r.blocks} />
-								)}
-							</TranscriptRow>
-						) : r.role === "compaction" ? (
-							<CompactionRow
-								key={i}
-								text={r.blocks
-									.map((b) => (b.kind === "text" ? b.text : ""))
-									.join("\n")
-									.trim()}
-							/>
-						) : (
-							<Message
-								key={i}
-								role={r.role}
-								blocks={r.blocks}
-								labelled={r.labelled}
-								autoOpenTools={toolMode === "live"}
-								userMode={userMode}
-								foldThinking={thinkingMode === "folded"}
-								footer={r.footer}
-								onFork={onFork}
-								at={r.at}
-								onEdit={busy ? undefined : onEdit}
-							/>
-						),
+					<div ref={content}>
+					{scrollParent && rows.length > 0 && (
+						<Virtuoso
+							key={`${snapshot.id}:${toolMode}:${thinkingMode}`}
+							customScrollParent={scrollParent}
+							data={rows}
+							increaseViewportBy={200}
+							computeItemKey={(i, row) => row.kind === "phases" ? `phases:${row.activity.start}` : `${row.kind}:${row.kind === "message" ? row.at ?? "" : ""}:${i}`}
+							itemContent={(i, row) => (
+								<HistoryRow
+									row={row}
+									live={row.kind === "phases" && busy && row.activity.end === undefined ? { text: partial.text, thinking: showThinking ? partial.thinking : "", tools: liveTools } : undefined}
+									liveBlocks={joinFold && i === rows.length - 1 ? partialFold : undefined}
+									waitingForInput={row.kind === "phases" && row.activity.end === undefined && !!snapshot.ask}
+									workExpanded={workExpanded}
+									toolMode={toolMode}
+									userMode={userMode}
+									thinkingMode={thinkingMode}
+									onFork={onFork}
+									onEdit={busy ? undefined : onEdit}
+								/>
+							)}
+						/>
 					)}
 
 					{hasPartial && !phasedLive && (
@@ -953,6 +985,7 @@ export function Chat({
 							</div>
 						</div>
 					)}
+					</div>
 				</div>
 				<OverlayScrollbar target={viewport} />
 				</div>
