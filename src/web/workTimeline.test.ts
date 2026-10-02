@@ -159,20 +159,23 @@ test("codemode lists nested calls in order without exposing its input or output"
 	const html = renderToStaticMarkup(createElement(WorkTimeline, { blocks: [batch], expanded: true }));
 	assert.match(html, /codemode tool list/);
 	assert.match(html, /class="pl-4 \[&amp;&gt;\*\]:my-0"/);
-	assert.ok(html.indexOf(">codemode<") < html.indexOf("Read first.ts"));
-	assert.ok(html.indexOf("Read first.ts") < html.indexOf("Searched second"));
-	assert.ok(html.indexOf("Searched second") < html.indexOf("Ran pnpm test"));
+	assert.ok(html.indexOf(">codemode<") < html.indexOf(" first.ts"));
+	assert.ok(html.indexOf(" first.ts") < html.indexOf(" second"));
+	assert.ok(html.indexOf(" second") < html.indexOf(" pnpm test"));
+	assert.match(html, /<span class="text-neutral-200">Read<\/span><span class="text-neutral-500"> first.ts<\/span>/);
+	assert.match(html, /<span class="text-neutral-200">Searched<\/span><span class="text-neutral-500"> second<\/span>/);
+	assert.match(html, /<span class="text-neutral-200">Ran<\/span><span class="text-neutral-500"> pnpm test<\/span>/);
 	assert.doesNotMatch(html, /hidden wrapper|hidden nested/);
 });
 
 test("codemode child status markers reflect confirmed outcomes, not partial or interrupted calls", () => {
 	const children: PiTool[] = [
-		{ ...tool("success"), result: "", isError: false },
-		{ ...tool("failure"), result: "error", isError: true },
+		{ ...tool("success"), result: "", isError: false, outputUnavailable: true },
+		{ ...tool("failure"), result: "", isError: true, outputUnavailable: true },
 		{ ...tool("running"), result: "partial output", running: true },
 		{ ...tool("pending") },
-		{ ...tool("interrupted"), result: "partial output", interrupted: true },
-		{ ...tool("unavailable"), outputUnavailable: true },
+		{ ...tool("interrupted"), result: "", isError: false, interrupted: true, outputUnavailable: true },
+		{ ...tool("unavailable"), result: "", outputUnavailable: true },
 	];
 	const html = renderToStaticMarkup(createElement(WorkTimeline, {
 		blocks: [{ kind: "tool", ...tool("batch", "codemode"), children }], expanded: true,

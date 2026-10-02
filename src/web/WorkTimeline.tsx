@@ -37,8 +37,8 @@ function Tool({ tool, nested = false }: { tool: PiTool; nested?: boolean }) {
 		</div>}
 	</div> : <RawBlocks blocks={[{ kind: "tool", ...tool }]} />;
 	if (!nested) return content;
-	const completed = !tool.running && !tool.interrupted && !tool.outputUnavailable
-		&& (tool.isError !== undefined || tool.result !== undefined);
+	const completed = !tool.running && !tool.interrupted
+		&& (tool.isError !== undefined || (!tool.outputUnavailable && tool.result !== undefined));
 	return <div className="relative [&>*]:my-0">
 		{completed && <span role="img" aria-label={tool.isError ? "Tool failed" : "Tool succeeded"} className={`absolute -left-4 top-[0.25em] ${tool.isError ? "text-red-400" : "text-green-400"}`}>
 			{tool.isError ? <X size={12} weight="bold" aria-hidden /> : <Check size={12} weight="bold" aria-hidden />}
