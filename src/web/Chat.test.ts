@@ -251,4 +251,12 @@ test("live todos render directly under Show work, not beside the composer", () =
 	const checklist = rowNodes.findIndex((node) => node.type === TodoList);
 	assert.ok(toggle >= 0 && checklist > toggle);
 	assert.equal(rowNodes[checklist].props.tasks[0].subject, "Move checklist");
+	selected.props.onToggle();
+	const updated = env.render().find((node) => node.type === Virtuoso)!;
+	const opened = updated.props.itemContent(i, updated.props.data[i]) as Node;
+	assert.equal(opened.props.expanded, true);
+	const expandedNodes = descendants((opened.type as any).type(opened.props));
+	const work = expandedNodes.findIndex((node) => node.type === RawBlocks && node.props.blocks === opened.props.row.work);
+	const expandedChecklist = expandedNodes.findIndex((node) => node.type === TodoList);
+	assert.ok(work >= 0 && expandedChecklist > work);
 });

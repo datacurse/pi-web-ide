@@ -124,8 +124,8 @@ const HistoryRow = memo(function HistoryRow({ row, expanded, onToggle, userMode,
 		{row.role !== "assistant" && <div className="font-mono text-meta text-neutral-500">{row.role}</div>}
 		{(!!row.work?.length || row.running) && <>
 			<Button size="sm" variant="subtle" aria-expanded={expanded} onClick={onToggle}>{expanded ? "Hide work" : "Show work"}</Button>
+			{expanded && <RawBlocks blocks={row.work ?? []} streaming={row.running} />}
 			{!!row.todos?.length && <div className="mt-3"><TodoList tasks={row.todos} /></div>}
-			{expanded && <RawBlocks blocks={row.work ?? []} />}
 		</>}
 		<RawBlocks blocks={row.blocks} />
 	</div></div>;
