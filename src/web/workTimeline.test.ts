@@ -158,7 +158,7 @@ test("codemode lists nested calls in order without exposing its input or output"
 	] };
 	const html = renderToStaticMarkup(createElement(WorkTimeline, { blocks: [batch], expanded: true }));
 	assert.match(html, /codemode tool list/);
-	assert.match(html, /class="pl-4"/);
+	assert.match(html, /class="pl-4 \[&amp;&gt;\*\]:my-0"/);
 	assert.ok(html.indexOf(">codemode<") < html.indexOf("Read first.ts"));
 	assert.ok(html.indexOf("Read first.ts") < html.indexOf("Searched second"));
 	assert.ok(html.indexOf("Searched second") < html.indexOf("Ran pnpm test"));

@@ -32,7 +32,7 @@ function Thought({ item, expanded, shimmer = false }: { item: ThoughtItem; expan
 function Tool({ tool }: { tool: PiTool }) {
 	if (tool.name === "codemode" || tool.name.endsWith(".codemode")) return <div data-custom="codemode tool list" className="my-3 text-neutral-300">
 		<div className="font-mono chat-code">{tool.name}</div>
-		{!!tool.children?.length && <div className="pl-4">
+		{!!tool.children?.length && <div className="pl-4 [&>*]:my-0">
 			{tool.children.map((child) => <Tool key={child.id} tool={child} />)}
 		</div>}
 	</div>;
