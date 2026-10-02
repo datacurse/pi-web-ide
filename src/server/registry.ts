@@ -240,6 +240,7 @@ export class Registry {
 					const t = entry.partial.tools.find((t) => t.id === e.id);
 					if (t) {
 						t.result = e.result;
+						if (e.todos !== undefined) t.todos = e.todos;
 						t.isError = e.isError;
 						if (e.at !== undefined && t.startedAt !== undefined) { t.durationMs = Math.max(0, e.at - t.startedAt); t.running = false; }
 					}

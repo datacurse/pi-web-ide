@@ -1,3 +1,4 @@
+import { TodoList } from "./TodoList.js";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Virtuoso } from "react-virtuoso";
 import { ArrowDown, Check, PaperPlaneTilt, Paperclip, QuestionMark, Square } from "@phosphor-icons/react";
@@ -123,6 +124,7 @@ const HistoryRow = memo(function HistoryRow({ row, expanded, onToggle, userMode,
 		{row.role !== "assistant" && <div className="font-mono text-meta text-neutral-500">{row.role}</div>}
 		{(!!row.work?.length || row.running) && <>
 			<Button size="sm" variant="subtle" aria-expanded={expanded} onClick={onToggle}>{expanded ? "Hide work" : "Show work"}</Button>
+			{!!row.todos?.length && <div className="mt-3"><TodoList tasks={row.todos} /></div>}
 			{expanded && <RawBlocks blocks={row.work ?? []} />}
 		</>}
 		<RawBlocks blocks={row.blocks} />

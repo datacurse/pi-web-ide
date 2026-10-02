@@ -466,7 +466,7 @@ export function useSession({
 						setPartial((p) => ({
 							...p,
 							tools: p.tools.map((t) =>
-								t.id === e.id ? { ...t, result: e.result, isError: e.isError,
+								t.id === e.id ? { ...t, result: e.result, isError: e.isError, ...(e.todos !== undefined ? { todos: e.todos } : {}),
 									durationMs: e.at !== undefined && t.startedAt !== undefined ? Math.max(0, e.at - t.startedAt) : t.durationMs,
 									running: t.parentId ? false : t.running } : t,
 							),

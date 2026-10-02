@@ -13,6 +13,7 @@
 import type { Hunk } from "./hunks.js";
 import type { TurnActivity } from "./activity.js";
 
+import type { TodoTask } from "./todos.js";
 /**
  * What this server is. `/api/health` reports it, and the port takeover
  * refuses to act on a health body that does not carry it — a server from the
@@ -44,6 +45,8 @@ export interface PiTool {
 	name: string;
 	args: unknown;
 	result?: string;
+	/** Full task snapshot returned by the todo extension. */
+	todos?: TodoTask[];
 	diff?: string;
 	isError?: boolean;
 	parentId?: string;
@@ -164,7 +167,7 @@ export type PiEvent =
 	 * output with it rather than appending.
 	 */
 	| { type: "tool_update"; id: string; result: string }
-	| { type: "tool_end"; id: string; name: string; isError: boolean; result: string; at?: number }
+	| { type: "tool_end"; id: string; name: string; isError: boolean; result: string; todos?: TodoTask[]; at?: number }
 	| { type: "message_done"; message: PiMessage }
 	| { type: "notice"; notice: PiNotice }
 	| { type: "ask"; ask: PiAsk | null }

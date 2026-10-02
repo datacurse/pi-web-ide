@@ -12,6 +12,7 @@ import * as transcript from "./Transcript.js";
 import type { Snapshot } from "../shared/types.js";
 
 import { RawBlocks } from "./RawOutput.js";
+import { TodoList } from "./TodoList.js";
 
 const require = createRequire(import.meta.url);
 const modules: Record<string, unknown> = {
@@ -39,6 +40,7 @@ const modules: Record<string, unknown> = {
 	"./piMark.js": require("./piMark.js"),
 	"./PastedTexts.js": require("./PastedTexts.js"),
 	"./pastedText.js": require("./pastedText.js"),
+	"./TodoList.js": { TodoList },
 };
 const source = ts.transpileModule(readFileSync(new URL("./Chat.tsx", import.meta.url), "utf8"), {
 	compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX },
@@ -232,4 +234,21 @@ test("raw live tools stay visible without folding or duplicating settled calls",
 	const list = nodes.find((node) => node.type === Virtuoso)!;
 	assert.equal(list.props.data[0].work[0].result, "raw output");
 	assert.deepEqual(Array.from(list.props.data[0].work, (block: any) => block.id), ["a", "b"]);
+});
+
+test("live todos render directly under Show work, not beside the composer", () => {
+	const env = harness();
+	env.props.busy = true;
+	env.props.partial.tools = [{ id: "todo", name: "todo", args: {}, todos: [{ id: 1, subject: "Move checklist", status: "in_progress" }] }];
+	const nodes = env.render();
+	assert.equal(nodes.some((node) => node.type === TodoList), false);
+	const list = nodes.find((node) => node.type === Virtuoso)!;
+	const i = list.props.data.length - 1;
+	const selected = list.props.itemContent(i, list.props.data[i]) as Node;
+	assert.equal(selected.props.expanded, false);
+	const rowNodes = descendants((selected.type as any).type(selected.props));
+	const toggle = rowNodes.findIndex((node) => node.props.children === "Show work");
+	const checklist = rowNodes.findIndex((node) => node.type === TodoList);
+	assert.ok(toggle >= 0 && checklist > toggle);
+	assert.equal(rowNodes[checklist].props.tasks[0].subject, "Move checklist");
 });
