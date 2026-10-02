@@ -53,7 +53,7 @@ function SourceLines({
       : lines.map((line) => [{ text: line, cls: "" }]);
   return (
     <div
-      aria-label={removed ? "Removed lines" : "Replacement lines"}
+      aria-label={removed ? "Removed lines" : "Added lines"}
       data-language={language}
       className={
         removed
@@ -178,27 +178,28 @@ export function AnchorDiff({ diff }: { diff: Diff }) {
             : " · line unavailable"}
         </div>
       )}
-      {diff.removed ? (
-        <SourceLines
-          lines={removed}
-          location={diff}
-          gutterWidth={gutterWidth}
-          changes={changes?.removed}
-          removed
-        />
-      ) : (
-        <div
-          aria-label="Removed range"
-          className="border-l-2 border-red-400 px-3 py-2 text-red-300"
-        >
-          {diff.from === diff.to
-            ? `Remove line ${diff.from}`
-            : `Remove lines ${diff.from} → ${diff.to} (inclusive)`}
-          <span className="ml-3 text-meta text-neutral-500">
-            Previous source unavailable in tool result
-          </span>
-        </div>
-      )}
+      {diff.kind === "replace" &&
+        (diff.removed ? (
+          <SourceLines
+            lines={removed}
+            location={diff}
+            gutterWidth={gutterWidth}
+            changes={changes?.removed}
+            removed
+          />
+        ) : (
+          <div
+            aria-label="Removed range"
+            className="border-l-2 border-red-400 px-3 py-2 text-red-300"
+          >
+            {diff.from === diff.to
+              ? `Remove line ${diff.from}`
+              : `Remove lines ${diff.from} → ${diff.to} (inclusive)`}
+            <span className="ml-3 text-meta text-neutral-500">
+              Previous source unavailable in tool result
+            </span>
+          </div>
+        ))}
       {added.length > 0 && (
         <SourceLines
           lines={added}

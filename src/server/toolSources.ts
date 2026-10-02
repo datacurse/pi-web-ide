@@ -209,6 +209,35 @@ export class ToolSourceTracker {
           ? resolve(this.cwd, args.path)
           : undefined;
       if (
+        name === "insert" &&
+        typeof args.anchor === "string" &&
+        (args.direction === "before" || args.direction === "after")
+      ) {
+        const candidates = [
+          ...(this.anchors.get(args.anchor)?.values() ?? []),
+        ].filter((anchor) => !path || anchor.path === path);
+        if (candidates.length === 1) {
+          const anchor = candidates[0];
+          path = anchor.path;
+          const content = this.read(path);
+          const line =
+            content === undefined
+              ? undefined
+              : hash(content) === anchor.hash
+                ? anchor.line
+                : uniqueLine(content, [anchor.text]);
+          this.set(id, {
+            path,
+            removed: [],
+            ...(line !== undefined
+              ? {
+                  line: line + (args.direction === "after" ? 1 : 0),
+                }
+              : {}),
+          });
+        } else if (path) this.set(id, { path, removed: [] });
+      }
+      if (
         name === "replace" &&
         typeof args.remove_from === "string" &&
         typeof args.remove_to === "string"
@@ -275,7 +304,7 @@ export class ToolSourceTracker {
           });
         } else if (path) this.set(id, { path });
       }
-      if (READ_TOOLS.has(name) || name === "replace") {
+      if (READ_TOOLS.has(name) || name === "replace" || name === "insert") {
         this.pending.set(id, {
           name,
           path,
@@ -353,7 +382,7 @@ export class ToolSourceTracker {
       if (
         tool.isError ||
         tool.running ||
-        tool.name.split(".").pop() !== "replace"
+        !["replace", "insert"].includes(tool.name.split(".").pop() ?? "")
       )
         continue;
       let previous = this.sources.get(tool.id) ?? tool.source;
@@ -361,6 +390,12 @@ export class ToolSourceTracker {
       const args = isRecord(tool.args) ? tool.args : {};
       if (!previous && typeof args.path === "string")
         previous = { path: resolve(this.cwd, args.path) };
+      const insertion = tool.name.split(".").pop() === "insert";
+      if (!previous && insertion && typeof args.anchor === "string") {
+        const candidates = [...(this.anchors.get(args.anchor)?.keys() ?? [])];
+        if (candidates.length === 1)
+          previous = { path: candidates[0], removed: [] };
+      }
       if (
         !previous &&
         typeof args.remove_from === "string" &&
@@ -373,7 +408,7 @@ export class ToolSourceTracker {
         if (candidates.length === 1) previous = { path: candidates[0] };
       }
       if (previous) this.set(tool.id, previous);
-      const lines = args.replacement_lines;
+      const lines = insertion ? args.lines : args.replacement_lines;
       if (
         !Array.isArray(lines) ||
         !lines.length ||

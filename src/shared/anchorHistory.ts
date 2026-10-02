@@ -293,11 +293,13 @@ export function recordedAnchorSources(
         ? args.replacement_lines
         : undefined;
     const removed =
-      name === "replace" && from && to
-        ? (tool.source?.removed ??
-          history.range(from, to, path) ??
-          removedRange(result, from, to))
-        : undefined;
+      name === "insert"
+        ? []
+        : name === "replace" && from && to
+          ? (tool.source?.removed ??
+            history.range(from, to, path) ??
+            removedRange(result, from, to))
+          : undefined;
     sources.set(tool.id, {
       path,
       ...tool.source,
