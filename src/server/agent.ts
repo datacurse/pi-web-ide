@@ -59,7 +59,6 @@ import { join } from "node:path";
 
 import { isRecord, records } from "./guards.js";
 import { nestTools } from "../shared/toolTree.js";
-import { todoTasks } from "../shared/todos.js";
 import type { PiTool } from "../shared/types.js";
 import { ActivityTracker } from "./activity.js";
 import type { TurnActivity } from "../shared/activity.js";
@@ -284,7 +283,6 @@ export function toPiMessage(m: AgentMessage): PiMessage {
 					args: undefined,
 					result: textOf(m.content),
 					diff: isRecord(m.details) && typeof m.details.diff === "string" ? m.details.diff : undefined,
-					...(todoTasks(m.toolName, m.details) !== undefined ? { todos: todoTasks(m.toolName, m.details) } : {}),
 					isError: Boolean(m.isError),
 					...nestedTools(m.nestedCalls, String(m.toolCallId ?? "")),
 				},
@@ -408,7 +406,7 @@ export function stitch(messages: PiMessage[]): PiMessage[] {
 			blocks: m.blocks.map((b) => {
 				if (b.kind !== "tool") return b;
 				const r = results.get(b.id);
-				return r ? { ...b, result: r.result, isError: r.isError, ...(r.todos !== undefined ? { todos: r.todos } : {}), ...(r.children ? { children: r.children, childrenIncomplete: r.childrenIncomplete } : {}) } : b;
+				return r ? { ...b, result: r.result, isError: r.isError, ...(r.children ? { children: r.children, childrenIncomplete: r.childrenIncomplete } : {}) } : b;
 			}),
 		}));
 }
@@ -2046,7 +2044,6 @@ export function toEvents(frame: Record<string, unknown>): PiEvent[] {
 					name: String(frame.toolName ?? ""),
 					isError: Boolean(frame.isError),
 					result: textOf(isRecord(frame.result) ? frame.result.content : undefined),
-					...(todoTasks(frame.toolName, isRecord(frame.result) ? frame.result.details : undefined) !== undefined ? { todos: todoTasks(frame.toolName, isRecord(frame.result) ? frame.result.details : undefined) } : {}),
 					...(typeof frame.parentToolCallId === "string" ? { at: Date.now() } : {}),
 				},
 			];

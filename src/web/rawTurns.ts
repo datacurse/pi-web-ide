@@ -1,6 +1,5 @@
-import type { PiBlock, PiMessage, PiPartial, PiTool } from "../shared/types.js";
+import type { PiBlock, PiMessage, PiPartial } from "../shared/types.js";
 import type { TurnActivity } from "../shared/activity.js";
-import { sessionTodos, type TodoTask } from "../shared/todos.js";
 
 export type RawRow = {
 	role: PiMessage["role"];
@@ -8,7 +7,6 @@ export type RawRow = {
 	answerAt?: number;
 	blocks: PiBlock[];
 	work?: PiBlock[];
-	todos?: TodoTask[];
 	running?: boolean;
 	workStartedAt?: number;
 	workEndedAt?: number;
@@ -31,8 +29,6 @@ function partitionTurn(messages: PiMessage[], live: boolean): { work: PiMessage[
 /** One disclosure per assistant turn, with only its settled final answer outside. */
 export function rawRows(messages: PiMessage[], partial: PiPartial, busy: boolean, activity: TurnActivity[] = []): RawRow[] {
 	const rows: RawRow[] = [];
-	const history: PiMessage[] = [];
-	const hasTodo = (tool: PiTool): boolean => tool.name === "todo" || (tool.children ?? []).some(hasTodo);
 	let turn: PiMessage[] = [];
 	let turnAt: number | undefined;
 	const flush = (live: boolean) => {
@@ -44,14 +40,10 @@ export function rawRows(messages: PiMessage[], partial: PiPartial, busy: boolean
 			...(partial.text ? [{ kind: "text" as const, text: partial.text }] : []),
 			...partial.tools.map((tool) => ({ kind: "tool" as const, ...tool })),
 		);
-		const turnTools = turn.flatMap((message) => message.blocks.filter((block) => block.kind === "tool"));
-		const hasTodos = turnTools.some(hasTodo) || (live && partial.tools.some(hasTodo));
-		history.push(...turn);
-		const todos = hasTodos ? sessionTodos(history, live ? partial : { text: "", thinking: "", tools: [] }) : [];
 		const at = turnAt ?? turn[0]?.timestamp ?? 0;
 		const trace = activity.find((item) => item.asked === at);
 		rows.push({
-			role: "assistant", at, answerAt: answer?.timestamp, blocks: answer?.blocks ?? [], work: blocks, running: live, todos, activity: trace,
+			role: "assistant", at, answerAt: answer?.timestamp, blocks: answer?.blocks ?? [], work: blocks, running: live, activity: trace,
 			workStartedAt: trace?.start ?? turnAt ?? turn[0]?.timestamp,
 			// Never use the next prompt or the current clock as a historical end time.
 			workEndedAt: live ? undefined : trace?.end ?? turn.at(-1)?.endedAt,

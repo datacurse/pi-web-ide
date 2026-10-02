@@ -12,7 +12,6 @@ import * as transcript from "./Transcript.js";
 import type { Snapshot } from "../shared/types.js";
 
 import { RawBlocks } from "./RawOutput.js";
-import { TodoList } from "./TodoList.js";
 import { WorkTimeline } from "./WorkTimeline.js";
 
 const require = createRequire(import.meta.url);
@@ -38,7 +37,6 @@ const modules: Record<string, unknown> = {
 	"./piMark.js": require("./piMark.js"),
 	"./PastedTexts.js": require("./PastedTexts.js"),
 	"./pastedText.js": require("./pastedText.js"),
-	"./TodoList.js": { TodoList },
 	"./WorkTimeline.js": { WorkTimeline },
 };
 const source = ts.transpileModule(readFileSync(new URL("./Chat.tsx", import.meta.url), "utf8"), {
@@ -230,36 +228,24 @@ test("raw live tools stay visible without folding or duplicating settled calls",
 	assert.deepEqual(Array.from(list.props.data[0].work, (block: any) => block.id), ["a", "b"]);
 });
 
-test("live todos render directly under the work timeline, not beside the composer", () => {
+test("legacy todo calls do not create a checklist in the transcript", () => {
 	const env = harness();
 	env.props.busy = true;
-	env.props.partial.tools = [{ id: "todo", name: "todo", args: {}, todos: [{ id: 1, subject: "Move checklist", status: "in_progress" }] }];
-	const nodes = env.render();
-	assert.equal(nodes.some((node) => node.type === TodoList), false);
-	const list = nodes.find((node) => node.type === Virtuoso)!;
+	env.props.partial.tools = [{ id: "todo", name: "todo", args: {} }];
+	const list = env.render().find((node) => node.type === Virtuoso)!;
 	const i = list.props.data.length - 1;
 	const selected = list.props.itemContent(i, list.props.data[i]) as Node;
-	assert.equal(selected.props.expanded, false);
 	const rowNodes = descendants((selected.type as any).type(selected.props));
-	const toggle = rowNodes.findIndex((node) => node.type === WorkTimeline);
-	const checklist = rowNodes.findIndex((node) => node.type === TodoList);
-	assert.ok(toggle >= 0 && checklist > toggle);
-	assert.equal(rowNodes[checklist].props.tasks[0].subject, "Move checklist");
-	selected.props.onToggle();
-	const updated = env.render().find((node) => node.type === Virtuoso)!;
-	const opened = updated.props.itemContent(i, updated.props.data[i]) as Node;
-	assert.equal(opened.props.expanded, true);
-	const expandedNodes = descendants((opened.type as any).type(opened.props));
-	const work = expandedNodes.findIndex((node) => node.type === WorkTimeline && node.props.blocks === opened.props.row.work);
-	const expandedChecklist = expandedNodes.findIndex((node) => node.type === TodoList);
-	assert.ok(work >= 0 && expandedChecklist > work);
+	assert.ok(rowNodes.some((node) => node.type === WorkTimeline));
+	assert.equal("todos" in selected.props.row, false);
+	assert.equal(rowNodes.some((node) => node.props["aria-label"] === "Todos"), false);
 });
 
 test("settled answer actions use the assistant timestamp and are absent while streaming", () => {
 	const env = harness();
 	env.props.snapshot!.messages = [
 		{ role: "user", timestamp: 1, blocks: [{ kind: "text", text: "question" }] },
-		{ role: "assistant", timestamp: 2, blocks: [{ kind: "thinking", text: "reasoning" }, { kind: "text", text: "answer" }] },
+		{ role: "assistant", timestamp: 2, endedAt: 12002, blocks: [{ kind: "thinking", text: "reasoning" }, { kind: "text", text: "answer" }] },
 	];
 	const rowNodes = () => {
 		const list = env.render().find((node) => node.type === Virtuoso)!;
@@ -268,6 +254,8 @@ test("settled answer actions use the assistant timestamp and are absent while st
 	};
 	const actions = rowNodes().find((node) => node.type === transcript.AnswerActions)!;
 	assert.equal(actions.props.at, 2);
+	assert.equal(actions.props.respondedAt, 12002, "age starts at completion, not generation start");
+	assert.equal(actions.props.durationMs, 12001);
 	assert.equal(actions.props.text, "answer");
 	assert.equal(actions.props.onFork, env.props.onFork);
 	env.props.busy = true;

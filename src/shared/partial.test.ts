@@ -14,11 +14,9 @@ test("deltas append but cumulative tool output replaces; input state is never mu
 	const latest = reducePartial(updated, { type: "tool_update", id: "child", result: "complete output" });
 	assert.equal(started.tools[0].result, undefined);
 	assert.equal(latest.tools[0].result, "complete output");
-	const todos = [{ id: 1, subject: "Implement", status: "completed" as const }];
-	const done = reducePartial(latest, { type: "tool_end", id: "child", name: "read", result: "done", isError: false, at: 1300, todos });
+	const done = reducePartial(latest, { type: "tool_end", id: "child", name: "read", result: "done", isError: false, at: 1300 });
 	assert.equal(done.tools[0].durationMs, 300);
 	assert.equal(done.tools[0].running, false);
-	assert.deepEqual(done.tools[0].todos, todos);
 	assert.equal(latest.tools[0].running, true);
 	assert.deepEqual(reducePartial(done, { type: "idle" }), emptyPartial());
 	assert.deepEqual(reducePartial(done, { type: "message_done", message: { role: "assistant", timestamp: 1400, blocks: [] } }), emptyPartial());

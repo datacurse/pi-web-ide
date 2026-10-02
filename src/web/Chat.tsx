@@ -1,4 +1,3 @@
-import { TodoList } from "./TodoList.js";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Virtuoso } from "react-virtuoso";
 import { ArrowDown, CaretRight, Check, PaperPlaneTilt, Paperclip, QuestionMark, Square } from "@phosphor-icons/react";
@@ -132,10 +131,11 @@ const HistoryRow = memo(function HistoryRow({ row, expanded, onToggle, userMode,
 				{workLabel}<CaretRight size={12} aria-hidden className={`transition-opacity ${expanded ? "rotate-90 opacity-100" : "opacity-0 group-hover/work:opacity-100 group-focus-visible/work:opacity-100"}`} />
 			</button>}
 			<WorkTimeline blocks={row.work ?? []} activity={row.activity} running={row.running} expanded={expanded} />
-			{!!row.todos?.length && <div className="mt-3"><TodoList tasks={row.todos} /></div>}
 		</>}
 		<RawBlocks blocks={row.blocks} />
-		{row.answerAt !== undefined && <AnswerActions at={row.answerAt} text={row.blocks.flatMap((b) => b.kind === "text" ? [b.text] : []).join("\n\n")} onFork={onFork} />}
+		{row.answerAt !== undefined && <AnswerActions at={row.answerAt} respondedAt={row.workEndedAt ?? row.answerAt}
+			durationMs={row.workStartedAt !== undefined && row.workEndedAt !== undefined ? Math.max(0, row.workEndedAt - row.workStartedAt) : undefined}
+			text={row.blocks.flatMap((b) => b.kind === "text" ? [b.text] : []).join("\n\n")} onFork={onFork} />}
 	</div></div>;
 });
 

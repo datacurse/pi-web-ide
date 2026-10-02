@@ -22,11 +22,15 @@ test("user prompts retain literal text, attachment thumbnails, copy/edit and the
 	assert.ok(html.indexOf("data:image") < html.indexOf("literal"), "attachments remain above text");
 });
 
-test("final answer actions retain copy and fork controls without the retired timing renderer", () => {
+test("final answer footer retains actions and includes response age and work duration", (t) => {
+	t.mock.method(Date, "now", () => 182000);
 	const html = renderToStaticMarkup(createElement(AnswerActions, {
-		at: 2000, text: "answer", onFork: async () => {},
+		at: 1000, respondedAt: 2000, durationMs: 10000, text: "answer", onFork: async () => {},
 	}));
 	assert.match(html, /Copy/);
 	assert.match(html, /Fork from here/);
+	assert.match(html, />3m ago<\/time>/);
+	assert.match(html, /Worked for 10s/);
+	assert.match(html, /dateTime="1970-01-01T00:00:02.000Z"/);
 	assert.doesNotMatch(html, /Breakdown|Round|progressbar/);
 });

@@ -9,6 +9,7 @@ import { t, plural, locale } from "./i18n.js";
 import type { UserMode } from "./prefs.js";
 import { PastedTexts } from "./PastedTexts.js";
 import { RawBlocks } from "./RawOutput.js";
+import { ResponseTime } from "./ResponseTime.js";
 import { addPastedText, isLargePaste, joinPastedText, splitPastedText } from "./pastedText.js";
 
 /** Braille spinner, same visual language as the TUI. */
@@ -697,7 +698,9 @@ export function UserMessage({ blocks, userMode, at, onEdit }: {
 }
 
 /** Actions target the final assistant message, never the prompt that grouped the turn. */
-export function AnswerActions({ text, at, onFork }: { text: string; at: number; onFork: (at: number) => Promise<void> }) {
+export function AnswerActions({ text, at, respondedAt = at, durationMs, onFork }: {
+	text: string; at: number; respondedAt?: number; durationMs?: number; onFork: (at: number) => Promise<void>;
+}) {
 	const [forking, setForking] = useState(false);
 	return <div className="mt-1 flex items-center gap-1 text-meta text-neutral-500">
 		<CopyButton text={text} />
@@ -707,5 +710,6 @@ export function AnswerActions({ text, at, onFork }: { text: string; at: number; 
 		}}>
 			<GitFork size={14} />
 		</IconButton>
+		<ResponseTime at={respondedAt} durationMs={durationMs} />
 	</div>;
 }

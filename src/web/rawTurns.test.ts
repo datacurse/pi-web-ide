@@ -17,34 +17,6 @@ test("only the final answer stays outside one work group per turn", () => {
 	assert.deepEqual(rows[3].blocks, [{ kind: "text", text: "second answer" }]);
 });
 
-test("todos stay with their turn while the current turn updates live", () => {
-	const task = { id: 1, subject: "Implement", status: "pending" as const };
-	const rows = rawRows([
-		{ role: "user", timestamp: 1, blocks: [] },
-		{ role: "assistant", timestamp: 2, blocks: [{ kind: "tool", id: "t", name: "todo", args: {}, todos: [task] }] },
-		{ role: "user", timestamp: 3, blocks: [] },
-	], { text: "", thinking: "", tools: [{ id: "live", name: "todo", args: {}, todos: [{ ...task, status: "completed" }] }] }, true);
-	assert.deepEqual(rows[1].todos, [task]);
-	assert.equal(rows[3].todos?.[0].status, "completed");
-	const next = rawRows([
-		{ role: "user", timestamp: 1, blocks: [] },
-		{ role: "assistant", timestamp: 2, blocks: [{ kind: "tool", id: "t", name: "todo", args: {}, todos: [task] }] },
-		{ role: "user", timestamp: 3, blocks: [] },
-		{ role: "assistant", timestamp: 4, blocks: [{ kind: "text", text: "No tasks this turn" }] },
-	], { text: "", thinking: "", tools: [] }, false);
-	assert.deepEqual(next[3].todos, []);
-});
-
-test("saved nested updates use the earlier task state without rewriting old turns", () => {
-	const rows = rawRows([
-		{ role: "user", timestamp: 1, blocks: [] },
-		{ role: "assistant", timestamp: 2, blocks: [{ kind: "tool", id: "t", name: "todo", args: {}, todos: [{ id: 1, subject: "Implement", status: "pending" }] }] },
-		{ role: "user", timestamp: 3, blocks: [] },
-		{ role: "assistant", timestamp: 4, blocks: [{ kind: "tool", id: "c", name: "codemode", args: {}, children: [{ id: "c/1", name: "todo", args: { action: "update", id: 1, status: "completed" }, outputUnavailable: true }] }] },
-	], { text: "", thinking: "", tools: [] }, false);
-	assert.equal(rows[1].todos?.[0].status, "pending");
-	assert.equal(rows[3].todos?.[0].status, "completed");
-});
 
 test("final answer text and images stay outside work without mutating the source messages", () => {
 	const messages = [{

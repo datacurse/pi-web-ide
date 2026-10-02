@@ -16,7 +16,6 @@ export function reducePartial(partial: PiPartial, event: PiEvent): PiPartial {
 		case "tool_end": return { ...partial, tools: partial.tools.map((tool) =>
 			tool.id === event.id ? {
 				...tool, result: event.result, isError: event.isError,
-				...(event.todos !== undefined ? { todos: event.todos } : {}),
 				...(event.at !== undefined && tool.startedAt !== undefined ? { durationMs: Math.max(0, event.at - tool.startedAt) } : {}),
 				...(tool.running !== undefined ? { running: false } : {}),
 			} : tool) };

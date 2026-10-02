@@ -177,7 +177,6 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
   escaped text inside their own native `details` disclosures, initially collapsed.
   Nested calls stay under their parent; there is no tool-mode selector.
 - User prompts retain their pill, image thumbnails, long-message folding and inline editing.
-  Todos remain directly below the work timeline.
 - Recorded activity still persists server-side. It is not drawn as timing bars or model rounds.
   Snapshot refreshes must preserve newer live telemetry received while the request was in flight.
 - History is virtualized; expanding work must not mount the whole transcript.
@@ -467,6 +466,11 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
 
 - The settled final answer has `Copy` and `GitFork` ghost `IconButton size="sm"` controls
   with 14px icons. Fork targets that assistant message’s timestamp, not its user prompt.
+- Beside those controls, the response age (`just now`, `2m ago`, etc.) uses completion
+  time when recorded and refreshes every 30 seconds. Hover or keyboard focus opens
+  a compact date/time and `Worked for {s}s` card; omit duration for unobserved history.
+  The card is a viewport-clamped portal so transcript clipping/fading cannot hide it.
+  Escape, blur, scrolling or resizing dismiss it; moving onto the card keeps it open.
 - Settings → Transcript → `Message footer` (`pwi:messageFooter`, `data-footer` on `<html>`)
   places the user prompt’s timestamp beside or opposite its copy/edit controls.
 - Copy swaps to `Check` for 1.2s. Fork is disabled with the label `Forking…` while
