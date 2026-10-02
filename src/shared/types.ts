@@ -39,12 +39,20 @@ export interface PiImage {
 	mimeType: string;
 }
 
+/** Display metadata captured at execution; currentLine is a best-effort lookup, never historical. */
+export interface ToolSource {
+	path: string;
+	line?: number;
+	currentLine?: number;
+}
+
 export interface PiTool {
 	id: string;
 	name: string;
 	args: unknown;
 	result?: string;
 	diff?: string;
+	source?: ToolSource;
 	isError?: boolean;
 	parentId?: string;
 	startedAt?: number;
@@ -157,14 +165,14 @@ export type AskAnswer = { value: string } | { confirmed: boolean } | { cancelled
 export type PiEvent =
 	| { type: "text"; delta: string }
 	| { type: "thinking"; delta: string }
-	| { type: "tool_start"; id: string; name: string; args: unknown; parentId?: string; at?: number }
+	| { type: "tool_start"; id: string; name: string; args: unknown; parentId?: string; at?: number; source?: ToolSource }
 	/**
 	 * Streaming tool output. `result` is CUMULATIVE — pi's `partialResult`
 	 * carries everything produced so far — so a consumer replaces the card's
 	 * output with it rather than appending.
 	 */
 	| { type: "tool_update"; id: string; result: string }
-	| { type: "tool_end"; id: string; name: string; isError: boolean; result: string; at?: number }
+	| { type: "tool_end"; id: string; name: string; isError: boolean; result: string; at?: number; source?: ToolSource }
 	| { type: "message_done"; message: PiMessage }
 	| { type: "notice"; notice: PiNotice }
 	| { type: "ask"; ask: PiAsk | null }

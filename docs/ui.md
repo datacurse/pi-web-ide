@@ -72,8 +72,13 @@ fits none of the existing ones, and record it here.
   and metadata for reads, terminal-style commands for shell calls, the editor's
   read-only unified diff for each edit replacement (content-height, capped at
   `max-h-64`), content previews for writes, and only the removed/added lines for
-  completed anchor-based `replace` calls (`-` red, `+` green); omit context and
-  redundant anchor arguments. Other arguments stay visible as key/value rows.
+  completed anchor-based `replace` calls, with red/green backgrounds and borders,
+  syntax colors and a centered line-number gutter; omit context and redundant
+  anchor arguments. Show the file path and captured file line when available.
+  Persist execution-time source metadata in the server session sidecar; an exact
+  historical-text lookup in referenced files is labelled as a current location,
+  never as the original edit line. Unknown positions remain explicitly unknown.
+  Other arguments stay visible as key/value rows.
   Results are separated from inputs. Unified diffs in tool output use the same
   added/removed color convention as review diffs. Source-reading tool results strip
   read anchors and common indentation before syntax highlighting; unknown extensions

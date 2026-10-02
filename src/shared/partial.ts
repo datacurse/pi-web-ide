@@ -9,6 +9,7 @@ export function reducePartial(partial: PiPartial, event: PiEvent): PiPartial {
 		case "thinking": return { ...partial, thinking: partial.thinking + event.delta };
 		case "tool_start": return { ...partial, tools: [...partial.tools, {
 			id: event.id, name: event.name, args: event.args,
+			...(event.source ? { source: event.source } : {}),
 			...(event.parentId ? { parentId: event.parentId, startedAt: event.at, running: true } : {}),
 		}] };
 		case "tool_update": return { ...partial, tools: partial.tools.map((tool) =>
@@ -16,6 +17,7 @@ export function reducePartial(partial: PiPartial, event: PiEvent): PiPartial {
 		case "tool_end": return { ...partial, tools: partial.tools.map((tool) =>
 			tool.id === event.id ? {
 				...tool, result: event.result, isError: event.isError,
+				...(event.source ? { source: event.source } : {}),
 				...(event.at !== undefined && tool.startedAt !== undefined ? { durationMs: Math.max(0, event.at - tool.startedAt) } : {}),
 				...(tool.running !== undefined ? { running: false } : {}),
 			} : tool) };

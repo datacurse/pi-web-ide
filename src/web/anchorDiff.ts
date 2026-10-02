@@ -2,6 +2,8 @@ import type { PiBlock, PiTool } from "../shared/types.js";
 
 export interface AnchorSource {
 	path?: string;
+	line?: number;
+	currentLine?: number;
 	removed?: string[];
 }
 
@@ -35,7 +37,9 @@ export function anchorDiff(tool: PiTool, source?: AnchorSource): AnchorDiff | un
 		|| !Array.isArray(added) || !added.every((line): line is string => typeof line === "string")) return;
 	// These are the tool's recorded old lines, not today's file contents.
 	return { from, to, added, removed: removedRange(tool.result ?? "", from, to) ?? source?.removed,
-		path: typeof args.path === "string" ? args.path : source?.path };
+		path: tool.source?.path ?? (typeof args.path === "string" ? args.path : source?.path),
+		line: tool.source?.line ?? source?.line,
+		currentLine: tool.source?.currentLine ?? source?.currentLine };
 }
 
 /** Resolve bare anchors through earlier reads; saved codemode results also contain their children's diffs. */
@@ -46,9 +50,9 @@ export function anchorSources(blocks: PiBlock[]): Map<string, AnchorSource> {
 		const args = tool.args && typeof tool.args === "object" ? tool.args as Record<string, unknown> : {};
 		const from = typeof args.remove_from === "string" ? args.remove_from : undefined;
 		const to = typeof args.remove_to === "string" ? args.remove_to : undefined;
-		const path = typeof args.path === "string" ? args.path : from ? anchors.get(from) : undefined;
+		const path = tool.source?.path ?? (typeof args.path === "string" ? args.path : from ? anchors.get(from) : undefined);
 		const removed = from && to ? removedRange(batchResult, from, to) : undefined;
-		sources.set(tool.id, { path, removed });
+		sources.set(tool.id, { path, removed, ...tool.source });
 		if (path) {
 			for (const line of (tool.result ?? "").split("\n")) {
 				const match = /^[ +]?([A-Za-z0-9]{4})│/.exec(line);

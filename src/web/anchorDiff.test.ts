@@ -28,3 +28,12 @@ test("empty removed source lines and explicit paths are preserved", () => {
 	assert.deepEqual(diff?.removed, ["", "\told();"]);
 	assert.equal(diff?.path, "app.ts");
 });
+
+test("retained execution metadata takes priority over inferred anchor paths", () => {
+	const tool = { id: "edit", name: "replace", args: { remove_from: "AAAA", remove_to: "AAAA", replacement_lines: ["new();"] },
+		source: { path: "/project/src/app.py", line: 242 } };
+	const diff = anchorDiff(tool, { path: "wrong.ts", currentLine: 7 });
+	assert.equal(diff?.path, "/project/src/app.py");
+	assert.equal(diff?.line, 242);
+	assert.equal(anchorSources([{ kind: "tool", ...tool }]).get("edit")?.line, 242);
+});

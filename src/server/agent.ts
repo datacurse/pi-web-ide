@@ -61,6 +61,7 @@ import { isRecord, records } from "./guards.js";
 import { nestTools } from "../shared/toolTree.js";
 import type { PiTool } from "../shared/types.js";
 import { ActivityTracker } from "./activity.js";
+import { ToolSourceTracker } from "./toolSources.js";
 import type { TurnActivity } from "../shared/activity.js";
 import { FAST_COMMAND, supportsFastMode } from "../shared/fastMode.js";
 import { hunkFromWrite, hunksFromEdit, type Hunk } from "../shared/hunks.js";
@@ -1257,6 +1258,8 @@ async function wrap(child: RpcChild, cwd: string): Promise<PiSession> {
 	const state = await fetchState(child);
 	let messages = healDanglingToolCalls(await fetchMessages(child));
 
+	const toolSources = new ToolSourceTracker(state.sessionFile ?? state.sessionId, cwd);
+	toolSources.recover(stitch(messages.filter(isConversation).map(toPiMessage)));
 	/**
 	 * When each assistant message finished, keyed by its start timestamp. pi's
 	 * messages carry only the start; the end is when the entry was appended,
@@ -1364,6 +1367,7 @@ async function wrap(child: RpcChild, cwd: string): Promise<PiSession> {
 			.then(([fresh]) => {
 				if (generation !== at || fresh.length === 0) return;
 				messages = healDanglingToolCalls(fresh);
+				toolSources.recover(stitch(messages.filter(isConversation).map(toPiMessage)));
 			})
 			.catch(() => {
 				// The accumulated list stands; the next settle tries again.
@@ -1452,6 +1456,7 @@ async function wrap(child: RpcChild, cwd: string): Promise<PiSession> {
 	 */
 	const unsubscribe = child.onFrame((frame) => {
 		if (!replaying || streaming) activity.record(frame);
+		if (!replaying) toolSources.record(frame);
 		switch (frame.type) {
 			case "agent_start":
 				// The prompt DID reach the model, so this was not a local command.
@@ -1597,7 +1602,7 @@ async function wrap(child: RpcChild, cwd: string): Promise<PiSession> {
 					streaming = false;
 					break;
 			}
-			emit(e);
+			emit(toolSources.event(e));
 		}
 	});
 
@@ -1663,7 +1668,7 @@ async function wrap(child: RpcChild, cwd: string): Promise<PiSession> {
 			return true;
 		},
 		messages() {
-			return stitch(messages.filter(isConversation).map((m) => withEnd(toPiMessage(m))));
+			return toolSources.annotate(stitch(messages.filter(isConversation).map((m) => withEnd(toPiMessage(m)))));
 		},
 		async prompt(text: string, images?: PiImage[]) {
 			// Convert BEFORE sending: a bad attachment should surface as a rejected
@@ -1852,6 +1857,7 @@ async function wrap(child: RpcChild, cwd: string): Promise<PiSession> {
 		},
 		dispose() {
 			activity.finish();
+			toolSources.save();
 			unsubscribe();
 			unsubscribeExit();
 			listeners.clear();
@@ -1861,6 +1867,7 @@ async function wrap(child: RpcChild, cwd: string): Promise<PiSession> {
 		},
 		detach() {
 			activity.save();
+			toolSources.save();
 			unsubscribe();
 			unsubscribeExit();
 			listeners.clear();

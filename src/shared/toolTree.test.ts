@@ -57,3 +57,13 @@ test("persisted parent outcomes remain authoritative over a stale partial", () =
 	assert.equal(block.result,"done");
 	assert.equal(block.isError,true);
 });
+
+test("saved source locations survive partial tools that have no execution metadata", () => {
+	const source = { path: "/project/app.ts", line: 42 };
+	const messages: PiMessage[] = [{ role: "assistant", timestamp: 1, blocks: [{ kind: "tool", ...tool("batch"), children: [
+		{ ...tool("batch/1", "batch"), source, outputUnavailable: true },
+	] }] }];
+	const parent = mergeLiveTools(messages, [{ ...tool("batch/1", "batch"), source: undefined, result: "done" }]).messages[0].blocks[0];
+	assert.ok(parent.kind === "tool");
+	assert.deepEqual(parent.children?.[0].source, source);
+});

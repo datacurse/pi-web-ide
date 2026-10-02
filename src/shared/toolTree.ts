@@ -39,6 +39,7 @@ export function mergeLiveTools(messages: PiMessage[], tools: PiTool[]): { messag
 		}
 		return { ...saved, ...current,
 			result: saved.outputUnavailable ? current.result ?? saved.result : saved.result ?? current.result,
+			source: current.source ?? saved.source,
 			isError: saved.result === undefined ? current.isError : saved.isError,
 			durationMs: saved.durationMs ?? current.durationMs,
 			running: saved.result !== undefined ? false : current.running,
