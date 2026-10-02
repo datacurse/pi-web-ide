@@ -41,7 +41,7 @@ export function AnchorDiff({ diff }: { diff: Diff }) {
 	const current = diff.line === undefined && diff.currentLine !== undefined;
 	const lastLine = (startLine ?? 1) + Math.max(removed.length, added.length, 1) - 1;
 	const gutterWidth = lastLine >= 100 ? "w-8" : lastLine >= 10 ? "w-6" : "w-4";
-	return <div data-custom="anchor replacement diff" className="my-3 overflow-hidden rounded-sm border border-neutral-800 font-mono chat-code">
+	return <div data-custom="anchor replacement diff" className="my-3 overflow-hidden rounded-sm border border-neutral-800 bg-neutral-900 font-mono chat-code">
 		{path && openFile ? <button type="button" data-custom="replacement file navigation"
 			onClick={() => openFile(path, diff.currentLine ?? diff.line)}
 			title={`Open ${path}${startLine !== undefined ? ` at line ${diff.currentLine ?? startLine}` : ""}`}
