@@ -7,6 +7,7 @@ import { Math } from "./Math.js";
 import { Button, ContextMenu, MenuItem } from "./ui.js";
 import { t } from "./i18n.js";
 import { highlightLines, type Token } from "./codeHighlight.js";
+import { dedentBlocks } from "./codeIndent.js";
 export { CodeBox };
 
 /** Leading whitespace in columns, tabs at 4, for the wrapped rows' hanging indent. */
@@ -28,20 +29,21 @@ function indentCols(line: string) {
  * continuation row keeps its line's indent behind a dim `↳` (`.code-line`).
  */
 function CodeBox({ lang, text, className }: { lang?: string; text: string; className: string }) {
+	const displayText = dedentBlocks([text.split("\n")])[0].join("\n");
 	const [copied, setCopied] = useState(false);
 	const [colored, setColored] = useState<{ text: string; lines: Token[][] } | null>(null);
 
 	useEffect(() => {
 		if (!lang) return;
 		let live = true;
-		highlightLines(lang, text).then(
-			(lines) => live && lines && setColored({ text, lines }),
+		highlightLines(lang, displayText).then(
+			(lines) => live && lines && setColored({ text: displayText, lines }),
 			() => {}, // No colour is the fallback, not an error.
 		);
 		return () => {
 			live = false;
 		};
-	}, [lang, text]);
+	}, [lang, displayText]);
 
 	const copy = async () => {
 		try {
@@ -54,7 +56,7 @@ function CodeBox({ lang, text, className }: { lang?: string; text: string; class
 	};
 
 	// Colour lags the text by one parse while streaming; plain until it catches up.
-	const lines = colored?.text === text ? colored.lines : text.split("\n").map((l) => [{ text: l, cls: "" }]);
+	const lines = colored?.text === displayText ? colored.lines : displayText.split("\n").map((l) => [{ text: l, cls: "" }]);
 
 	return (
 		<div className={`group relative ${className}`}>

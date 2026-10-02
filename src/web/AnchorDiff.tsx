@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { highlightLines, type Token } from "./codeHighlight.js";
 import type { AnchorDiff as Diff } from "./anchorDiff.js";
+import { dedentBlocks } from "./codeIndent.js";
 
 /** The chat code view's syntax parser and theme, over a quiet red/green diff surface. */
 function SourceLines({ lines, path, removed }: { lines: string[]; path?: string; removed?: boolean }) {
@@ -29,14 +30,15 @@ function SourceLines({ lines, path, removed }: { lines: string[]; path?: string;
 }
 
 export function AnchorDiff({ diff }: { diff: Diff }) {
+	const [removed, added] = dedentBlocks([diff.removed ?? [], diff.added]);
 	return <div data-custom="anchor replacement diff" className="my-3 overflow-hidden rounded-sm border border-neutral-800 font-mono chat-code">
-		{diff.removed ? <SourceLines lines={diff.removed} path={diff.path} removed />
+		{diff.removed ? <SourceLines lines={removed} path={diff.path} removed />
 			: <div aria-label="Removed range" className="border-l-2 border-red-400 bg-red-400/10 px-3 py-2 text-red-300">
 				<span aria-hidden className="mr-3 select-none">−</span>
 				{diff.from === diff.to ? `Remove line ${diff.from}` : `Remove lines ${diff.from} → ${diff.to} (inclusive)`}
 				<span className="ml-3 text-meta text-neutral-500">Previous source unavailable in tool result</span>
 			</div>}
-		{diff.added.length ? <SourceLines lines={diff.added} path={diff.path} />
+		{added.length ? <SourceLines lines={added} path={diff.path} />
 			: <div className="px-3 py-2 text-meta text-neutral-500">Deletion only · no replacement lines</div>}
 	</div>;
 }
