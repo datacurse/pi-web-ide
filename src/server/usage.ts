@@ -89,15 +89,44 @@ function record(body: ProviderUsage, at: number): void {
   } catch {
     throw new Error("usage-history.json is not valid JSON");
   }
+  const previous = samples.findLast((s) => s.provider === body.provider);
   const sample: UsageSample = {
     provider: body.provider,
     at,
-    limits: body.limits.map((l) => ({
-      kind: l.kind,
-      model: l.scope?.model?.display_name ?? null,
-      percent: l.percent,
-      resets_at: l.resets_at,
-    })),
+    limits: body.limits.map((l) => {
+      const model = l.scope?.model?.display_name ?? null;
+      const old = previous?.limits.find(
+        (x) => x.kind === l.kind && x.model === model,
+      );
+      const planned = old?.resets_at ? Date.parse(old.resets_at) : NaN;
+      const end = l.resets_at ? Date.parse(l.resets_at) : NaN;
+      // Ignore deadline jitter and sub-percent corrections. A drop before the
+      // previous deadline is an observed reset, even if that deadline stays put.
+      const earlyReset =
+        body.provider === "openai-codex" &&
+        old &&
+        Number.isFinite(end) &&
+        planned > at + 60_000 &&
+        l.percent <= old.percent - 1
+          ? { plannedAt: old.resets_at!, previousPercent: old.percent }
+          : undefined;
+      if (earlyReset) {
+        l.startedAt = at;
+        console.info(
+          `OpenAI usage early reset detected (${l.kind}) at ${new Date(at).toISOString()}; planned for ${earlyReset.plannedAt}; usage ${old!.percent}% → ${l.percent}%`,
+        );
+      } else if (old?.startedAt && Math.abs(end - planned) < 600_000) {
+        l.startedAt = old.startedAt;
+      }
+      return {
+        kind: l.kind,
+        model,
+        percent: l.percent,
+        resets_at: l.resets_at,
+        startedAt: l.startedAt,
+        earlyReset,
+      };
+    }),
   };
   writeStateFile(
     statePath("usage-history.json"),

@@ -643,6 +643,7 @@ function Usage({
     message,
     stale,
     updatedAt,
+    history,
     error: usageError,
   },
 }: {
@@ -706,6 +707,46 @@ function Usage({
           {subscription && <SubscriptionLine sub={subscription} />}
         </div>
       )}
+      {history.some((s) => s.limits.some((l) => l.earlyReset)) && (
+        <div className="mt-3 text-meta text-neutral-500">
+          <h4 className={sectionLabel}>{t("Early resets")}</h4>
+          {history
+            .slice()
+            .reverse()
+            .flatMap((s) =>
+              s.limits
+                .filter((l) => l.earlyReset)
+                .map((l) => {
+                  const live = limits?.find(
+                    (x) =>
+                      x.kind === l.kind &&
+                      (x.scope?.model?.display_name ?? null) === l.model,
+                  );
+                  return (
+                    <p key={`${s.at}-${l.kind}-${l.model}`} className="mt-1">
+                      {t(
+                        "{limit}: early reset detected {when}, {span} before planned reset ({planned}). Usage dropped from {before}% to {after}%.",
+                        {
+                          limit: live
+                            ? limitLabel(live)
+                            : l.kind.replace(/_/g, " "),
+                          when: stampFmt().format(s.at),
+                          span: span(
+                            Date.parse(l.earlyReset!.plannedAt) - s.at,
+                          ),
+                          planned: stampFmt().format(
+                            Date.parse(l.earlyReset!.plannedAt),
+                          ),
+                          before: l.earlyReset!.previousPercent,
+                          after: l.percent,
+                        },
+                      )}
+                    </p>
+                  );
+                }),
+            )}
+        </div>
+      )}
     </div>
   );
 }
@@ -738,7 +779,7 @@ function Paces({
     const end = l.resets_at ? Date.parse(l.resets_at) : NaN;
     const p =
       windowMs && Number.isFinite(end)
-        ? pace(l.percent, end, windowMs, now)
+        ? pace(l.percent, end, windowMs, now, l.startedAt)
         : null;
     return p ? [{ l, p }] : [];
   });

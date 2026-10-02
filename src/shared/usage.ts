@@ -4,6 +4,8 @@ export interface UsageLimit {
   percent: number;
   resets_at: string | null;
   windowMs?: number;
+  /** Observed start after an early reset, rather than the scheduled window start. */
+  startedAt?: number;
   scope: { model?: { display_name?: string | null } } | null;
 }
 

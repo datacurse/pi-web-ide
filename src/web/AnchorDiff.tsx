@@ -78,7 +78,7 @@ function SourceLines({
           </span>
           <pre
             data-custom="replacement diff source"
-            className="min-w-0 whitespace-pre-wrap break-words font-mono text-neutral-200 [tab-size:4]"
+            className="min-w-0 whitespace-pre-wrap break-words font-mono text-neutral-200 [tab-size:2]"
           >
             {line.length
               ? changedTokenGroups(line, changes?.[i] ?? []).map((group, j) => (

@@ -500,6 +500,9 @@ export interface UsageSample {
     model: string | null;
     percent: number;
     resets_at: string | null;
+    startedAt?: number;
+    /** An early reset first observed in this sample. */
+    earlyReset?: { plannedAt: string; previousPercent: number };
   }[];
 }
 

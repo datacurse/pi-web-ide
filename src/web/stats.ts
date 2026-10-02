@@ -248,8 +248,9 @@ export function pace(
   resetsAt: number,
   windowMs: number,
   now = Date.now(),
+  startedAt?: number,
 ): Pace | null {
-  const start = resetsAt - windowMs;
+  const start = Math.max(resetsAt - windowMs, startedAt ?? -Infinity);
   const elapsed = now - start;
   const left = resetsAt - now;
   if (elapsed <= 0 || left <= 0) return null;

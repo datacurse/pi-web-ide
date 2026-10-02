@@ -10,12 +10,12 @@ import { highlightLines, type Token } from "./codeHighlight.js";
 import { dedentBlocks } from "./codeIndent.js";
 export { CodeBox };
 
-/** Leading whitespace in columns, tabs at 4, for the wrapped rows' hanging indent. */
+/** Leading whitespace in columns, tabs at 2, for the wrapped rows' hanging indent. */
 function indentCols(line: string) {
   let n = 0;
   for (const c of line) {
     if (c === " ") n++;
-    else if (c === "\t") n += 4 - (n % 4);
+    else if (c === "\t") n += 2 - (n % 2);
     else break;
   }
   return n;
@@ -87,7 +87,7 @@ function CodeBox({
       >
         {copied ? t("Copied") : t("Copy")}
       </Button>
-      <pre className="chat-code rounded-sm bg-neutral-900 p-2 pt-7 whitespace-pre-wrap wrap-anywhere text-neutral-300 [tab-size:4]">
+      <pre className="chat-code rounded-sm bg-neutral-900 p-2 pt-7 whitespace-pre-wrap wrap-anywhere text-neutral-300 [tab-size:2]">
         <code>
           {lines.map((tokens, i) => (
             <span
