@@ -15,7 +15,7 @@ function Disclosure({ label, children, expanded, active }: { label: string; chil
 	</details>;
 }
 
-function Thought({ item, expanded }: { item: ThoughtItem; expanded?: boolean }) {
+function Thought({ item, expanded, shimmer = false }: { item: ThoughtItem; expanded?: boolean; shimmer?: boolean }) {
 	let label = item.active ? "Thinking" : "Thought";
 	if (!item.active && item.durationMs !== undefined) {
 		const seconds = Math.floor(Math.max(0, item.durationMs) / 1000);
@@ -24,9 +24,9 @@ function Thought({ item, expanded }: { item: ThoughtItem; expanded?: boolean }) 
 	// Providers can retain empty thinking placeholders/signatures without readable text.
 	if (!item.block.text.trim()) {
 		if (!item.active && item.durationMs === undefined) return null;
-		return <div className="my-3 chat-prose text-neutral-500"><ShinyText text={label} active={item.active} /></div>;
+		return <div className="my-3 chat-prose text-neutral-500"><ShinyText text={label} active={shimmer} /></div>;
 	}
-	return <Disclosure label={label} expanded={expanded} active={item.active}><RawBlocks blocks={[item.block]} streaming={item.active} /></Disclosure>;
+	return <Disclosure label={label} expanded={expanded} active={shimmer}><RawBlocks blocks={[item.block]} streaming={item.active} /></Disclosure>;
 }
 
 function Tool({ tool }: { tool: PiTool }) {
@@ -45,16 +45,19 @@ export function WorkTimeline({ blocks, activity, running, expanded }: {
 	const items = workTimeline(blocks, activity, !!running);
 	const status = running ? currentWorkStatus(activity, blocks) : undefined;
 	const hasVisibleThinking = items.some((item) => item.kind === "thought" && item.active);
+	const showStatus = !!status && !(status === "Thinking" && hasVisibleThinking);
+	// One animation target: the trailing status wins over an ongoing work group.
+	const shinyIndex = showStatus ? -1 : items.findLastIndex((item) => item.kind !== "prose" && item.active);
 	return <>
 		{items.map((item, i) => {
 			if (item.kind === "prose") return <RawBlocks key={i} blocks={item.blocks} streaming={running} />;
-			if (item.kind === "thought") return <Thought key={i} item={item} expanded={expanded} />;
-			return <Disclosure key={i} label={explorationLabel(item.blocks, item.active)} expanded={expanded} active={item.active}>
+			if (item.kind === "thought") return <Thought key={i} item={item} expanded={expanded} shimmer={i === shinyIndex} />;
+			return <Disclosure key={i} label={explorationLabel(item.blocks, item.active)} expanded={expanded} active={i === shinyIndex}>
 				{item.entries.map((entry, j) => entry.kind === "thought"
 					? <Thought key={j} item={entry} />
 					: <Tool key={entry.id} tool={entry} />)}
 			</Disclosure>;
 		})}
-		{status && !(status === "Thinking" && hasVisibleThinking) && <div role="status" className="my-3 chat-prose text-neutral-400"><ShinyText text={status} /></div>}
+		{showStatus && <div role="status" className="my-3 chat-prose text-neutral-400"><ShinyText text={status!} /></div>}
 	</>;
 }
