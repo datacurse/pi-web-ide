@@ -287,9 +287,12 @@ test("work disclosure shows elapsed seconds and keeps its label when expanded", 
 	const first = renderRow();
 	const toggle = first.nodes.find((node) => node.type === "button" && node.props["aria-expanded"] === false)!;
 	assert.equal(toggle.props.children[0], "Worked for 12s");
+	assert.ok(toggle.props.className.includes("group/work"));
+	assert.equal(toggle.props.children[1].props.className, "transition-opacity opacity-0 group-hover/work:opacity-100 group-focus-visible/work:opacity-100");
 	toggle.props.onClick();
 	const opened = renderRow().nodes.find((node) => node.type === "button" && node.props["aria-expanded"] === true)!;
 	assert.equal(opened.props.children[0], "Worked for 12s");
+	assert.equal(opened.props.children[1].props.className, "transition-opacity rotate-90 opacity-100");
 	env.props.busy = true;
 	const live = renderRow().row;
 	const liveNodes = descendants((live.type as any).type({ ...live.props, now: 13500 }));
