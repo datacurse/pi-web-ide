@@ -277,6 +277,8 @@ test("work disclosure shows minutes and seconds and keeps its label when expande
 	const toggle = first.nodes.find((node) => node.type === "button" && node.props["aria-expanded"] === false)!;
 	assert.equal(toggle.props.children[0], "Worked for 3m 17s");
 	assert.ok(toggle.props.className.includes("group/work"));
+	assert.ok(toggle.props.className.split(" ").includes("chat-prose"), "work disclosure matches transcript text size");
+	assert.ok(!toggle.props.className.split(" ").includes("text-meta"));
 	assert.equal(toggle.props.children[1].props.className, "transition-opacity opacity-0 group-hover/work:opacity-100 group-focus-visible/work:opacity-100");
 	toggle.props.onClick();
 	const opened = renderRow().nodes.find((node) => node.type === "button" && node.props["aria-expanded"] === true)!;

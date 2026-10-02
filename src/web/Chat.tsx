@@ -127,7 +127,7 @@ const HistoryRow = memo(function HistoryRow({ row, expanded, onToggle, userMode,
 		{row.role !== "assistant" && <div className="font-mono text-meta text-neutral-500">{row.role}</div>}
 		{(!!row.work?.length || row.running) && <>
 			{!row.running && <button type="button" data-custom="work disclosure: muted status text without button chrome" aria-expanded={expanded} onClick={onToggle}
-				className="group/work inline-flex items-center gap-1.5 py-1 text-meta text-neutral-500 transition-colors hover:text-neutral-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-neutral-500">
+				className="group/work chat-prose inline-flex items-center gap-1.5 py-1 text-neutral-500 transition-colors hover:text-neutral-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-neutral-500">
 				{workLabel}<CaretRight size={12} aria-hidden className={`transition-opacity ${expanded ? "rotate-90 opacity-100" : "opacity-0 group-hover/work:opacity-100 group-focus-visible/work:opacity-100"}`} />
 			</button>}
 			<WorkTimeline blocks={row.work ?? []} activity={row.activity} running={row.running} expanded={expanded} />
