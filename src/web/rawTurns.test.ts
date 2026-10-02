@@ -13,6 +13,8 @@ test("only the final answer stays outside one work group per turn", () => {
 	assert.equal(rows.length, 4);
 	assert.deepEqual(rows[1].blocks, [{ kind: "text", text: "**final**" }]);
 	assert.equal(rows[1].work?.length, 3);
+	assert.equal(rows[1].roundtrips, 2);
+	assert.equal(rows[3].roundtrips, 1);
 	assert.equal(rows[3].work?.length, 0);
 	assert.deepEqual(rows[3].blocks, [{ kind: "text", text: "second answer" }]);
 });

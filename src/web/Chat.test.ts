@@ -275,14 +275,14 @@ test("work disclosure shows minutes and seconds and keeps its label when expande
 	};
 	const first = renderRow();
 	const toggle = first.nodes.find((node) => node.type === "button" && node.props["aria-expanded"] === false)!;
-	assert.equal(toggle.props.children[0], "Worked for 3m 17s");
+	assert.equal(toggle.props.children[0], "Worked for 3m 17s, 1 roundtrip");
 	assert.ok(toggle.props.className.includes("group/work"));
 	assert.ok(toggle.props.className.split(" ").includes("chat-prose"), "work disclosure matches transcript text size");
 	assert.ok(!toggle.props.className.split(" ").includes("text-meta"));
 	assert.equal(toggle.props.children[1].props.className, "transition-opacity opacity-0 group-hover/work:opacity-100 group-focus-visible/work:opacity-100");
 	toggle.props.onClick();
 	const opened = renderRow().nodes.find((node) => node.type === "button" && node.props["aria-expanded"] === true)!;
-	assert.equal(opened.props.children[0], "Worked for 3m 17s");
+	assert.equal(opened.props.children[0], "Worked for 3m 17s, 1 roundtrip");
 	assert.equal(opened.props.children[1].props.className, "transition-opacity rotate-90 opacity-100");
 	env.props.busy = true;
 	const live = renderRow().row;
@@ -291,6 +291,11 @@ test("work disclosure shows minutes and seconds and keeps its label when expande
 	assert.equal(liveNodes.find((node) => node.type === WorkTimeline)!.props.running, true);
 	env.props.busy = false;
 	env.props.snapshot!.messages[1].endedAt = undefined;
-	assert.equal(renderRow().nodes.find((node) => node.type === "button")!.props.children[0], "Worked");
+	assert.equal(renderRow().nodes.find((node) => node.type === "button")!.props.children[0], "Worked, 1 roundtrip");
+	env.props.snapshot!.messages.splice(1, 0,
+		{ role: "assistant", timestamp: 1500, blocks: [{ kind: "tool", id: "read", name: "read", args: {} }] },
+		{ role: "toolResult", timestamp: 1600, blocks: [] },
+	);
+	assert.equal(renderRow().nodes.find((node) => node.type === "button")!.props.children[0], "Worked, 2 roundtrips");
 	env.cleanup();
 });

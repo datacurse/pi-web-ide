@@ -122,7 +122,8 @@ const HistoryRow = memo(function HistoryRow({ row, expanded, onToggle, userMode,
 	if (row.role === "user") return <UserMessage blocks={row.blocks} at={row.at} userMode={userMode} onEdit={onEdit} />;
 	const durationMs = row.workStartedAt !== undefined && row.workEndedAt !== undefined
 		? row.workEndedAt - row.workStartedAt : undefined;
-	const workLabel = durationMs === undefined ? t("Worked") : t("Worked for {duration}", { duration: formatDuration(durationMs) });
+	const workLabel = (durationMs === undefined ? t("Worked") : t("Worked for {duration}", { duration: formatDuration(durationMs) }))
+		+ (row.roundtrips === undefined ? "" : t(row.roundtrips === 1 ? ", {n} roundtrip" : ", {n} roundtrips", { n: row.roundtrips }));
 	return <div className="chat-gutter my-3"><div className="chat-measure">
 		{row.role !== "assistant" && <div className="font-mono text-meta text-neutral-500">{row.role}</div>}
 		{(!!row.work?.length || row.running) && <>

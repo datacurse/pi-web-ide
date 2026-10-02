@@ -10,6 +10,8 @@ export type RawRow = {
 	running?: boolean;
 	workStartedAt?: number;
 	workEndedAt?: number;
+	/** One model roundtrip per assistant message, including the final answer. */
+	roundtrips?: number;
 	activity?: TurnActivity;
 };
 
@@ -44,6 +46,7 @@ export function rawRows(messages: PiMessage[], partial: PiPartial, busy: boolean
 		const trace = activity.find((item) => item.asked === at);
 		rows.push({
 			role: "assistant", at, answerAt: answer?.timestamp, blocks: answer?.blocks ?? [], work: blocks, running: live, activity: trace,
+			roundtrips: turn.filter((message) => message.role === "assistant").length,
 			workStartedAt: trace?.start ?? turnAt ?? turn[0]?.timestamp,
 			// Never use the next prompt or the current clock as a historical end time.
 			workEndedAt: live ? undefined : trace?.end ?? turn.at(-1)?.endedAt,
