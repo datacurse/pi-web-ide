@@ -30,7 +30,8 @@ export async function highlightLines(lang: string, text: string): Promise<Token[
 		import("@lezer/highlight"),
 	]);
 	const desc =
-		LanguageDescription.matchLanguageName(languages, lang) ?? LanguageDescription.matchFilename(languages, `x.${lang}`);
+		LanguageDescription.matchLanguageName(languages, lang) ?? LanguageDescription.matchFilename(languages, lang)
+			?? LanguageDescription.matchFilename(languages, `x.${lang}`);
 	if (!desc) return null;
 	const [support, hs] = await Promise.all([desc.load(), appSyntaxStyle()]);
 	const lines: Token[][] = [[]];
