@@ -2,7 +2,7 @@ import type { TodoTask } from "../shared/todos.js";
 import { t } from "./i18n.js";
 import { ScrollPane } from "./OverlayScrollbar.js";
 
-/** Live task progress beside the answer’s Show work disclosure. */
+/** Live task progress beside the answer’s work-duration disclosure. */
 export function TodoList({ tasks }: { tasks: TodoTask[] }) {
 	if (!tasks.length) return null;
 	const completed = tasks.filter((task) => task.status === "completed").length;

@@ -25,7 +25,6 @@ import {
 	writeSettingsExpanded,
 	type ChatFade,
 	editorThemeOf,
-	LANGUAGES,
 	MATCH_APP,
 	paletteVars,
 	THEMES,
@@ -34,7 +33,6 @@ import {
 	FOOTER_LAYOUTS,
 	ASK_MODES,
 	type AskMode,
-	type Language,
 	type ThemeId,
 	type UserMode,
 } from "./prefs.js";
@@ -350,8 +348,6 @@ export function Settings({
 	editorTheme,
 	onEditorTheme,
 	onBrowseThemes,
-	language,
-	onLanguage,
 	userMode,
 	onUserMode,
 	askMode,
@@ -374,8 +370,6 @@ export function Settings({
 	editorTheme: string;
 	onEditorTheme: (theme: string) => void;
 	onBrowseThemes: () => void;
-	language: Language;
-	onLanguage: (language: Language) => void;
 	userMode: UserMode;
 	onUserMode: (mode: UserMode) => void;
 	askMode: AskMode;
@@ -503,33 +497,6 @@ export function Settings({
 							{t("Match app theme")}
 						</Button>
 					)}
-				</div>
-			),
-		},
-		{
-			category: "appearance",
-			label: t("Language"),
-			text: `language interface english russian ${LANGUAGES.map((l) => l.label).join(" ")}`,
-			node: (
-				<div role="radiogroup" aria-labelledby="language-label">
-					<div id="language-label" className="px-2 pt-1 pb-1 text-ui text-neutral-300">
-						{t("Language")}
-					</div>
-					{LANGUAGES.map((l) => (
-						<OptionRow key={l.id} selected={l.id === language}>
-							<input
-								type="radio"
-								name="language"
-								value={l.id}
-								checked={l.id === language}
-								onChange={() => onLanguage(l.id)}
-								className="size-3.5 shrink-0 accent-amber-400"
-							/>
-							<span lang={l.id} className="flex-1">
-								{l.label}
-							</span>
-						</OptionRow>
-					))}
 				</div>
 			),
 		},

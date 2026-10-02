@@ -1,7 +1,7 @@
 import { TodoList } from "./TodoList.js";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Virtuoso } from "react-virtuoso";
-import { ArrowDown, Check, PaperPlaneTilt, Paperclip, QuestionMark, Square } from "@phosphor-icons/react";
+import { ArrowDown, CaretRight, Check, PaperPlaneTilt, Paperclip, QuestionMark, Square } from "@phosphor-icons/react";
 import type {
 	AskAnswer,
 	PiCommand,
@@ -114,16 +114,25 @@ function CommandPicker({
 	);
 }
 
-const HistoryRow = memo(function HistoryRow({ row, expanded, onToggle, userMode, onEdit, onFork }: {
-	row: RawRow; expanded: boolean; onToggle: () => void; userMode: UserMode;
+const HistoryRow = memo(function HistoryRow({ row, expanded, onToggle, userMode, onEdit, onFork, now }: {
+	row: RawRow; expanded: boolean; onToggle: () => void; userMode: UserMode; now?: number;
 	onEdit?: (at: number, text: string, images: PiImage[]) => void;
 	onFork: (at: number) => Promise<void>;
 }) {
 	if (row.role === "user") return <UserMessage blocks={row.blocks} at={row.at} userMode={userMode} onEdit={onEdit} />;
+	const end = row.running ? now : row.workEndedAt;
+	const seconds = row.workStartedAt !== undefined && end !== undefined
+		? Math.floor(Math.max(0, end - row.workStartedAt) / 1000) : undefined;
+	const workLabel = seconds === undefined
+		? t(row.running ? "Working…" : "Worked")
+		: t(row.running ? "Working for {s}s" : "Worked for {s}s", { s: seconds });
 	return <div className="chat-gutter my-3"><div className="chat-measure">
 		{row.role !== "assistant" && <div className="font-mono text-meta text-neutral-500">{row.role}</div>}
 		{(!!row.work?.length || row.running) && <>
-			<Button size="sm" variant="subtle" aria-expanded={expanded} onClick={onToggle}>{expanded ? t("Hide work") : t("Show work")}</Button>
+			<button type="button" data-custom="work disclosure: muted status text without button chrome" aria-expanded={expanded} onClick={onToggle}
+				className="inline-flex items-center gap-1.5 py-1 text-meta text-neutral-500 transition-colors hover:text-neutral-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-neutral-500">
+				{workLabel}<CaretRight size={12} aria-hidden className={expanded ? "rotate-90" : undefined} />
+			</button>
 			{expanded && <RawBlocks blocks={row.work ?? []} streaming={row.running} />}
 			{!!row.todos?.length && <div className="mt-3"><TodoList tasks={row.todos} /></div>}
 		</>}
@@ -405,7 +414,14 @@ export function Chat({
 	}, [snapshot?.messages, partial.tools]);
 
 	const [expandedWork, setExpandedWork] = useState<Set<string>>(() => new Set());
-	const rows = useMemo(() => rawRows(messages, { ...partial, tools: liveTools }, busy), [messages, partial, liveTools, busy]);
+	const rows = useMemo(() => rawRows(messages, { ...partial, tools: liveTools }, busy, snapshot?.activity), [messages, partial, liveTools, busy, snapshot?.activity]);
+	const [workNow, setWorkNow] = useState(Date.now);
+	useEffect(() => {
+		if (!busy) return;
+		setWorkNow(Date.now());
+		const timer = setInterval(() => setWorkNow(Date.now()), 1000);
+		return () => clearInterval(timer);
+	}, [busy, snapshot?.id]);
 
 
 	if (!snapshot) {
@@ -574,7 +590,7 @@ export function Chat({
 							computeItemKey={(i, row) => `${row.role}:${row.at}:${i}`}
 							itemContent={(_i, row) => {
 								const key = `${snapshot.id}:${row.role}:${row.at}`;
-								return <HistoryRow row={row} userMode={userMode} onEdit={busy ? undefined : onEdit} onFork={onFork} expanded={expandedWork.has(key)} onToggle={() => setExpandedWork((previous) => {
+								return <HistoryRow row={row} now={row.running ? workNow : undefined} userMode={userMode} onEdit={busy ? undefined : onEdit} onFork={onFork} expanded={expandedWork.has(key)} onToggle={() => setExpandedWork((previous) => {
 									const next = new Set(previous);
 									if (next.has(key)) next.delete(key); else next.add(key);
 									return next;

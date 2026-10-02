@@ -61,7 +61,6 @@ import {
 	applyScrollPast,
 	applySessionLines,
 	applyTheme,
-	type Language,
 	THEMES,
 	readDockHeight,
 	readDockOpen,
@@ -116,7 +115,7 @@ import { setFavicon } from "./favicon.js";
 import { attentionOf, attentionTitle, nextWaiting, type Attention } from "./attention.js";
 import { Button, hoverIntent, IconButton, PanelHeader } from "./ui.js";
 import { api, unwrap } from "./api.js";
-import { getLanguage, setLanguage, t } from "./i18n.js";
+import { t } from "./i18n.js";
 
 /**
  * The stand-in for "no session, so no hunks".
@@ -229,7 +228,6 @@ export default function App() {
 	const splitRow = useRef<HTMLDivElement | null>(null);
 	const [theme, setTheme] = useState<ThemeId>(readTheme);
 	const [editorTheme, setEditorTheme] = useState(readEditorTheme);
-	const [language, setLanguageState] = useState<Language>(getLanguage);
 	const [userMode, setUserMode] = useState<UserMode>(readUserMode);
 	const [askMode, setAskMode] = useState<AskMode>(readAskMode);
 	const [notify, setNotify] = useState(readNotify);
@@ -256,12 +254,6 @@ export default function App() {
 	useEffect(() => applyScrollPast(readScrollPastOn(), readScrollPast()), []);
 	useEffect(() => applyFooterLayout(readFooterLayout()), []);
 	useEffect(() => applySessionLines(readSessionLines()), []);
-	useEffect(() => void (document.documentElement.lang = language), [language]);
-	const changeLanguage = useCallback((lang: Language) => {
-		setLanguage(lang);
-		setLanguageState(lang);
-	}, []);
-
 	const changeUserMode = useCallback((mode: UserMode) => {
 		setUserMode(mode);
 		writeUserMode(mode);
@@ -1644,8 +1636,6 @@ export default function App() {
 				editorTheme={editorTheme}
 				onEditorTheme={setEditorTheme}
 				onBrowseThemes={() => setPage("themes")}
-				language={language}
-				onLanguage={changeLanguage}
 				userMode={userMode}
 				onUserMode={changeUserMode}
 				askMode={askMode}

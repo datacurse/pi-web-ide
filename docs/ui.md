@@ -163,7 +163,10 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
 
 ## Chat work and output
 
-- Each assistant turn has one collapsed-by-default `Show work` / `Hide work` toggle.
+- Each assistant turn has one collapsed-by-default, muted `Worked for {s}s` disclosure
+  with a small caret; while running it reads `Working for {s}s` and updates each second.
+  Timing uses recorded turn activity, falling back to prompt/message end timestamps.
+  Unobserved history reads `Worked` without inventing a duration.
   Reasoning, intermediate prose, tool calls and in-flight output live inside it.
   Only the settled final answer's trailing text and images stay outside.
 - Model prose and reasoning render Markdown. Tool arguments and output are literal,
@@ -646,10 +649,8 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
   Defaults avoid those keys: Alt+Shift+T reopens the last tab closed in this page load,
   Alt+N starts a session in the last-used column, Ctrl+O, Ctrl+P, Ctrl+`, Alt+J, Alt+1–9.
   Changes live in `pwi:shortcuts`; the palette shows the current keys.
-- Appearance has a `Language` radio group (English / Русский, each named in itself,
-  `pwi:language`, per browser). Every interface string goes through `t("English text")`
-  or `plural(n, one, other)` from `i18n.ts`; the Russian lives in `i18n.ru.ts`, and
-  `i18n.test.ts` fails when a literal key has no translation. Switching re-renders in place.
+- The interface is English-only, with no language setting. `i18n.ts` provides
+  placeholder and English plural helpers; dates and numbers use the browser locale.
 - A `Search settings` field (`inputClass.sm`) tops the nav. A query shows every matching
   setting from all categories, grouped under their category's `Section`; categories
   without a hit fade to `opacity-50`. A setting matches when every word is in its

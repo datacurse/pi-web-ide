@@ -229,7 +229,7 @@ test("raw live tools stay visible without folding or duplicating settled calls",
 	assert.deepEqual(Array.from(list.props.data[0].work, (block: any) => block.id), ["a", "b"]);
 });
 
-test("live todos render directly under Show work, not beside the composer", () => {
+test("live todos render directly under the work duration, not beside the composer", () => {
 	const env = harness();
 	env.props.busy = true;
 	env.props.partial.tools = [{ id: "todo", name: "todo", args: {}, todos: [{ id: 1, subject: "Move checklist", status: "in_progress" }] }];
@@ -240,7 +240,7 @@ test("live todos render directly under Show work, not beside the composer", () =
 	const selected = list.props.itemContent(i, list.props.data[i]) as Node;
 	assert.equal(selected.props.expanded, false);
 	const rowNodes = descendants((selected.type as any).type(selected.props));
-	const toggle = rowNodes.findIndex((node) => node.props.children === "Show work");
+	const toggle = rowNodes.findIndex((node) => node.type === "button" && node.props["aria-expanded"] === false);
 	const checklist = rowNodes.findIndex((node) => node.type === TodoList);
 	assert.ok(toggle >= 0 && checklist > toggle);
 	assert.equal(rowNodes[checklist].props.tasks[0].subject, "Move checklist");
@@ -271,4 +271,33 @@ test("settled answer actions use the assistant timestamp and are absent while st
 	assert.equal(actions.props.onFork, env.props.onFork);
 	env.props.busy = true;
 	assert.equal(rowNodes().some((node) => node.type === transcript.AnswerActions), false);
+});
+
+test("work disclosure shows elapsed seconds and keeps its label when expanded", () => {
+	const env = harness();
+	env.props.snapshot!.messages = [
+		{ role: "user", timestamp: 1000, blocks: [] },
+		{ role: "assistant", timestamp: 2000, endedAt: 13500, blocks: [{ kind: "thinking", text: "work" }, { kind: "text", text: "answer" }] },
+	];
+	const renderRow = () => {
+		const list = env.render().find((node) => node.type === Virtuoso)!;
+		const row = list.props.itemContent(1, list.props.data[1]) as Node;
+		return { row, nodes: descendants((row.type as any).type(row.props)) };
+	};
+	const first = renderRow();
+	const toggle = first.nodes.find((node) => node.type === "button" && node.props["aria-expanded"] === false)!;
+	assert.equal(toggle.props.children[0], "Worked for 12s");
+	toggle.props.onClick();
+	const opened = renderRow().nodes.find((node) => node.type === "button" && node.props["aria-expanded"] === true)!;
+	assert.equal(opened.props.children[0], "Worked for 12s");
+	env.props.busy = true;
+	const live = renderRow().row;
+	const liveNodes = descendants((live.type as any).type({ ...live.props, now: 13500 }));
+	assert.equal(liveNodes.find((node) => node.type === "button")!.props.children[0], "Working for 12s");
+	const skewed = descendants((live.type as any).type({ ...live.props, now: 500 }));
+	assert.equal(skewed.find((node) => node.type === "button")!.props.children[0], "Working for 0s");
+	env.props.busy = false;
+	env.props.snapshot!.messages[1].endedAt = undefined;
+	assert.equal(renderRow().nodes.find((node) => node.type === "button")!.props.children[0], "Worked");
+	env.cleanup();
 });

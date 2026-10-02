@@ -125,25 +125,6 @@ const EDITOR_THEME_KEY = "pwi:editorTheme";
 /** The inline variables and light flag applyTheme last wrote, replayed by index.html before the first paint. */
 const THEME_BOOT_KEY = "pwi:themeBoot";
 
-/** Interface languages, each labelled in itself so it can be found by someone who cannot read the other. */
-export const LANGUAGES = [
-	{ id: "en", label: "English" },
-	{ id: "ru", label: "Русский" },
-] as const;
-
-export type Language = (typeof LANGUAGES)[number]["id"];
-
-const LANGUAGE_KEY = "pwi:language";
-
-export function readLanguage(): Language {
-	const stored = readStored(LANGUAGE_KEY);
-	return LANGUAGES.some((l) => l.id === stored) ? (stored as Language) : "en";
-}
-
-export function writeLanguage(lang: Language): void {
-	writeStored(LANGUAGE_KEY, lang);
-}
-
 const NOTIFY_KEY = "pwi:notify";
 const LATEST_PROMPT_KEY = "pwi:latestPrompt";
 const HIDE_SCROLLBARS_KEY = "pwi:hideScrollbars";
