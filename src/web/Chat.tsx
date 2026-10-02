@@ -131,7 +131,7 @@ const HistoryRow = memo(function HistoryRow({ row, expanded, onToggle, userMode,
 				className="group/work chat-prose inline-flex items-center gap-1.5 py-1 text-neutral-500 transition-colors hover:text-neutral-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-neutral-500">
 				{workLabel}<CaretRight size={12} aria-hidden className={`transition-opacity ${expanded ? "rotate-90 opacity-100" : "opacity-0 group-hover/work:opacity-100 group-focus-visible/work:opacity-100"}`} />
 			</button>}
-			<WorkTimeline blocks={row.work ?? []} activity={row.activity} running={row.running} expanded={expanded} />
+			{(row.running || expanded) && <WorkTimeline blocks={row.work ?? []} activity={row.activity} running={row.running} expanded={expanded} />}
 		</>}
 		<RawBlocks blocks={row.blocks} />
 		{row.answerAt !== undefined && <AnswerActions at={row.answerAt} respondedAt={row.workEndedAt ?? row.answerAt}

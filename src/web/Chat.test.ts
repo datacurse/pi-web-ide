@@ -274,6 +274,7 @@ test("work disclosure shows minutes and seconds and keeps its label when expande
 		return { row, nodes: descendants((row.type as any).type(row.props)) };
 	};
 	const first = renderRow();
+	assert.equal(first.nodes.some((node) => node.type === WorkTimeline), false, "collapsed work hides the entire timeline");
 	const toggle = first.nodes.find((node) => node.type === "button" && node.props["aria-expanded"] === false)!;
 	assert.equal(toggle.props.children[0], "Worked for 3m 17s, 1 roundtrip");
 	assert.ok(toggle.props.className.includes("group/work"));
@@ -281,7 +282,9 @@ test("work disclosure shows minutes and seconds and keeps its label when expande
 	assert.ok(!toggle.props.className.split(" ").includes("text-meta"));
 	assert.equal(toggle.props.children[1].props.className, "transition-opacity opacity-0 group-hover/work:opacity-100 group-focus-visible/work:opacity-100");
 	toggle.props.onClick();
-	const opened = renderRow().nodes.find((node) => node.type === "button" && node.props["aria-expanded"] === true)!;
+	const expandedNodes = renderRow().nodes;
+	assert.equal(expandedNodes.some((node) => node.type === WorkTimeline), true, "expanded work shows the timeline");
+	const opened = expandedNodes.find((node) => node.type === "button" && node.props["aria-expanded"] === true)!;
 	assert.equal(opened.props.children[0], "Worked for 3m 17s, 1 roundtrip");
 	assert.equal(opened.props.children[1].props.className, "transition-opacity rotate-90 opacity-100");
 	env.props.busy = true;
