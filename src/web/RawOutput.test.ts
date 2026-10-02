@@ -49,8 +49,10 @@ test("anchor replacements show a removed range and literal green source lines", 
 		},
 	}] }));
 	assert.ok(html.includes("Remove lines agfl → xyzw (inclusive)"));
-	assert.ok(html.includes("bg-red-400/10"));
-	assert.ok(html.includes("bg-green-400/10"));
+	assert.ok(html.includes("border-red-400"));
+	assert.ok(html.includes("border-green-400"));
+	assert.ok(!html.includes("bg-red-"));
+	assert.ok(!html.includes("bg-green-"));
 	assert.ok(html.includes("assert.match(exploring, /&lt;span&gt;Explored/);"));
 	assert.ok(!html.includes("\tassert.match"));
 	assert.ok(html.includes("**literal**"));

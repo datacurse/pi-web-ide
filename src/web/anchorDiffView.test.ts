@@ -15,8 +15,10 @@ test("unknown paths use TypeScript highlighting and snippet numbers replace diff
 	assert.ok(html.includes('aria-label="Replacement snippet line 2"'));
 	assert.ok(!html.includes(">−<"));
 	assert.ok(!html.includes(">+<"));
-	assert.ok(html.includes("bg-red-400/10"));
-	assert.ok(html.includes("bg-green-400/10"));
+	assert.ok(html.includes("border-red-400"));
+	assert.ok(html.includes("border-green-400"));
+	assert.ok(!html.includes("bg-red-"));
+	assert.ok(!html.includes("bg-green-"));
 	assert.ok(html.includes("flex items-baseline px-2"));
 	assert.ok(html.includes("mr-2 w-4 shrink-0 select-none text-center"));
 	assert.ok(!/snippet line[^>]+class="[^"]*text-meta/.test(html));

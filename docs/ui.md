@@ -72,7 +72,7 @@ fits none of the existing ones, and record it here.
   and metadata for reads, terminal-style commands for shell calls, the editor's
   read-only unified diff for each edit replacement (content-height, capped at
   `max-h-64`), content previews for writes, and only the removed/added lines for
-  completed anchor-based `replace` calls, with red/green backgrounds and borders,
+  completed anchor-based `replace` calls, with red/green left borders and no tinted backgrounds,
   syntax colors and a centered line-number gutter; omit context and redundant
   anchor arguments. Show the file path and captured file line when available.
   Clicking its header opens/focuses an editor tab at that line, centered and
