@@ -63,6 +63,30 @@ const api = hc<typeof app>("http://127.0.0.1:8890/", {
 	headers: HOST,
 	fetch: (input: RequestInfo | URL, init?: RequestInit) => app.request(input, init),
 }).api;
+
+test("Personality can be disabled without losing saved text or reminder preference", async () => {
+	await api.personality.$put({ json: { content: "Keep this personality." } });
+	await api.personality.remind.$put({ json: { remind: true } });
+	for (const enabled of [false, true]) {
+		const r = await api.personality.enabled.$put({ json: { enabled } });
+		assert.equal(r.status, 200);
+		const body = await r.json();
+		assert.equal(body.enabled, enabled);
+		assert.equal(body.content, "Keep this personality.\n");
+		assert.equal(body.remind, true);
+		const loaded = await api.personality.$get();
+		assert.equal((await loaded.json()).enabled, enabled);
+	}
+	for (const enabled of ["false", 0, null, undefined]) {
+		const r = await app.request("/api/personality/enabled", {
+			method: "PUT",
+			headers: { ...HOST, "Content-Type": "application/json" },
+			body: JSON.stringify({ enabled }),
+		});
+		assert.equal(r.status, 400);
+	}
+});
+
 const json = (body: string, headers: Record<string, string> = {}) => ({
 	method: "POST",
 	body,

@@ -21,6 +21,7 @@ interface PersonalityFile {
 	content: string;
 	exists: boolean;
 	remind: boolean;
+	enabled: boolean;
 }
 
 type SaveState = "idle" | "saving" | "saved";
@@ -82,6 +83,16 @@ export function Personality({ open }: { open: boolean }) {
 		setPersonality((p) => (p ? { ...p, remind } : p));
 	};
 
+	const saveEnabled = async (enabled: boolean) => {
+		const r = await api.personality.enabled.$put({ json: { enabled } }).catch(() => null);
+		if (!r?.ok) {
+			setSaveError(t("could not save the personality setting"));
+			return;
+		}
+		setSaveError(null);
+		setPersonality((p) => (p ? { ...p, enabled } : p));
+	};
+
 	const save = async () => {
 		if (draft === null) return;
 		setSaveState("saving");
@@ -101,6 +112,7 @@ export function Personality({ open }: { open: boolean }) {
 			content: body.content ?? draft,
 			exists: true,
 			remind: body.remind ?? personality?.remind ?? false,
+			enabled: body.enabled ?? personality?.enabled ?? true,
 		};
 		setPersonality(saved);
 		setDraft(saved.content);
@@ -114,6 +126,21 @@ export function Personality({ open }: { open: boolean }) {
 	return (
 		<div className="mt-4">
 			<h4 className="px-2 text-ui text-neutral-200">{t("Personality")}</h4>
+			<OptionRow className="mt-2">
+				<input
+					type="checkbox"
+					checked={personality?.enabled ?? true}
+					disabled={!personality}
+					onChange={(e) => void saveEnabled(e.target.checked)}
+					className="size-4 shrink-0 accent-amber-400"
+				/>
+				<span className="flex-1">
+					{t("Enable personality")}
+					<span className="block text-meta text-neutral-500">
+						{t("When off, no personality text or reminders are sent. Your saved text is kept. Applies to sessions started from now on.")}
+					</span>
+				</span>
+			</OptionRow>
 			<label className="mt-1 block px-2">
 				<span className="text-meta text-neutral-500">{t("Appended to every new session's system prompt")}</span>
 				<span className="mt-0.5 block font-mono text-meta break-all text-neutral-500">
@@ -151,7 +178,7 @@ export function Personality({ open }: { open: boolean }) {
 				<input
 					type="checkbox"
 					checked={personality?.remind ?? false}
-					disabled={!personality}
+					disabled={!personality || !personality.enabled}
 					onChange={(e) => void saveRemind(e.target.checked)}
 					className="size-4 shrink-0 accent-amber-400"
 				/>

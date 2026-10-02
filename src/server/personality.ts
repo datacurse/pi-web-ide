@@ -12,8 +12,8 @@
  * sessions started AFTER the save, because a running child has already built
  * its system prompt.
  *
- * Clearing the box and saving writes an empty file, which is how the override
- * is turned off — nothing here deletes anything.
+ * The enable switch turns off prompt additions without deleting the text.
+ * Clearing the box also disables additions by leaving an empty file.
  */
 
 import { readFileSync } from "node:fs";
@@ -39,6 +39,8 @@ export interface Personality {
 	exists: boolean;
 	/** Also repeat the text before every reply (remind-extension.ts). */
 	remind: boolean;
+	/** Disable both prompt additions without deleting the saved text. */
+	enabled: boolean;
 }
 
 function remindPath(): string {
@@ -58,15 +60,29 @@ export function writeRemind(remind: boolean): Personality {
 	return readPersonality();
 }
 
+/** Existing installations stay enabled until explicitly switched off. */
+export function readPersonalityEnabled(): boolean {
+	try {
+		return JSON.parse(readStateFile(statePath("personality-enabled.json")) ?? "{}").enabled !== false;
+	} catch {
+		return true;
+	}
+}
+
+export function writePersonalityEnabled(enabled: boolean): Personality {
+	writeStateFile(statePath("personality-enabled.json"), `${JSON.stringify({ enabled })}\n`);
+	return readPersonality();
+}
+
 export function readPersonality(): Personality {
 	const path = personalityPath();
 	try {
-		return { path, content: readFileSync(path, "utf8"), exists: true, remind: readRemind() };
+		return { path, content: readFileSync(path, "utf8"), exists: true, remind: readRemind(), enabled: readPersonalityEnabled() };
 	} catch {
 		// Absent is the normal state of a machine that never set one, so it is
 		// reported rather than thrown: the field opens empty and saving creates
 		// the file.
-		return { path, content: "", exists: false, remind: readRemind() };
+		return { path, content: "", exists: false, remind: readRemind(), enabled: readPersonalityEnabled() };
 	}
 }
 
@@ -81,5 +97,5 @@ export function writePersonality(content: string): Personality {
 
 	const path = personalityPath();
 	writeStateFile(path, text);
-	return { path, content: text, exists: true, remind: readRemind() };
+	return { path, content: text, exists: true, remind: readRemind(), enabled: readPersonalityEnabled() };
 }

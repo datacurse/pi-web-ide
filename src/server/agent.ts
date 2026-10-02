@@ -65,7 +65,7 @@ import type { TurnActivity } from "../shared/activity.js";
 import { FAST_COMMAND, supportsFastMode } from "../shared/fastMode.js";
 import { hunkFromWrite, hunksFromEdit, type Hunk } from "../shared/hunks.js";
 import { fileURLToPath } from "node:url";
-import { personalityPath, readRemind } from "./personality.js";
+import { personalityPath, readRemind, readPersonalityEnabled } from "./personality.js";
 import { readToolMetrics } from "./pwiExtensions.js";
 import { ensureSolPiReducer } from "./solPi.js";
 import { autoCompactionEnabled } from "./automaticModelConfig.js";
@@ -1172,6 +1172,7 @@ export async function openSession(opts: OpenOptions): Promise<PiSession> {
  * would append a blank line to every system prompt.
  */
 function personalityFile(): string | undefined {
+	if (!readPersonalityEnabled()) return undefined;
 	try {
 		return statSync(personalityPath()).size > 0 ? personalityPath() : undefined;
 	} catch {

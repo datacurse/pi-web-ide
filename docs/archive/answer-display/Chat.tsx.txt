@@ -3,8 +3,10 @@ import { Virtuoso } from "react-virtuoso";
 import { ArrowDown, Check, PaperPlaneTilt, Paperclip, QuestionMark, Square } from "@phosphor-icons/react";
 import type {
 	AskAnswer,
+	PiBlock,
 	PiCommand,
 	PiImage,
+	PiMessage,
 	PiPartial,
 	Snapshot,
 } from "../shared/types.js";
@@ -12,8 +14,7 @@ import { Button, ContextMenu, IconButton, MenuItem } from "./ui.js";
 import { mergeLiveTools } from "../shared/toolTree.js";
 import { ModelSelector } from "./ModelSelector.js";
 import { GitActions } from "./GitActions.js";
-import { RawBlocks } from "./RawOutput.js";
-import { rawRows, type RawRow } from "./rawTurns.js";
+import { MarkdownText } from "./Markdown.js";
 import { ASK_MODES, type AskMode, type ThinkingMode, type ToolMode, type UserMode } from "./prefs.js";
 import { clearDraft, readDraft, writeDraftImages, writeDraftText } from "./drafts.js";
 import { completionOptions, parseCompletion, type CommandOption } from "./commands.js";
@@ -28,8 +29,26 @@ import {
 	uploadFile,
 } from "./Attachments.js";
 import type { ImageWorkspace } from "./imageAnnotations.js";
-import { CommandRow, ContextMeter, ContextPanel, Message, Notices } from "./Transcript.js";
+import {
+	CommandRow,
+	CompactionRow,
+	ContextMeter,
+	ContextPanel,
+	Footer,
+	Message,
+	Notices,
+	Reasoning,
+	Thought,
+	Tool,
+	ToolGroup,
+	TranscriptRow,
+	turnStart,
+} from "./Transcript.js";
 import { t } from "./i18n.js";
+import { CompletedActivity, TurnStatus } from "./Activity.js";
+import { TurnWork } from "./TurnWork.js";
+import { partitionPhaseTurn } from "./turnPhases.js";
+import type { TurnActivity } from "../shared/activity.js";
 import { PiMark } from "./piMark.js";
 import { PastedTexts } from "./PastedTexts.js";
 import { addPastedText, isLargePaste, joinPastedText, splitPastedText } from "./pastedText.js";
@@ -113,20 +132,45 @@ function CommandPicker({
 	);
 }
 
-const HistoryRow = memo(function HistoryRow({ row, expanded, onToggle, userMode, onEdit, onFork, labelled }: {
-	row: RawRow; expanded: boolean; onToggle: () => void; userMode: UserMode;
+/**
+ * A rendered transcript row: one message, or a run of tool calls collapsed
+ * into one group. Only "grouped" tool mode ever produces the second kind.
+ */
+type Row =
+	| {
+			kind: "message";
+			role: PiMessage["role"];
+			blocks: PiBlock[];
+			labelled: boolean;
+			footer?: Footer;
+			/** The message's start timestamp; see `at` on Message. */
+			at?: number;
+	  }
+	| { kind: "tools"; blocks: PiBlock[]; labelled: boolean }
+	| { kind: "phases"; activity: TurnActivity; messages: PiMessage[]; prompt?: PiMessage };
+
+const HistoryRow = memo(function HistoryRow({
+	row, live, liveBlocks, waitingForInput, workExpanded, toolMode, userMode, thinkingMode, onFork, onEdit,
+}: {
+	row: Row;
+	live?: PiPartial;
+	liveBlocks?: PiBlock[];
+	waitingForInput: boolean;
+	workExpanded: boolean;
+	toolMode: ToolMode;
+	userMode: UserMode;
+	thinkingMode: ThinkingMode;
+	onFork: (at: number) => Promise<void>;
 	onEdit?: (at: number, text: string, images: PiImage[]) => void;
-	onFork: (at: number) => Promise<void>; labelled: boolean;
 }) {
-	if (row.role === "user") return <Message role="user" blocks={row.blocks} at={row.at} labelled={labelled} userMode={userMode} onEdit={onEdit} onFork={onFork} autoOpenTools={false} foldThinking={false} />;
-	return <div className="chat-gutter my-3"><div className="chat-measure">
-		{row.role !== "assistant" && <div className="font-mono text-meta text-neutral-500">{row.role}</div>}
-		{(!!row.work?.length || row.running) && <>
-			<Button size="sm" variant="subtle" aria-expanded={expanded} onClick={onToggle}>{expanded ? "Hide work" : "Show work"}</Button>
-			{expanded && <RawBlocks blocks={row.work ?? []} />}
-		</>}
-		<RawBlocks blocks={row.blocks} />
-	</div></div>;
+	if (row.kind === "phases") return <TurnWork activity={row.activity} messages={row.messages} prompt={row.prompt} partial={live} waitingForInput={waitingForInput} expandedByDefault={workExpanded} userMode={userMode} thinkingMode={thinkingMode} onFork={onFork} onEdit={onEdit} />;
+	if (row.kind === "tools") return (
+		<TranscriptRow role="assistant" labelled={row.labelled}>
+			<ToolGroup blocks={liveBlocks ? [...row.blocks, ...liveBlocks] : row.blocks} streaming={!!liveBlocks} />
+		</TranscriptRow>
+	);
+	if (row.role === "compaction") return <CompactionRow text={row.blocks.map((block) => block.kind === "text" ? block.text : "").join("\n").trim()} />;
+	return <Message role={row.role} blocks={row.blocks} labelled={row.labelled} autoOpenTools={toolMode === "live"} userMode={userMode} foldThinking={thinkingMode === "folded"} footer={row.footer} onFork={onFork} at={row.at} onEdit={onEdit} />;
 });
 
 /** Page-wide: with two columns, only the first composer to show takes the load focus. */
@@ -137,9 +181,10 @@ export function Chat({
 	partial,
 	busy,
 	opening,
+	thinkingMode,
+	toolMode,
+	workExpanded,
 	userMode,
-	onEdit,
-	onFork,
 	askMode,
 	onAskMode,
 	modelError,
@@ -153,6 +198,8 @@ export function Chat({
 	onCommandMenu,
 	onCompact,
 	compacting,
+	onFork,
+	onEdit,
 	onRestart,
 	draftRev = 0,
 	focus,
@@ -209,6 +256,7 @@ export function Chat({
 	/** Bumped when the session list picked `entry`: focus the composer once it shows. */
 	focus?: { entry: string; n: number };
 }) {
+	const showThinking = thinkingMode !== "hidden";
 	const [text, setText] = useState("");
 	const pasted = useMemo(() => splitPastedText(text), [text]);
 	// In "toggle" mode sticky until switched off or the session changes; "once" clears it on send.
@@ -406,8 +454,216 @@ export function Chat({
 		return mergeLiveTools(settled, partial.tools);
 	}, [snapshot?.messages, partial.tools]);
 
-	const [expandedWork, setExpandedWork] = useState<Set<string>>(() => new Set());
-	const rows = useMemo(() => rawRows(messages, { ...partial, tools: liveTools }, busy), [messages, partial, liveTools, busy]);
+	/**
+	 * The transcript as it is actually rendered.
+	 *
+	 * Two passes in one: blocks the settings suppress are dropped — a filter
+	 * rather than `display:none`, since a hidden subtree still costs the
+	 * markdown render and still answers find-in-page — and a message left
+	 * with no blocks is dropped with it rather than leaving an empty labelled
+	 * row behind.
+	 *
+	 * `labelled` then marks only where the SPEAKER CHANGES. One agent turn is
+	 * routinely a dozen messages of tool calls, and an ASSISTANT heading over
+	 * every one of them announces a new speaker that never arrived — the
+	 * label is worth reading precisely because it is not on every row.
+	 *
+	 * In "grouped" mode a run of consecutive tool calls becomes one row. The run
+	 * SPANS messages, because that is the shape of a turn: a dozen one-call
+	 * messages in a row is exactly what is worth collapsing.
+	 *
+	 * In "answer" mode the unit is the whole TURN, not the run: everything the
+	 * assistant did between two user messages folds into one line, and only the
+	 * prose the turn ENDED on stays. The end is what makes it the answer — the
+	 * model stopped there — so it is found by peeling text blocks off the back
+	 * of the turn, not by picking the longest or the first. A turn still
+	 * streaming ends on a tool call, so it has no answer yet and folds whole.
+	 *
+	 * Computed before the empty-pane early return below, because a hook
+	 * cannot run conditionally.
+	 */
+	const rows = useMemo(() => {
+		const out: Row[] = [];
+		/** The run being accumulated. Never non-empty outside "grouped" mode. */
+		let pending: PiBlock[] = [];
+		/** The turn being accumulated. Never non-empty outside "answer" mode. */
+		let turn: PiBlock[] = [];
+		let turnMessages: PiMessage[] = [];
+		let turnAsked: number | undefined;
+		/** The last question's timestamp, for the footer's duration. */
+		let asked: number | undefined;
+		/** The accumulated turn's footer, set by its last assistant message. */
+		let turnFooter: Footer | undefined;
+		/**
+		 * The footer goes under the message that ENDED a turn: an assistant
+		 * message with no tool calls, the same rule as `turnStart`. Intermediate
+		 * steps get none, so there is one per question.
+		 */
+		const footerFor = (m: PiMessage): Footer | undefined =>
+			m.role === "assistant" && !m.blocks.some((b) => b.kind === "tool")
+				? { at: m.timestamp, endedAt: m.endedAt, asked, activity: snapshot?.activity?.find((turn) => turn.asked === asked && turn.end !== undefined) }
+				: undefined;
+
+		const lastRole = (): PiMessage["role"] | undefined => {
+			const last = out.at(-1);
+			if (!last) return undefined;
+			// A group is always the assistant's, so it breaks the label the same
+			// way a message from the assistant does.
+			return last.kind !== "message" ? "assistant" : last.role;
+		};
+		const flushGroup = () => {
+			if (pending.length === 0) return;
+			out.push({
+				kind: "tools",
+				blocks: pending,
+				labelled: lastRole() !== "assistant",
+			});
+			pending = [];
+		};
+		/**
+		 * One turn: the work as a single folded line, then its answer as prose.
+		 *
+		 * Trailing images stay with the answer — a screenshot the turn ended on
+		 * is part of what it said — but nothing else is peeled: a thought after
+		 * the last paragraph means the turn did not end on prose.
+		 */
+		const flushTurn = (live = false) => {
+			const activity = turnMessages.length > 0 ? snapshot?.activity?.find((trace) => trace.asked === turnAsked) : undefined;
+			if (activity) {
+				const { work, answer } = partitionPhaseTurn(turnMessages, live && activity.end === undefined);
+				let prompt: PiMessage | undefined;
+				const previous = out.at(-1);
+				if (previous?.kind === "message" && previous.role === "user") {
+					out.pop();
+					prompt = { role: "user", blocks: previous.blocks, timestamp: previous.at ?? activity.start };
+				}
+				out.push({ kind: "phases", activity, messages: work, prompt });
+				if (answer) out.push({ kind: "message", role: "assistant", blocks: answer.blocks, labelled: false, at: answer.timestamp, footer: turnFooter ? { ...turnFooter, activity: undefined } : undefined });
+				turn = [];
+				turnMessages = [];
+				turnAsked = undefined;
+				turnFooter = undefined;
+				return;
+			}
+			turnMessages = [];
+			turnAsked = undefined;
+			if (turn.length === 0) return;
+			let cut = turn.length;
+			// Mid-turn, prose is never the answer yet: splitting it out made each
+			// paragraph pop out of the fold and back in when the next call came.
+			// Only the running turn: finished turns keep their answers on screen.
+			while (!live && cut > 0 && (turn[cut - 1].kind === "text" || turn[cut - 1].kind === "image"))
+				cut--;
+			const work = turn.slice(0, cut);
+			const answer = turn.slice(cut);
+			const footer = turnFooter;
+			turn = [];
+			turnFooter = undefined;
+			if (work.length > 0)
+				out.push({
+					kind: "tools",
+					blocks: work,
+					labelled: lastRole() !== "assistant",
+				});
+			if (answer.length > 0)
+				out.push({
+					kind: "message",
+					role: "assistant",
+					blocks: answer,
+					labelled: lastRole() !== "assistant",
+					footer,
+				});
+		};
+
+		for (const m of messages) {
+			if (m.role === "user") {
+				flushTurn();
+				asked = m.timestamp;
+			}
+			const before = out.length;
+			const blocks = m.blocks.filter(
+				(b) =>
+					(showThinking || b.kind !== "thinking") &&
+					(toolMode !== "hidden" || b.kind !== "tool"),
+			);
+			if (blocks.length === 0 && !((toolMode === "phases" || toolMode === "answer") && m.role === "assistant")) continue;
+
+			if (toolMode === "phases" || toolMode === "answer") {
+				// The assistant's blocks pile up until someone else speaks; see
+				// flushTurn below for where the answer is split back out.
+				if (m.role === "assistant") {
+					if (turnMessages.length === 0) turnAsked = asked;
+					turnMessages.push({ ...m, blocks });
+					turn.push(...blocks);
+					turnFooter = footerFor(m);
+					continue;
+				}
+				flushTurn();
+				out.push({
+					kind: "message",
+					role: m.role,
+					blocks,
+					labelled: lastRole() !== m.role,
+					at: m.timestamp,
+				});
+				continue;
+			}
+
+			if (toolMode !== "grouped") {
+				out.push({
+					kind: "message",
+					role: m.role,
+					blocks,
+					labelled: lastRole() !== m.role,
+					footer: footerFor(m),
+					at: m.timestamp,
+				});
+				continue;
+			}
+
+			/*
+			 * Tool blocks AND reasoning are peeled off into the run — see ToolGroup
+			 * for why reasoning belongs there. It joins even when no run is open
+			 * yet, because a turn that opens with a long thought is exactly the
+			 * wall of text this mode exists to fold: a thought is never prose the
+			 * reader asked for. Everything else stays a message row, and order is
+			 * preserved on both sides: a paragraph after three calls ends the run
+			 * and starts the next one.
+			 */
+			let run: PiBlock[] = [];
+			const flushRun = () => {
+				if (run.length === 0) return;
+				out.push({
+					kind: "message",
+					role: m.role,
+					blocks: run,
+					labelled: lastRole() !== m.role,
+					at: m.timestamp,
+				});
+				run = [];
+			};
+			for (const b of blocks) {
+				if (b.kind === "tool" || b.kind === "thinking") {
+					flushRun();
+					pending.push(b);
+				} else {
+					flushGroup();
+					run.push(b);
+				}
+			}
+			flushRun();
+			// Under the prose this message ended on, if it produced any.
+			const last = out.at(-1);
+			if (out.length > before && last?.kind === "message") last.footer = footerFor(m);
+		}
+		flushGroup();
+		flushTurn(busy);
+		if (busy && (toolMode === "phases" || toolMode === "answer")) {
+			const current = snapshot?.activity?.findLast((trace) => trace.end === undefined);
+			if (current && !out.some((row) => row.kind === "phases" && row.activity.start === current.start)) out.push({ kind: "phases", activity: current, messages: [] });
+		}
+		return out;
+	}, [messages, showThinking, toolMode, busy, snapshot?.activity]);
 
 
 	if (!snapshot) {
@@ -519,7 +775,57 @@ export function Chat({
 		setAttachError(null);
 	};
 
-	const hasPartial = Boolean(partial.text || partial.thinking || liveTools.length);
+	// A suppressed block does not count toward "there is something to show",
+	// or hiding it would leave a bare `assistant` label hanging in the
+	// transcript for the whole reasoning or tool phase.
+	const showTools = toolMode !== "hidden";
+	/**
+	 * Both folding modes collapse a streaming run into the one growing line —
+	 * reasoning included. Leaving live reasoning outside the fold made the
+	 * running turn the one place a wall of thinking still landed in the
+	 * transcript, and then it vanished into a group the moment the turn
+	 * settled: the pane jumped, and a mode that promises one line showed
+	 * twenty. The fold's own line says it is thinking, and the status line
+	 * below still names the running tool.
+	 */
+	const folds = toolMode === "grouped" || toolMode === "answer" || toolMode === "phases";
+	const phasedLive = busy && rows.some((row) => row.kind === "phases" && row.activity.end === undefined);
+	const hasPartial =
+		partial.text ||
+		(showThinking && partial.thinking) ||
+		(showTools && liveTools.length > 0);
+	/**
+	 * The streaming fold's blocks, in the order they happened: the thought that
+	 * opened the turn, then the calls. One `thinking` block, not one per delta
+	 * — `partial.thinking` is already the accumulated text.
+	 */
+	const partialFold: PiBlock[] =
+		showTools && folds
+			? [
+					...(showThinking && partial.thinking
+						? [{ kind: "thinking", text: partial.thinking } as PiBlock]
+						: []),
+					// "Answer only" folds live prose too; it leaves the fold once the turn ends.
+					...((toolMode === "answer" || toolMode === "phases") && partial.text
+						? [{ kind: "text", text: partial.text } as PiBlock]
+						: []),
+					...liveTools.map((t) => ({ kind: "tool", ...t }) as PiBlock),
+				]
+			: [];
+
+	// The streaming block is one more assistant row, so it follows the same
+	// rule: label it only when the last settled row was someone else. A
+	// collapsed run of calls is the assistant's too.
+	const lastRow = rows.at(-1);
+	const partialLabelled =
+		!lastRow || (lastRow.kind === "message" && lastRow.role !== "assistant");
+	/*
+	 * A turn is many messages, and the settled ones end in a fold that the
+	 * streaming one continues. Rendered apart they read as two groups; so the
+	 * live fold joins the settled one when nothing came between them.
+	 */
+	const joinFold =
+		busy && folds && lastRow?.kind === "tools" && (partialFold.length > 0 || !hasPartial);
 
 	return (
 		/*
@@ -568,21 +874,75 @@ export function Chat({
 					<div ref={content}>
 					{scrollParent && rows.length > 0 && (
 						<Virtuoso
-							key={snapshot.id}
+							key={`${snapshot.id}:${toolMode}:${thinkingMode}`}
 							customScrollParent={scrollParent}
 							data={rows}
 							initialTopMostItemIndex={rows.length - 1}
 							increaseViewportBy={200}
-							computeItemKey={(i, row) => `${row.role}:${row.at}:${i}`}
-							itemContent={(i, row) => {
-								const key = `${snapshot.id}:${row.role}:${row.at}`;
-								return <HistoryRow row={row} userMode={userMode} onEdit={busy ? undefined : onEdit} onFork={onFork} labelled={i === 0 || rows[i - 1].role !== row.role} expanded={expandedWork.has(key)} onToggle={() => setExpandedWork((previous) => {
-									const next = new Set(previous);
-									if (next.has(key)) next.delete(key); else next.add(key);
-									return next;
-								})} />;
-							}}
+							computeItemKey={(i, row) => row.kind === "phases" ? `phases:${row.activity.start}` : `${row.kind}:${row.kind === "message" ? row.at ?? "" : ""}:${i}`}
+							itemContent={(i, row) => (
+								<HistoryRow
+									row={row}
+									live={row.kind === "phases" && busy && row.activity.end === undefined ? { text: partial.text, thinking: showThinking ? partial.thinking : "", tools: liveTools } : undefined}
+									liveBlocks={joinFold && i === rows.length - 1 ? partialFold : undefined}
+									waitingForInput={row.kind === "phases" && row.activity.end === undefined && !!snapshot.ask}
+									workExpanded={workExpanded}
+									toolMode={toolMode}
+									userMode={userMode}
+									thinkingMode={thinkingMode}
+									onFork={onFork}
+									onEdit={busy ? undefined : onEdit}
+								/>
+							)}
 						/>
+					)}
+
+					{hasPartial && !phasedLive && (
+						<TranscriptRow role="assistant" labelled={partialLabelled}>
+							{/*
+							 * Grouped while it streams, not just once it settles: the group
+							 * line grows in place instead of the pane growing a line per
+							 * call, and the status line below still names the running tool.
+							 */}
+							{partialFold.length > 0 && !joinFold && (
+								<ToolGroup blocks={partialFold} streaming />
+							)}
+							{/* Unfolded modes show the live thought as itself. */}
+							{!folds && thinkingMode === "folded" && partial.thinking && (
+								<Thought
+									text={partial.thinking}
+									streaming={!partial.text && liveTools.length === 0}
+								/>
+							)}
+							{!folds && thinkingMode === "shown" && partial.thinking && (
+								<Reasoning text={partial.thinking} />
+							)}
+							{showTools &&
+								!folds &&
+								liveTools.map((t) => (
+									<Tool
+										key={t.id}
+										name={t.name}
+										isError={t.isError}
+										result={t.result}
+										args={t.args}
+										autoOpen={toolMode === "live"}
+										children={t.children}
+										childrenIncomplete={t.childrenIncomplete}
+									/>
+								))}
+							{/* optimizeForStreaming suppresses incomplete inline syntax (an
+						    unclosed ** or a half-typed fence) instead of rendering the raw
+						    markers until the closing delimiter arrives next delta. */}
+							{partial.text && toolMode !== "answer" && toolMode !== "phases" && (
+								<MarkdownText text={partial.text} streaming />
+							)}
+						</TranscriptRow>
+					)}
+
+					{busy && !phasedLive && <TurnStatus key={snapshot.id} activity={snapshot.activity?.findLast((turn) => turn.end === undefined)} since={turnStart(snapshot.messages)} waitingForInput={!!snapshot.ask} />}
+					{!busy && snapshot.activity?.at(-1)?.end !== undefined && !rows.some((r) => (r.kind === "message" && r.footer?.activity?.start === snapshot.activity?.at(-1)?.start) || (r.kind === "phases" && r.activity.start === snapshot.activity?.at(-1)?.start)) && (
+						<CompletedActivity activity={snapshot.activity.at(-1)!} expandedByDefault={workExpanded} />
 					)}
 
 					{/* Below the transcript: a local command answers after the last

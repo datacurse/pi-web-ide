@@ -13,7 +13,7 @@ import {
 	removeFavorite,
 	removeProject,
 } from "../projects.js";
-import { readPersonality, writePersonality, writeRemind } from "../personality.js";
+import { readPersonality, writePersonality, writeRemind, writePersonalityEnabled } from "../personality.js";
 import {
 	pwiExtensions,
 	writePwiExtension,
@@ -345,6 +345,12 @@ export function systemRoutes({ cwd: CWD, model: MODEL, registry, piVersion: PI_V
 				return c.json({ error: "remind must be a boolean" }, 400);
 			}
 			return c.json(writeRemind(b.remind), 200);
+		})
+
+		.put("/personality/enabled", json<{ enabled: boolean }>(), async (c) => {
+			const b = c.req.valid("json");
+			if (typeof b.enabled !== "boolean") return c.json({ error: "enabled must be a boolean" }, 400);
+			return c.json(writePersonalityEnabled(b.enabled), 200);
 		})
 
 		.put("/personality", json<{ content: string }>(), async (c) => {

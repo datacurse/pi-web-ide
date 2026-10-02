@@ -11,7 +11,7 @@ import { AskPanel } from "./AskPanel.js";
 import * as transcript from "./Transcript.js";
 import type { Snapshot } from "../shared/types.js";
 
-import { RawBlocks } from "./RawOutput.js";
+const { ToolGroup, TranscriptRow } = transcript;
 
 const require = createRequire(import.meta.url);
 const modules: Record<string, unknown> = {
@@ -23,8 +23,6 @@ const modules: Record<string, unknown> = {
 	"./ModelSelector.js": require("./ModelSelector.js"),
 	"./GitActions.js": require("./GitActions.js"),
 	"./Markdown.js": require("./Markdown.js"),
-	"./RawOutput.js": { RawBlocks },
-	"./rawTurns.js": require("./rawTurns.js"),
 	"./prefs.js": require("./prefs.js"),
 	"./drafts.js": require("./drafts.js"),
 	"./commands.js": require("./commands.js"),
@@ -138,7 +136,7 @@ test("history is passed to Virtuoso without eagerly mounting message rows", () =
 	assert.equal(env.nodes.filter((node) => node.props.row).length, 0);
 	const selected = list.props.itemContent(250, list.props.data[250]) as Node;
 	assert.equal(selected.props.row.blocks[0].text, "message 250");
-	assert.equal(selected.props.expanded, false);
+	assert.equal(selected.props.row.labelled, true);
 	assert.equal((selected.type as any).$$typeof, Symbol.for("react.memo"));
 	const key = list.props.computeItemKey(250, list.props.data[250]);
 	env.props.partial.text = "streaming update";
@@ -146,37 +144,21 @@ test("history is passed to Virtuoso without eagerly mounting message rows", () =
 	assert.equal(updated.props.computeItemKey(250, updated.props.data[250]), key);
 });
 
-test("user prompts reuse the complete original Message component", () => {
-	const env = harness();
-	env.props.userMode = "expanded";
-	const list = env.render().find((node) => node.type === Virtuoso)!;
-	const selected = list.props.itemContent(0, list.props.data[0]) as Node;
-	const rendered = (selected.type as any).type(selected.props) as Node;
-	assert.equal(rendered.type, transcript.Message);
-	assert.equal(rendered.props.role, "user");
-	assert.equal(rendered.props.blocks, list.props.data[0].blocks);
-	assert.equal(rendered.props.at, 1);
-	assert.equal(rendered.props.userMode, "expanded");
-	assert.equal(rendered.props.onEdit, env.props.onEdit);
-	env.props.busy = true;
-	const busyList = env.render().find((node) => node.type === Virtuoso)!;
-	const busyRow = busyList.props.itemContent(0, busyList.props.data[0]) as Node;
-	assert.equal((busyRow.type as any).type(busyRow.props).props.onEdit, undefined);
-});
-
-test("raw history ignores phase grouping and preserves every message", () => {
+test("phase work keeps its preceding user prompt in the same row", () => {
 	const env = harness();
 	env.props.toolMode = "phases";
 	env.props.snapshot!.messages = [
 		{ role: "user", timestamp: 1, blocks: [{ kind: "text", text: "question" }] },
-		{ role: "assistant", timestamp: 2, blocks: [{ kind: "thinking", text: "reasoning" }, { kind: "text", text: "**answer**" }] },
+		{ role: "assistant", timestamp: 2, endedAt: 3, blocks: [{ kind: "text", text: "answer" }] },
 	];
-	env.props.thinkingMode = "hidden";
+	env.props.snapshot!.activity = [{
+		start: 1, asked: 1, end: 3, steps: [{ kind: "text", label: "Receiving answer", start: 2, end: 3 }], tools: [],
+	}];
 	const list = env.render().find((node) => node.type === Virtuoso)!;
-	assert.equal(list.props.data.length, 2);
-	assert.equal(list.props.data[0].role, "user");
-	assert.equal(list.props.data[1].work[0].text, "reasoning");
-	assert.equal(list.props.data[1].blocks[0].text, "**answer**");
+	const phase = list.props.data.find((row: any) => row.kind === "phases");
+	assert.ok(phase);
+	assert.equal(phase.prompt.blocks[0].text, "question");
+	assert.equal(list.props.data.some((row: any) => row.kind === "message" && row.role === "user"), false);
 });
 test("content growth follows only while pinned, and jump-to-latest resumes following", () => {
 	const env = harness();
@@ -199,37 +181,31 @@ test("content growth follows only while pinned, and jump-to-latest resumes follo
 	assert.equal(observer.disconnected, true);
 });
 
-test("one collapsed toggle hides live work and toggles all intermediate output", () => {
+test("streaming content and unanswered questions stay outside the virtual history", () => {
 	const env = harness();
 	env.props.busy = true;
 	env.props.partial.text = "live answer";
-	env.props.partial.thinking = "reasoning";
 	env.props.snapshot!.ask = { id: "ask", kind: "text", message: "question" };
 	const nodes = env.render();
 	assert.ok(nodes.some((node) => node.type === AskPanel));
-	const list = nodes.find((node) => node.type === Virtuoso)!;
-	const i = list.props.data.length - 1;
-	const selected = list.props.itemContent(i, list.props.data[i]) as Node;
-	assert.equal(selected.props.expanded, false);
-	const rendered = (selected.type as any).type(selected.props);
-	assert.equal(descendants(rendered).filter((node) => node.type === RawBlocks && node.props.blocks.length > 0).length, 0);
-	selected.props.onToggle();
-	const updated = env.render().find((node) => node.type === Virtuoso)!;
-	const opened = updated.props.itemContent(i, updated.props.data[i]) as Node;
-	assert.equal(opened.props.expanded, true);
-	assert.ok(descendants((opened.type as any).type(opened.props)).some((node) => node.type === RawBlocks && node.props.blocks.some((block: any) => block.text === "live answer")));
+	assert.ok(nodes.some((node) => node.type === TranscriptRow && descendants(node).some((child) => child.props.text === "live answer")));
 });
 
-test("raw live tools stay visible without folding or duplicating settled calls", () => {
+test("grouped live tools still join the last settled tool row", () => {
 	const env = harness();
 	env.props.toolMode = "grouped";
 	env.props.busy = true;
 	env.props.snapshot!.messages = [
+		{ role: "user", timestamp: 1, blocks: [{ kind: "text", text: "question" }] },
 		{ role: "assistant", timestamp: 2, blocks: [{ kind: "tool", id: "a", name: "read", args: {} }] },
 	];
-	env.props.partial.tools = [{ id: "a", name: "read", args: {}, result: "raw output" }, { id: "b", name: "bash", args: {}, running: true }];
+	env.props.partial.tools = [{ id: "b", name: "bash", args: {}, running: true }];
 	const nodes = env.render();
 	const list = nodes.find((node) => node.type === Virtuoso)!;
-	assert.equal(list.props.data[0].work[0].result, "raw output");
-	assert.deepEqual(Array.from(list.props.data[0].work, (block: any) => block.id), ["a", "b"]);
+	const selected = list.props.itemContent(1, list.props.data[1]) as Node;
+	assert.equal(selected.props.liveBlocks[0].id, "b");
+	const rendered = (selected.type as any).type(selected.props) as Node;
+	const group = descendants(rendered).find((node) => node.type === ToolGroup)!;
+	assert.equal(group.props.streaming, true);
+	assert.deepEqual(Array.from(group.props.blocks, (block: any) => block.id), ["a", "b"]);
 });

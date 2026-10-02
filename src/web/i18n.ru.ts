@@ -1,5 +1,8 @@
 /** Russian for every `t`/`plural` key (see i18n.ts). Plurals are `one|few|many`. */
 export const RU: Record<string, string> = {
+	"Enable personality": "Включить личность",
+	"could not save the personality setting": "не удалось сохранить настройку личности",
+	"When off, no personality text or reminders are sent. Your saved text is kept. Applies to sessions started from now on.": "Когда выключено, текст личности и напоминания не отправляются. Сохранённый текст остаётся. Применяется к новым сеансам.",
 	"Loading…": "Загрузка…",
 	"Agent instructions": "Инструкции агента",
 	"Global AGENTS.md": "Глобальный AGENTS.md",

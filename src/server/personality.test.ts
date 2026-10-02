@@ -11,6 +11,8 @@ import {
 	personalityPath,
 	readPersonality,
 	readRemind,
+	readPersonalityEnabled,
+	writePersonalityEnabled,
 	writePersonality,
 	writeRemind,
 } from "./personality.js";
@@ -42,6 +44,7 @@ assert.deepEqual(readPersonality(), {
 	content: `${text}\n`,
 	exists: true,
 	remind: false,
+	enabled: true,
 });
 
 // The toggle defaults off, persists, and does not touch the text.
@@ -49,6 +52,17 @@ assert.equal(readRemind(), false);
 assert.equal(writeRemind(true).remind, true);
 assert.equal(readPersonality().content, `${text}\n`);
 assert.equal(writeRemind(false).remind, false);
+
+// Disabling keeps the text and reminder preference, and survives subsequent saves.
+assert.equal(readPersonalityEnabled(), true);
+writeRemind(true);
+assert.equal(writePersonalityEnabled(false).enabled, false);
+assert.equal(readPersonalityEnabled(), false);
+assert.equal(readPersonality().content, `${text}\n`);
+assert.equal(readRemind(), true);
+assert.equal(writePersonality(text).enabled, false);
+assert.equal(writePersonalityEnabled(true).enabled, true);
+writeRemind(false);
 
 // An already-terminated file is not given a second newline on every save.
 assert.equal(writePersonality(`${text}\n`).content, `${text}\n`, "idempotent");
