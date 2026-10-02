@@ -8,6 +8,7 @@ import type {
   ToolSource,
 } from "../shared/types.js";
 import { isRecord } from "./guards.js";
+import { recordedAnchorSources } from "../shared/anchorHistory.js";
 import { readStateFile, statePath, writeStateFile } from "./state.js";
 
 const MAX_BYTES = 2 * 1024 * 1024;
@@ -307,6 +308,19 @@ export class ToolSourceTracker {
 
   /** Older edits may be found in today's referenced files, but cannot gain invented historical line numbers. */
   recover(messages: PiMessage[]): void {
+    // Reconstruct old ranges from the session transcript before consulting today's files.
+    // This also repairs edits made before pre-edit source capture was introduced.
+    const recorded = recordedAnchorSources(
+      this.annotate(messages).flatMap((message) => message.blocks),
+    );
+    for (const [id, source] of recorded) {
+      if (source.path && source.removed !== undefined) {
+        this.set(id, {
+          ...source,
+          path: resolve(this.cwd, source.path),
+        });
+      }
+    }
     const tools = flatten(messages);
     const paths = new Set<string>();
     for (const tool of tools) {

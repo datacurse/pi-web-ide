@@ -74,7 +74,7 @@ function SourceLines({
             }
             className={`mr-2 ${gutterWidth} shrink-0 select-none text-center tabular-nums text-neutral-500`}
           >
-            {(startLine ?? 1) + i}
+            {startLine === undefined ? "" : startLine + i}
           </span>
           <pre
             data-custom="replacement diff source"
@@ -199,17 +199,13 @@ export function AnchorDiff({ diff }: { diff: Diff }) {
           </span>
         </div>
       )}
-      {added.length ? (
+      {added.length > 0 && (
         <SourceLines
           lines={added}
           location={diff}
           gutterWidth={gutterWidth}
           changes={changes?.added}
         />
-      ) : (
-        <div className="px-3 py-2 text-meta text-neutral-500">
-          Deletion only · no replacement lines
-        </div>
       )}
     </div>
   );
