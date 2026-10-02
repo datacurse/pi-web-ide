@@ -73,8 +73,9 @@ fits none of the existing ones, and record it here.
   read-only unified diff for each edit replacement (content-height, capped at
   `max-h-64`), content previews for writes, and only the removed/added lines for
   completed anchor-based `replace` calls, with the shared code background (`neutral-900`)
-  and red/green left borders, without red/green background tints,
-  syntax colors and a centered line-number gutter; omit context and redundant
+  and red/green left borders. Highlight only added words/symbols in green and
+  removed words/symbols in red; preserve syntax colors and the unchanged background.
+  Keep a centered line-number gutter; omit context and redundant
   anchor arguments. Show the file path and captured file line when available.
   Clicking its header opens/focuses an editor tab at that line, centered and
   focused; repeated clicks reveal it again without resetting edits or undo history.
