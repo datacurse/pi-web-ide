@@ -165,6 +165,25 @@ test("codemode lists nested calls in order without exposing its input or output"
 	assert.doesNotMatch(html, /hidden wrapper|hidden nested/);
 });
 
+test("codemode child status markers reflect confirmed outcomes, not partial or interrupted calls", () => {
+	const children: PiTool[] = [
+		{ ...tool("success"), result: "", isError: false },
+		{ ...tool("failure"), result: "error", isError: true },
+		{ ...tool("running"), result: "partial output", running: true },
+		{ ...tool("pending") },
+		{ ...tool("interrupted"), result: "partial output", interrupted: true },
+		{ ...tool("unavailable"), outputUnavailable: true },
+	];
+	const html = renderToStaticMarkup(createElement(WorkTimeline, {
+		blocks: [{ kind: "tool", ...tool("batch", "codemode"), children }], expanded: true,
+	}));
+	assert.equal((html.match(/aria-label="Tool succeeded"/g) ?? []).length, 1);
+	assert.equal((html.match(/aria-label="Tool failed"/g) ?? []).length, 1);
+	assert.match(html, /absolute -left-4 top-\[0\.25em\] text-green-400/);
+	assert.match(html, /absolute -left-4 top-\[0\.25em\] text-red-400/);
+	assert.match(html, /class="relative \[&amp;&gt;\*\]:my-0"/);
+});
+
 test("codemode without recorded children does not expose wrapper payloads", () => {
 	const html = renderToStaticMarkup(createElement(WorkTimeline, { blocks: [
 		{ kind: "tool", ...tool("batch", "codemode", { code: "hidden code" }), result: "hidden output" },

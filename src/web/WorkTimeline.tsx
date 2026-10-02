@@ -1,4 +1,4 @@
-import { CaretRight } from "@phosphor-icons/react";
+import { CaretRight, Check, X } from "@phosphor-icons/react";
 import type { PiBlock, PiTool } from "../shared/types.js";
 import type { TurnActivity } from "../shared/activity.js";
 import { RawBlocks } from "./RawOutput.js";
@@ -29,14 +29,22 @@ function Thought({ item, expanded, shimmer = false }: { item: ThoughtItem; expan
 	return <Disclosure label={label} expanded={expanded} active={shimmer}><RawBlocks blocks={[item.block]} streaming={item.active} /></Disclosure>;
 }
 
-function Tool({ tool }: { tool: PiTool }) {
-	if (tool.name === "codemode" || tool.name.endsWith(".codemode")) return <div data-custom="codemode tool list" className="my-3 text-neutral-300">
+function Tool({ tool, nested = false }: { tool: PiTool; nested?: boolean }) {
+	const content = tool.name === "codemode" || tool.name.endsWith(".codemode") ? <div data-custom="codemode tool list" className="my-3 text-neutral-300">
 		<div className="font-mono chat-code">{tool.name}</div>
 		{!!tool.children?.length && <div className="pl-4 [&>*]:my-0">
-			{tool.children.map((child) => <Tool key={child.id} tool={child} />)}
+			{tool.children.map((child) => <Tool key={child.id} tool={child} nested />)}
 		</div>}
+	</div> : <RawBlocks blocks={[{ kind: "tool", ...tool }]} />;
+	if (!nested) return content;
+	const completed = !tool.running && !tool.interrupted && !tool.outputUnavailable
+		&& (tool.isError !== undefined || tool.result !== undefined);
+	return <div className="relative [&>*]:my-0">
+		{completed && <span role="img" aria-label={tool.isError ? "Tool failed" : "Tool succeeded"} className={`absolute -left-4 top-[0.25em] ${tool.isError ? "text-red-400" : "text-green-400"}`}>
+			{tool.isError ? <X size={12} weight="bold" aria-hidden /> : <Check size={12} weight="bold" aria-hidden />}
+		</span>}
+		{content}
 	</div>;
-	return <RawBlocks blocks={[{ kind: "tool", ...tool }]} />;
 }
 
 export function WorkTimeline({ blocks, activity, running, expanded }: {
