@@ -956,32 +956,28 @@ input[type="number"]::-webkit-outer-spin-button {
 	margin-block: 0;
 }
 
-/* A moving highlight on live work labels; completed phases stay quiet. */
+/* React Bits-style live progress: muted base, lavender shine, no white.
+ * Motion moves the highlight fully off-screen before looping. This requested
+ * progress signal stays animated independently of decorative motion settings. */
 .work-shimmer {
 	display: inline-block;
+	color: var(--color-neutral-500);
 }
 
-@media (prefers-reduced-motion: no-preference) {
-	@supports (background-clip: text) or (-webkit-background-clip: text) {
-		.work-shimmer {
-			background-image: linear-gradient(105deg,
-				var(--color-neutral-500) 38%,
-				var(--color-amber-400) 46%,
-				var(--color-neutral-50) 50%,
-				var(--color-amber-400) 54%,
-				var(--color-neutral-500) 62%);
-			background-size: 200% 100%;
-			background-clip: text;
-			-webkit-background-clip: text;
-			color: transparent;
-			animation: work-shimmer 1.5s linear infinite;
-		}
+@supports (background-clip: text) or (-webkit-background-clip: text) {
+	.work-shimmer {
+		background-image: linear-gradient(120deg,
+			var(--color-neutral-500) 0%,
+			var(--color-neutral-500) 35%,
+			var(--ct-mauve) 50%,
+			var(--color-neutral-500) 65%,
+			var(--color-neutral-500) 100%);
+		background-size: 200% 100%;
+		background-clip: text;
+		-webkit-background-clip: text;
+		color: transparent;
+		-webkit-text-fill-color: transparent;
 	}
-}
-
-@keyframes work-shimmer {
-	from { background-position: 100% 0; }
-	to { background-position: 0% 0; }
 }
 
 

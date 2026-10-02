@@ -3,12 +3,13 @@ import type { PiBlock, PiTool } from "../shared/types.js";
 import type { TurnActivity } from "../shared/activity.js";
 import { RawBlocks } from "./RawOutput.js";
 import { currentWorkStatus, explorationLabel, workTimeline, type ThoughtItem } from "./workTimeline.js";
+import { ShinyText } from "./ShinyText.js";
 
 /** Native disclosures keep individual expansion state while streaming updates arrive. */
 function Disclosure({ label, children, expanded, active }: { label: string; children: React.ReactNode; expanded?: boolean; active?: boolean }) {
 	return <details data-custom="quiet work phase" open={expanded || undefined} className="group/phase my-3">
 		<summary className="group/label inline-flex cursor-pointer list-none items-center gap-1.5 chat-prose text-neutral-500 hover:text-neutral-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-neutral-500 [&::-webkit-details-marker]:hidden">
-			<span className={active ? "work-shimmer" : undefined}>{label}</span><CaretRight size={12} aria-hidden className="opacity-0 transition-opacity group-hover/label:opacity-100 group-focus-visible/label:opacity-100 [[open]>summary>&]:rotate-90 [[open]>summary>&]:opacity-100" />
+			<ShinyText text={label} active={!!active} /><CaretRight size={12} aria-hidden className="opacity-0 transition-opacity group-hover/label:opacity-100 group-focus-visible/label:opacity-100 [[open]>summary>&]:rotate-90 [[open]>summary>&]:opacity-100" />
 		</summary>
 		<div className="text-neutral-500">{children}</div>
 	</details>;
@@ -23,12 +24,18 @@ function Thought({ item, expanded }: { item: ThoughtItem; expanded?: boolean }) 
 	// Providers can retain empty thinking placeholders/signatures without readable text.
 	if (!item.block.text.trim()) {
 		if (!item.active && item.durationMs === undefined) return null;
-		return <div className="my-3 chat-prose text-neutral-500"><span className={item.active ? "work-shimmer" : undefined}>{label}</span></div>;
+		return <div className="my-3 chat-prose text-neutral-500"><ShinyText text={label} active={item.active} /></div>;
 	}
 	return <Disclosure label={label} expanded={expanded} active={item.active}><RawBlocks blocks={[item.block]} streaming={item.active} /></Disclosure>;
 }
 
 function Tool({ tool }: { tool: PiTool }) {
+	if (tool.name === "codemode" || tool.name.endsWith(".codemode")) return <div data-custom="codemode tool list" className="my-3 text-neutral-300">
+		<div className="font-mono chat-code">{tool.name}</div>
+		{!!tool.children?.length && <div className="pl-4">
+			{tool.children.map((child) => <Tool key={child.id} tool={child} />)}
+		</div>}
+	</div>;
 	return <RawBlocks blocks={[{ kind: "tool", ...tool }]} />;
 }
 
@@ -48,6 +55,6 @@ export function WorkTimeline({ blocks, activity, running, expanded }: {
 					: <Tool key={entry.id} tool={entry} />)}
 			</Disclosure>;
 		})}
-		{status && !(status === "Thinking" && hasVisibleThinking) && <div role="status" className="my-3 chat-prose text-neutral-400"><span className="work-shimmer">{status}</span></div>}
+		{status && !(status === "Thinking" && hasVisibleThinking) && <div role="status" className="my-3 chat-prose text-neutral-400"><ShinyText text={status} /></div>}
 	</>;
 }

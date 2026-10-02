@@ -69,7 +69,7 @@ test("counts distinguish exploration from commands and do not double-count wrapp
 
 test("rendering starts with planning, shows measured thoughts, and leaves prose visible", () => {
 	const planning = renderToStaticMarkup(createElement(WorkTimeline, { blocks: [], running: true }));
-	assert.match(planning, /role="status"[^>]*><span class="work-shimmer">Planning next moves<\/span>/);
+	assert.match(planning, /role="status"[^>]*><span class="work-shimmer"[^>]*>Planning next moves<\/span>/);
 	const html = renderToStaticMarkup(createElement(WorkTimeline, { blocks, activity: trace }));
 	assert.match(html, /Thought 2s/);
 	assert.match(html, /Explored 1 file, 1 search/);
@@ -87,9 +87,9 @@ test("live thinking is not duplicated; tool groups remain active through interve
 	const live = { ...trace, end: undefined, steps: [{ kind: "thinking" as const, label: "", start: 1000 }] };
 	const html = renderToStaticMarkup(createElement(WorkTimeline, { blocks: reasoning, activity: live, running: true }));
 	assert.equal((html.match(/>Thinking</g) ?? []).length, 1);
-	assert.match(html, /class="work-shimmer">Thinking<\/span>/);
+	assert.match(html, /class="work-shimmer"[^>]*>Thinking<\/span>/);
 	const exploring = renderToStaticMarkup(createElement(WorkTimeline, { blocks: blocks.slice(0, -1), activity: live, running: true }));
-	assert.match(exploring, /class="work-shimmer">Exploring/);
+	assert.match(exploring, /class="work-shimmer"[^>]*>Exploring/);
 	assert.doesNotMatch(html, /Thought 2s/);
 	const items = workTimeline(blocks.slice(0, -1), live, true);
 	const last = items.at(-1);
@@ -108,6 +108,31 @@ test("empty thinking placeholders never become empty expandable disclosures", ()
 	assert.doesNotMatch(timed, /details|summary|svg/);
 	const live = renderToStaticMarkup(createElement(WorkTimeline, { blocks: empty, running: true }));
 	assert.match(live, /Thinking/);
-	assert.match(live, /class="work-shimmer">Thinking<\/span>/);
+	assert.match(live, /class="work-shimmer"[^>]*>Thinking<\/span>/);
 	assert.doesNotMatch(live, /details|summary|svg/);
+});
+
+test("codemode lists nested calls in order without exposing its input or output", () => {
+	const batch: PiBlock = { kind: "tool", ...tool("batch", "codemode", { code: "hidden wrapper code" }), result: "hidden wrapper output", children: [
+		tool("read", "read", { path: "first.ts" }),
+		{ ...tool("nested", "functions.codemode", { code: "hidden nested code" }), result: "hidden nested output", children: [
+			tool("search", "symbol_search", { query: "second" }),
+		] },
+		tool("bash", "bash", { command: "pnpm test" }),
+	] };
+	const html = renderToStaticMarkup(createElement(WorkTimeline, { blocks: [batch], expanded: true }));
+	assert.match(html, /codemode tool list/);
+	assert.match(html, /class="pl-4"/);
+	assert.ok(html.indexOf(">codemode<") < html.indexOf("Read first.ts"));
+	assert.ok(html.indexOf("Read first.ts") < html.indexOf("Searched second"));
+	assert.ok(html.indexOf("Searched second") < html.indexOf("Ran pnpm test"));
+	assert.doesNotMatch(html, /hidden wrapper|hidden nested/);
+});
+
+test("codemode without recorded children does not expose wrapper payloads", () => {
+	const html = renderToStaticMarkup(createElement(WorkTimeline, { blocks: [
+		{ kind: "tool", ...tool("batch", "codemode", { code: "hidden code" }), result: "hidden output" },
+	] }));
+	assert.match(html, />codemode</);
+	assert.doesNotMatch(html, /hidden code|hidden output|raw tool input|raw tool output/);
 });
