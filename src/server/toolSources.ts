@@ -98,6 +98,10 @@ export class ToolSourceTracker {
           ...(positive(row[1].currentLine)
             ? { currentLine: row[1].currentLine }
             : {}),
+          ...(Array.isArray(row[1].removed) &&
+          row[1].removed.every((line) => typeof line === "string")
+            ? { removed: row[1].removed }
+            : {}),
         });
       }
       for (const row of (Array.isArray(saved.anchors)
@@ -155,7 +159,8 @@ export class ToolSourceTracker {
     if (
       previous?.path === source.path &&
       previous.line === source.line &&
-      previous.currentLine === source.currentLine
+      previous.currentLine === source.currentLine &&
+      JSON.stringify(previous.removed) === JSON.stringify(source.removed)
     )
       return;
     this.sources.set(id, source);
@@ -218,22 +223,53 @@ export class ToolSourceTracker {
           path = first.path;
           const content = this.read(path);
           const digest = content === undefined ? undefined : hash(content);
+          // After earlier edits shift a file, match the complete recorded range.
+          // An endpoint such as `}` may be ambiguous even when the range is unique.
+          const rows =
+            last && last.hash === first.hash && last.line >= first.line
+              ? [...this.anchors.values()]
+                  .flatMap((paths) => {
+                    const row = paths.get(first.path);
+                    return row &&
+                      row.hash === first.hash &&
+                      row.line >= first.line &&
+                      row.line <= last.line
+                      ? [row]
+                      : [];
+                  })
+                  .sort((a, b) => a.line - b.line)
+              : [];
+          const rangeLine =
+            content !== undefined &&
+            last &&
+            rows.length === last.line - first.line + 1 &&
+            rows.every((row, i) => row.line === first.line + i)
+              ? uniqueLine(
+                  content,
+                  rows.map((row) => row.text),
+                )
+              : undefined;
           const line =
             content === undefined
               ? undefined
               : digest === first.hash
                 ? first.line
-                : uniqueLine(content, [first.text]);
+                : (rangeLine ?? uniqueLine(content, [first.text]));
           const end =
             !last || content === undefined
               ? undefined
               : digest === last.hash
                 ? last.line
-                : uniqueLine(content, [last.text]);
+                : rangeLine !== undefined
+                  ? rangeLine + last.line - first.line
+                  : uniqueLine(content, [last.text]);
           this.set(id, {
             path,
             ...(line !== undefined && end !== undefined && end >= line
-              ? { line }
+              ? {
+                  line,
+                  removed: content?.split("\n").slice(line - 1, end),
+                }
               : {}),
           });
         } else if (path) this.set(id, { path });
@@ -343,9 +379,9 @@ export class ToolSourceTracker {
       const only = candidates.length === 1 ? candidates[0] : undefined;
       const line = only ? uniqueLine(only.content, lines) : undefined;
       if (only && line !== undefined)
-        this.set(tool.id, { path: only.path, currentLine: line });
+        this.set(tool.id, { ...previous, path: only.path, currentLine: line });
       else if (previous?.currentLine !== undefined)
-        this.set(tool.id, { path: previous.path });
+        this.set(tool.id, { ...previous, currentLine: undefined });
     }
     this.save();
   }

@@ -44,6 +44,8 @@ export interface ToolSource {
   path: string;
   line?: number;
   currentLine?: number;
+  /** Exact pre-edit lines, retained independently of abbreviated tool output. */
+  removed?: string[];
 }
 
 export interface PiTool {

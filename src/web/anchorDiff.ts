@@ -59,7 +59,10 @@ export function anchorDiff(
     from,
     to,
     added,
-    removed: removedRange(tool.result ?? "", from, to) ?? source?.removed,
+    removed:
+      removedRange(tool.result ?? "", from, to) ??
+      tool.source?.removed ??
+      source?.removed,
     path:
       tool.source?.path ??
       (typeof args.path === "string" ? args.path : source?.path),
@@ -72,6 +75,36 @@ export function anchorDiff(
 export function anchorSources(blocks: PiBlock[]): Map<string, AnchorSource> {
   const anchors = new Map<string, string>();
   const sources = new Map<string, AnchorSource>();
+  const reads = new Map<
+    string,
+    { rows: { token: string; text: string }[]; index: number }
+  >();
+  const readTools = new Set(["read", "read_symbol", "read_enclosing"]);
+  const isRead = (tool: PiTool): boolean =>
+    !tool.isError &&
+    (tool.children?.length
+      ? tool.children.every(isRead)
+      : readTools.has(tool.name.split(".").pop() ?? ""));
+  const rememberRead = (result: string) => {
+    let rows: { token: string; text: string }[] = [];
+    const flush = () => {
+      rows.forEach((row, index) => reads.set(row.token, { rows, index }));
+      rows = [];
+    };
+    for (const line of result.split("\n")) {
+      const match = /^([A-Za-z0-9]{4})│(.*)$/.exec(line);
+      if (match) rows.push({ token: match[1], text: match[2] });
+      else flush();
+    }
+    flush();
+  };
+  const readRange = (from: string, to: string): string[] | undefined => {
+    const first = reads.get(from);
+    const last = reads.get(to);
+    if (!first || !last || first.rows !== last.rows || last.index < first.index)
+      return;
+    return first.rows.slice(first.index, last.index + 1).map((row) => row.text);
+  };
   const visit = (tool: PiTool, batchResult = "") => {
     const args =
       tool.args && typeof tool.args === "object"
@@ -88,8 +121,30 @@ export function anchorSources(blocks: PiBlock[]): Map<string, AnchorSource> {
           ? anchors.get(from)
           : undefined);
     const removed =
-      from && to ? removedRange(batchResult, from, to) : undefined;
-    sources.set(tool.id, { path, removed, ...tool.source });
+      from && to
+        ? (removedRange(tool.result || batchResult, from, to) ??
+          readRange(from, to))
+        : undefined;
+    sources.set(tool.id, {
+      path,
+      ...tool.source,
+      removed: tool.source?.removed ?? removed,
+    });
+    // Never reuse a read snapshot across a mutation: intermediate lines may have changed.
+    const name = tool.name.split(".").pop() ?? "";
+    if (
+      [
+        "replace",
+        "insert",
+        "write",
+        "edit",
+        "bash",
+        "undo_last_change",
+      ].includes(name)
+    )
+      reads.clear();
+    // A read-only batch is safe to index as a whole; mixed batches need individual outputs.
+    if (isRead(tool) && tool.result) rememberRead(tool.result);
     if (path) {
       for (const line of (tool.result ?? "").split("\n")) {
         const match = /^[ +]?([A-Za-z0-9]{4})│/.exec(line);
