@@ -14,6 +14,7 @@ import { mergeLiveTools } from "../shared/toolTree.js";
 import { ModelSelector } from "./ModelSelector.js";
 import { GitActions } from "./GitActions.js";
 import { RawBlocks } from "./RawOutput.js";
+import { WorkTimeline } from "./WorkTimeline.js";
 import { rawRows, type RawRow } from "./rawTurns.js";
 import { ASK_MODES, type AskMode, type UserMode } from "./prefs.js";
 import { clearDraft, readDraft, writeDraftImages, writeDraftText } from "./drafts.js";
@@ -114,26 +115,23 @@ function CommandPicker({
 	);
 }
 
-const HistoryRow = memo(function HistoryRow({ row, expanded, onToggle, userMode, onEdit, onFork, now }: {
-	row: RawRow; expanded: boolean; onToggle: () => void; userMode: UserMode; now?: number;
+const HistoryRow = memo(function HistoryRow({ row, expanded, onToggle, userMode, onEdit, onFork }: {
+	row: RawRow; expanded: boolean; onToggle: () => void; userMode: UserMode;
 	onEdit?: (at: number, text: string, images: PiImage[]) => void;
 	onFork: (at: number) => Promise<void>;
 }) {
 	if (row.role === "user") return <UserMessage blocks={row.blocks} at={row.at} userMode={userMode} onEdit={onEdit} />;
-	const end = row.running ? now : row.workEndedAt;
-	const seconds = row.workStartedAt !== undefined && end !== undefined
-		? Math.floor(Math.max(0, end - row.workStartedAt) / 1000) : undefined;
-	const workLabel = seconds === undefined
-		? t(row.running ? "Working…" : "Worked")
-		: t(row.running ? "Working for {s}s" : "Worked for {s}s", { s: seconds });
+	const seconds = row.workStartedAt !== undefined && row.workEndedAt !== undefined
+		? Math.floor(Math.max(0, row.workEndedAt - row.workStartedAt) / 1000) : undefined;
+	const workLabel = seconds === undefined ? t("Worked") : t("Worked for {s}s", { s: seconds });
 	return <div className="chat-gutter my-3"><div className="chat-measure">
 		{row.role !== "assistant" && <div className="font-mono text-meta text-neutral-500">{row.role}</div>}
 		{(!!row.work?.length || row.running) && <>
-			<button type="button" data-custom="work disclosure: muted status text without button chrome" aria-expanded={expanded} onClick={onToggle}
+			{!row.running && <button type="button" data-custom="work disclosure: muted status text without button chrome" aria-expanded={expanded} onClick={onToggle}
 				className="group/work inline-flex items-center gap-1.5 py-1 text-meta text-neutral-500 transition-colors hover:text-neutral-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-neutral-500">
 				{workLabel}<CaretRight size={12} aria-hidden className={`transition-opacity ${expanded ? "rotate-90 opacity-100" : "opacity-0 group-hover/work:opacity-100 group-focus-visible/work:opacity-100"}`} />
-			</button>
-			{expanded && <RawBlocks blocks={row.work ?? []} streaming={row.running} />}
+			</button>}
+			<WorkTimeline blocks={row.work ?? []} activity={row.activity} running={row.running} expanded={expanded} />
 			{!!row.todos?.length && <div className="mt-3"><TodoList tasks={row.todos} /></div>}
 		</>}
 		<RawBlocks blocks={row.blocks} />
@@ -415,13 +413,6 @@ export function Chat({
 
 	const [expandedWork, setExpandedWork] = useState<Set<string>>(() => new Set());
 	const rows = useMemo(() => rawRows(messages, { ...partial, tools: liveTools }, busy, snapshot?.activity), [messages, partial, liveTools, busy, snapshot?.activity]);
-	const [workNow, setWorkNow] = useState(Date.now);
-	useEffect(() => {
-		if (!busy) return;
-		setWorkNow(Date.now());
-		const timer = setInterval(() => setWorkNow(Date.now()), 1000);
-		return () => clearInterval(timer);
-	}, [busy, snapshot?.id]);
 
 
 	if (!snapshot) {
@@ -590,7 +581,7 @@ export function Chat({
 							computeItemKey={(i, row) => `${row.role}:${row.at}:${i}`}
 							itemContent={(_i, row) => {
 								const key = `${snapshot.id}:${row.role}:${row.at}`;
-								return <HistoryRow row={row} now={row.running ? workNow : undefined} userMode={userMode} onEdit={busy ? undefined : onEdit} onFork={onFork} expanded={expandedWork.has(key)} onToggle={() => setExpandedWork((previous) => {
+								return <HistoryRow row={row} userMode={userMode} onEdit={busy ? undefined : onEdit} onFork={onFork} expanded={expandedWork.has(key)} onToggle={() => setExpandedWork((previous) => {
 									const next = new Set(previous);
 									if (next.has(key)) next.delete(key); else next.add(key);
 									return next;

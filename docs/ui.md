@@ -163,17 +163,21 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
 
 ## Chat work and output
 
-- Each assistant turn has one collapsed-by-default, muted `Worked for {s}s` disclosure
-  with a small caret; while running it reads `Working for {s}s` and updates each second.
-  Timing uses recorded turn activity, falling back to prompt/message end timestamps.
-  Unobserved history reads `Worked` without inventing a duration.
-  Reasoning, intermediate prose, tool calls and in-flight output live inside it.
-  Only the settled final answer's trailing text and images stay outside.
+- While a turn runs, quiet event-driven status text reads `Planning next moves`,
+  `Thinking`, retry/input/compaction status, or grouped `Exploring` counts.
+  Completed thinking reads `Thought {s}s` / `Thought briefly` only when measured;
+  unobserved history reads `Thought` without inventing timing.
+- Assistant prose (including streaming/intermediate prose) stays visible. Reasoning
+  and adjacent tool calls are separate native disclosures, initially collapsed.
+  Exploration groups include intervening thoughts in their original order.
+- Settled turns retain the muted `Worked for {s}s` toggle to expand phase details.
+  Chevrons appear on hover or keyboard focus when closed, persist when open.
+  The total uses recorded activity, falling back to prompt/message end timestamps.
 - Model prose and reasoning render Markdown. Tool arguments and output are literal,
   escaped text inside their own native `details` disclosures, initially collapsed.
-  Nested calls stay under their parent; there is no phase/round renderer or tool-mode selector.
+  Nested calls stay under their parent; there is no tool-mode selector.
 - User prompts retain their pill, image thumbnails, long-message folding and inline editing.
-  Todos remain directly below the work toggle, including while work is collapsed.
+  Todos remain directly below the work timeline.
 - Recorded activity still persists server-side. It is not drawn as timing bars or model rounds.
   Snapshot refreshes must preserve newer live telemetry received while the request was in flight.
 - History is virtualized; expanding work must not mount the whole transcript.

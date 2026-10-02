@@ -13,6 +13,7 @@ import type { Snapshot } from "../shared/types.js";
 
 import { RawBlocks } from "./RawOutput.js";
 import { TodoList } from "./TodoList.js";
+import { WorkTimeline } from "./WorkTimeline.js";
 
 const require = createRequire(import.meta.url);
 const modules: Record<string, unknown> = {
@@ -38,6 +39,7 @@ const modules: Record<string, unknown> = {
 	"./PastedTexts.js": require("./PastedTexts.js"),
 	"./pastedText.js": require("./pastedText.js"),
 	"./TodoList.js": { TodoList },
+	"./WorkTimeline.js": { WorkTimeline },
 };
 const source = ts.transpileModule(readFileSync(new URL("./Chat.tsx", import.meta.url), "utf8"), {
 	compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX },
@@ -195,7 +197,7 @@ test("content growth follows only while pinned, and jump-to-latest resumes follo
 	assert.equal(observer.disconnected, true);
 });
 
-test("one collapsed toggle hides live work and toggles all intermediate output", () => {
+test("live work shows a quiet timeline instead of hiding the streaming answer", () => {
 	const env = harness();
 	env.props.busy = true;
 	env.props.partial.text = "live answer";
@@ -208,12 +210,11 @@ test("one collapsed toggle hides live work and toggles all intermediate output",
 	const selected = list.props.itemContent(i, list.props.data[i]) as Node;
 	assert.equal(selected.props.expanded, false);
 	const rendered = (selected.type as any).type(selected.props);
-	assert.equal(descendants(rendered).filter((node) => node.type === RawBlocks && node.props.blocks.length > 0).length, 0);
-	selected.props.onToggle();
-	const updated = env.render().find((node) => node.type === Virtuoso)!;
-	const opened = updated.props.itemContent(i, updated.props.data[i]) as Node;
-	assert.equal(opened.props.expanded, true);
-	assert.ok(descendants((opened.type as any).type(opened.props)).some((node) => node.type === RawBlocks && node.props.blocks.some((block: any) => block.text === "live answer")));
+	const timeline = descendants(rendered).find((node) => node.type === WorkTimeline)!;
+	assert.equal(timeline.props.running, true);
+	assert.equal(timeline.props.expanded, false);
+	assert.ok(timeline.props.blocks.some((block: any) => block.text === "live answer"));
+	assert.equal(descendants(rendered).some((node) => node.type === "button"), false);
 });
 
 test("raw live tools stay visible without folding or duplicating settled calls", () => {
@@ -229,7 +230,7 @@ test("raw live tools stay visible without folding or duplicating settled calls",
 	assert.deepEqual(Array.from(list.props.data[0].work, (block: any) => block.id), ["a", "b"]);
 });
 
-test("live todos render directly under the work duration, not beside the composer", () => {
+test("live todos render directly under the work timeline, not beside the composer", () => {
 	const env = harness();
 	env.props.busy = true;
 	env.props.partial.tools = [{ id: "todo", name: "todo", args: {}, todos: [{ id: 1, subject: "Move checklist", status: "in_progress" }] }];
@@ -240,7 +241,7 @@ test("live todos render directly under the work duration, not beside the compose
 	const selected = list.props.itemContent(i, list.props.data[i]) as Node;
 	assert.equal(selected.props.expanded, false);
 	const rowNodes = descendants((selected.type as any).type(selected.props));
-	const toggle = rowNodes.findIndex((node) => node.type === "button" && node.props["aria-expanded"] === false);
+	const toggle = rowNodes.findIndex((node) => node.type === WorkTimeline);
 	const checklist = rowNodes.findIndex((node) => node.type === TodoList);
 	assert.ok(toggle >= 0 && checklist > toggle);
 	assert.equal(rowNodes[checklist].props.tasks[0].subject, "Move checklist");
@@ -249,7 +250,7 @@ test("live todos render directly under the work duration, not beside the compose
 	const opened = updated.props.itemContent(i, updated.props.data[i]) as Node;
 	assert.equal(opened.props.expanded, true);
 	const expandedNodes = descendants((opened.type as any).type(opened.props));
-	const work = expandedNodes.findIndex((node) => node.type === RawBlocks && node.props.blocks === opened.props.row.work);
+	const work = expandedNodes.findIndex((node) => node.type === WorkTimeline && node.props.blocks === opened.props.row.work);
 	const expandedChecklist = expandedNodes.findIndex((node) => node.type === TodoList);
 	assert.ok(work >= 0 && expandedChecklist > work);
 });
@@ -296,9 +297,8 @@ test("work disclosure shows elapsed seconds and keeps its label when expanded", 
 	env.props.busy = true;
 	const live = renderRow().row;
 	const liveNodes = descendants((live.type as any).type({ ...live.props, now: 13500 }));
-	assert.equal(liveNodes.find((node) => node.type === "button")!.props.children[0], "Working for 12s");
-	const skewed = descendants((live.type as any).type({ ...live.props, now: 500 }));
-	assert.equal(skewed.find((node) => node.type === "button")!.props.children[0], "Working for 0s");
+	assert.equal(liveNodes.some((node) => node.type === "button"), false);
+	assert.equal(liveNodes.find((node) => node.type === WorkTimeline)!.props.running, true);
 	env.props.busy = false;
 	env.props.snapshot!.messages[1].endedAt = undefined;
 	assert.equal(renderRow().nodes.find((node) => node.type === "button")!.props.children[0], "Worked");
