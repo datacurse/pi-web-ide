@@ -64,7 +64,7 @@ export default defineConfig({
 		host: "127.0.0.1",
 		proxy: {
 			"/api": {
-				target: `http://127.0.0.1:${process.env.PWI_PORT ?? 8891}`,
+				target: `http://127.0.0.1:${process.env.PWI_PORT ?? 8890}`,
 				changeOrigin: true,
 				// `changeOrigin` rewrites Host but NOT Origin, so the server sees
 				// Origin: <vite> against Host: <server> and refuses the terminal's
@@ -75,7 +75,7 @@ export default defineConfig({
 				// which origin it claims to be, so the client works against a
 				// server started either way. Dev-only, and no wider than PWI_DEV
 				// already is — both are this same loopback port.
-				headers: { Origin: `http://127.0.0.1:${process.env.PWI_PORT ?? 8891}` },
+				headers: { Origin: `http://127.0.0.1:${process.env.PWI_PORT ?? 8890}` },
 				// The terminal is a WebSocket on /api/terminal/socket, and a proxy
 				// entry without this answers its upgrade with a 200 and no socket
 				// — which in the browser is a terminal that connects, says
@@ -84,5 +84,20 @@ export default defineConfig({
 			},
 		},
 	},
-	build: { outDir: "dist" },
+	build: {
+		outDir: "dist",
+		rollupOptions: {
+			output: {
+				manualChunks(id) {
+					if (!id.includes("/node_modules/")) return;
+					// Leave language packages lazy; grouping them pulls every grammar
+					// into the initial download. Only share the editor runtime.
+					if (/\/(?:@codemirror\/(?:state|view|language|commands|search|autocomplete|merge)|@lezer\/(?:common|highlight|lr))\//.test(id)) return "editor";
+					if (/\/(?:react-virtuoso|markdown-to-jsx|fancy-ansi)\//.test(id)) return "rendering";
+					if (id.includes("/@phosphor-icons/")) return "icons";
+					if (/\/(?:react|react-dom|scheduler)\//.test(id)) return "react";
+				},
+			},
+		},
+	},
 });

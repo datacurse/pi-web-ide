@@ -5,13 +5,13 @@
 	"type": "module",
 	"description": "A deliberately thin web UI for the pi coding agent",
 	"scripts": {
-		"dev": "pnpm build && PWI_PORT=${PWI_PORT:-8890} concurrently -k -n server,web -c blue,green \"pnpm:dev:server\" \"pnpm:dev:web\"",
-		"dev:server": "PWI_DEV=1 node --watch --import tsx src/server/index.ts",
-		"dev:web": "until nc -z 127.0.0.1 ${PWI_PORT:-8890}; do sleep 0.1; done && vite",
+		"dev": "pnpm build && node scripts/dev.mjs",
+		"dev:server": "PWI_DEV=1 PWI_PORT=${PWI_PORT:-8890} PWI_TAKEOVER=${PWI_TAKEOVER:-0} node --watch --import tsx src/server/index.ts",
+		"dev:web": "node scripts/dev.mjs wait && vite",
 		"build": "vite build",
 		"start": "node --import tsx src/server/index.ts",
 		"typecheck": "tsc --noEmit && sh scripts/check-ui.sh && sh scripts/check-api.sh",
-		"test": "timeout --kill-after=5s 30s node --import tsx --test --test-timeout=10000 src/**/*.test.ts"
+		"test": "node --test scripts/dev.test.mjs && timeout --kill-after=5s 30s node --import tsx --test --test-timeout=10000 src/**/*.test.ts"
 	},
 	"dependencies": {
 		"@codemirror/autocomplete": "^6.20.3",

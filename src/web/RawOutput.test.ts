@@ -13,5 +13,7 @@ test("raw output preserves markdown, whitespace and tool result anchors", () => 
 	assert.ok(html.includes("ABCD│const x = 1;"));
 	assert.ok(html.includes("reasoning"));
 	assert.ok(!html.includes("<strong>"));
-	assert.ok(!html.includes("<details"));
+	assert.ok(html.includes("<details"));
+	assert.ok(!html.includes("<details open"));
+	assert.ok(html.includes("<summary"));
 });

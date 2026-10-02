@@ -71,7 +71,7 @@ import { ensureSolPiReducer } from "./solPi.js";
 import { autoCompactionEnabled } from "./automaticModelConfig.js";
 import { repairSessionFile } from "./repair.js";
 import { sessionHeaderCwd } from "./sessions.js";
-import { stateDir, statePath } from "./state.js";
+import { stateDir, statePath, writeStateFile } from "./state.js";
 import { ASK_ONLY, type ContextBreakdown, type ContextItem, type ContextPart } from "../shared/types.js";
 import type {
 	AskAnswer,
@@ -550,7 +550,7 @@ function killGroup(pid: number, signal: NodeJS.Signals): void {
  * through `meta.json` and `adopt`s it mid-turn. Pipes would tie pi's lifetime
  * to ours: pi exits 1.3s after stdin EOF (docs/pi-facts.md).
  */
-class RpcChild {
+export class RpcChild {
 	private readonly pending = new Map<string, Pending>();
 	private readonly frameListeners = new Set<(frame: Record<string, unknown>) => void>();
 	private readonly reader: FrameReader;
@@ -896,6 +896,9 @@ class RpcChild {
 	close(): void {
 		if (this.exited || this.closing) return;
 		this.closing = true;
+		// Withdraw from adoption BEFORE signalling: the port can be released
+		// while this child is still alive (including the SIGKILL grace period).
+		writeStateFile(join(this.dir, "meta.json"), JSON.stringify({ pid: this.pid, keep: false } satisfies Meta));
 		this.kill();
 		// A child we did not spawn has no exit event; the poll is stopped by
 		// nothing but the exit it is waiting for.
@@ -1676,9 +1679,10 @@ async function wrap(child: RpcChild, cwd: string): Promise<PiSession> {
 			// text block it builds around it (see IMAGE_ONLY_PROMPT). Caption it.
 			const message = text.trim() ? text : attachments ? IMAGE_ONLY_PROMPT : text;
 
+			// Auto-compaction is synchronized at wrap/startup and by settings changes,
+			// not on this latency-sensitive prompt path.
 			// streamingBehavior is REQUIRED while streaming or the command fails.
 			const wasStreaming = streaming;
-			await child.send("set_auto_compaction", { enabled: autoCompactionEnabled() });
 			await child.send<unknown>("prompt", {
 				message,
 				...(attachments ? { images: attachments } : {}),

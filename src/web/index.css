@@ -1172,9 +1172,3 @@ input[type="number"]::-webkit-outer-spin-button {
 	background: var(--ed-list-active);
 	color: var(--ed-list-active-fg);
 }
-
-/* Settings search matches (CSS Custom Highlight API, set in Settings.tsx). */
-::highlight(settings-search) {
-	background-color: color-mix(in oklab, var(--color-amber-400) 35%, transparent);
-	color: var(--color-neutral-50);
-}

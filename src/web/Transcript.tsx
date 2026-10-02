@@ -142,15 +142,12 @@ export function Tool({
 }) {
 	const running = inFlight ?? result === undefined;
 	const nestedShellOutput = nested && name === "bash" && result !== undefined && result !== "";
-	const [open, setOpen] = useState(expandedByDefault || (autoOpen && running) || nestedShellOutput);
+	const [open, setOpen] = useState(expandedByDefault || (autoOpen && running));
 	/*
-	 * Changing the setting has to reach calls that are ALREADY on screen:
-	 * their `open` was decided at mount, so without this, switching to
-	 * "Always collapsed" would leave the wall of expanded calls you switched
-	 * to get rid of. Keyed on the setting alone — a call the user opened by
-	 * hand stays open until the setting itself moves.
+	 * Keep existing calls in sync with the expand setting, while settled calls
+	 * remain collapsed by default and can always be toggled from their row.
 	 */
-	useEffect(() => setOpen(expandedByDefault || (autoOpen && running) || nestedShellOutput), [autoOpen, expandedByDefault, nestedShellOutput]);
+	useEffect(() => setOpen(expandedByDefault || (autoOpen && running)), [autoOpen, expandedByDefault]);
 	const spinner = useSpinner(running);
 	const elapsed = ms ?? (running && startedAt !== undefined ? Math.max(0, Date.now() - startedAt) : undefined);
 	const target = args && typeof args === "object" ? (args as { path?: unknown; command?: unknown }).path ?? (args as { command?: unknown }).command : undefined;

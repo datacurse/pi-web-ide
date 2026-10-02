@@ -16,19 +16,21 @@ then survive a server restart); `gh` is optional (enables "Create PR").
 
 ```bash
 pnpm install
-pnpm dev                     # server :8891 + vite :5480 (hot reload)
+pnpm dev                     # built UI + API :8890, hot-reload UI :5480
 pnpm build && pnpm start     # single process, serves dist/ itself
 pnpm test
 pnpm typecheck               # must pass; includes scripts/check-ui.sh
 ```
 
-`pnpm dev` leaves the stable instance on :8890 (`pnpm start` or the systemd
-service) running, so one tab can stay on :8890 for other projects while
-:5480 reloads with your pwi edits. Don't open the same chat in both.
+`pnpm dev` builds `dist/`, then starts a backend on :8890 serving that built
+UI, plus Vite on :5480 for hot reload. Both UIs use the same backend. No
+systemd service or separate `pnpm start` is needed.
 
-Starting pwi while an older pwi holds the port stops the old one and takes
-over; running sessions are adopted, not killed. Anything else on the port is
-left alone and startup fails.
+Starting production pwi while an older pwi holds the port stops the old one
+and takes over; running sessions are adopted, not killed. Anything else on
+the port is left alone and startup fails. Dev disables takeover by default
+(`PWI_TAKEOVER=0`): it must not fight a systemd service that restarts after
+being signalled. Stop an existing dev runner before starting another one.
 
 ## Configuration
 
