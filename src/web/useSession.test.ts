@@ -5,12 +5,16 @@ import { runInNewContext } from "node:vm";
 import ts from "typescript";
 import * as shared from "../shared/types.js";
 import * as activity from "../shared/activity.js";
+import * as partial from "../shared/partial.js";
+import { unwrap } from "./api.js";
 import type { useSession } from "./useSession.js";
 
 const source = ts.transpileModule(readFileSync(new URL("./useSession.ts", import.meta.url), "utf8"), {
 	compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
 }).outputText;
-const response = (body: unknown, ok = true) => ({ ok, json: async () => body });
+const response = (body: unknown, ok = true) => new Response(JSON.stringify(body), {
+	status: ok ? 200 : 400, headers: { "Content-Type": "application/json" },
+});
 const deferred = () => Promise.withResolvers<ReturnType<typeof response>>();
 
 function harness() {
@@ -50,18 +54,26 @@ function harness() {
 				return request.promise;
 			} },
 			$get: ({ param }: { param: { id: string } }) => get(param.id),
+			edit: { $post: async () => response({}) },
+			fork: { $post: async () => response({ file: "fork" }) },
+			restart: { $post: async () => response({ id: "restarted", file: "session" }) },
+			model: { $post: async () => response({}) },
+			thinking: { $post: async () => response({}) },
+			fast: { $post: async () => response({}) },
+			ask: { $post: async () => response({}) },
 			prompt: { $post: async () => response({}) },
 		},
 	} };
 	const exports = {} as { useSession: typeof useSession };
 	runInNewContext(source, {
-		exports, EventSource: Stream, setTimeout, clearTimeout,
+		exports, EventSource: Stream, setTimeout, clearTimeout, Error,
 		require: (name: string) => {
 			switch (name) {
 				case "react": return hooks;
 				case "../shared/types.js": return shared;
 				case "../shared/activity.js": return activity;
-				case "./api.js": return { api };
+				case "../shared/partial.js": return partial;
+				case "./api.js": return { api, unwrap };
 				case "./i18n.js": return { t: (text: string) => text };
 				case "./GitActions.js": return { gitChanged: () => {} };
 				case "./tabs.js": return {};
@@ -80,6 +92,9 @@ function harness() {
 		render() { cursor = 0; return exports.useSession(env); },
 		requests, streams,
 		setGet(fn: typeof get) { get = fn; },
+		setPost(route: keyof typeof api.sessions[":id"], fn: () => Promise<Response>) {
+			Object.assign(api.sessions[":id"][route], { $post: fn });
+		},
 	};
 }
 
@@ -193,7 +208,6 @@ for (const trigger of ["refresh", "send"] as const) {
 		await sending;
 		await new Promise((resolve) => setImmediate(resolve));
 		assert.equal(h.render().snapshot?.activity?.[0].steps.at(-1)?.kind, "request");
-		assert.equal(activity.activityGroups(h.render().snapshot!.activity![0]).at(-1)?.kind, "thinking");
 	});
 }
 
@@ -206,4 +220,79 @@ test("a refresh without intervening live timing accepts authoritative removal", 
 	h.streams[0]!.onmessage!({ data: JSON.stringify({ type: "message_done" }) });
 	await new Promise((resolve) => setImmediate(resolve));
 	assert.equal(h.render().snapshot?.activity?.length, 0);
+});
+
+for (const route of ["prompt", "edit", "fork", "restart", "model", "thinking", "fast", "ask"] as const) {
+	for (const ok of [true, false]) {
+		test(`${route} ${ok ? "success" : "failure"} cannot change a newly selected session`, async () => {
+			const h = harness();
+			await h.render().attach("old");
+			const pending = deferred();
+			h.setPost(route, () => pending.promise);
+			const session = h.render();
+			const actions = {
+				prompt: () => session.send("hello"),
+				edit: () => session.edit(1000, "replacement"),
+				fork: () => session.fork(1000),
+				restart: () => session.restart(),
+				model: () => session.changeModel("provider/model"),
+				thinking: () => session.changeThinking("low"),
+				fast: () => session.changeFast(true),
+				ask: () => session.answerAsk("question", { cancelled: true }),
+			};
+			const request = actions[route]();
+			await h.render().attach("new");
+			h.render();
+			h.streams.at(-1)!.onmessage!({ data: JSON.stringify({ type: "text", delta: "New answer" }) });
+			pending.resolve(response({ id: "restarted", file: "fork", error: "old failure" }, ok));
+			await request;
+			assert.equal(h.render().snapshot?.id, "new");
+			assert.equal(h.render().snapshot?.error, null);
+			assert.equal(h.render().modelError, null);
+			assert.equal(h.render().busy, true, "the new run must not be stopped");
+		});
+	}
+}
+
+test("a network-rejected prompt clears its optimistic row and reports an error", async () => {
+	const h = harness();
+	await h.render().attach("session");
+	h.setPost("prompt", async () => { throw new Error("network unavailable"); });
+	await h.render().send("hello");
+	assert.equal(h.render().busy, false);
+	assert.equal(h.render().command, null);
+	assert.equal(h.render().snapshot?.messages.length, 0);
+	assert.match(h.render().snapshot?.error ?? "", /network unavailable/);
+});
+
+test("a rejected queued follow-up does not stop the existing run", async () => {
+	const h = harness();
+	await h.render().attach("session");
+	h.streams[0]!.onmessage!({ data: JSON.stringify({ type: "text", delta: "Answer" }) });
+	h.setPost("prompt", async () => response({ error: "queue rejected" }, false));
+	await h.render().send("follow-up");
+	assert.equal(h.render().busy, true);
+	assert.equal(h.render().snapshot?.error, "queue rejected");
+});
+
+test("a delayed refresh cannot overwrite a later attachment to the same session", async () => {
+	const h = harness();
+	await h.render().attach("session");
+	const pending = deferred();
+	h.setGet(() => pending.promise);
+	const request = h.render().reloadSnapshot();
+	await h.render().attach("other");
+	await h.render().attach("session");
+	pending.resolve(response({ id: "session", error: "obsolete snapshot" }));
+	await request;
+	assert.equal(h.render().snapshot?.error, null);
+});
+
+test("a failed compaction reports the network error and clears its loading state", async () => {
+	const h = harness();
+	await h.render().attach("session");
+	h.setPost("compact", async () => { throw new Error("network unavailable"); });
+	await h.render().compact();
+	assert.equal(h.render().compacting, false);
+	assert.match(h.render().snapshot?.error ?? "", /network unavailable/);
 });

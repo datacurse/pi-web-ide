@@ -15,10 +15,10 @@ import type {
 import { gitChanged } from "./GitActions.js";
 import { groupOf, sideOfTab, withGroup } from "./tabs.js";
 import type { Side } from "./tabs.js";
-import { api } from "./api.js";
+import { api, unwrap } from "./api.js";
 import { t } from "./i18n.js";
 
-const emptyPartial = (): PiPartial => ({ text: "", thinking: "", tools: [] });
+import { emptyPartial, reducePartial } from "../shared/partial.js";
 
 /**
  * The server's JSON, made safe to render.
@@ -440,6 +440,10 @@ export function useSession({
 					void refetch();
 					return;
 				}
+				// Clearing a completed partial waits for the authoritative message refetch.
+				if (["text", "thinking", "tool_start", "tool_update", "tool_end"].includes(e.type)) {
+					setPartial((p) => reducePartial(p, e));
+				}
 				switch (e.type) {
 					case "text":
 						setBusy(true);
@@ -448,29 +452,15 @@ export function useSession({
 						// and the transcript now shows it.
 						setCommand(null);
 						worked = true;
-						setPartial((p) => ({ ...p, text: p.text + e.delta }));
 						break;
 					case "thinking":
 						setBusy(true);
 						worked = true;
-						setPartial((p) => ({ ...p, thinking: p.thinking + e.delta }));
 						break;
 					case "tool_start":
 						worked = true;
-						setPartial((p) => ({
-							...p,
-							tools: [...p.tools, { id: e.id, name: e.name, args: e.args, ...(e.parentId ? { parentId: e.parentId, startedAt: e.at, running: true } : {}) }],
-						}));
 						break;
 					case "tool_end":
-						setPartial((p) => ({
-							...p,
-							tools: p.tools.map((t) =>
-								t.id === e.id ? { ...t, result: e.result, isError: e.isError, ...(e.todos !== undefined ? { todos: e.todos } : {}),
-									durationMs: e.at !== undefined && t.startedAt !== undefined ? Math.max(0, e.at - t.startedAt) : t.durationMs,
-									running: t.parentId ? false : t.running } : t,
-							),
-						}));
 						// Any tool may have touched the tree; re-read the changed-file count now.
 						gitChanged(snap.cwd || project);
 						break;
@@ -503,13 +493,6 @@ export function useSession({
 						// until the user comes back.
 						setSnapshot((s) => (s ? { ...s, ask: e.ask } : s));
 						if (e.ask) announce(snap.file, askLine(e.ask));
-						break;
-					case "tool_update":
-						// Cumulative output: replace, never append.
-						setPartial((p) => ({
-							...p,
-							tools: p.tools.map((t) => (t.id === e.id ? { ...t, result: e.result } : t)),
-						}));
 						break;
 					case "idle":
 						setBusy(false);
@@ -598,6 +581,11 @@ export function useSession({
 			if (attachSeq.current === seq) {
 				setSnapshot((s) => (s?.id === snapshot.id ? { ...s, error: body.error ?? t("could not compact") } : s));
 			}
+		} catch (err) {
+			if (attachSeq.current === seq) {
+				const error = err instanceof Error ? err.message : String(err);
+				setSnapshot((s) => s?.id === snapshot.id ? { ...s, error } : s);
+			}
 		} finally {
 			setCompactingIds((ids) => {
 				const remaining = new Set(ids);
@@ -607,267 +595,165 @@ export function useSession({
 		}
 	}, [snapshot]);
 
+	/** Every async mutation belongs to the attachment that started it, not the next selected tab. */
+	const runSession = useCallback(async (action: (request: {
+		id: string;
+		active: () => boolean;
+		update: (change: (s: Snapshot) => Snapshot) => void;
+		refresh: (transform?: (s: Snapshot) => Snapshot) => Promise<void>;
+	}) => Promise<void>, model = false) => {
+		if (!snapshot) return;
+		const id = snapshot.id;
+		const seq = attachSeq.current;
+		const active = () => attachSeq.current === seq;
+		const update = (change: (s: Snapshot) => Snapshot) =>
+			setSnapshot((s) => active() && s?.id === id ? change(s) : s);
+		const refresh = async (transform = (s: Snapshot) => s) => {
+			const baseline = snapshotRef.current;
+			const fresh = transform(toSnapshot(await unwrap(api.sessions[":id"].$get({ param: { id } }))));
+			update((current) => preserveLiveActivity(fresh, current, baseline));
+		};
+		if (model) setModelError(null);
+		try {
+			await action({ id, active, update, refresh });
+		} catch (err) {
+			if (!active()) return;
+			const error = err instanceof Error ? err.message : String(err);
+			if (model) setModelError(error);
+			else update((s) => ({ ...s, error }));
+		}
+	}, [snapshot]);
+
 	const send = useCallback(
 		async (text: string, images?: PiImage[], askOnly = false) => {
 			if (!snapshot) return;
-			seenErrorRef.current = null;
 			const trimmed = text.trim();
-			// pi's `/compact` is TUI-only; over RPC it would reach the model as text.
+			// pi's /compact is TUI-only; over RPC it would reach the model as text.
 			const compactCmd = /^\/compact(?:\s+([\s\S]*))?$/.exec(trimmed);
 			if (compactCmd && !images?.length) return compact(compactCmd[1]?.trim());
-			setBusy(true);
-			// A local command appends no message: this row IS the record that it
-			// was sent. And the ack below is acceptance, not completion — the
-			// answer arrives later as a notice, so it starts out running.
-			setCommand(trimmed.startsWith("/") ? { text: trimmed, running: true } : null);
-			// Show the message now, not after pi acks it. Every refetch replaces
-			// `messages` wholesale, so the server's copy supersedes this one. Not
-			// while streaming: a follow-up is queued, and would jump position.
-			const optimistic: PiMessage | null =
-				!busy && !trimmed.startsWith("/")
-					? {
-							role: "user",
-							blocks: [
-								...(text ? [{ kind: "text" as const, text }] : []),
-								...(images ?? []).map((i) => ({ kind: "image" as const, ...i })),
-							],
-							timestamp: Date.now(),
-						}
-					: null;
-			if (optimistic) setSnapshot((s) => (s ? { ...s, messages: [...s.messages, optimistic] } : s));
-			const r = await api.sessions[":id"].prompt.$post({
-				param: { id: snapshot.id },
-				// The suffix goes to pi only; toPiMessage strips it from the transcript.
-				json: { text: askOnly && !trimmed.startsWith("/") ? text + ASK_ONLY : text, images },
-			});
-
-			// A rejected prompt (unsupported type, too large, 413) never reaches the
-			// session, so no SSE error is coming — surface it here or it is lost and
-			// the UI just sits on a spinner that will never resolve.
-			if (!r.ok) {
-				const body = await r.json().catch(() => ({}) as { error?: string });
-				setBusy(false);
-				setCommand(null);
-				setSnapshot((s) =>
-					s
-						? {
-								...s,
-								messages: s.messages.filter((m) => m !== optimistic),
-								error: body.error ?? t("prompt failed ({status})", { status: r.status }),
-							}
-						: s,
-				);
-				return;
-			}
-
-			// The ack can beat pi's `message_end` for this message (images are
-			// processed first), so keep the optimistic copy until the server has it.
-			const baseline = snapshotRef.current;
-			const rr = await api.sessions[":id"].$get({ param: { id: snapshot.id } });
-			if (!rr.ok) return;
-			const fresh = toSnapshot(await rr.json());
-			const landed = fresh.messages.length > snapshot.messages.length;
-			setSnapshot((current) => current?.id === fresh.id ? preserveLiveActivity(
-				optimistic && !landed ? { ...fresh, messages: [...fresh.messages, optimistic] } : fresh, current, baseline) : current);
-		},
-		[snapshot, busy, compact],
-	);
-
-	const abort = useCallback(async () => {
-		if (!snapshot) return;
-		await api.sessions[":id"].abort.$post({ param: { id: snapshot.id } });
-	}, [snapshot]);
-
-	/**
-	 * Replace the user message that started at `at` with `text`: everything from
-	 * it on leaves the transcript and the new message is sent in its place.
-	 */
-	const edit = useCallback(
-		async (at: number, text: string, images?: PiImage[]) => {
-			if (!snapshot || busy) return;
-			setBusy(true);
-			setCommand(null);
-			const cut = snapshot.messages.findIndex((m) => m.role === "user" && m.timestamp === at);
-			if (cut >= 0) {
-				const optimistic: PiMessage = {
+			await runSession(async ({ id, active, update, refresh }) => {
+				seenErrorRef.current = null;
+				setBusy(true);
+				setCommand(trimmed.startsWith("/") ? { text: trimmed, running: true } : null);
+				// A queued follow-up must not jump ahead of the running answer.
+				const optimistic: PiMessage | null = !busy && !trimmed.startsWith("/") ? {
 					role: "user",
 					blocks: [
 						...(text ? [{ kind: "text" as const, text }] : []),
 						...(images ?? []).map((i) => ({ kind: "image" as const, ...i })),
 					],
 					timestamp: Date.now(),
-				};
-				setSnapshot((s) => (s ? { ...s, messages: [...s.messages.slice(0, cut), optimistic] } : s));
-			}
-			const r = await api.sessions[":id"].edit
-				.$post({ param: { id: snapshot.id }, json: { at, text, images } })
-				.catch(() => null);
-			const body = r?.ok ? null : ((await r?.json().catch(() => null)) as { error?: unknown } | null);
-			if (!r?.ok) setBusy(false);
-			const rr = await api.sessions[":id"].$get({ param: { id: snapshot.id } });
-			if (rr.ok) setSnapshot(toSnapshot(await rr.json()));
-			if (!r?.ok) {
-				const reason = typeof body?.error === "string" ? body.error : t("could not edit that message");
-				setSnapshot((s) => (s ? { ...s, error: reason } : s));
-			}
-		},
-		[snapshot, busy],
-	);
-
-	/** Fork this session after one of its answers, and open the fork in this column. */
-	const fork = useCallback(
-		async (at: number) => {
-			if (!snapshot) return;
-			const r = await api.sessions[":id"].fork.$post({ param: { id: snapshot.id }, json: { at } }).catch(() => null);
-			const body = (await r?.json().catch(() => null)) as { file?: unknown; error?: unknown } | null;
-			if (r?.ok && typeof body?.file === "string") {
-				void attach(body.file);
-				return;
-			}
-			const reason = typeof body?.error === "string" ? body.error : t("could not fork this session");
-			setSnapshot((s) => (s ? { ...s, error: reason } : s));
-		},
-		[snapshot, attach],
-	);
-
-	/**
-	 * Replace this session's pi child so it picks up a newly installed
-	 * package. The transcript comes back from the server's fresh snapshot —
-	 * the conversation is on disk, only the process changed.
-	 */
-	const restart = useCallback(async () => {
-		if (!snapshot) return;
-		const r = await api.sessions[":id"].restart.$post({ param: { id: snapshot.id } });
-		const body: unknown = await r.json().catch(() => null);
-		if (r.ok && body && typeof body === "object") {
-			setSnapshot(toSnapshot(body as Partial<Snapshot>));
-			return;
-		}
-		const reason =
-			body && typeof body === "object" && "error" in body && typeof body.error === "string"
-				? body.error
-				: t("could not restart this session");
-		setSnapshot((s) => (s ? { ...s, error: reason } : s));
-	}, [snapshot]);
-
-	/**
-	 * Re-read the open session's snapshot.
-	 *
-	 * For facts that change OUTSIDE the event stream — a package installed
-	 * from the Packages screen makes this session stale, and nothing in the
-	 * session's own frames will ever say so.
-	 */
-	const reloadSnapshot = useCallback(async () => {
-		if (!snapshot) return;
-		const r = await api.sessions[":id"].$get({ param: { id: snapshot.id } });
-		if (r.ok) setSnapshot(toSnapshot(await r.json()));
-	}, [snapshot]);
-
-	/**
-	 * Re-read the slash command catalog when the composer's picker opens.
-	 *
-	 * pi pushes nothing when the set changes, and it does change under a live
-	 * session: installing a package, or dropping a file in `.pi/prompts`, adds
-	 * commands the child only sees when asked. Asking on every `/` keystroke
-	 * would be a round trip per character, so the answer is good for half a
-	 * minute — a package install is not a keystroke.
-	 */
-	const commandsFetchedAt = useRef<{ id: string; at: number } | null>(null);
-	const refreshCommands = useCallback(async () => {
-		if (!snapshot) return;
-		const last = commandsFetchedAt.current;
-		if (last && last.id === snapshot.id && Date.now() - last.at < 30_000) return;
-		commandsFetchedAt.current = { id: snapshot.id, at: Date.now() };
-		const r = await api.sessions[":id"].commands.$post({ param: { id: snapshot.id } }).catch(() => null);
-		if (!r?.ok) return;
-		const body: unknown = await r.json().catch(() => null);
-		if (!body || typeof body !== "object" || !("commands" in body)) return;
-		const commands = body.commands;
-		if (!Array.isArray(commands)) return;
-		setSnapshot((s) => (s && s.id === snapshot.id ? { ...s, commands } : s));
-	}, [snapshot]);
-
-	/**
-	 * Answer the question pi is blocked on.
-	 *
-	 * The panel is cleared optimistically: the `ask` event that confirms it
-	 * comes back over SSE, and leaving the question on screen until it arrives
-	 * would invite a second click on a dialog that is already answered. A 409
-	 * means it was gone before the click landed (timed out, or the turn was
-	 * aborted), which the refetch below then reflects.
-	 */
-	const answerAsk = useCallback(
-		async (askId: string, answer: AskAnswer) => {
-			if (!snapshot) return;
-			setSnapshot((s) => (s ? { ...s, ask: null } : s));
-			const r = await api.sessions[":id"].ask.$post({ param: { id: snapshot.id }, json: { askId, ...answer } });
-			if (r.ok) return;
-			const rr = await api.sessions[":id"].$get({ param: { id: snapshot.id } });
-			if (rr.ok) setSnapshot(toSnapshot(await rr.json()));
-		},
-		[snapshot],
-	);
-
-	const changeModel = useCallback(
-		async (model: string) => {
-			if (!snapshot) return;
-			setModelError(null);
-			const r = await api.sessions[":id"].model.$post({ param: { id: snapshot.id }, json: { model } });
-			if (!r.ok) {
-				const body = (await r.json().catch(() => ({}))) as { error?: string };
-				setModelError(body.error ?? t("failed to switch model"));
-				return;
-			}
-			const rr = await api.sessions[":id"].$get({ param: { id: snapshot.id } });
-			if (rr.ok) setSnapshot(await rr.json());
-		},
-		[snapshot],
-	);
-
-	/**
-	 * Reasoning effort. Shares `modelError` with the model switch: both are
-	 * the same control group saying "the session refused that", and a second
-	 * error slot would be a second thing to render in the same corner.
-	 */
-	const changeThinking = useCallback(
-		async (level: string) => {
-			if (!snapshot) return;
-			setModelError(null);
-			const r = await api.sessions[":id"].thinking.$post({ param: { id: snapshot.id }, json: { level } });
-			if (!r.ok) {
-				const body = (await r.json().catch(() => ({}))) as { error?: string };
-				setModelError(body.error ?? t("failed to set thinking level"));
-				return;
-			}
-			const rr = await api.sessions[":id"].$get({ param: { id: snapshot.id } });
-			if (rr.ok) setSnapshot(await rr.json());
-		},
-		[snapshot],
-	);
-
-	const changeFast = useCallback(
-		async (enabled: boolean) => {
-			if (!snapshot) return;
-			const id = snapshot.id;
-			setModelError(null);
-			try {
-				const r = await api.sessions[":id"].fast.$post({ param: { id }, json: { enabled } });
-				if (!r.ok) {
-					const body = (await r.json().catch(() => ({}))) as { error?: string };
-					throw new Error(body.error ?? String(r.status));
+				} : null;
+				if (optimistic) update((s) => ({ ...s, messages: [...s.messages, optimistic] }));
+				try {
+					await unwrap(api.sessions[":id"].prompt.$post({
+						param: { id },
+						json: { text: askOnly && !trimmed.startsWith("/") ? text + ASK_ONLY : text, images },
+					}));
+				} catch (err) {
+					if (active()) {
+						setBusy(busy);
+						setCommand(null);
+						update((s) => ({ ...s, messages: s.messages.filter((m) => m !== optimistic) }));
+					}
+					throw err;
 				}
-				const rr = await api.sessions[":id"].$get({ param: { id } });
-				if (!rr.ok) throw new Error(String(rr.status));
-				const fresh = toSnapshot(await rr.json());
-				if (snapshotRef.current?.id === id) setSnapshot(fresh);
-			} catch (err) {
-				if (snapshotRef.current?.id === id) setModelError(t("Could not set Fast mode: {error}", {
-					error: err instanceof Error ? err.message : String(err),
-				}));
-			}
+				// Keep the optimistic prompt until pi has appended its own copy.
+				if (active()) await refresh((fresh) =>
+					optimistic && fresh.messages.length <= snapshot.messages.length
+						? { ...fresh, messages: [...fresh.messages, optimistic] } : fresh);
+			});
 		},
-		[snapshot],
+		[snapshot, busy, compact, runSession],
 	);
+
+	const abort = useCallback(() => runSession(async ({ id }) => {
+		await unwrap(api.sessions[":id"].abort.$post({ param: { id } }));
+	}), [runSession]);
+
+	/** Rewind and replace a user message; restore the transcript if the request is rejected. */
+	const edit = useCallback(async (at: number, text: string, images?: PiImage[]) => {
+		if (!snapshot || busy) return;
+		await runSession(async ({ id, active, update, refresh }) => {
+			setBusy(true);
+			setCommand(null);
+			const cut = snapshot.messages.findIndex((m) => m.role === "user" && m.timestamp === at);
+			if (cut >= 0) update((s) => ({ ...s, messages: [...s.messages.slice(0, cut), {
+				role: "user",
+				blocks: [
+					...(text ? [{ kind: "text" as const, text }] : []),
+					...(images ?? []).map((i) => ({ kind: "image" as const, ...i })),
+				],
+				timestamp: Date.now(),
+			}] }));
+			try {
+				await unwrap(api.sessions[":id"].edit.$post({ param: { id }, json: { at, text, images } }));
+			} catch (err) {
+				if (active()) {
+					setBusy(false);
+					update((s) => ({ ...s, messages: snapshot.messages }));
+				}
+				throw err;
+			}
+			if (active()) await refresh();
+		});
+	}, [snapshot, busy, runSession]);
+
+	const fork = useCallback((at: number) => runSession(async ({ id, active }) => {
+		const body = await unwrap(api.sessions[":id"].fork.$post({ param: { id }, json: { at } }));
+		if (active()) await attach(body.file);
+	}), [runSession, attach]);
+
+	const restart = useCallback(() => runSession(async ({ id, update }) => {
+		const fresh = toSnapshot(await unwrap(api.sessions[":id"].restart.$post({ param: { id } })));
+		update(() => fresh);
+	}), [runSession]);
+
+	/** Refresh facts that change outside the event stream, such as installed packages. */
+	const reloadSnapshot = useCallback(() => runSession(async ({ refresh }) => refresh()), [runSession]);
+
+	/** The slash-command catalog is per session and cached for half a minute. */
+	const commandsFetchedAt = useRef<{ id: string; at: number } | null>(null);
+	const refreshCommands = useCallback(() => runSession(async ({ id, update }) => {
+		const last = commandsFetchedAt.current;
+		if (last && last.id === id && Date.now() - last.at < 30_000) return;
+		commandsFetchedAt.current = { id, at: Date.now() };
+		try {
+			const { commands } = await unwrap(api.sessions[":id"].commands.$post({ param: { id } }));
+			update((s) => ({ ...s, commands }));
+		} catch {
+			if (commandsFetchedAt.current?.id === id) commandsFetchedAt.current = null;
+		}
+	}), [runSession]);
+
+	/** A stale question gets a 409; refetch it rather than answering a different one. */
+	const answerAsk = useCallback((askId: string, answer: AskAnswer) => runSession(async ({ id, active, update, refresh }) => {
+		update((s) => ({ ...s, ask: null }));
+		try {
+			const r = await api.sessions[":id"].ask.$post({ param: { id }, json: { askId, ...answer } });
+			if (r.status === 409) {
+				if (active()) await refresh();
+			} else await unwrap(r);
+		} catch (err) {
+			update((s) => ({ ...s, ask: snapshot?.ask ?? null }));
+			throw err;
+		}
+	}), [runSession, snapshot]);
+
+	const changeModel = useCallback((model: string) => runSession(async ({ id, active, refresh }) => {
+		await unwrap(api.sessions[":id"].model.$post({ param: { id }, json: { model } }));
+		if (active()) await refresh();
+	}, true), [runSession]);
+
+	const changeThinking = useCallback((level: string) => runSession(async ({ id, active, refresh }) => {
+		await unwrap(api.sessions[":id"].thinking.$post({ param: { id }, json: { level } }));
+		if (active()) await refresh();
+	}, true), [runSession]);
+
+	const changeFast = useCallback((enabled: boolean) => runSession(async ({ id, active, refresh }) => {
+		await unwrap(api.sessions[":id"].fast.$post({ param: { id }, json: { enabled } }));
+		if (active()) await refresh();
+	}, true), [runSession]);
 
 	return {
 		snapshot,

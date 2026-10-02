@@ -71,18 +71,4 @@ assert.equal(prefs.readSessionAttachments(), true);
 store.set("pwi:sessionAttachments", "invalid");
 assert.equal(prefs.readSessionAttachments(), true);
 
-assert.equal(prefs.readToolMode(), "phases", "phase grouping is the default");
-prefs.writeToolMode("live");
-assert.equal(prefs.readToolMode(), "live", "explicit display preferences are preserved");
-prefs.writeToolMode("phases");
-assert.equal(prefs.readToolMode(), "phases");
-
-assert.equal(prefs.readWorkExpanded(), true, "work is unfolded by default for design review");
-prefs.writeWorkExpanded(false);
-assert.equal(prefs.readWorkExpanded(), false, "explicit collapsed defaults are preserved");
-prefs.writeWorkExpanded(true);
-assert.equal(prefs.readWorkExpanded(), true);
-store.set("pwi:workExpanded", "invalid");
-assert.equal(prefs.readWorkExpanded(), true);
-
 console.log("prefs ok");

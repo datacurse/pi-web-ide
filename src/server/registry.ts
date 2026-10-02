@@ -20,7 +20,6 @@
 
 import {
 	adoptSessions,
-	emptyPartial,
 	forkSession,
 	openSession,
 	type AskAnswer,
@@ -30,6 +29,7 @@ import { currentEpoch } from "./packages.js";
 import { lastMessageAt } from "./sessions.js";
 import type { Hunk } from "../shared/hunks.js";
 import { addNotice, type ContextBreakdown, type PiEvent, type PiImage, type PiNotice, type PiPartial, type Snapshot } from "../shared/types.js";
+import { emptyPartial, reducePartial } from "../shared/partial.js";
 
 export type { Snapshot };
 
@@ -218,38 +218,11 @@ export class Registry {
 		// was built from.
 		entry.unsubscribe = session.subscribe((e) => {
 			entry.lastActivity = Date.now();
+			entry.partial = reducePartial(entry.partial, e);
 			switch (e.type) {
 				case "text":
-					entry.streaming = true;
-					entry.partial.text += e.delta;
-					break;
 				case "thinking":
 					entry.streaming = true;
-					entry.partial.thinking += e.delta;
-					break;
-				case "tool_start":
-					entry.partial.tools.push({ id: e.id, name: e.name, args: e.args, ...(e.parentId ? { parentId: e.parentId, startedAt: e.at, running: true } : {}) });
-					break;
-				case "tool_update": {
-					// Cumulative, so replace rather than append.
-					const running = entry.partial.tools.find((t) => t.id === e.id);
-					if (running) running.result = e.result;
-					break;
-				}
-				case "tool_end": {
-					const t = entry.partial.tools.find((t) => t.id === e.id);
-					if (t) {
-						t.result = e.result;
-						if (e.todos !== undefined) t.todos = e.todos;
-						t.isError = e.isError;
-						if (e.at !== undefined && t.startedAt !== undefined) { t.durationMs = Math.max(0, e.at - t.startedAt); t.running = false; }
-					}
-					break;
-				}
-				case "message_done":
-					// Settled into session.messages() — clear the partial so a
-					// reattach does not render the same content twice.
-					entry.partial = emptyPartial();
 					break;
 				case "notice":
 					// Bounded: a chatty command must not turn one session into an
@@ -258,7 +231,6 @@ export class Registry {
 					break;
 				case "idle":
 					entry.streaming = false;
-					entry.partial = emptyPartial();
 					break;
 				case "error":
 					entry.error = e.message;

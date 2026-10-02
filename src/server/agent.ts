@@ -83,14 +83,13 @@ import type {
 	PiImage,
 	PiMessage,
 	PiNotice,
-	PiPartial,
 } from "../shared/types.js";
 
 // Re-exported for callers that already import from this module. `PiBlock` and
 // `PiSessionInfo` are deliberately absent: everyone who needs them takes them
 // from `shared/types.js` directly, and a re-export nobody imports is just a
 // second name for the same type.
-export type { AskAnswer, PiAsk, PiCommand, PiEvent, PiImage, PiMessage, PiPartial };
+export type { AskAnswer, PiAsk, PiCommand, PiEvent, PiImage, PiMessage };
 
 /**
  * A systemd user unit gets a minimal PATH that usually omits the directory an
@@ -163,9 +162,6 @@ type AgentMessage = Record<string, unknown>;
  */
 const IMAGE_ONLY_PROMPT = "(see attached image)";
 
-export function emptyPartial(): PiPartial {
-	return { text: "", thinking: "", tools: [] };
-}
 
 // ---------------------------------------------------------------------------
 // Conversion helpers

@@ -34,9 +34,6 @@ const modules: Record<string, unknown> = {
 	"./Attachments.js": require("./Attachments.js"),
 	"./Transcript.js": transcript,
 	"./i18n.js": require("./i18n.js"),
-	"./Activity.js": require("./Activity.js"),
-	"./TurnWork.js": require("./TurnWork.js"),
-	"./turnPhases.js": require("./turnPhases.js"),
 	"./piMark.js": require("./piMark.js"),
 	"./PastedTexts.js": require("./PastedTexts.js"),
 	"./pastedText.js": require("./pastedText.js"),
@@ -108,7 +105,7 @@ function harness() {
 	};
 	const props: Parameters<typeof Chat>[0] = {
 		snapshot, partial: { text: "", thinking: "", tools: [] }, busy: false, opening: false,
-		thinkingMode: "shown", toolMode: "live", workExpanded: false, userMode: "full", askMode: "once",
+		userMode: "full", askMode: "once",
 		onAskMode() {}, onAnswerAsk() {}, onSend() {}, onAbort() {}, onModelChange() {},
 		onThinkingChange() {}, onFastChange: async () => {}, onCommandMenu() {},
 		onCompact() {}, compacting: false, onFork: async () => {}, onEdit() {}, onRestart() {},
@@ -148,14 +145,13 @@ test("history is passed to Virtuoso without eagerly mounting message rows", () =
 	assert.equal(updated.props.computeItemKey(250, updated.props.data[250]), key);
 });
 
-test("user prompts reuse the complete original Message component", () => {
+test("user prompts keep attachments and inline editing through UserMessage", () => {
 	const env = harness();
 	env.props.userMode = "expanded";
 	const list = env.render().find((node) => node.type === Virtuoso)!;
 	const selected = list.props.itemContent(0, list.props.data[0]) as Node;
 	const rendered = (selected.type as any).type(selected.props) as Node;
-	assert.equal(rendered.type, transcript.Message);
-	assert.equal(rendered.props.role, "user");
+	assert.equal(rendered.type, transcript.UserMessage);
 	assert.equal(rendered.props.blocks, list.props.data[0].blocks);
 	assert.equal(rendered.props.at, 1);
 	assert.equal(rendered.props.userMode, "expanded");
@@ -166,14 +162,12 @@ test("user prompts reuse the complete original Message component", () => {
 	assert.equal((busyRow.type as any).type(busyRow.props).props.onEdit, undefined);
 });
 
-test("raw history ignores phase grouping and preserves every message", () => {
+test("history keeps reasoning in work and the final answer outside", () => {
 	const env = harness();
-	env.props.toolMode = "phases";
 	env.props.snapshot!.messages = [
 		{ role: "user", timestamp: 1, blocks: [{ kind: "text", text: "question" }] },
 		{ role: "assistant", timestamp: 2, blocks: [{ kind: "thinking", text: "reasoning" }, { kind: "text", text: "**answer**" }] },
 	];
-	env.props.thinkingMode = "hidden";
 	const list = env.render().find((node) => node.type === Virtuoso)!;
 	assert.equal(list.props.data.length, 2);
 	assert.equal(list.props.data[0].role, "user");
@@ -224,7 +218,6 @@ test("one collapsed toggle hides live work and toggles all intermediate output",
 
 test("raw live tools stay visible without folding or duplicating settled calls", () => {
 	const env = harness();
-	env.props.toolMode = "grouped";
 	env.props.busy = true;
 	env.props.snapshot!.messages = [
 		{ role: "assistant", timestamp: 2, blocks: [{ kind: "tool", id: "a", name: "read", args: {} }] },
@@ -259,4 +252,23 @@ test("live todos render directly under Show work, not beside the composer", () =
 	const work = expandedNodes.findIndex((node) => node.type === RawBlocks && node.props.blocks === opened.props.row.work);
 	const expandedChecklist = expandedNodes.findIndex((node) => node.type === TodoList);
 	assert.ok(work >= 0 && expandedChecklist > work);
+});
+
+test("settled answer actions use the assistant timestamp and are absent while streaming", () => {
+	const env = harness();
+	env.props.snapshot!.messages = [
+		{ role: "user", timestamp: 1, blocks: [{ kind: "text", text: "question" }] },
+		{ role: "assistant", timestamp: 2, blocks: [{ kind: "thinking", text: "reasoning" }, { kind: "text", text: "answer" }] },
+	];
+	const rowNodes = () => {
+		const list = env.render().find((node) => node.type === Virtuoso)!;
+		const row = list.props.itemContent(1, list.props.data[1]) as Node;
+		return descendants((row.type as any).type(row.props));
+	};
+	const actions = rowNodes().find((node) => node.type === transcript.AnswerActions)!;
+	assert.equal(actions.props.at, 2);
+	assert.equal(actions.props.text, "answer");
+	assert.equal(actions.props.onFork, env.props.onFork);
+	env.props.busy = true;
+	assert.equal(rowNodes().some((node) => node.type === transcript.AnswerActions), false);
 });

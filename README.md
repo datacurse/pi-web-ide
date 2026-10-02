@@ -20,6 +20,7 @@ pnpm dev                     # built UI + API :8890, hot-reload UI :5480
 pnpm build && pnpm start     # single process, serves dist/ itself
 pnpm test
 pnpm typecheck               # must pass; includes scripts/check-ui.sh
+pnpm deadcode                # unused files/exports/dependencies, including a production-only pass
 ```
 
 `pnpm dev` builds `dist/`, then starts a backend on :8890 serving that built
@@ -73,7 +74,7 @@ started sessions; trusted project SoL-Pi settings can override the reducer.
   and per-model comparisons of answer times, tokens, tools, estimated cost,
   errors and aborts; historical sessions are included.
 - **Packages**: browse, install, update and remove pi packages.
-- **Settings**: themes (Catppuccin, Claude), tool-call display modes, and a
+- **Settings**: themes (Catppuccin, Claude), user-message folding, and a
   personality prompt appended to every new session.
 
 Runs survive closing the tab and restarting the server: pi children are

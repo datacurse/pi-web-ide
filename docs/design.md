@@ -704,8 +704,6 @@ everything that is a property of *this browser* rather than of the agent:
 | setting | key | default |
 | --- | --- | --- |
 | theme | `pwi:theme` | `mocha` |
-| show thinking | `pwi:showThinking` | on |
-| tool calls | `pwi:tools` | `live` |
 | session titles from latest prompt | `pwi:latestPrompt` | on |
 | notify when finished | `pwi:notify` | off |
 
@@ -734,43 +732,9 @@ Mixed-model answers are grouped separately rather than attributed to the last mo
 These are recorded performance metrics, not a score of answer quality; subscription
 limits use the local login and are independent of the model and machine filters.
 
-**Show thinking** hides reasoning blocks, streaming and historical, and it
-*filters* rather than `display: none`s them: reasoning is routinely the
-longest part of a message, and a hidden subtree would still pay for the
-markdown render and still turn up in find-in-page. A message that was
-nothing but reasoning disappears entirely instead of leaving an empty
-`assistant` label behind, and the streaming placeholder waits for real
-output for the same reason. The turn status row still spins while it
-happens — that is state, not content, and hiding the transcript of a thought
-should not hide the fact that the agent is having one.
-
-**Tool calls** is five-way, because "collapsed" and "hidden" are different
-answers to one question and two checkboxes would let you pick both:
-
-- `live` — a call with no result yet is expanded, so a long-running tool
-  shows progress without a click, and collapses once it settles. The default,
-  and the noisiest: a run of twenty edits turns the pane into a wall of
-  arguments while you are waiting for prose.
-- `collapsed` — one line per call; click to open. Settled calls already look
-  like this, so this only changes the in-flight ones.
-- `grouped` — one line per *run* of calls: `Ran 3 commands, read 2 files,
-  edited a file ✓`. Click it to list the run, click a call in it to open that
-  call. See below.
-- `answer` — one line per *turn*: every call, every thought and every
-  intermediate paragraph folds into it, and only the prose the turn ended on
-  stays. See below.
-- `hidden` — tool blocks are filtered out entirely, same mechanism as
-  thinking, and a message that was nothing but tool calls disappears with
-  them.
-
-The setting reaches calls already on screen, not just the next ones: `open`
-is decided when a call mounts, so switching to `collapsed` would otherwise
-leave exactly the wall of expanded calls you switched to get rid of. A call
-opened by hand stays open until the setting itself moves.
-
-Under `hidden` the turn status row still spins and counts seconds. That is the same
-rule as thinking: the setting hides the *transcript* of the work, never the
-fact that work is happening.
+Chat has one work disclosure per assistant turn. The final answer stays visible;
+reasoning, intermediate prose and literal tool payloads are available under `Show work`.
+The old reasoning/tool display preferences were removed because the raw renderer ignored them.
 
 **Notify when a run finishes** raises a desktop notification titled with the
 session and carrying the first line of the answer, so a long run can be left
@@ -799,70 +763,21 @@ twice replaces its own notification instead of stacking. The preference is
 read through a ref inside the SSE handler: making `attach` depend on it would
 tear down and rebuild a live `EventSource` every time it was toggled.
 
-### Grouped
+### One renderer
 
-`collapsed` fixes the wrong axis. One line per call is still twenty lines,
-and twenty lines of `▸ read ✓` is the same wall in a smaller font — it was
-measured on a real transcript: 12331px of scroll height became 2452px, five
-times shorter, with nothing removed.
+`Chat.tsx` uses `rawTurns.ts` to divide settled answers from work and `RawOutput.tsx`
+to render model prose as Markdown and tool payloads as escaped literal text. The retired
+round/phase renderer and its presentation-only helpers have been removed; the earlier
+display is preserved in Git history and `docs/archive/answer-display/`.
 
-A group is a run of consecutive calls, and the run **spans messages**,
-because that is the shape of a turn: one agent turn is a dozen one-call
-messages in a row. Prose is what ends a run, since prose is what the reader
-came for — a paragraph after three calls closes that group and the next call
-opens a new one.
+The answer is found from the end of the turn, not by guessing which paragraph matters.
+Trailing text and images are peeled off the last settled assistant message; reasoning,
+tools and earlier prose stay inside one work disclosure. A turn ending in a tool call or
+still streaming has no final answer outside the disclosure yet.
 
-Reasoning between two calls collapses *with* the run, even with **Show
-thinking** on. With a thought between every pair of calls, a group that broke
-on reasoning would be a group of one, which is the wall this mode exists to
-fold away. The reasoning is not dropped: expanding the group shows the run in
-order, thoughts and calls interleaved exactly as they happened, each call
-still openable for its arguments and output.
-
-Three details that are the difference between a summary and a lie:
-
-- **Failures are counted on the collapsed line** (`✗ 1 failed`, and the line
-  goes red). A group may hide detail; it may never hide that something went
-  wrong.
-- **The phrase list is capped at three**, then `+5 more`. A run of forty
-  calls across eight tools is a sentence nobody reads, wrapped over two lines
-  where the point was to have one.
-- **A tool with no phrase still summarises**, as `mcp_fetch ×2`, so a package
-  can add a tool without this going stale or — worse — wrong.
-
-While a turn streams there are at most two lines: the calls that have settled
-are one group, and the call in flight is the streaming row's own group, which
-grows in place instead of adding a line per call. They merge into one the
-moment the turn ends.
-
-### Answer only
-
-`grouped` still leaves the shape of a console: a paragraph of "now let me
-check X" between every two runs, and the answer somewhere at the bottom of
-eight of them. `answer` folds the whole turn instead — one line for
-everything the assistant did between two of your messages, then the prose it
-ended on. That is how a chat assistant reads, and on a long agent turn it is
-the difference between a page of work with an answer in it and an answer with
-the work behind one line.
-
-**The answer is found from the END of the turn, not by picking the best
-paragraph.** Text blocks (and images, which is how a turn that ends on a
-screenshot keeps it) are peeled off the back; everything before them folds.
-The model stopping there is what makes it the answer — no heuristic about
-length or position could say the same, and any guess would eventually fold
-away the thing you were reading. A turn that ends on a tool call therefore
-has no answer yet and folds whole, which is exactly the state of a turn that
-is still streaming.
-
-A turn ends when someone else speaks: your next message, or a compaction
-boundary. Those stay rows of their own — the fold is over the assistant's
-work, never over the conversation.
-
-The folded line says `Read 23 files, grepped 3 times, edited 16 files, +3
-more ✗ 3 failed`, same summary and same failure count as `grouped`. When the
-fold contains no calls at all — a turn that only thought — it says `4 steps`
-rather than pretending to have run something. Expanding shows the turn in
-order: thoughts, calls, intermediate prose, exactly as it happened.
+Async session actions use one attachment-scoped request helper. Delayed responses must
+not replace a newer selection, including a detach and reattach to the same file. Server
+and browser partial-message accumulation share one immutable reducer.
 
 ## Your side of the conversation
 
@@ -896,8 +811,8 @@ is a base64 data URL: a tab would show a megabyte of address bar, and some
 browsers refuse to navigate to one at all. It is a React context rather than
 a prop chain — the two places that show an image, a sent message deep in the
 transcript and the composer's staging row, have no common parent short of
-`Chat`, and threading a callback through `Message`, `Block` and `ToolGroup`
-would put an image concern in three components that have none.
+`Chat`, and threading a callback through every rendering component would put an
+image concern in components that otherwise have none.
 
 ## Icons
 

@@ -144,8 +144,6 @@ export function writeLanguage(lang: Language): void {
 	writeStored(LANGUAGE_KEY, lang);
 }
 
-const THINKING_KEY = "pwi:showThinking";
-const TOOL_KEY = "pwi:tools";
 const NOTIFY_KEY = "pwi:notify";
 const LATEST_PROMPT_KEY = "pwi:latestPrompt";
 const HIDE_SCROLLBARS_KEY = "pwi:hideScrollbars";
@@ -187,32 +185,6 @@ export function applyTheme(id: ThemeId, editor: string): void {
 	writeStored(THEME_KEY, id);
 	writeStored(EDITOR_THEME_KEY, editor);
 	writeStored(THEME_BOOT_KEY, JSON.stringify({ light, style: vars.map(([n, v]) => `${n}:${v}`).join(";") }));
-}
-
-/**
- * How reasoning blocks are rendered in the transcript.
- *
- * Shown by default: thinking is why the answer looks the way it does, and hiding
- * it by default would make the transcript quietly incomplete. `folded` is one
- * "Thinking" line that stays open while the model thinks and folds once it
- * moves on. Stored under the old boolean key: "0" is hidden, "fold" folded,
- * anything else shown, so a corrupt value fails visible.
- */
-export const THINKING_MODES = [
-	{ id: "shown", label: "Shown", hint: "As text, as it streams and in history." },
-	{ id: "folded", label: "Folded", hint: "Open while the model thinks, one line once it moves on." },
-	{ id: "hidden", label: "Hidden", hint: "Not shown at all." },
-] as const;
-
-export type ThinkingMode = (typeof THINKING_MODES)[number]["id"];
-
-export function readThinkingMode(): ThinkingMode {
-	const stored = readStored(THINKING_KEY);
-	return stored === "0" ? "hidden" : stored === "fold" ? "folded" : "shown";
-}
-
-export function writeThinkingMode(mode: ThinkingMode): void {
-	writeStored(THINKING_KEY, mode === "hidden" ? "0" : mode === "folded" ? "fold" : "1");
 }
 
 /**
@@ -315,16 +287,6 @@ export function applyScrollPast(on: boolean, amount: number): void {
 	document.documentElement.style.setProperty("--chat-scroll-past", on ? `${amount}vh` : "0px");
 }
 
-const WORK_EXPANDED_KEY = "pwi:workExpanded";
-
-export function readWorkExpanded(): boolean {
-	return readStored(WORK_EXPANDED_KEY) === "1";
-}
-
-export function writeWorkExpanded(on: boolean): void {
-	writeStored(WORK_EXPANDED_KEY, on ? "1" : "0");
-}
-
 const SETTINGS_EXPANDED_KEY = "pwi:settingsExpanded";
 
 /** Whether settings with a details panel (Chat fade) start expanded. On by default. */
@@ -349,76 +311,6 @@ export function applyChatFade(fade: ChatFade): void {
 		stops.push(`rgb(0 0 0 / ${a.toFixed(3)}) calc(100% - ${(0.75 + (1 - u) * fade.length).toFixed(3)}rem)`);
 	}
 	document.documentElement.style.setProperty("--chat-fade", `linear-gradient(to bottom, ${stops.join(", ")})`);
-}
-
-/**
- * How much of a tool call the transcript shows.
- *
- * `phases` is the saved default: model rounds contain requesting, thinking,
- * receiving and doing steps, with reasoning and tool cards inside their folds. `live` is the old behaviour:
- * a call with no result yet is
- * expanded so progress is visible without clicking, and collapses once it
- * settles. It is also the noisiest, which is the reason this setting exists —
- * a long run of edits and reads turns the pane into a wall of arguments while
- * you are waiting for prose.
- *
- * `grouped` goes one step further than collapsing each call: a whole run of
- * consecutive calls becomes ONE line saying what the run did. That is the
- * shape of an agent turn — a dozen reads and edits between two paragraphs of
- * prose — and per-call lines still bury the prose. The count of failed calls
- * stays on the collapsed line, because grouping may hide detail and never
- * that something went wrong.
- *
- * `answer` takes that to its conclusion: a whole turn — every call, every
- * thought, every intermediate "now let me check X" — is ONE line, and only
- * the answer the turn ended on is prose. That is how a chat assistant reads,
- * and for a long agent turn it is the difference between a page of work with
- * an answer somewhere in it and an answer with the work folded behind one
- * line. Still one click from the whole run, and a failure still shows on the
- * folded line.
- */
-export const TOOL_MODES = [
-	{
-		id: "phases",
-		label: "Rounds",
-		hint: "Model rounds with Requesting, Thinking, Receiving and Doing steps.",
-	},
-	{
-		id: "live",
-		label: "Expand while running",
-		hint: "Collapses once the call finishes.",
-	},
-	{
-		id: "collapsed",
-		label: "Always collapsed",
-		hint: "One line per call; click to open.",
-	},
-	{
-		id: "grouped",
-		label: "Grouped",
-		hint: "One line per run of calls; click to list them.",
-	},
-	{
-		id: "answer",
-		label: "Answer only",
-		hint: "One line per turn; only the final answer stays as prose.",
-	},
-	{
-		id: "hidden",
-		label: "Hidden",
-		hint: "The status line still names the running tool.",
-	},
-] as const;
-
-export type ToolMode = (typeof TOOL_MODES)[number]["id"];
-
-export function readToolMode(): ToolMode {
-	const stored = readStored(TOOL_KEY);
-	return TOOL_MODES.some((m) => m.id === stored) ? (stored as ToolMode) : "phases";
-}
-
-export function writeToolMode(mode: ToolMode): void {
-	writeStored(TOOL_KEY, mode);
 }
 
 /** How your own long messages show in the transcript. */

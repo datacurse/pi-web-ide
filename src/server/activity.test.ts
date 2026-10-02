@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test, type TestContext } from "node:test";
-import { ACTIVITY_STATUS, activityTotals, parseActivity, type TurnActivity } from "../shared/activity.js";
+import { ACTIVITY_STATUS, parseActivity, type TurnActivity } from "../shared/activity.js";
 import activityExtension from "./activity-extension.js";
 import { ActivityTracker } from "./activity.js";
 
@@ -46,7 +46,10 @@ test("request, first response, first output and tool phases retain their measure
 	assert.equal(turn.end, 13000);
 	assert.equal(turn.tools[0].label, "bash: pnpm typecheck");
 	assert.equal(turn.tools[0].end! - turn.tools[0].start, 2000);
-	const totals = activityTotals(turn, 999999);
+	const totals = turn.steps.reduce<Record<string, number>>((sum, step) => {
+		sum[step.kind] = (sum[step.kind] ?? 0) + step.end! - step.start;
+		return sum;
+	}, {});
 	assert.equal(totals.request, 760);
 	assert.equal(totals.response, 4500);
 	assert.equal(totals.tools, 2000);
@@ -64,7 +67,7 @@ test("parallel tool timings overlap without inflating wall-clock totals", (t) =>
 	tracker.record({ type: "tool_execution_end", toolCallId: "b", isError: true }, 4500);
 	tracker.finish(5000);
 	const turn = tracker.history[0];
-	assert.equal(activityTotals(turn, 5000).tools, 3500);
+	assert.equal(turn.steps.filter((step) => step.kind === "tools").reduce((ms, step) => ms + step.end! - step.start, 0), 3500);
 	assert.deepEqual(turn.tools.map((tool) => tool.end! - tool.start), [2000, 3000]);
 	assert.equal(turn.tools[1].isError, true);
 });
@@ -83,7 +86,7 @@ test("retry, compaction and user waits are explicit, and an unrelated tool end c
 	tracker.resumeInput();
 	assert.equal(tracker.history[0].steps.at(-1)?.kind, "processing");
 	tracker.finish(9000);
-	assert.equal(activityTotals(tracker.history[0], 9000).input, 2000);
+	assert.equal(tracker.history[0].steps.filter((step) => step.kind === "input").reduce((ms, step) => ms + step.end! - step.start, 0), 2000);
 });
 
 test("activity heartbeats are throttled, malformed telemetry is ignored, and rewind discards old timings", (t) => {

@@ -30,16 +30,12 @@ import {
 	paletteVars,
 	THEMES,
 	VSCODE_THEMES,
-	THINKING_MODES,
-	TOOL_MODES,
 	USER_MODES,
 	FOOTER_LAYOUTS,
 	ASK_MODES,
 	type AskMode,
 	type Language,
 	type ThemeId,
-	type ThinkingMode,
-	type ToolMode,
 	type UserMode,
 } from "./prefs.js";
 import { t } from "./i18n.js";
@@ -356,12 +352,6 @@ export function Settings({
 	onBrowseThemes,
 	language,
 	onLanguage,
-	thinkingMode,
-	onThinkingMode,
-	toolMode,
-	onToolMode,
-	workExpanded,
-	onWorkExpanded,
 	userMode,
 	onUserMode,
 	askMode,
@@ -386,12 +376,6 @@ export function Settings({
 	onBrowseThemes: () => void;
 	language: Language;
 	onLanguage: (language: Language) => void;
-	thinkingMode: ThinkingMode;
-	onThinkingMode: (mode: ThinkingMode) => void;
-	toolMode: ToolMode;
-	onToolMode: (mode: ToolMode) => void;
-	workExpanded: boolean;
-	onWorkExpanded: (on: boolean) => void;
 	userMode: UserMode;
 	onUserMode: (mode: UserMode) => void;
 	askMode: AskMode;
@@ -547,78 +531,6 @@ export function Settings({
 						</OptionRow>
 					))}
 				</div>
-			),
-		},
-		{
-			category: "transcript",
-			label: t("Reasoning"),
-			text: `reasoning thinking ${THINKING_MODES.map((m) => `${t(m.label)} ${t(m.hint)}`).join(" ")}`,
-			node: (
-				<div role="radiogroup" aria-labelledby="thinking-mode-label">
-					<div id="thinking-mode-label" className="px-2 pt-1 pb-1 text-ui text-neutral-300">
-						{t("Reasoning")}
-					</div>
-					{THINKING_MODES.map((m) => (
-						<OptionRow key={m.id} selected={m.id === thinkingMode}>
-							<input
-								type="radio"
-								name="thinkingMode"
-								value={m.id}
-								checked={m.id === thinkingMode}
-								onChange={() => onThinkingMode(m.id)}
-								className="size-3.5 shrink-0 accent-amber-400"
-							/>
-							<span className="flex-1">
-								{t(m.label)}
-								<span className="block text-meta text-neutral-500">{t(m.hint)}</span>
-							</span>
-						</OptionRow>
-					))}
-				</div>
-			),
-		},
-		{
-			category: "transcript",
-			label: t("Tool calls"),
-			text: `tools collapse expand ${TOOL_MODES.map((m) => `${t(m.label)} ${t(m.hint)}`).join(" ")}`,
-			node: (
-				// Radios, not a second checkbox: "collapsed" and "hidden" are
-				// different answers to one question.
-				<div role="radiogroup" aria-labelledby="tool-mode-label">
-					<div id="tool-mode-label" className="px-2 pt-1 pb-1 text-ui text-neutral-300">
-						{t("Tool calls")}
-					</div>
-					{TOOL_MODES.map((m) => (
-						<OptionRow key={m.id} selected={m.id === toolMode}>
-							<input
-								type="radio"
-								name="toolMode"
-								value={m.id}
-								checked={m.id === toolMode}
-								onChange={() => onToolMode(m.id)}
-								className="size-3.5 shrink-0 accent-amber-400"
-							/>
-							<span className="flex-1">
-								{t(m.label)}
-								<span className="block text-meta text-neutral-500">{t(m.hint)}</span>
-							</span>
-						</OptionRow>
-					))}
-				</div>
-			),
-		},
-		{
-			category: "transcript",
-			label: t("Expand work by default"),
-			text: `rounds tools output unfolded ${t("Rounds and tool details start open; individual rows can still be collapsed.")}`,
-			node: (
-				<OptionRow selected={workExpanded}>
-					<input type="checkbox" checked={workExpanded} onChange={(e) => onWorkExpanded(e.target.checked)} className="size-4 shrink-0 accent-amber-400" />
-					<span className="flex-1">
-						{t("Expand work by default")}
-						<span className="block text-meta text-neutral-500">{t("Rounds and tool details start open; individual rows can still be collapsed.")}</span>
-					</span>
-				</OptionRow>
 			),
 		},
 		{

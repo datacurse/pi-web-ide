@@ -4,7 +4,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { RU } from "./i18n.ru.js";
 import { ATTENTION_UI } from "./attention.js";
 import { SHORTCUTS } from "./shortcuts.js";
-import { ASK_MODES, SESSION_SORTS, THINKING_MODES, TOOL_MODES, USER_MODES } from "./prefs.js";
+import { ASK_MODES, SESSION_SORTS, USER_MODES } from "./prefs.js";
 
 const STR = String.raw`"(?:[^"\\]|\\.)*"`;
 
@@ -20,10 +20,8 @@ function keys(): Set<string> {
 			out.add(JSON.parse(m[1]));
 	}
 	// Tables translated where they render.
-	for (const m of TOOL_MODES) out.add(m.label).add(m.hint);
 	for (const m of USER_MODES) out.add(m.label).add(m.hint);
 	for (const m of ASK_MODES) out.add(m.label).add(m.hint);
-	for (const m of THINKING_MODES) out.add(m.label).add(m.hint);
 	for (const s of SESSION_SORTS) out.add(s.label);
 	for (const s of SHORTCUTS) out.add(s.label);
 	for (const a of Object.values(ATTENTION_UI)) out.add(a.label);

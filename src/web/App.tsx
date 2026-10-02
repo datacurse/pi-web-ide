@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { X } from "@phosphor-icons/react";
 import { useSession } from "./useSession.js";
+import { startPointerDrag } from "./pointerDrag.js";
 import { sessionPrompts } from "./sessionName.js";
 import { EditorColumn } from "./EditorColumn.js";
 import {
@@ -78,7 +79,6 @@ import {
 	readSeenSessions,
 	readSessionSort,
 	readLatestPrompt,
-	readThinkingMode,
 	readTerminalLayout,
 	readTerminalWidth,
 	readListWidth,
@@ -88,9 +88,6 @@ import {
 	writeListWidth,
 	readEditorTheme,
 	readTheme,
-	readToolMode,
-	readWorkExpanded,
-	writeWorkExpanded,
 	readUserMode,
 	readAskMode,
 	TERMINAL_MAX_PERCENT,
@@ -104,17 +101,13 @@ import {
 	writeSeenSessions,
 	writeSessionSort,
 	writeLatestPrompt,
-	writeThinkingMode,
 	writeTerminalLayout,
 	writeTerminalWidth,
-	writeToolMode,
 	writeUserMode,
 	writeAskMode,
 	type Panel,
 	type SessionSort,
 	type ThemeId,
-	type ThinkingMode,
-	type ToolMode,
 	type UserMode,
 	type AskMode,
 } from "./prefs.js";
@@ -237,9 +230,6 @@ export default function App() {
 	const [theme, setTheme] = useState<ThemeId>(readTheme);
 	const [editorTheme, setEditorTheme] = useState(readEditorTheme);
 	const [language, setLanguageState] = useState<Language>(getLanguage);
-	const [thinkingMode, setThinkingMode] = useState<ThinkingMode>(readThinkingMode);
-	const [toolMode, setToolMode] = useState<ToolMode>(readToolMode);
-	const [workExpanded, setWorkExpanded] = useState(readWorkExpanded);
 	const [userMode, setUserMode] = useState<UserMode>(readUserMode);
 	const [askMode, setAskMode] = useState<AskMode>(readAskMode);
 	const [notify, setNotify] = useState(readNotify);
@@ -270,16 +260,6 @@ export default function App() {
 	const changeLanguage = useCallback((lang: Language) => {
 		setLanguage(lang);
 		setLanguageState(lang);
-	}, []);
-
-	const changeThinkingMode = useCallback((mode: ThinkingMode) => {
-		setThinkingMode(mode);
-		writeThinkingMode(mode);
-	}, []);
-
-	const changeToolMode = useCallback((mode: ToolMode) => {
-		setToolMode(mode);
-		writeToolMode(mode);
 	}, []);
 
 	const changeUserMode = useCallback((mode: UserMode) => {
@@ -354,24 +334,11 @@ export default function App() {
 			if (event.button !== 0) return;
 			const area = editorArea.current?.getBoundingClientRect();
 			if (!area || area.height === 0) return;
-			const divider = event.currentTarget;
-			divider.setPointerCapture(event.pointerId);
-			event.preventDefault();
 			let latest = dockHeight;
-			const move = (moved: PointerEvent) => {
-				// The dock is at the bottom, so it grows up from the area's bottom edge.
+			startPointerDrag(event, (moved) => {
 				latest = ((area.bottom - moved.clientY) / area.height) * 100;
 				resizeDock(latest, false);
-			};
-			const end = () => {
-				divider.removeEventListener("pointermove", move);
-				divider.removeEventListener("pointerup", end);
-				divider.removeEventListener("pointercancel", end);
-				resizeDock(latest, true);
-			};
-			divider.addEventListener("pointermove", move);
-			divider.addEventListener("pointerup", end);
-			divider.addEventListener("pointercancel", end);
+			}, () => resizeDock(latest, true));
 		},
 		[resizeDock, dockHeight],
 	);
@@ -502,26 +469,11 @@ export default function App() {
 			const divider = event.currentTarget;
 			// The panel's left edge, not the row's: the activity bar sits between them.
 			const left = divider.previousElementSibling?.getBoundingClientRect().left ?? row.left;
-			divider.setPointerCapture(event.pointerId);
-			// Or the browser starts a text selection across both panes instead.
-			event.preventDefault();
 			let latest = panelWidth;
-			const move = (moved: PointerEvent) => {
-				// The panel is on the LEFT, so its width grows from its own left
-				// edge. This read `row.right - clientX` when the terminal was the
-				// only thing in this track and sat on the right.
+			startPointerDrag(event, (moved) => {
 				latest = ((moved.clientX - left) / row.width) * 100;
 				resizePanel(latest);
-			};
-			const end = () => {
-				divider.removeEventListener("pointermove", move);
-				divider.removeEventListener("pointerup", end);
-				divider.removeEventListener("pointercancel", end);
-				writeTerminalWidth(clampPanel(latest));
-			};
-			divider.addEventListener("pointermove", move);
-			divider.addEventListener("pointerup", end);
-			divider.addEventListener("pointercancel", end);
+			}, () => writeTerminalWidth(clampPanel(latest)));
 		},
 		[resizePanel, panelWidth],
 	);
@@ -561,23 +513,11 @@ export default function App() {
 		if (event.button !== 0) return;
 		const right = splitRow.current?.getBoundingClientRect().right;
 		if (right === undefined) return;
-		const divider = event.currentTarget;
-		divider.setPointerCapture(event.pointerId);
-		event.preventDefault();
-		let latest = 0;
-		const move = (moved: PointerEvent) => {
+		let latest: number | undefined;
+		startPointerDrag(event, (moved) => {
 			latest = clampListWidth(right - moved.clientX);
 			setListWidth(latest);
-		};
-		const end = () => {
-			divider.removeEventListener("pointermove", move);
-			divider.removeEventListener("pointerup", end);
-			divider.removeEventListener("pointercancel", end);
-			if (latest) writeListWidth(latest);
-		};
-		divider.addEventListener("pointermove", move);
-		divider.addEventListener("pointerup", end);
-		divider.addEventListener("pointercancel", end);
+		}, () => { if (latest !== undefined) writeListWidth(latest); });
 	}, []);
 
 	const listDividerKeys = useCallback(
@@ -1657,11 +1597,6 @@ export default function App() {
 			keys: shortcutKeys("view.terminal"),
 			run: toggleTerminal,
 		},
-		{
-			id: "view.thinking",
-			label: thinkingMode === "hidden" ? t("Show Thinking") : t("Hide Thinking"),
-			run: () => changeThinkingMode(thinkingMode === "hidden" ? "shown" : "hidden"),
-		},
 		{ id: "page.fleet", label: t("Open Fleet"), run: () => setPage("fleet") },
 		{ id: "page.stats", label: t("Open Stats"), run: () => setPage("stats") },
 		{ id: "page.packages", label: t("Open Packages"), run: () => setPage("packages") },
@@ -1711,12 +1646,6 @@ export default function App() {
 				onBrowseThemes={() => setPage("themes")}
 				language={language}
 				onLanguage={changeLanguage}
-				thinkingMode={thinkingMode}
-				onThinkingMode={changeThinkingMode}
-				toolMode={toolMode}
-				onToolMode={changeToolMode}
-				workExpanded={workExpanded}
-				onWorkExpanded={(on) => { setWorkExpanded(on); writeWorkExpanded(on); }}
 				userMode={userMode}
 				onUserMode={changeUserMode}
 				askMode={askMode}
@@ -1748,9 +1677,6 @@ export default function App() {
 			partial={s.partial}
 			busy={s.busy}
 			opening={s.opening}
-			thinkingMode={thinkingMode}
-			toolMode={toolMode}
-			workExpanded={workExpanded}
 			userMode={userMode}
 			askMode={askMode}
 			onAskMode={changeAskMode}

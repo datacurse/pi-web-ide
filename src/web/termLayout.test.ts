@@ -4,7 +4,6 @@ import {
 	addTab,
 	allTerminals,
 	EMPTY_LAYOUT,
-	focusedTerminal,
 	focusTerminal,
 	MIN_SPLIT_PERCENT,
 	parseLayout,
@@ -33,7 +32,7 @@ assert.deepEqual(layout, {
 layout = splitActive(layout, "b");
 layout = splitActive(focusTerminal(layout, "a"), "c");
 assert.deepEqual(layout.tabs[0].terminals, ["a", "c", "b"]);
-assert.equal(focusedTerminal(layout), "c");
+assert.equal(layout.tabs[layout.active].focus, "c");
 // Shares stay even and complete: a missing percent is a visible seam.
 assert.equal(sum(layout.tabs[0].sizes), 100);
 
@@ -50,9 +49,9 @@ assert.deepEqual(allTerminals(layout), ["a", "c", "b", "d"]);
 layout = focusTerminal(layout, "b");
 assert.equal(layout.active, 0);
 layout = selectTab(layout, 1);
-assert.equal(focusedTerminal(layout), "d");
+assert.equal(layout.tabs[layout.active].focus, "d");
 layout = selectTab(layout, 0);
-assert.equal(focusedTerminal(layout), "b");
+assert.equal(layout.tabs[layout.active].focus, "b");
 
 // Direction is per tab, because one tab can want side-by-side and another
 // stacked.
@@ -84,7 +83,7 @@ assert.equal(sum(layout.tabs[0].sizes), 100);
 layout = focusTerminal(layout, "c");
 layout = removeTerminal(layout, "c");
 assert.deepEqual(layout.tabs[0].terminals, ["a", "b"]);
-assert.equal(focusedTerminal(layout), "b");
+assert.equal(layout.tabs[layout.active].focus, "b");
 assert.equal(sum(layout.tabs[0].sizes), 100);
 
 /*
@@ -96,7 +95,7 @@ layout = selectTab(layout, 1);
 layout = removeTerminal(layout, "d");
 assert.equal(layout.tabs.length, 1);
 assert.equal(layout.active, 0);
-assert.equal(focusedTerminal(layout), "b");
+assert.equal(layout.tabs[layout.active].focus, "b");
 
 // Removing something that is not there is not an error and not a change.
 assert.equal(removeTerminal(layout, "nope"), layout);

@@ -11,7 +11,8 @@
 		"build": "vite build",
 		"start": "node --import tsx src/server/index.ts",
 		"typecheck": "tsc --noEmit && sh scripts/check-ui.sh && sh scripts/check-api.sh",
-		"test": "node --test scripts/dev.test.mjs && timeout --kill-after=5s 30s node --import tsx --test --test-timeout=10000 src/**/*.test.ts"
+		"test": "node --test scripts/dev.test.mjs && timeout --kill-after=5s 30s node --import tsx --test --test-timeout=10000 src/**/*.test.ts",
+		"deadcode": "knip --no-config-hints && knip --production --no-config-hints"
 	},
 	"dependencies": {
 		"@codemirror/autocomplete": "^6.20.3",
@@ -46,6 +47,7 @@
 		"@types/ws": "^8.18.1",
 		"@vitejs/plugin-react": "4.3.4",
 		"concurrently": "9.1.0",
+		"knip": "6.39.0",
 		"tailwindcss": "4.3.3",
 		"tsx": "4.23.15",
 		"typescript": "5.7.2",

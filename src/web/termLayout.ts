@@ -67,11 +67,6 @@ export function activeTab(layout: TermLayout): TermTab | undefined {
 	return layout.tabs[layout.active];
 }
 
-/** The pane the keyboard is in, or null when there is no terminal at all. */
-export function focusedTerminal(layout: TermLayout): string | null {
-	return activeTab(layout)?.focus ?? null;
-}
-
 /** Every terminal the layout references, across all tabs. */
 export function allTerminals(layout: TermLayout): string[] {
 	return layout.tabs.flatMap((t) => t.terminals);

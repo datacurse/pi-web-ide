@@ -9,6 +9,7 @@ const session = (path: string, lastActive: string, extra: Partial<PiSessionInfo>
 	created: lastActive,
 	lastActive,
 	messageCount: 1,
+	lastAsked: "a prompt",
 	firstMessage: "",
 	...extra,
 });
@@ -16,7 +17,7 @@ const session = (path: string, lastActive: string, extra: Partial<PiSessionInfo>
 const seen = { baseline: "2025-01-01T00:00:00.000Z", seen: { "/b": "2025-01-03T00:00:00.000Z" } };
 
 // A just-created empty session is not an unread reply, even if its file is newer than the baseline.
-assert.equal(attentionOf(session("/empty", "2025-01-02T00:00:00.000Z", { messageCount: 0 }), seen), null);
+assert.equal(attentionOf(session("/empty", "2025-01-02T00:00:00.000Z", { messageCount: 0, lastAsked: undefined }), seen), null);
 // Older than the baseline: never flagged, so an upgrade does not light up history.
 assert.equal(attentionOf(session("/a", "2024-12-31T00:00:00.000Z"), seen), null);
 // Newer than the baseline and never viewed: a reply waiting.

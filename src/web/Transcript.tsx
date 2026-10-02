@@ -1,23 +1,19 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import { ArrowsInLineVertical, ArrowsOutLineVertical, CaretDown, CaretRight, CaretUp, Check, Copy, GitFork, PaperPlaneTilt, PencilSimple, X, BookOpen, NotePencil, TerminalWindow, MagnifyingGlass, Wrench } from "@phosphor-icons/react";
-import { AnsiHtml } from "fancy-ansi/react";
-import { hasAnsi, stripAnsi } from "fancy-ansi";
-import type { ContextBreakdown, ContextItem, ContextPart, PiBlock, PiImage, PiMessage, PiNotice, PiTool } from "../shared/types.js";
+import { ArrowsInLineVertical, ArrowsOutLineVertical, CaretDown, CaretRight, CaretUp, Check, Copy, GitFork, PaperPlaneTilt, PencilSimple, X } from "@phosphor-icons/react";
+import type { ContextBreakdown, ContextItem, ContextPart, PiBlock, PiImage, PiNotice } from "../shared/types.js";
 import { api, unwrap } from "./api.js";
-import { Button, IconButton, ListRow, sectionLabel } from "./ui.js";
-import { CodeBox, MarkdownText } from "./Markdown.js";
+import { Button, IconButton, ListRow } from "./ui.js";
 import { timeAgo } from "./SessionList.js";
 import { Attachments, Thumb } from "./Attachments.js";
 import { t, plural, locale } from "./i18n.js";
-import { activityDuration, type TurnActivity } from "../shared/activity.js";
-import { ActivityPanel } from "./Activity.js";
 import type { UserMode } from "./prefs.js";
 import { PastedTexts } from "./PastedTexts.js";
-import { ToolArguments } from "./ToolArguments.js";
+import { RawBlocks } from "./RawOutput.js";
 import { addPastedText, isLargePaste, joinPastedText, splitPastedText } from "./pastedText.js";
 
 /** Braille spinner, same visual language as the TUI. */
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+
 const STAR_FRAMES = ["·", "✢", "∗", "✶", "✻", "✽", "✻", "✶", "∗", "✢"];
 
 function useSpinner(active: boolean, frames = SPINNER_FRAMES, ms = 80): string {
@@ -28,425 +24,6 @@ function useSpinner(active: boolean, frames = SPINNER_FRAMES, ms = 80): string {
 		return () => clearInterval(id);
 	}, [active, frames, ms]);
 	return frames[i % frames.length];
-}
-
-/**
- * Command output rendered as-is (`ls`, `git`, most test runners) carries
- * real ANSI SGR codes, not markdown. Rendering those raw would show the
- * literal `\x1b[32m` escape noise instead of color, so this is the one
- * place in the transcript that goes through an ANSI-to-HTML converter
- * rather than plain `whitespace-pre-wrap` text — and only when the string
- * actually contains escape codes, to avoid the extra DOM work otherwise.
- */
-function AnsiOutput({ text, className }: { text: string; className?: string }) {
-	const lines = text.split("\n");
-	if (lines.some((line) => line.startsWith("diff --git ")) && lines.some((line) => line.startsWith("@@ "))) {
-		return <div className={`font-mono ${className ?? ""}`}>
-			{lines.map((line, index) => {
-				const tone = line.startsWith("+") && !line.startsWith("+++") ? "text-green-400" :
-					line.startsWith("-") && !line.startsWith("---") ? "text-red-400" :
-					line.startsWith("@@ ") || line.startsWith("diff --git ") || line.startsWith("index ") ||
-					line.startsWith("--- ") || line.startsWith("+++ ") ? "text-neutral-500" : "text-neutral-300";
-				return <pre key={index} className={`whitespace-pre-wrap wrap-anywhere ${tone}`}>{line || " "}</pre>;
-			})}
-		</div>;
-	}
-	if (!hasAnsi(text)) return <pre className={className}>{text}</pre>;
-	return <AnsiHtml className={`${className ?? ""} whitespace-pre-wrap`} text={text} />;
-}
-
-/**
- * A one-line, ANSI-stripped preview of the result shown next to a collapsed
- * tool call, so scanning a long transcript of settled tool calls doesn't
- * require opening every single one to see what happened.
- */
-/** Remove transcript anchors and common indentation from read output for code display. */
-function formatReadOutput(result: string): string {
-	const lines = result.replace(/^[A-Za-z0-9]{4}│/gm, "").split("\n");
-	const indents = lines.filter((line) => line.trim()).map((line) => line.match(/^[ \t]*/)?.[0].length ?? 0);
-	const indent = indents.length ? Math.min(...indents) : 0;
-	return lines.map((line) => line.slice(Math.min(indent, line.match(/^[ \t]*/)?.[0].length ?? 0))).join("\n");
-}
-
-function resultPreview(result: string): string {
-	return stripAnsi(result).split("\n", 1)[0]?.trim() ?? "";
-}
-
-function codemodeOutputs(result: string): string[] {
-	const outputs = result.split("\n").flatMap((line) => {
-		try {
-			const value: unknown = JSON.parse(line);
-			return value && typeof value === "object" && "output" in value && typeof value.output === "string" ? [value.output] : [];
-		} catch {
-			return [];
-		}
-	});
-	if (outputs.length > 0) return outputs;
-	const cleaned = result.split("\n")
-		.filter((line) => !/^Script completed$|^Wall time .+$|^Output:$/.test(line))
-		.join("\n").trim();
-	return cleaned ? [cleaned] : [];
-}
-
-/**
- * Tool calls render as a collapsed one-liner; details are behind a click.
- *
- * `autoOpen` is the "Expand while running" setting: a call with no result yet
- * is IN FLIGHT, and opening it shows progress without a click, mirroring the
- * TUI. Unless expanded work is requested, settled calls start collapsed — the
- * one-liner carries the name, the outcome and a preview of the result, which
- * is what scanning a finished transcript needs.
- */
-export function ToolIcon({ name }: { name: string }) {
-	switch (name) {
-		case "read": case "read_symbol": case "read_enclosing": return <BookOpen size={14} className="shrink-0 text-blue-400" aria-hidden />;
-		case "write": case "edit": case "ast_grep_replace": return <NotePencil size={14} className="shrink-0 text-amber-400" aria-hidden />;
-		case "bash": case "powershell": return <TerminalWindow size={14} className="shrink-0 text-neutral-400" aria-hidden />;
-		case "grep": case "ffgrep": case "find": case "symbol_search": return <MagnifyingGlass size={14} className="shrink-0 text-neutral-400" aria-hidden />;
-		default: return <Wrench size={14} className="shrink-0 text-neutral-400" aria-hidden />;
-	}
-}
-
-export function Tool({
-	name,
-	isError,
-	result,
-	args,
-	autoOpen,
-	ms,
-	children,
-	childrenIncomplete,
-	nested = false,
-	running: inFlight,
-	interrupted,
-	outputUnavailable,
-	diff,
-	startedAt,
-	expandedByDefault = false,
-}: {
-	name: string;
-	isError?: boolean;
-	result?: string;
-	args?: unknown;
-	autoOpen: boolean;
-	ms?: number;
-	children?: PiTool[];
-	childrenIncomplete?: boolean;
-	nested?: boolean;
-	running?: boolean;
-	interrupted?: boolean;
-	outputUnavailable?: boolean;
-	diff?: string;
-	startedAt?: number;
-	expandedByDefault?: boolean;
-}) {
-	const running = inFlight ?? result === undefined;
-	const nestedShellOutput = nested && name === "bash" && result !== undefined && result !== "";
-	const [open, setOpen] = useState(expandedByDefault || (autoOpen && running));
-	/*
-	 * Keep existing calls in sync with the expand setting, while settled calls
-	 * remain collapsed by default and can always be toggled from their row.
-	 */
-	useEffect(() => setOpen(expandedByDefault || (autoOpen && running)), [autoOpen, expandedByDefault]);
-	const spinner = useSpinner(running);
-	const elapsed = ms ?? (running && startedAt !== undefined ? Math.max(0, Date.now() - startedAt) : undefined);
-	const target = args && typeof args === "object" ? (args as { path?: unknown; command?: unknown }).path ?? (args as { command?: unknown }).command : undefined;
-	const codeLanguage = (name === "read" || name === "read_symbol" || name === "read_enclosing") && typeof target === "string" ? target.split(".").at(-1) : undefined;
-	const displayedResult = codeLanguage && result ? formatReadOutput(result) : result;
-	const preview = name !== "codemode" ? typeof target === "string" ? target : !open && result ? resultPreview(result) : "" : "";
-	const counts = new Map<string, number>();
-	let failures = 0;
-	const count = (calls: PiTool[]) => {
-		for (const call of calls) {
-			counts.set(call.name, (counts.get(call.name) ?? 0) + 1);
-			if (call.isError) failures++;
-			count(call.children ?? []);
-		}
-	};
-	count(children ?? []);
-	const summary = [...counts].map(([tool, n]) => tool + " × " + n).join(" · ");
-	const batchOutputs = name === "codemode" && typeof result === "string" ? codemodeOutputs(result) : [];
-	const outputMatchesCalls = children?.length === batchOutputs.length;
-	if (name === "codemode") return <div className={nested ? "my-1" : "chat-wide my-3"}>
-		{children?.map((child, index) => {
-			const output = outputMatchesCalls ? batchOutputs[index] : undefined;
-			return <Tool key={child.id} {...child} {...(output !== undefined ? { result: output, outputUnavailable: false } : {})} nested autoOpen={false} expandedByDefault={expandedByDefault} ms={child.durationMs} />;
-		})}
-		{childrenIncomplete && <p className="mt-1 text-meta text-amber-400">{t("Some nested calls were not retained")}</p>}
-		{!children?.length && (isError || interrupted) && <p className="text-meta text-red-400">{isError ? t("failed") : t("Interrupted")}</p>}
-	</div>;
-	return (
-		<div className={nested ? "my-1" : "chat-wide my-3"}>
-			<button
-				data-custom="transcript disclosure"
-				aria-expanded={open}
-				onClick={() => setOpen((o) => !o)}
-				className={`flex w-full items-center gap-2 whitespace-nowrap chat-code font-mono ${isError ? "text-red-400" : running ? "text-amber-400" : "text-neutral-500"} hover:text-neutral-300`}
-			>
-{!running && !interrupted && !isError && <Check size={11} weight="bold" className="shrink-0 text-green-400" />}
-				<ToolIcon name={name} />
-				{nested && name === "bash" && typeof target === "string" ? (
-					<span className="min-w-0 flex-1 fade-end text-left text-neutral-300"><span className="text-amber-400">$</span> {target}</span>
-				) : (
-					<>
-						<span className="min-w-0 max-w-1/2 fade-end" title={name}>{name}</span>
-						{preview && <span className="fade-end min-w-0 flex-1 text-left font-normal text-neutral-400">{preview}</span>}
-					</>
-				)}
-				{summary && <span className="fade-end ml-1 min-w-0 text-neutral-500">{summary}</span>}
-				{failures > 0 && <span className="shrink-0 text-red-400">{t("{n} failed", { n: failures })}</span>}
-				{childrenIncomplete && <span className="shrink-0 text-amber-400">{t("Partial batch")}</span>}
-				{elapsed !== undefined && <span className="ml-auto shrink-0 text-meta tabular-nums">{activityDuration(elapsed)}</span>}
-				{running ? (
-					<span className="shrink-0">{spinner}</span>
-				) : interrupted ? (
-					<span>{t("Interrupted")}</span>
-				) : isError ? (
-					<X size={11} weight="bold" className="shrink-0" />
-				) : (
-					null
-				)}
-			</button>
-			{open && children && children.length > 0 && (
-				<div className="ml-3 border-l border-neutral-800 pl-3">
-					{children.map((child) => <Tool key={child.id} {...child} nested autoOpen={false} expandedByDefault={expandedByDefault} ms={child.durationMs} />)}
-				</div>
-			)}
-			{open && childrenIncomplete && <p className="mt-1 text-meta text-amber-400">{t("Some nested calls were not retained")}</p>}
-			{open && name !== "codemode" && (nestedShellOutput ? (
-				<div className="chat-code mt-1 max-h-96 overflow-auto text-neutral-300"><AnsiOutput className="whitespace-pre-wrap wrap-anywhere pl-7" text={result} /></div>
-			) : (
-				<div className="chat-code mt-1 max-h-96 overflow-auto rounded-sm border border-neutral-800 bg-neutral-900 text-neutral-400">
-					{!(nested && name === "bash") && <ToolArguments name={name} args={args} diff={diff} />}
-					{outputUnavailable && !nested && <p className="border-t border-neutral-800 px-3 py-2 text-meta">{t("Nested output was not retained")}</p>}
-					{result !== undefined && result !== "" && (
-						<div className="border-t border-neutral-800 p-3">
-							{codeLanguage ? <CodeBox lang={codeLanguage} text={displayedResult ?? result} className="" /> : <AnsiOutput className="whitespace-pre-wrap wrap-anywhere" text={result} />}
-						</div>
-					)}
-				</div>
-			))}
-		</div>
-	);
-}
-
-type ToolBlock = Extract<PiBlock, { kind: "tool" }>;
-
-/** Phrases on a collapsed group line before the rest becomes "+N more". */
-const SUMMARY_PHRASES = 3;
-
-/**
- * How a run of calls reads once it is one line.
- *
- * pi's built-in tools, and nothing else: a tool absent from this table still
- * summarises — as `name ×3` — so an installed package can add one without
- * this going stale or, worse, wrong. Each entry takes the count and returns
- * the whole phrase, because English plurals are not a suffix: "searched 3
- * times" and "listed a directory" do not share a shape.
- */
-const TOOL_PHRASES: Record<string, (n: number) => string> = {
-	bash: (n) => plural(n, "ran a command", "ran {n} commands"),
-	powershell: (n) => plural(n, "ran a command", "ran {n} commands"),
-	read: (n) => plural(n, "read a file", "read {n} files"),
-	edit: (n) => plural(n, "edited a file", "edited {n} files"),
-	write: (n) => plural(n, "wrote a file", "wrote {n} files"),
-	grep: (n) => plural(n, "grepped", "grepped {n} times"),
-	find: (n) => plural(n, "found files", "found files {n} times"),
-	ls: (n) => plural(n, "listed a directory", "listed {n} directories"),
-};
-
-/**
- * "Ran 3 commands, read 2 files, edited a file". Tool names in call order.
- *
- * Capped, because a run of forty calls across eight tools is a sentence
- * nobody reads and two wrapped lines where the point was one: past three
- * phrases the rest is a count, and expanding shows the truth.
- */
-function summarize(calls: ToolBlock[]): string {
-	const counts = new Map<string, number>();
-	for (const c of calls) counts.set(c.name, (counts.get(c.name) ?? 0) + 1);
-	const phrases = [...counts].map(
-		([name, n]) => TOOL_PHRASES[name]?.(n) ?? (n === 1 ? name : `${name} ×${n}`),
-	);
-	const shown = phrases.slice(0, SUMMARY_PHRASES);
-	if (phrases.length > shown.length) shown.push(t("+{n} more", { n: phrases.length - shown.length }));
-	const text = shown.join(", ");
-	return text.charAt(0).toUpperCase() + text.slice(1);
-}
-
-/**
- * A fold of steps as ONE line — the "Grouped" and "Answer only" tool modes.
- *
- * Collapsed, it says what the fold did and how it went; expanding shows it in
- * order, each call still openable for its arguments and output.
- *
- * Reasoning interleaved with the calls is part of the work and collapses with
- * it, even with "Show reasoning" on: with a thought between every two calls,
- * a group that broke on reasoning would be a group of one, which is the wall
- * of steps this mode exists to fold away. In "Grouped" prose is what ends a
- * fold, because prose is the thing the reader came for; in "Answer only"
- * only the turn's LAST prose is that thing, so intermediate paragraphs fold
- * in too — and then the line has to stay honest about them, hence the step
- * count for a fold that ran no tools at all.
- *
- * Failures are counted on the collapsed line: a group may hide detail, never
- * the fact that something went wrong. Only the *badge* is red, though — one
- * failed call out of seventeen does not make the other sixteen failures, and
- * a whole line in red says it did.
- *
- * `streaming` is the in-flight fold: the group is the partial message, so it
- * is running even before its first call has started. Without it a fold of
- * pure reasoning reports itself finished the whole time the model is still
- * thinking.
- */
-export function ToolGroup({ blocks, streaming }: { blocks: PiBlock[]; streaming?: boolean }) {
-	const [open, setOpen] = useState(false);
-	const calls = blocks.filter((b): b is ToolBlock => b.kind === "tool");
-	const running = streaming === true || calls.some((c) => c.result === undefined);
-	const failed = calls.filter((c) => c.isError).length;
-	// A fold with no calls is reasoning — say so, rather than counting "steps"
-	// at a reader who cannot tell what a step was.
-	const thoughts = blocks.filter((b) => b.kind === "thinking").length;
-	const label =
-		calls.length > 0
-			? summarize(calls)
-			: thoughts > 0 && thoughts === blocks.length
-				? running
-					? t("Thinking")
-					: plural(thoughts, "Thought", "Thought {n} times")
-				: plural(blocks.length, "{n} step", "{n} steps");
-	return (
-		<div className="chat-wide my-3">
-			<button
-				type="button"
-				data-custom="transcript disclosure"
-				onClick={() => setOpen((o) => !o)}
-				className="flex max-w-full items-center gap-1 whitespace-nowrap chat-code font-mono text-neutral-500 hover:text-neutral-300"
-			>
-				{open ? <CaretDown size={11} className="shrink-0" /> : <CaretRight size={11} className="shrink-0" />}
-				<span className="fade-end min-w-0">{label}</span>
-				{/* No spinner while running: TurnStatus below already animates, and a
-				    second one on a line that joins and splits between messages
-				    flickered. */}
-				{running ? null : failed > 0 ? (
-					<span className="flex shrink-0 items-center gap-1 text-red-400">
-						<X size={11} weight="bold" className="shrink-0" />
-						{t("{n} failed", { n: failed })}
-					</span>
-				) : (
-					<Check size={11} weight="bold" className="shrink-0 text-green-400" />
-				)}
-			</button>
-			{open && (
-				<div className="chat-nested flow-trim mt-1 flow-root border-l border-neutral-800 pl-3">
-					{blocks.map((b, i) => (
-						<Block key={i} block={b} isUser={false} autoOpenTools={false} />
-					))}
-				</div>
-			)}
-		</div>
-	);
-}
-
-/**
- * `isUser` bypasses markdown entirely: user input is verbatim text the user
- * typed, never prose to render — an accidental `*foo*` or `# heading` in a
- * question should show up exactly as typed, not get reinterpreted.
- */
-export function Block({
-	block,
-	isUser,
-	autoOpenTools,
-	userMode = "clamped",
-	foldThinking = false,
-	toolMs,
-	expandedByDefault = false,
-}: {
-	block: PiBlock;
-	isUser: boolean;
-	autoOpenTools: boolean;
-	userMode?: UserMode;
-	foldThinking?: boolean;
-	toolMs?: number;
-	expandedByDefault?: boolean;
-}) {
-	if (block.kind === "text")
-		// No `chat-measure` on the user branch: the pill IS the column, and a
-		// second centred box inside it would indent the text off its own edge.
-		return isUser ? (
-			<UserText key={userMode} text={block.text} mode={userMode} />
-		) : (
-			<MarkdownText text={block.text} />
-		);
-	if (block.kind === "image")
-		return (
-			<img
-				src={`data:${block.mimeType};base64,${block.data}`}
-				alt={t("attachment")}
-				className="chat-wide my-3 max-h-80 rounded-sm border border-neutral-800"
-			/>
-		);
-	if (block.kind === "thinking")
-		return foldThinking ? (
-			<Thought text={block.text} />
-		) : (
-			<Reasoning text={block.text} />
-		);
-	return (
-		<Tool
-			name={block.name}
-			isError={block.isError}
-			result={block.result}
-			args={block.args}
-			ms={toolMs ?? block.durationMs}
-			children={block.children}
-			childrenIncomplete={block.childrenIncomplete}
-			running={block.running}
-			interrupted={block.interrupted}
-			outputUnavailable={block.outputUnavailable}
-			startedAt={block.startedAt}
-			autoOpen={autoOpenTools}
-			expandedByDefault={expandedByDefault}
-		/>
-	);
-}
-
-/**
- * Reasoning shown inline. Split into paragraphs so they are spaced like the
- * answer's (`my-3`), not by a raw blank line of the smaller reasoning text.
- */
-export function Reasoning({ text, className = "chat-measure my-3" }: { text: string; className?: string }) {
-	return (
-		<div className={`${className} chat-reasoning text-neutral-500 italic`}>
-			<MarkdownText text={text.trim()} />
-		</div>
-	);
-}
-
-/**
- * A reasoning block as one disclosure line (the "Folded" thinking setting).
- * Open while `streaming`, so you can watch what the model is working on; it
- * folds once the model moves on, and a click opens it again.
- */
-export function Thought({ text, streaming = false }: { text: string; streaming?: boolean }) {
-	const [open, setOpen] = useState(streaming);
-	useEffect(() => {
-		if (!streaming) setOpen(false);
-	}, [streaming]);
-	return (
-		<div className="chat-wide my-3">
-			<button
-				data-custom="transcript disclosure"
-				aria-expanded={open}
-				onClick={() => setOpen((o) => !o)}
-				className="flex items-center gap-1 chat-code font-mono text-neutral-500 hover:text-neutral-300"
-			>
-				{open ? <CaretDown size={11} /> : <CaretRight size={11} />}
-				{streaming ? t("Thinking") : t("Thought")}
-			</button>
-			{open && <Reasoning text={text} className="chat-nested mt-1 border-l border-neutral-800 pl-3" />}
-		</div>
-	);
 }
 
 /**
@@ -897,36 +474,10 @@ function Compacting() {
 	);
 }
 
-/**
- * When the running turn was asked: the first user message after the last
- * assistant message that ended a turn (one with no tool calls). Undefined when
- * that message is not in the transcript yet, e.g. a slash command that became
- * a turn.
- */
-export function turnStart(messages: PiMessage[]): number | undefined {
-	let start: number | undefined;
-	for (let i = messages.length - 1; i >= 0; i--) {
-		const m = messages[i];
-		if (m.role === "assistant" && !m.blocks.some((b) => b.kind === "tool")) break;
-		if (m.role === "user") start = m.timestamp;
-	}
-	return start;
-}
-
 /** 75000 -> "1m 15s". */
 function elapsed(ms: number): string {
 	const secs = Math.floor(ms / 1000);
 	return secs < 60 ? t("{s}s", { s: secs }) : t("{m}m {s}s", { m: Math.floor(secs / 60), s: secs % 60 });
-}
-
-/** What the bar under a turn's answer needs; see `rows` in Chat. */
-export interface Footer {
-	/** The answer's start timestamp: how the server finds it to fork. */
-	at: number;
-	endedAt?: number;
-	/** When the question was asked: the turn's duration runs from here. */
-	asked?: number;
-	activity?: TurnActivity;
 }
 
 /** Copy `text`; the icon swaps to a check for 1.2s. */
@@ -969,196 +520,12 @@ function UserFooter({ text, at, onEdit }: { text: string; at?: number; onEdit?: 
 }
 
 /**
- * Under the answer that ends a turn: copy it, fork a new session from it,
- * and how long the turn took (exact end time on hover).
- */
-function AnswerFooter({
-	footer,
-	text,
-	onFork,
-}: {
-	footer: Footer;
-	text: string;
-	onFork: (at: number) => Promise<void>;
-}) {
-	const [forking, setForking] = useState(false);
-	const end = footer.endedAt ?? footer.at;
-	const took = footer.endedAt && footer.asked ? footer.endedAt - footer.asked : 0;
-	const controls = <>
-		<CopyButton text={text} />
-		<IconButton
-			size="sm"
-			label={forking ? t("Forking…") : t("Fork from here")}
-			disabled={forking}
-			onClick={() => {
-				setForking(true);
-				void onFork(footer.at).finally(() => setForking(false));
-			}}
-		>
-			<GitFork size={14} />
-		</IconButton>
-		{!footer.activity && took >= 1000 && <span className="msg-footer-time ml-1 tabular-nums" title={new Date(end).toLocaleString(locale())}>{elapsed(took)}</span>}
-	</>;
-	return (
-		<div className="chat-measure mt-1 text-meta text-neutral-500">
-			{footer.activity ? <ActivityPanel activity={footer.activity} controls={controls} /> : <div className="flex items-center gap-1">{controls}</div>}
-		</div>
-	);
-}
-
-/**
  * The line between one turn and the next, above your prompt, across the whole
  * pane (outside the gutter). Kept but invisible above the first prompt, so its
  * spacing stays.
  */
 function TurnSeparator() {
 	return <hr aria-hidden className="my-6 border-neutral-800 group-first/turn:hidden" />;
-}
-
-/**
- * The chrome every transcript row shares: the gutter, the speaker label, the
- * prose column. Shared by settled messages, a collapsed run of tool calls,
- * and the streaming row — three things that must line up exactly.
- *
- * What the user said gets a PILL instead: a rounded-sm card in the reading
- * column, the shape every chat client uses for the half of the conversation
- * you wrote. It replaced a full-bleed stripe, which at this measure was a
- * band of slightly different grey running the whole width of the window —
- * loud about the row and quiet about the words in it. The pill needs no
- * `USER` label either: nothing else in the transcript is shaped like it.
- */
-export function TranscriptRow({
-	role,
-	labelled,
-	children,
-	below,
-}: {
-	role: PiMessage["role"];
-	labelled: boolean;
-	children: ReactNode;
-	/** Under the pill (user, shown on hover) or under the answer (its footer). */
-	below?: ReactNode;
-}) {
-	if (role === "user") {
-		return (
-			<div className="group/turn first:pt-6">
-				<TurnSeparator />
-				<div className="chat-gutter">
-					<div className="chat-measure">
-						<div className="-mx-3 chat-prose rounded-lg bg-neutral-900 p-3 ring-1 ring-neutral-700 ring-inset">
-							{children}
-						</div>
-					</div>
-					{below}
-				</div>
-			</div>
-		);
-	}
-
-	/*
-	 * A continuation row carries NO vertical padding: its blocks already have
-	 * margins, and padding on top of them made two tool calls sent as two
-	 * messages sit twice as far apart as two tool calls inside one message —
-	 * a gap that encodes nothing a reader can see or use.
-	 */
-	return (
-		<div className={`chat-gutter ${labelled ? "pt-3" : ""}`}>
-			{/* `chat-measure` on the LABEL too: it names the column it sits above,
-			    so it has to move with it — left in the track while the prose is
-			    centred put the speaker's name nowhere near their words. */}
-			{labelled && role !== "assistant" && (
-				<div className={`chat-measure mb-1 ${sectionLabel}`}>
-					{role}
-				</div>
-			)}
-			<div className={`chat-prose ${labelled ? "flow-trim-start" : ""} ${below ? "flow-trim-end" : ""}`}>
-				{children}
-			</div>
-			{below}
-		</div>
-	);
-}
-
-/** One message row. See `rows` in Chat for where `labelled` and `footer` come from. */
-export function Message({
-	role,
-	blocks,
-	labelled,
-	autoOpenTools,
-	userMode,
-	foldThinking,
-	footer,
-	onFork,
-	at,
-	onEdit,
-}: {
-	role: PiMessage["role"];
-	blocks: PiBlock[];
-	labelled: boolean;
-	autoOpenTools: boolean;
-	userMode: UserMode;
-	foldThinking: boolean;
-	footer?: Footer;
-	onFork: (at: number) => Promise<void>;
-	/** The message's start timestamp: how the server finds a user message to edit. */
-	at?: number;
-	/** Absent while a turn runs: pi cannot rewind under a running turn. */
-	onEdit?: (at: number, text: string, images: PiImage[]) => void;
-}) {
-	const isUser = role === "user";
-	const [editing, setEditing] = useState(false);
-	/*
-	 * In a pill the attachments go ON TOP, as one row of squares, whatever
-	 * order they arrived in: a screenshot is context for the question, so it
-	 * belongs above the question, and interleaving image blocks with the text
-	 * that references them is how a two-line prompt becomes a screenful.
-	 */
-	const images = isUser ? blocks.filter((b) => b.kind === "image") : [];
-	const rest = isUser ? blocks.filter((b) => b.kind !== "image") : blocks;
-	const text = blocks
-		.map((b) => (b.kind === "text" ? b.text : ""))
-		.filter(Boolean)
-		.join("\n\n");
-	if (editing && onEdit && at !== undefined) {
-		const attached = images.flatMap((b) => (b.kind === "image" ? [{ data: b.data, mimeType: b.mimeType }] : []));
-		return (
-			<EditMessage
-				text={text}
-				attached={attached}
-				onCancel={() => setEditing(false)}
-				onSend={(next, kept) => {
-					setEditing(false);
-					onEdit(at, next, kept);
-				}}
-			/>
-		);
-	}
-	return (
-		<TranscriptRow
-			role={role}
-			labelled={labelled}
-			below={
-				isUser ? (
-					<UserFooter text={text} at={at} onEdit={onEdit && at !== undefined ? () => setEditing(true) : undefined} />
-				) : footer ? (
-					<AnswerFooter footer={footer} text={text} onFork={onFork} />
-				) : undefined
-			}
-		>
-			{images.length > 0 && (
-				<div className="mb-2 flex flex-wrap gap-2">
-					{images.map((b, i) =>
-						b.kind === "image" ? (
-							<Thumb key={i} image={b} label={t("attachment {n}", { n: i + 1 })} />
-						) : null,
-					)}
-				</div>
-			)}
-			{rest.map((b, i) => (
-				<Block key={i} block={b} isUser={isUser} autoOpenTools={autoOpenTools} userMode={userMode} foldThinking={foldThinking} />
-			))}
-		</TranscriptRow>
-	);
 }
 
 /**
@@ -1235,30 +602,6 @@ function EditMessage({
 	);
 }
 
-/**
- * The compaction boundary.
- *
- * Everything above it is out of the model's context; the summary is what
- * replaced it. Rendered as a divider rather than a message because nobody
- * SAID it — and collapsed, because the summary is the agent's notes to
- * itself, while the one thing a reader needs at a glance is that the line is
- * there at all.
- */
-export function CompactionRow({ text }: { text: string }) {
-	return (
-		<details className="chat-gutter my-4">
-			<summary className={`flex cursor-pointer list-none items-center gap-3 ${sectionLabel} select-none`}>
-				<span className="h-px flex-1 bg-neutral-800" />
-				{t("compacted — context starts here")}
-				<span className="h-px flex-1 bg-neutral-800" />
-			</summary>
-			<div className="chat-prose mt-3">
-				<MarkdownText text={text} />
-			</div>
-		</details>
-	);
-}
-
 /** Per-level colors for a notice line. Info is deliberately quiet. */
 const NOTICE_STYLE: Record<PiNotice["level"], string> = {
 	info: "border-neutral-800 bg-neutral-900/60 text-neutral-300",
@@ -1301,7 +644,7 @@ export function Notices({ notices }: { notices: PiNotice[] }) {
 export function CommandRow({ command, running }: { command: string; running: boolean }) {
 	const spinner = useSpinner(running);
 	return (
-		<TranscriptRow role="user" labelled>
+		<UserRow>
 			<div className="flex items-center gap-2">
 				<span className="font-mono text-body">{command}</span>
 				{running && (
@@ -1311,6 +654,58 @@ export function CommandRow({ command, running }: { command: string; running: boo
 					</span>
 				)}
 			</div>
-		</TranscriptRow>
+		</UserRow>
 	);
+}
+
+/** User prompts retain their pill, attachments, copy button and inline editing. */
+function UserRow({ children, below }: { children: ReactNode; below?: ReactNode }) {
+	return <div className="group/turn first:pt-6">
+		<TurnSeparator />
+		<div className="chat-gutter">
+			<div className="chat-measure">
+				<div className="-mx-3 chat-prose rounded-lg bg-neutral-900 p-3 ring-1 ring-neutral-700 ring-inset">{children}</div>
+			</div>
+			{below}
+		</div>
+	</div>;
+}
+
+export function UserMessage({ blocks, userMode, at, onEdit }: {
+	blocks: PiBlock[];
+	userMode: UserMode;
+	at?: number;
+	onEdit?: (at: number, text: string, images: PiImage[]) => void;
+}) {
+	const [editing, setEditing] = useState(false);
+	const images = blocks.filter((b) => b.kind === "image");
+	const text = blocks.flatMap((b) => b.kind === "text" ? [b.text] : []).join("\n\n");
+	if (editing && onEdit && at !== undefined) return <EditMessage
+		text={text}
+		attached={images.map(({ data, mimeType }) => ({ data, mimeType }))}
+		onCancel={() => setEditing(false)}
+		onSend={(next, kept) => { setEditing(false); onEdit(at, next, kept); }}
+	/>;
+	return <UserRow below={<UserFooter text={text} at={at} onEdit={onEdit && at !== undefined ? () => setEditing(true) : undefined} />}>
+		{images.length > 0 && <div className="mb-2 flex flex-wrap gap-2">
+			{images.map((image, i) => <Thumb key={i} image={image} label={t("attachment {n}", { n: i + 1 })} />)}
+		</div>}
+		{blocks.map((block, i) => block.kind === "image" ? null : block.kind === "text"
+			? <UserText key={i + userMode} text={block.text} mode={userMode} />
+			: <RawBlocks key={i} blocks={[block]} />)}
+	</UserRow>;
+}
+
+/** Actions target the final assistant message, never the prompt that grouped the turn. */
+export function AnswerActions({ text, at, onFork }: { text: string; at: number; onFork: (at: number) => Promise<void> }) {
+	const [forking, setForking] = useState(false);
+	return <div className="mt-1 flex items-center gap-1 text-meta text-neutral-500">
+		<CopyButton text={text} />
+		<IconButton size="sm" label={forking ? t("Forking…") : t("Fork from here")} disabled={forking} onClick={() => {
+			setForking(true);
+			void onFork(at).finally(() => setForking(false));
+		}}>
+			<GitFork size={14} />
+		</IconButton>
+	</div>;
 }

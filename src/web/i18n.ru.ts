@@ -1,5 +1,7 @@
 /** Russian for every `t`/`plural` key (see i18n.ts). Plurals are `one|few|many`. */
 export const RU: Record<string, string> = {
+	"Show work": "Показать работу",
+	"Hide work": "Скрыть работу",
 	"Todos": "Задачи",
 	"In progress": "В работе",
 	"Completed": "Завершено",

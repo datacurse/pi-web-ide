@@ -67,8 +67,8 @@ export function uploadFile(
  * A context and not a prop chain because the two places that show an image —
  * a sent message deep inside the transcript, and the composer's staging row —
  * have no common parent short of `Chat` itself, and threading a callback
- * through `Message`, `Block` and `ToolGroup` would put an image concern in
- * three components that otherwise have none.
+ * through every rendering component would put an image concern in components
+ * that otherwise have none.
  */
 export const ZoomContext = createContext<(src: string) => void>(() => {});
 

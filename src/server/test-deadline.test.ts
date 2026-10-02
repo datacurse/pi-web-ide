@@ -7,7 +7,7 @@ import { test } from "node:test";
 
 test("the suite's outer deadline stops a worker still alive after its assertions finish", () => {
 	const script = JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf8")).scripts.test as string;
-	assert.match(script, /^timeout --kill-after=5s 30s node /);
+	assert.match(script, /(?:^|&&\s*)timeout --kill-after=5s 30s node /);
 	assert.match(script, /--test-timeout=10000/);
 	const dir = mkdtempSync(join(tmpdir(), "pwi-test-deadline-"));
 	try {

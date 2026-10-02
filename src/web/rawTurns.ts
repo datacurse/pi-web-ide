@@ -1,15 +1,28 @@
 import type { PiBlock, PiMessage, PiPartial, PiTool } from "../shared/types.js";
-import { partitionPhaseTurn } from "./turnPhases.js";
 import { sessionTodos, type TodoTask } from "../shared/todos.js";
 
 export type RawRow = {
 	role: PiMessage["role"];
 	at: number;
+	answerAt?: number;
 	blocks: PiBlock[];
 	work?: PiBlock[];
 	todos?: TodoTask[];
 	running?: boolean;
 };
+
+/** Keep only a settled final answer outside the work disclosure. */
+function partitionTurn(messages: PiMessage[], live: boolean): { work: PiMessage[]; answer?: PiMessage } {
+	const last = messages.at(-1);
+	if (live || !last || last.role !== "assistant" || last.blocks.some((b) => b.kind === "tool")) return { work: messages };
+	let cut = last.blocks.length;
+	while (cut > 0 && ["text", "image"].includes(last.blocks[cut - 1].kind)) cut--;
+	if (cut === last.blocks.length) return { work: messages };
+	return {
+		work: [...messages.slice(0, -1), ...(cut ? [{ ...last, blocks: last.blocks.slice(0, cut) }] : [])],
+		answer: { ...last, blocks: last.blocks.slice(cut) },
+	};
+}
 
 /** One disclosure per assistant turn, with only its settled final answer outside. */
 export function rawRows(messages: PiMessage[], partial: PiPartial, busy: boolean): RawRow[] {
@@ -20,7 +33,7 @@ export function rawRows(messages: PiMessage[], partial: PiPartial, busy: boolean
 	let turnAt: number | undefined;
 	const flush = (live: boolean) => {
 		if (!turn.length && !live) return;
-		const { work, answer } = partitionPhaseTurn(turn, live);
+		const { work, answer } = partitionTurn(turn, live);
 		const blocks = work.flatMap((message) => message.blocks);
 		if (live) blocks.push(
 			...(partial.thinking ? [{ kind: "thinking" as const, text: partial.thinking }] : []),
@@ -31,7 +44,7 @@ export function rawRows(messages: PiMessage[], partial: PiPartial, busy: boolean
 		const hasTodos = turnTools.some(hasTodo) || (live && partial.tools.some(hasTodo));
 		history.push(...turn);
 		const todos = hasTodos ? sessionTodos(history, live ? partial : { text: "", thinking: "", tools: [] }) : [];
-		rows.push({ role: "assistant", at: turnAt ?? turn[0]?.timestamp ?? 0, blocks: answer?.blocks ?? [], work: blocks, running: live, todos });
+		rows.push({ role: "assistant", at: turnAt ?? turn[0]?.timestamp ?? 0, answerAt: answer?.timestamp, blocks: answer?.blocks ?? [], work: blocks, running: live, todos });
 		turn = [];
 	};
 	for (const message of messages) {

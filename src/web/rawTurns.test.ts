@@ -45,3 +45,22 @@ test("saved nested updates use the earlier task state without rewriting old turn
 	assert.equal(rows[1].todos?.[0].status, "pending");
 	assert.equal(rows[3].todos?.[0].status, "completed");
 });
+
+test("final answer text and images stay outside work without mutating the source messages", () => {
+	const messages = [{
+		role: "assistant" as const, timestamp: 4000,
+		blocks: [
+			{ kind: "thinking" as const, text: "Conclusion" },
+			{ kind: "text" as const, text: "Final answer" },
+			{ kind: "image" as const, data: "image", mimeType: "image/png" },
+		],
+	}];
+	const rows = rawRows(messages, { text: "", thinking: "", tools: [] }, false);
+	assert.deepEqual(rows[0].work?.map((b) => b.kind), ["thinking"]);
+	assert.deepEqual(rows[0].blocks.map((b) => b.kind), ["text", "image"]);
+	assert.equal(rows[0].answerAt, 4000, "fork must target the assistant, not the prompt");
+	assert.equal(messages[0].blocks.length, 3);
+	const live = rawRows(messages, { text: "", thinking: "", tools: [] }, true);
+	assert.equal(live[0].blocks.length, 0, "streaming prose is not a settled answer");
+	assert.equal(live[0].answerAt, undefined);
+});

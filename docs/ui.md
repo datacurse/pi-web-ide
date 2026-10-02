@@ -161,76 +161,19 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
   (`--etk-*`, chrome `--ed-*`). Settings > Appearance > `Editor theme` defaults to `Match app theme`
   (`pwi:editorTheme`). `data-light` on `<html>` marks any light app theme.
 
-## Turn activity and timing
+## Chat work and output
 
-- Replace playful running verbs with an always-visible factual phase and its elapsed time,
-  with total turn time underneath. A caret on that line opens the live timing breakdown
-  in place; it is not a separate Stats window. Use `text-body` for the current phase and
-  `text-meta` for timing details, in the existing chat gutter and measure.
-- Distinguish request preparation/dispatch, waiting for model output, response received/waiting
-  for model output, receiving reasoning/answer/tool-call arguments, specific running tools,
-  retry backoff, compaction, and waiting for user input. Only observed phases are labelled.
-  Request hooks do not prove upload completion: do not claim “request delivered”, or separate
-  network delivery from provider processing. Missing request telemetry is labelled unavailable.
-- Snapshot refreshes must preserve live timing events received while the request was in flight;
-  the displayed phase must not regress to stale Requesting telemetry.
-- While reasoning is set to Shown, its live streamed text appears directly below the Breakdown disclosure and above the current phase/status; it leaves the round detail while streaming so it is not duplicated.
-- Streaming silence of at least three seconds shows “No new output for …”, not an invented
-  cause. Phase and total clocks update live even when the provider is silent.
-- The default tool mode is `Rounds` (saved ID `phases` is preserved): each user turn contains
-  `Round 1`, `Round 2`, … disclosures for model-response/tool cycles. Their compact summaries
-  show wall time, observed tool counts, failures, and highlight the active segment while running. Each round
-  is a compact `rounded-sm` bordered card with one always-visible `text-meta` round duration beside its number; phase-by-phase timings stay in the complete-turn breakdown, not each round summary.
-  No empty phase/subphase disclosures. Opening a round shows received prose/reasoning
-  first, then tool calls; omit missing text rather than show empty sections.
-  Requesting covers recorded preparation up to the provider-request hook; Thinking covers
-  waiting after that hook until visible model output. Tooltips explain that browser delivery
-  and exact upload completion are not measured, and Thinking includes hidden reasoning and
-  network waiting—not isolated reasoning time. Existing recorded timestamps are preserved;
-  `Receiving` includes reasoning, prose and tool-call arguments; `Doing` includes consecutive
-  tools and their brief intervening bookkeeping. Retry, compaction and user waits remain distinct.
-  Explicit live/collapsed/grouped/hidden preferences are preserved; `Answer only` also uses timed
-  phases when available. Unmeasured old turns retain their ordinary work fold.
-- The separate round header is removed: the `text-meta` round number, a 12px caret and a clock icon with total wall time sit together at the left. Summary padding is `px-2`;
-  round gaps use `space-y-0`. Round work has no vertical margins between Markdown
-  blocks or tool rows. Round summaries have no progress bar.
-  Actual tool rows put the success check at the far left, followed by the target/path
-  and semantic icon; elapsed duration stays right-aligned. Their own arguments/output
-  remain individually expandable. Tool durations do not form a second log.
-  Only the final assistant message's trailing answer stays outside the phase folds.
-- Requesting is `blue-400` / `ArrowUpRight`; Thinking is `pink-400` / `Brain` in live status and step legends; the bar segments use pink without icons.
-  The label and icon are pink; the theme maps `pink-400` to a blend of its red and mauve accents.
-  Receiving is `green-400` / `ArrowDownLeft`; Doing is
-  `amber-400` / `Wrench`. Retry and user waits use `red-400` with `ArrowClockwise` / `QuestionMark`;
-  compaction uses `neutral-400` / `ArrowsInLineVertical`. Icons and labels accompany colour.
-- The left disclosure is a full-row toggle with no chevron; its `ListNumbers` icon, round count and total-time clock sit together. Complete-turn phase icons/durations follow immediately at their natural widths. No fixed-width slots or spacer push them to the right.
-- A `Breakdown` disclosure with a clock icon and total elapsed time sits at the left, immediately followed by the complete-turn phase icons and durations; each takes only its natural width. The current action sits
-- Compact phase timings use `gap-2` between icon-and-duration pairs so their colours and values read as separate groups.
-- The elapsed-history strip centers each icon in a `w-3` slot; `gap-1` keeps it close to its duration, while `gap-3` separates neighboring pairs.
-  below the breakdown, including its expanded rounds. No overall progress bar. In Rounds mode,
-  the preceding user prompt and its breakdown stick together at the top while scrolling through the turn's work, without duplicating
-  the prompt.
-  `Expand work by default` is off by default (`pwi:workExpanded`).
-  Rounds and completed tool arguments/output stay open; rounds cannot be collapsed independently. The Transcript settings checkbox controls whether the overall Breakdown opens by default and persists that choice; explicit off is respected.
-  Retries before any response remain in their current round; later observed request cycles start another. Missing stages are not invented for older or incomplete telemetry. Model rounds are not new user-prompt turns.
-- Parallel calls overlap and are not added together in wall-clock totals. Individual call
-  durations remain available inside their phase.
-- Codemode wrappers add no transcript row or disclosure: render child calls directly. Keep its script
-  hidden. For a single bash call, strip the codemode completion/wall-time envelope and show its
-  combined stdout in that command's result, without repeating its command arguments. Nested bash
-  calls render as terminal-style `$ command` rows with captured stdout visible underneath. Suppress
-  the wrapper output when it is only a success notice from a non-command tool. For multiple calls,
-  combined output may be shown once only when it cannot be attributed to an individual call; never
-  claim child output is missing when that combined output is visible. Use each child tool's elapsed
-  time, not codemode's separate wall-time string. Read tools use blue `BookOpen` icons; writing
-  and editing use amber `NotePencil`; commands use `TerminalWindow`; searches use
-  `MagnifyingGlass`; other tools use `Wrench`. Round call counts omit codemode wrappers.
-  Do not guess Explore/Modify/Verify stages from tool names or commands. Parent wall time owns
-  the outer timeline; overlapping child durations are not added to it.
-- Integrated work owns the turn's timing strip; do not duplicate it in the answer footer.
-  Other tool modes retain timing next to the answer's copy/fork controls, with the same strip
-  visible while collapsed. Timings survive reloads and server restarts in pwi's state directory;
-  unobserved historical turns have none.
+- Each assistant turn has one collapsed-by-default `Show work` / `Hide work` toggle.
+  Reasoning, intermediate prose, tool calls and in-flight output live inside it.
+  Only the settled final answer's trailing text and images stay outside.
+- Model prose and reasoning render Markdown. Tool arguments and output are literal,
+  escaped text inside their own native `details` disclosures, initially collapsed.
+  Nested calls stay under their parent; there is no phase/round renderer or tool-mode selector.
+- User prompts retain their pill, image thumbnails, long-message folding and inline editing.
+  Todos remain directly below the work toggle, including while work is collapsed.
+- Recorded activity still persists server-side. It is not drawn as timing bars or model rounds.
+  Snapshot refreshes must preserve newer live telemetry received while the request was in flight.
+- History is virtualized; expanding work must not mount the whole transcript.
 
 ## Composer
 
@@ -510,23 +453,15 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
   unrelated extension or compaction notices.
 
 ## Reasoning
-
-- Settings → Transcript → `Reasoning`: Shown (default, italic `neutral-500` text), Folded
-  or Hidden (`pwi:showThinking`: `1` / `fold` / `0`).
-- Folded is `Thought`: a disclosure line like a tool call (11px caret, mono `chat-code`
-  `neutral-500`), `Thinking` while the model is still thinking and open, then `Thought`
-  and folded once text or a tool call starts. The text sits under a `border-l` like a group.
-- In the Grouped and Answer only tool modes reasoning folds into the group either way.
+- Reasoning appears in the turn’s work disclosure, using Markdown and `neutral-500` text.
+- There is no separate shown/folded/hidden preference; the work toggle controls visibility.
 
 ## Answer footer
 
-- Under the message that ends a turn (an assistant message with no tool calls),
-  never under intermediate steps: `Copy` and `GitFork` ghost `IconButton size="sm"`
-  with 14px icons, then `timeAgo` of when it finished (exact time in `title`) and
-  `· 1m 15s`, question to answer. `text-meta neutral-500`, in `chat-measure`.
+- The settled final answer has `Copy` and `GitFork` ghost `IconButton size="sm"` controls
+  with 14px icons. Fork targets that assistant message’s timestamp, not its user prompt.
 - Settings → Transcript → `Message footer` (`pwi:messageFooter`, `data-footer` on `<html>`)
-  places the time (`.msg-footer-time`) in both footers: `Together` (default, right after
-  the buttons), `Time on the right`, or `Buttons on the right` (time left, buttons right).
+  places the user prompt’s timestamp beside or opposite its copy/edit controls.
 - Copy swaps to `Check` for 1.2s. Fork is disabled with the label `Forking…` while
   the new session spawns, then opens it as a tab in the same column.
 

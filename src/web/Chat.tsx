@@ -15,7 +15,7 @@ import { ModelSelector } from "./ModelSelector.js";
 import { GitActions } from "./GitActions.js";
 import { RawBlocks } from "./RawOutput.js";
 import { rawRows, type RawRow } from "./rawTurns.js";
-import { ASK_MODES, type AskMode, type ThinkingMode, type ToolMode, type UserMode } from "./prefs.js";
+import { ASK_MODES, type AskMode, type UserMode } from "./prefs.js";
 import { clearDraft, readDraft, writeDraftImages, writeDraftText } from "./drafts.js";
 import { completionOptions, parseCompletion, type CommandOption } from "./commands.js";
 import { AskPanel } from "./AskPanel.js";
@@ -29,7 +29,7 @@ import {
 	uploadFile,
 } from "./Attachments.js";
 import type { ImageWorkspace } from "./imageAnnotations.js";
-import { CommandRow, ContextMeter, ContextPanel, Message, Notices } from "./Transcript.js";
+import { AnswerActions, CommandRow, ContextMeter, ContextPanel, UserMessage, Notices } from "./Transcript.js";
 import { t } from "./i18n.js";
 import { PiMark } from "./piMark.js";
 import { PastedTexts } from "./PastedTexts.js";
@@ -114,20 +114,21 @@ function CommandPicker({
 	);
 }
 
-const HistoryRow = memo(function HistoryRow({ row, expanded, onToggle, userMode, onEdit, onFork, labelled }: {
+const HistoryRow = memo(function HistoryRow({ row, expanded, onToggle, userMode, onEdit, onFork }: {
 	row: RawRow; expanded: boolean; onToggle: () => void; userMode: UserMode;
 	onEdit?: (at: number, text: string, images: PiImage[]) => void;
-	onFork: (at: number) => Promise<void>; labelled: boolean;
+	onFork: (at: number) => Promise<void>;
 }) {
-	if (row.role === "user") return <Message role="user" blocks={row.blocks} at={row.at} labelled={labelled} userMode={userMode} onEdit={onEdit} onFork={onFork} autoOpenTools={false} foldThinking={false} />;
+	if (row.role === "user") return <UserMessage blocks={row.blocks} at={row.at} userMode={userMode} onEdit={onEdit} />;
 	return <div className="chat-gutter my-3"><div className="chat-measure">
 		{row.role !== "assistant" && <div className="font-mono text-meta text-neutral-500">{row.role}</div>}
 		{(!!row.work?.length || row.running) && <>
-			<Button size="sm" variant="subtle" aria-expanded={expanded} onClick={onToggle}>{expanded ? "Hide work" : "Show work"}</Button>
+			<Button size="sm" variant="subtle" aria-expanded={expanded} onClick={onToggle}>{expanded ? t("Hide work") : t("Show work")}</Button>
 			{expanded && <RawBlocks blocks={row.work ?? []} streaming={row.running} />}
 			{!!row.todos?.length && <div className="mt-3"><TodoList tasks={row.todos} /></div>}
 		</>}
 		<RawBlocks blocks={row.blocks} />
+		{row.answerAt !== undefined && <AnswerActions at={row.answerAt} text={row.blocks.flatMap((b) => b.kind === "text" ? [b.text] : []).join("\n\n")} onFork={onFork} />}
 	</div></div>;
 });
 
@@ -168,11 +169,6 @@ export function Chat({
 	 * transcript itself has not arrived.
 	 */
 	opening: boolean;
-	/** Reasoning blocks are a setting; see prefs.ts. */
-	thinkingMode: ThinkingMode;
-	/** How much of a tool call to show; see prefs.ts. */
-	toolMode: ToolMode;
-	workExpanded: boolean;
 	/** How long user messages fold; see prefs.ts. */
 	userMode: UserMode;
 	/** Whether Ask only switches off after a send; see prefs.ts. */
@@ -576,9 +572,9 @@ export function Chat({
 							initialTopMostItemIndex={rows.length - 1}
 							increaseViewportBy={200}
 							computeItemKey={(i, row) => `${row.role}:${row.at}:${i}`}
-							itemContent={(i, row) => {
+							itemContent={(_i, row) => {
 								const key = `${snapshot.id}:${row.role}:${row.at}`;
-								return <HistoryRow row={row} userMode={userMode} onEdit={busy ? undefined : onEdit} onFork={onFork} labelled={i === 0 || rows[i - 1].role !== row.role} expanded={expandedWork.has(key)} onToggle={() => setExpandedWork((previous) => {
+								return <HistoryRow row={row} userMode={userMode} onEdit={busy ? undefined : onEdit} onFork={onFork} expanded={expandedWork.has(key)} onToggle={() => setExpandedWork((previous) => {
 									const next = new Set(previous);
 									if (next.has(key)) next.delete(key); else next.add(key);
 									return next;
