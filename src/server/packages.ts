@@ -40,8 +40,8 @@ const LOG_KEEP = 4_096;
  * stdin that will never answer, and the install sits there until the timeout.
  */
 const GIT_ENV = {
-	GIT_TERMINAL_PROMPT: "0",
-	GIT_SSH_COMMAND: "ssh -o BatchMode=yes -o ConnectTimeout=5",
+  GIT_TERMINAL_PROMPT: "0",
+  GIT_SSH_COMMAND: "ssh -o BatchMode=yes -o ConnectTimeout=5",
 };
 
 export type { PiwPackage };
@@ -73,18 +73,18 @@ let queue: Promise<unknown> = Promise.resolve();
 let running = false;
 
 function serialize<T>(fn: () => Promise<T>): Promise<T> {
-	const next = queue.then(async () => {
-		running = true;
-		try {
-			return await fn();
-		} finally {
-			running = false;
-		}
-	});
-	// The chain must not break on a rejection, or every later mutation is
-	// rejected with the first one's error.
-	queue = next.catch(() => {});
-	return next;
+  const next = queue.then(async () => {
+    running = true;
+    try {
+      return await fn();
+    } finally {
+      running = false;
+    }
+  });
+  // The chain must not break on a rejection, or every later mutation is
+  // rejected with the first one's error.
+  queue = next.catch(() => {});
+  return next;
 }
 
 // ---------------------------------------------------------------------------
@@ -100,33 +100,37 @@ function serialize<T>(fn: () => Promise<T>): Promise<T> {
  * ssh user.
  */
 function splitRef(spec: string): { base: string; ref: string | null } {
-	const at = spec.lastIndexOf("@");
-	if (at <= 0 || at < spec.lastIndexOf("/")) return { base: spec, ref: null };
-	return { base: spec.slice(0, at), ref: spec.slice(at + 1) || null };
+  const at = spec.lastIndexOf("@");
+  if (at <= 0 || at < spec.lastIndexOf("/")) return { base: spec, ref: null };
+  return { base: spec.slice(0, at), ref: spec.slice(at + 1) || null };
 }
 
 /** `github.com/user/repo`, `git@github.com:user/repo`, `https://host/user/repo` → host + path. */
 function gitLocation(base: string): { host: string; path: string } | null {
-	let rest = base;
-	for (const scheme of ["https://", "http://", "ssh://", "git://"]) {
-		if (rest.startsWith(scheme)) {
-			rest = rest.slice(scheme.length);
-			break;
-		}
-	}
-	// ssh userinfo is not part of the identity: the same repo cloned as `git@`
-	// and as `https://` is one package.
-	const userinfo = rest.indexOf("@");
-	const firstSlash = rest.indexOf("/");
-	if (userinfo > 0 && (firstSlash === -1 || userinfo < firstSlash)) rest = rest.slice(userinfo + 1);
-	// `host:user/repo` is the scp-like form; `host:2222/user/repo` is a port.
-	const colon = rest.indexOf(":");
-	if (colon > 0 && !/^\d+\//.test(rest.slice(colon + 1))) {
-		rest = `${rest.slice(0, colon)}/${rest.slice(colon + 1)}`;
-	}
-	const parts = rest.replace(/\.git$/, "").split("/").filter(Boolean);
-	if (parts.length < 2) return null;
-	return { host: parts[0], path: parts.slice(1).join("/") };
+  let rest = base;
+  for (const scheme of ["https://", "http://", "ssh://", "git://"]) {
+    if (rest.startsWith(scheme)) {
+      rest = rest.slice(scheme.length);
+      break;
+    }
+  }
+  // ssh userinfo is not part of the identity: the same repo cloned as `git@`
+  // and as `https://` is one package.
+  const userinfo = rest.indexOf("@");
+  const firstSlash = rest.indexOf("/");
+  if (userinfo > 0 && (firstSlash === -1 || userinfo < firstSlash))
+    rest = rest.slice(userinfo + 1);
+  // `host:user/repo` is the scp-like form; `host:2222/user/repo` is a port.
+  const colon = rest.indexOf(":");
+  if (colon > 0 && !/^\d+\//.test(rest.slice(colon + 1))) {
+    rest = `${rest.slice(0, colon)}/${rest.slice(colon + 1)}`;
+  }
+  const parts = rest
+    .replace(/\.git$/, "")
+    .split("/")
+    .filter(Boolean);
+  if (parts.length < 2) return null;
+  return { host: parts[0], path: parts.slice(1).join("/") };
 }
 
 const NPM_NAME = /^(?:@[a-z0-9~][a-z0-9._~-]*\/)?[a-z0-9~][a-z0-9._~-]*$/;
@@ -143,60 +147,62 @@ const NPM_VERSION = /^[A-Za-z0-9.^~><=|*+ -]+$/;
  * surface for no benefit.
  */
 export function parseSource(source: string): PiwPackage | null {
-	const spec = source.trim();
-	if (!spec) return null;
+  const spec = source.trim();
+  if (!spec) return null;
 
-	if (spec.startsWith("npm:")) {
-		const { base, ref } = splitRef(spec.slice(4));
-		if (!base) return null;
-		return {
-			source: spec,
-			kind: "npm",
-			identity: base,
-			pinned: ref,
-			installed: null,
-			filtered: false,
-			autoload: true,
-		};
-	}
+  if (spec.startsWith("npm:")) {
+    const { base, ref } = splitRef(spec.slice(4));
+    if (!base) return null;
+    return {
+      source: spec,
+      kind: "npm",
+      identity: base,
+      pinned: ref,
+      installed: null,
+      filtered: false,
+      autoload: true,
+    };
+  }
 
-	const isGit =
-		spec.startsWith("git:") ||
-		spec.startsWith("https://") ||
-		spec.startsWith("http://") ||
-		spec.startsWith("ssh://") ||
-		spec.startsWith("git://");
-	if (isGit) {
-		const { base, ref } = splitRef(spec.startsWith("git:") ? spec.slice(4) : spec);
-		const at = gitLocation(base);
-		if (!at) return null;
-		return {
-			source: spec,
-			kind: "git",
-			// pi's identity for a git package is the repo without its ref, and
-			// normalising the transport away means `https://` and `git@` forms of
-			// one repo do not read as two packages.
-			identity: `${at.host}/${at.path}`,
-			pinned: ref,
-			installed: null,
-			filtered: false,
-			autoload: true,
-		};
-	}
+  const isGit =
+    spec.startsWith("git:") ||
+    spec.startsWith("https://") ||
+    spec.startsWith("http://") ||
+    spec.startsWith("ssh://") ||
+    spec.startsWith("git://");
+  if (isGit) {
+    const { base, ref } = splitRef(
+      spec.startsWith("git:") ? spec.slice(4) : spec,
+    );
+    const at = gitLocation(base);
+    if (!at) return null;
+    return {
+      source: spec,
+      kind: "git",
+      // pi's identity for a git package is the repo without its ref, and
+      // normalising the transport away means `https://` and `git@` forms of
+      // one repo do not read as two packages.
+      identity: `${at.host}/${at.path}`,
+      pinned: ref,
+      installed: null,
+      filtered: false,
+      autoload: true,
+    };
+  }
 
-	if (spec.startsWith("/") || spec.startsWith("./") || spec.startsWith("../")) {
-		return {
-			source: spec,
-			kind: "local",
-			identity: spec,
-			pinned: null,
-			installed: null,
-			filtered: false,
-			autoload: true,
-		};
-	}
+  if (spec.startsWith("/") || spec.startsWith("./") || spec.startsWith("../")) {
+    return {
+      source: spec,
+      kind: "local",
+      identity: spec,
+      pinned: null,
+      installed: null,
+      filtered: false,
+      autoload: true,
+    };
+  }
 
-	return null;
+  return null;
 }
 
 /**
@@ -207,25 +213,31 @@ export function parseSource(source: string): PiwPackage | null {
  * characters git would not accept, or a local path.
  */
 export function validate(source: string): PiwPackage {
-	const parsed = parseSource(source);
-	if (!parsed) {
-		throw new Error(
-			`not a package source: ${source} — use npm:<name>[@version], git:<host>/<path>[@ref], or an https/ssh URL`,
-		);
-	}
-	if (parsed.kind === "local") {
-		throw new Error("local paths can only be added by editing pi's settings.json by hand");
-	}
-	if (parsed.kind === "npm" && !NPM_NAME.test(parsed.identity)) {
-		throw new Error(`not an npm package name: ${parsed.identity}`);
-	}
-	if (parsed.kind === "npm" && parsed.pinned && !NPM_VERSION.test(parsed.pinned)) {
-		throw new Error(`not an npm version: ${parsed.pinned}`);
-	}
-	if (parsed.kind === "git" && parsed.pinned && !GIT_REF.test(parsed.pinned)) {
-		throw new Error(`not a git ref: ${parsed.pinned}`);
-	}
-	return parsed;
+  const parsed = parseSource(source);
+  if (!parsed) {
+    throw new Error(
+      `not a package source: ${source} — use npm:<name>[@version], git:<host>/<path>[@ref], or an https/ssh URL`,
+    );
+  }
+  if (parsed.kind === "local") {
+    throw new Error(
+      "local paths can only be added by editing pi's settings.json by hand",
+    );
+  }
+  if (parsed.kind === "npm" && !NPM_NAME.test(parsed.identity)) {
+    throw new Error(`not an npm package name: ${parsed.identity}`);
+  }
+  if (
+    parsed.kind === "npm" &&
+    parsed.pinned &&
+    !NPM_VERSION.test(parsed.pinned)
+  ) {
+    throw new Error(`not an npm version: ${parsed.pinned}`);
+  }
+  if (parsed.kind === "git" && parsed.pinned && !GIT_REF.test(parsed.pinned)) {
+    throw new Error(`not a git ref: ${parsed.pinned}`);
+  }
+  return parsed;
 }
 
 // ---------------------------------------------------------------------------
@@ -233,30 +245,39 @@ export function validate(source: string): PiwPackage {
 // ---------------------------------------------------------------------------
 
 export function agentDir(): string {
-	return process.env.PI_CODING_AGENT_DIR ?? join(homedir(), ".pi", "agent");
+  return process.env.PI_CODING_AGENT_DIR ?? join(homedir(), ".pi", "agent");
 }
 
 /** The version npm actually put on disk, or null if the package is not there. */
 function npmVersion(name: string): string | null {
-	try {
-		const raw: unknown = JSON.parse(
-			readFileSync(join(agentDir(), "npm", "node_modules", name, "package.json"), "utf8"),
-		);
-		return isRecord(raw) && typeof raw.version === "string" ? raw.version : null;
-	} catch {
-		return null;
-	}
+  try {
+    const raw: unknown = JSON.parse(
+      readFileSync(
+        join(agentDir(), "npm", "node_modules", name, "package.json"),
+        "utf8",
+      ),
+    );
+    return isRecord(raw) && typeof raw.version === "string"
+      ? raw.version
+      : null;
+  } catch {
+    return null;
+  }
 }
 
 /** The commit a git package's clone is actually at, short form. */
 async function gitHead(identity: string): Promise<string | null> {
-	const clone = join(agentDir(), "git", ...identity.split("/"));
-	try {
-		const { stdout } = await run("git", ["-C", clone, "rev-parse", "--short", "HEAD"], 10_000);
-		return stdout.trim() || null;
-	} catch {
-		return null;
-	}
+  const clone = join(agentDir(), "git", ...identity.split("/"));
+  try {
+    const { stdout } = await run(
+      "git",
+      ["-C", clone, "rev-parse", "--short", "HEAD"],
+      10_000,
+    );
+    return stdout.trim() || null;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -268,29 +289,36 @@ async function gitHead(identity: string): Promise<string | null> {
  * list is also the only way to SEE that a settings file has gone wrong.
  */
 export async function list(): Promise<PiwPackage[]> {
-	const raw = readSettings().packages;
-	if (!Array.isArray(raw)) return [];
+  const raw = readSettings().packages;
+  if (!Array.isArray(raw)) return [];
 
-	const out: PiwPackage[] = [];
-	for (const entry of raw) {
-		const source = typeof entry === "string" ? entry : isRecord(entry) ? entry.source : undefined;
-		if (typeof source !== "string") continue;
-		const parsed = parseSource(source);
-		if (!parsed) continue;
+  const out: PiwPackage[] = [];
+  for (const entry of raw) {
+    const source =
+      typeof entry === "string"
+        ? entry
+        : isRecord(entry)
+          ? entry.source
+          : undefined;
+    if (typeof source !== "string") continue;
+    const parsed = parseSource(source);
+    if (!parsed) continue;
 
-		if (isRecord(entry)) {
-			parsed.filtered = ["extensions", "skills", "prompts", "themes"].some((k) => k in entry);
-			parsed.autoload = entry.autoload !== false;
-		}
-		parsed.installed =
-			parsed.kind === "npm"
-				? npmVersion(parsed.identity)
-				: parsed.kind === "git"
-					? await gitHead(parsed.identity)
-					: null;
-		out.push(parsed);
-	}
-	return out;
+    if (isRecord(entry)) {
+      parsed.filtered = ["extensions", "skills", "prompts", "themes"].some(
+        (k) => k in entry,
+      );
+      parsed.autoload = entry.autoload !== false;
+    }
+    parsed.installed =
+      parsed.kind === "npm"
+        ? npmVersion(parsed.identity)
+        : parsed.kind === "git"
+          ? await gitHead(parsed.identity)
+          : null;
+    out.push(parsed);
+  }
+  return out;
 }
 
 /**
@@ -303,37 +331,44 @@ export async function list(): Promise<PiwPackage[]> {
  * git's job, not ours.
  */
 export function listProject(cwd: string): PiwPackage[] {
-	let raw: unknown;
-	try {
-		raw = JSON.parse(readFileSync(join(cwd, ".pi", "settings.json"), "utf8"));
-	} catch {
-		// No project settings is the normal case, not an error.
-		return [];
-	}
-	if (!isRecord(raw) || !Array.isArray(raw.packages)) return [];
+  let raw: unknown;
+  try {
+    raw = JSON.parse(readFileSync(join(cwd, ".pi", "settings.json"), "utf8"));
+  } catch {
+    // No project settings is the normal case, not an error.
+    return [];
+  }
+  if (!isRecord(raw) || !Array.isArray(raw.packages)) return [];
 
-	const out: PiwPackage[] = [];
-	for (const entry of raw.packages) {
-		const source = typeof entry === "string" ? entry : isRecord(entry) ? entry.source : undefined;
-		if (typeof source !== "string") continue;
-		const parsed = parseSource(source);
-		if (!parsed) continue;
-		if (isRecord(entry)) {
-			parsed.filtered = ["extensions", "skills", "prompts", "themes"].some((k) => k in entry);
-			parsed.autoload = entry.autoload !== false;
-		}
-		out.push(parsed);
-	}
-	return out;
+  const out: PiwPackage[] = [];
+  for (const entry of raw.packages) {
+    const source =
+      typeof entry === "string"
+        ? entry
+        : isRecord(entry)
+          ? entry.source
+          : undefined;
+    if (typeof source !== "string") continue;
+    const parsed = parseSource(source);
+    if (!parsed) continue;
+    if (isRecord(entry)) {
+      parsed.filtered = ["extensions", "skills", "prompts", "themes"].some(
+        (k) => k in entry,
+      );
+      parsed.autoload = entry.autoload !== false;
+    }
+    out.push(parsed);
+  }
+  return out;
 }
 
 export async function view(): Promise<PackagesView> {
-	return { packages: await list(), epoch, busy: running };
+  return { packages: await list(), epoch, busy: running };
 }
 
 /** The epoch a session's child was started under. Compared to spot stale sessions. */
 export function currentEpoch(): number {
-	return epoch;
+  return epoch;
 }
 
 // ---------------------------------------------------------------------------
@@ -341,67 +376,76 @@ export function currentEpoch(): number {
 // ---------------------------------------------------------------------------
 
 export interface MutationResult {
-	ok: boolean;
-	/** The tail of pi's combined output: what npm or git said, verbatim. */
-	log: string;
-	/** One line, for a UI that has room for one line. Absent on success. */
-	reason?: string;
+  ok: boolean;
+  /** The tail of pi's combined output: what npm or git said, verbatim. */
+  log: string;
+  /** One line, for a UI that has room for one line. Absent on success. */
+  reason?: string;
 }
 
 function run(
-	bin: string,
-	args: string[],
-	timeout: number,
+  bin: string,
+  args: string[],
+  timeout: number,
 ): Promise<{ stdout: string; stderr: string }> {
-	const { promise, resolve, reject } = Promise.withResolvers<{ stdout: string; stderr: string }>();
-	execFile(
-		bin,
-		args,
-		{ timeout, maxBuffer: 8 * 1024 * 1024, env: { ...process.env, ...GIT_ENV } },
-		(err, stdout, stderr) => {
-			if (err) reject(Object.assign(err, { stdout, stderr }));
-			else resolve({ stdout, stderr });
-		},
-	);
-	return promise;
+  const { promise, resolve, reject } = Promise.withResolvers<{
+    stdout: string;
+    stderr: string;
+  }>();
+  execFile(
+    bin,
+    args,
+    {
+      timeout,
+      maxBuffer: 8 * 1024 * 1024,
+      env: { ...process.env, ...GIT_ENV },
+    },
+    (err, stdout, stderr) => {
+      if (err) reject(Object.assign(err, { stdout, stderr }));
+      else resolve({ stdout, stderr });
+    },
+  );
+  return promise;
 }
 
 /** Combined output, newest end kept: npm's verdict is its last few lines. */
 function tail(stdout: unknown, stderr: unknown): string {
-	return `${String(stdout ?? "")}${String(stderr ?? "")}`.slice(-LOG_KEEP).trim();
+  return `${String(stdout ?? "")}${String(stderr ?? "")}`
+    .slice(-LOG_KEEP)
+    .trim();
 }
 
 async function mutate(args: string[]): Promise<MutationResult> {
-	return serialize(async () => {
-		try {
-			const { stdout, stderr } = await run(PI_BIN, args, TIMEOUT_MS);
-			epoch++;
-			return { ok: true, log: tail(stdout, stderr) };
-		} catch (err) {
-			const e = err as NodeJS.ErrnoException & {
-				stdout?: string;
-				stderr?: string;
-				killed?: boolean;
-			};
-			const log = tail(e.stdout, e.stderr);
-			const reason =
-				e.code === "ENOENT"
-					? `cannot run "${PI_BIN}": not found on PATH. Set PWI_PI_BIN to its absolute path.`
-					: e.killed
-						? `timed out after ${Math.round(TIMEOUT_MS / 1000)}s`
-						: // The last non-empty line is the complaint; the rest is npm.
-							(log.split("\n").filter(Boolean).at(-1) ?? e.message);
-			return { ok: false, log, reason };
-		}
-	});
+  return serialize(async () => {
+    try {
+      const { stdout, stderr } = await run(PI_BIN, args, TIMEOUT_MS);
+      epoch++;
+      return { ok: true, log: tail(stdout, stderr) };
+    } catch (err) {
+      const e = err as NodeJS.ErrnoException & {
+        stdout?: string;
+        stderr?: string;
+        killed?: boolean;
+      };
+      const log = tail(e.stdout, e.stderr);
+      const reason =
+        e.code === "ENOENT"
+          ? `cannot run "${PI_BIN}": not found on PATH. Set PWI_PI_BIN to its absolute path.`
+          : e.killed
+            ? `timed out after ${Math.round(TIMEOUT_MS / 1000)}s`
+            : // The last non-empty line is the complaint; the rest is npm.
+              (log.split("\n").filter(Boolean).at(-1) ?? e.message);
+      return { ok: false, log, reason };
+    }
+  });
 }
 
 export async function install(source: string): Promise<MutationResult> {
-	return mutate(["install", validate(source).source]);
+  return mutate(["install", validate(source).source]);
 }
 
 export async function remove(source: string): Promise<MutationResult> {
-	return mutate(["remove", validate(source).source]);
+  return mutate(["remove", validate(source).source]);
 }
 
 /**
@@ -412,10 +456,12 @@ export async function remove(source: string): Promise<MutationResult> {
  * not an update.
  */
 export async function update(source?: string): Promise<MutationResult> {
-	return mutate(source ? ["update", validate(source).source] : ["update", "--extensions"]);
+  return mutate(
+    source ? ["update", validate(source).source] : ["update", "--extensions"],
+  );
 }
 
 /** Update the pi CLI itself on this machine. Never automatic. */
 export async function updateSelf(): Promise<MutationResult> {
-	return mutate(["update", "--self"]);
+  return mutate(["update", "--self"]);
 }

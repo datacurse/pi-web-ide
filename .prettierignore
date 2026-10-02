@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.pi/
+pnpm-lock.yaml
+# Generated icon and theme data.
+src/web/seti.json
+src/web/vscodeThemes.json

@@ -53,30 +53,30 @@ const MAX_SCROLLBACK = 256 * 1024;
 const MAX_TERMINALS = 16;
 
 export interface Term {
-	id: string;
-	/** Where the shell was started. Never changes; the shell may `cd` freely. */
-	cwd: string;
-	pty: IPty;
-	/** Most recent output, capped at MAX_SCROLLBACK bytes. */
-	scrollback: string;
-	cols: number;
-	rows: number;
-	/** Set once the shell exits. An exited terminal is kept until closed. */
-	exit: { code: number; signal?: number } | null;
-	listeners: Set<(e: TermEvent) => void>;
-	/** A Fleet page shell: listed only there, never in a project's dock. */
-	fleet: boolean;
+  id: string;
+  /** Where the shell was started. Never changes; the shell may `cd` freely. */
+  cwd: string;
+  pty: IPty;
+  /** Most recent output, capped at MAX_SCROLLBACK bytes. */
+  scrollback: string;
+  cols: number;
+  rows: number;
+  /** Set once the shell exits. An exited terminal is kept until closed. */
+  exit: { code: number; signal?: number } | null;
+  listeners: Set<(e: TermEvent) => void>;
+  /** A Fleet page shell: listed only there, never in a project's dock. */
+  fleet: boolean;
 }
 
 export type TermEvent =
-	| { type: "data"; data: string; replay?: true }
-	| { type: "exit"; code: number; signal?: number };
+  | { type: "data"; data: string; replay?: true }
+  | { type: "exit"; code: number; signal?: number };
 
 /** What a client needs to render a terminal it is not attached to yet. */
 export interface TermInfo {
-	id: string;
-	cwd: string;
-	running: boolean;
+  id: string;
+  cwd: string;
+  running: boolean;
 }
 
 /**
@@ -84,9 +84,9 @@ export interface TermInfo {
  * a systemd user unit does not always carry it, hence the fallback chain.
  */
 function shellPath(): string {
-	const candidates = [process.env.SHELL, "/bin/bash", "/bin/sh"];
-	for (const c of candidates) if (c && existsSync(c)) return c;
-	return "/bin/sh";
+  const candidates = [process.env.SHELL, "/bin/bash", "/bin/sh"];
+  for (const c of candidates) if (c && existsSync(c)) return c;
+  return "/bin/sh";
 }
 
 /**
@@ -95,289 +95,383 @@ function shellPath(): string {
  * and no alternate screen, so output still lands in xterm's own scrollback.
  */
 const TMUX_OPTIONS = [
-	["status", "off"],
-	["prefix", "None"],
-	["prefix2", "None"],
-	["escape-time", "0"],
-	["history-limit", "50000"],
-	["terminal-overrides", "*:smcup@:rmcup@"],
+  ["status", "off"],
+  ["prefix", "None"],
+  ["prefix2", "None"],
+  ["escape-time", "0"],
+  ["history-limit", "50000"],
+  ["terminal-overrides", "*:smcup@:rmcup@"],
 ];
 
 export class Terminals {
-	private terms = new Map<string, Term>();
-	private closing = new Set<Promise<void>>();
-	/**
-	 * The tmux socket each shell lives on, so a shell outlives this server and
-	 * the next one re-attaches it. Undefined without tmux: shells are then
-	 * plain PTYs that die with the server.
-	 */
-	private socket: string | undefined;
+  private terms = new Map<string, Term>();
+  private closing = new Set<Promise<void>>();
+  /**
+   * The tmux socket each shell lives on, so a shell outlives this server and
+   * the next one re-attaches it. Undefined without tmux: shells are then
+   * plain PTYs that die with the server.
+   */
+  private socket: string | undefined;
 
-	constructor(socket?: string) {
-		try {
-			if (socket) execFileSync("tmux", ["-V"], { stdio: "ignore", timeout: 5_000 });
-			this.socket = socket;
-		} catch {
-			this.socket = undefined;
-		}
-		this.adopt();
-	}
+  constructor(socket?: string) {
+    try {
+      if (socket)
+        execFileSync("tmux", ["-V"], { stdio: "ignore", timeout: 5_000 });
+      this.socket = socket;
+    } catch {
+      this.socket = undefined;
+    }
+    this.adopt();
+  }
 
-	private tmux(args: string[]): string {
-		return execFileSync("tmux", ["-L", this.socket ?? "", "-f", "/dev/null", ...args], {
-			encoding: "utf8",
-			stdio: ["ignore", "pipe", "pipe"],
-			timeout: 5_000,
-		});
-	}
+  private tmux(args: string[]): string {
+    return execFileSync(
+      "tmux",
+      ["-L", this.socket ?? "", "-f", "/dev/null", ...args],
+      {
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "pipe"],
+        timeout: 5_000,
+      },
+    );
+  }
 
-	/** Re-attach every shell a previous server left in tmux, with its history. */
-	private adopt(): void {
-		if (!this.socket) return;
-		let out: string;
-		try {
-			out = this.tmux(["list-sessions", "-F", "#{session_name}\t#{@pwi_cwd}\t#{@pwi_fleet}\t#{window_width}\t#{window_height}"]);
-		} catch {
-			return; // no tmux server: nothing survived
-		}
-		for (const line of out.split("\n")) {
-			const [id, cwd, fleet, w, h] = line.split("\t");
-			if (!id || !cwd) continue;
-			const rows = Number(h) || 24;
-			let history = "";
-			try {
-				history = this.tmux(["capture-pane", "-p", "-e", "-J", "-S", "-", "-E", "-1", "-t", `=${id}:`]);
-			} catch {
-				/* no history is still a shell */
-			}
-			const term = this.open(id, cwd, Number(w) || 80, rows, "/", fleet === "1");
-			// Pushed above the screen, which the attach redraws over.
-			term.scrollback = (history.replaceAll("\n", "\r\n") + "\r\n".repeat(rows)).slice(-MAX_SCROLLBACK);
-		}
-	}
+  /** Re-attach every shell a previous server left in tmux, with its history. */
+  private adopt(): void {
+    if (!this.socket) return;
+    let out: string;
+    try {
+      out = this.tmux([
+        "list-sessions",
+        "-F",
+        "#{session_name}\t#{@pwi_cwd}\t#{@pwi_fleet}\t#{window_width}\t#{window_height}",
+      ]);
+    } catch {
+      return; // no tmux server: nothing survived
+    }
+    for (const line of out.split("\n")) {
+      const [id, cwd, fleet, w, h] = line.split("\t");
+      if (!id || !cwd) continue;
+      const rows = Number(h) || 24;
+      let history = "";
+      try {
+        history = this.tmux([
+          "capture-pane",
+          "-p",
+          "-e",
+          "-J",
+          "-S",
+          "-",
+          "-E",
+          "-1",
+          "-t",
+          `=${id}:`,
+        ]);
+      } catch {
+        /* no history is still a shell */
+      }
+      const term = this.open(
+        id,
+        cwd,
+        Number(w) || 80,
+        rows,
+        "/",
+        fleet === "1",
+      );
+      // Pushed above the screen, which the attach redraws over.
+      term.scrollback = (
+        history.replaceAll("\n", "\r\n") + "\r\n".repeat(rows)
+      ).slice(-MAX_SCROLLBACK);
+    }
+  }
 
-	/**
-	 * Start a shell and return it.
-	 *
-	 * Every call is a NEW terminal: splitting and opening a tab are the same
-	 * operation to the server, and the difference between them is a layout the
-	 * client owns. Nothing here knows about tabs or panes, which is why one
-	 * shell can be moved between them without touching its process.
-	 */
-	create(cwd: string, cols = 80, rows = 24, dir = cwd, fleet?: { run?: string }): Term {
-		// `cwd` is the project the shell is listed under; `dir` is where it
-		// starts, so "Open in Terminal" on a subfolder stays in its project.
-		for (const d of [cwd, dir])
-			if (!(existsSync(d) && statSync(d).isDirectory())) throw new Error(`not a directory: ${d}`);
-		if (this.live().length >= MAX_TERMINALS)
-			throw new Error(`too many terminals (${MAX_TERMINALS}); close one first`);
+  /**
+   * Start a shell and return it.
+   *
+   * Every call is a NEW terminal: splitting and opening a tab are the same
+   * operation to the server, and the difference between them is a layout the
+   * client owns. Nothing here knows about tabs or panes, which is why one
+   * shell can be moved between them without touching its process.
+   */
+  create(
+    cwd: string,
+    cols = 80,
+    rows = 24,
+    dir = cwd,
+    fleet?: { run?: string },
+  ): Term {
+    // `cwd` is the project the shell is listed under; `dir` is where it
+    // starts, so "Open in Terminal" on a subfolder stays in its project.
+    for (const d of [cwd, dir])
+      if (!(existsSync(d) && statSync(d).isDirectory()))
+        throw new Error(`not a directory: ${d}`);
+    if (this.live().length >= MAX_TERMINALS)
+      throw new Error(`too many terminals (${MAX_TERMINALS}); close one first`);
 
-		const id = randomUUID();
-		if (this.socket) {
-			const set = TMUX_OPTIONS.flatMap(([k, v]) => [";", "set", "-g", k, v]);
-			this.tmux([
-				// set-environment, not `new-session -e`, which tmux 3.0 lacks.
-				"start-server", ...set, ";", "set-environment", "-g", "PWI_TERMINAL", "1",
-				";", "new-session", "-d", "-s", id, "-c", dir, "-x", String(cols), "-y", String(rows),
-				shellPath(), "-l",
-				";", "set", "-t", `=${id}:`, "@pwi_cwd", cwd,
-				";", "set", "-t", `=${id}:`, "@pwi_fleet", fleet ? "1" : "0",
-				// Typed into the shell rather than run instead of it, so leaving the
-				// command (an ssh session) lands in a local shell, not a dead tab.
-				...(fleet?.run ? [";", "send-keys", "-t", `=${id}:`, fleet.run, "Enter"] : []),
-			]);
-		}
-		const term = this.open(id, cwd, cols, rows, dir, !!fleet);
-		if (!this.socket && fleet?.run) term.pty.write(`${fleet.run}\r`);
-		return term;
-	}
+    const id = randomUUID();
+    if (this.socket) {
+      const set = TMUX_OPTIONS.flatMap(([k, v]) => [";", "set", "-g", k, v]);
+      this.tmux([
+        // set-environment, not `new-session -e`, which tmux 3.0 lacks.
+        "start-server",
+        ...set,
+        ";",
+        "set-environment",
+        "-g",
+        "PWI_TERMINAL",
+        "1",
+        ";",
+        "new-session",
+        "-d",
+        "-s",
+        id,
+        "-c",
+        dir,
+        "-x",
+        String(cols),
+        "-y",
+        String(rows),
+        shellPath(),
+        "-l",
+        ";",
+        "set",
+        "-t",
+        `=${id}:`,
+        "@pwi_cwd",
+        cwd,
+        ";",
+        "set",
+        "-t",
+        `=${id}:`,
+        "@pwi_fleet",
+        fleet ? "1" : "0",
+        // Typed into the shell rather than run instead of it, so leaving the
+        // command (an ssh session) lands in a local shell, not a dead tab.
+        ...(fleet?.run
+          ? [";", "send-keys", "-t", `=${id}:`, fleet.run, "Enter"]
+          : []),
+      ]);
+    }
+    const term = this.open(id, cwd, cols, rows, dir, !!fleet);
+    if (!this.socket && fleet?.run) term.pty.write(`${fleet.run}\r`);
+    return term;
+  }
 
-	/** The PTY: a tmux client on session `id`, or the shell itself without tmux. */
-	private open(id: string, cwd: string, cols: number, rows: number, dir: string, fleet: boolean): Term {
-		const term: Term = {
-			id,
-			cwd,
-			pty: spawn(
-				this.socket ? "tmux" : shellPath(),
-				this.socket ? ["-L", this.socket, "attach-session", "-t", `=${id}`] : ["-l"],
-				{
-					cwd: dir,
-					cols,
-					rows,
-					name: "xterm-256color",
-					env: {
-						...(process.env as Record<string, string>),
-						// Claimed by the shell's prompt and by every program that
-						// asks. Lying about it (the inherited "dumb" of a systemd
-						// unit, or nothing at all) is what makes colors and cursor
-						// addressing silently degrade.
-						TERM: "xterm-256color",
-						// So a shell profile, and anything run from it, can tell.
-						PWI_TERMINAL: "1",
-					},
-				},
-			),
-			scrollback: "",
-			cols,
-			rows,
-			exit: null,
-			listeners: new Set(),
-			fleet,
-		};
+  /** The PTY: a tmux client on session `id`, or the shell itself without tmux. */
+  private open(
+    id: string,
+    cwd: string,
+    cols: number,
+    rows: number,
+    dir: string,
+    fleet: boolean,
+  ): Term {
+    const term: Term = {
+      id,
+      cwd,
+      pty: spawn(
+        this.socket ? "tmux" : shellPath(),
+        this.socket
+          ? ["-L", this.socket, "attach-session", "-t", `=${id}`]
+          : ["-l"],
+        {
+          cwd: dir,
+          cols,
+          rows,
+          name: "xterm-256color",
+          env: {
+            ...(process.env as Record<string, string>),
+            // Claimed by the shell's prompt and by every program that
+            // asks. Lying about it (the inherited "dumb" of a systemd
+            // unit, or nothing at all) is what makes colors and cursor
+            // addressing silently degrade.
+            TERM: "xterm-256color",
+            // So a shell profile, and anything run from it, can tell.
+            PWI_TERMINAL: "1",
+          },
+        },
+      ),
+      scrollback: "",
+      cols,
+      rows,
+      exit: null,
+      listeners: new Set(),
+      fleet,
+    };
 
-		term.pty.onData((data) => {
-			term.scrollback = (term.scrollback + data).slice(-MAX_SCROLLBACK);
-			for (const l of [...term.listeners]) {
-				try {
-					l({ type: "data", data });
-				} catch {
-					// One broken socket must not take the shell down.
-				}
-			}
-		});
+    term.pty.onData((data) => {
+      term.scrollback = (term.scrollback + data).slice(-MAX_SCROLLBACK);
+      for (const l of [...term.listeners]) {
+        try {
+          l({ type: "data", data });
+        } catch {
+          // One broken socket must not take the shell down.
+        }
+      }
+    });
 
-		/*
-		 * An exited terminal is KEPT, not deleted: the last thing a failed
-		 * command printed is the reason you opened the terminal, and dropping
-		 * the entry would drop that with it. The client closes it explicitly.
-		 */
-		term.pty.onExit(({ exitCode, signal }) => {
-			term.exit = { code: exitCode, signal };
-			for (const l of [...term.listeners]) {
-				try {
-					l({ type: "exit", code: exitCode, signal });
-				} catch {
-					/* ignore */
-				}
-			}
-		});
+    /*
+     * An exited terminal is KEPT, not deleted: the last thing a failed
+     * command printed is the reason you opened the terminal, and dropping
+     * the entry would drop that with it. The client closes it explicitly.
+     */
+    term.pty.onExit(({ exitCode, signal }) => {
+      term.exit = { code: exitCode, signal };
+      for (const l of [...term.listeners]) {
+        try {
+          l({ type: "exit", code: exitCode, signal });
+        } catch {
+          /* ignore */
+        }
+      }
+    });
 
-		this.terms.set(term.id, term);
-		return term;
-	}
+    this.terms.set(term.id, term);
+    return term;
+  }
 
-	get(id: string): Term | undefined {
-		return this.terms.get(id);
-	}
+  get(id: string): Term | undefined {
+    return this.terms.get(id);
+  }
 
-	private live(): Term[] {
-		return [...this.terms.values()].filter((t) => !t.exit);
-	}
+  private live(): Term[] {
+    return [...this.terms.values()].filter((t) => !t.exit);
+  }
 
-	/**
-	 * The terminals of one project, or of all of them.
-	 *
-	 * This is how a reloaded client recovers: it persists a layout of ids, and
-	 * this says which of them are still real. Without it a restored layout
-	 * would render panes attached to shells that no longer exist.
-	 */
-	list(cwd?: string, fleet = false): TermInfo[] {
-		return [...this.terms.values()]
-			.filter((t) => t.fleet === fleet && (!cwd || t.cwd === cwd))
-			.map((t) => ({ id: t.id, cwd: t.cwd, running: !t.exit }));
-	}
+  /**
+   * The terminals of one project, or of all of them.
+   *
+   * This is how a reloaded client recovers: it persists a layout of ids, and
+   * this says which of them are still real. Without it a restored layout
+   * would render panes attached to shells that no longer exist.
+   */
+  list(cwd?: string, fleet = false): TermInfo[] {
+    return [...this.terms.values()]
+      .filter((t) => t.fleet === fleet && (!cwd || t.cwd === cwd))
+      .map((t) => ({ id: t.id, cwd: t.cwd, running: !t.exit }));
+  }
 
-	/**
-	 * Attach a client: the scrollback first, then everything new.
-	 *
-	 * Replay before subscribe, and both inside one call, because the gap
-	 * between them is where output goes missing — a line written between
-	 * reading the buffer and adding the listener would be in neither.
-	 */
-	attach(id: string, listener: (e: TermEvent) => void): () => void {
-		const term = this.terms.get(id);
-		if (!term) return () => {};
-		// Marked so the client does not answer the terminal queries in it again.
-		if (term.scrollback) listener({ type: "data", data: term.scrollback, replay: true });
-		if (term.exit) listener({ type: "exit", ...term.exit });
-		term.listeners.add(listener);
-		return () => term.listeners.delete(listener);
-	}
+  /**
+   * Attach a client: the scrollback first, then everything new.
+   *
+   * Replay before subscribe, and both inside one call, because the gap
+   * between them is where output goes missing — a line written between
+   * reading the buffer and adding the listener would be in neither.
+   */
+  attach(id: string, listener: (e: TermEvent) => void): () => void {
+    const term = this.terms.get(id);
+    if (!term) return () => {};
+    // Marked so the client does not answer the terminal queries in it again.
+    if (term.scrollback)
+      listener({ type: "data", data: term.scrollback, replay: true });
+    if (term.exit) listener({ type: "exit", ...term.exit });
+    term.listeners.add(listener);
+    return () => term.listeners.delete(listener);
+  }
 
-	write(id: string, data: string): void {
-		const term = this.terms.get(id);
-		if (term && !term.exit) term.pty.write(data);
-	}
+  write(id: string, data: string): void {
+    const term = this.terms.get(id);
+    if (term && !term.exit) term.pty.write(data);
+  }
 
-	/**
-	 * Resize the PTY.
-	 *
-	 * The size is the client's, and with several clients attached the LAST
-	 * one to report wins — same as two tmux clients on one window. Ignoring
-	 * resizes instead would leave a full-screen program drawing at 80x24 in a
-	 * wide pane, which is the visibly broken case.
-	 */
-	resize(id: string, cols: number, rows: number): void {
-		const term = this.terms.get(id);
-		if (!term || term.exit) return;
-		if (cols < 2 || rows < 2 || cols > 1000 || rows > 1000) return;
-		if (term.cols === cols && term.rows === rows) return;
-		term.cols = cols;
-		term.rows = rows;
-		term.pty.resize(cols, rows);
-	}
+  /**
+   * Resize the PTY.
+   *
+   * The size is the client's, and with several clients attached the LAST
+   * one to report wins — same as two tmux clients on one window. Ignoring
+   * resizes instead would leave a full-screen program drawing at 80x24 in a
+   * wide pane, which is the visibly broken case.
+   */
+  resize(id: string, cols: number, rows: number): void {
+    const term = this.terms.get(id);
+    if (!term || term.exit) return;
+    if (cols < 2 || rows < 2 || cols > 1000 || rows > 1000) return;
+    if (term.cols === cols && term.rows === rows) return;
+    term.cols = cols;
+    term.rows = rows;
+    term.pty.resize(cols, rows);
+  }
 
-	/**
-	 * Kill a terminal and everything in it.
-	 *
-	 * Deliberately explicit: hiding the pane, closing the browser and losing
-	 * the socket all leave the shell running, and only this ends it. SIGHUP
-	 * rather than SIGKILL, so the shell tells its children the terminal went
-	 * away — the same signal closing a terminal window sends, which is what
-	 * `nohup` and a shell's own job handling expect.
-	 */
-	close(id: string): Promise<void> {
-		const term = this.terms.get(id);
-		if (!term) return Promise.resolve();
-		this.terms.delete(id);
-		if (this.socket) {
-			try {
-				this.tmux(["kill-session", "-t", `=${id}`]);
-			} catch {
-				// Already gone.
-			}
-		}
-		term.listeners.clear();
-		return this.stop(term);
-	}
+  /**
+   * Kill a terminal and everything in it.
+   *
+   * Deliberately explicit: hiding the pane, closing the browser and losing
+   * the socket all leave the shell running, and only this ends it. SIGHUP
+   * rather than SIGKILL, so the shell tells its children the terminal went
+   * away — the same signal closing a terminal window sends, which is what
+   * `nohup` and a shell's own job handling expect.
+   */
+  close(id: string): Promise<void> {
+    const term = this.terms.get(id);
+    if (!term) return Promise.resolve();
+    this.terms.delete(id);
+    if (this.socket) {
+      try {
+        this.tmux(["kill-session", "-t", `=${id}`]);
+      } catch {
+        // Already gone.
+      }
+    }
+    term.listeners.clear();
+    return this.stop(term);
+  }
 
-	/**
-	 * Called on server exit. Under tmux this only detaches, so the next server
-	 * adopts the shells; without it every shell is killed, so none are orphaned.
-	 */
-	disposeAll(): Promise<void> {
-		for (const [id, term] of [...this.terms]) {
-			if (!this.socket) {
-				this.close(id);
-				continue;
-			}
-			this.terms.delete(id);
-			term.listeners.clear();
-			this.stop(term);
-		}
-		return Promise.all([...this.closing]).then(() => undefined);
-	}
+  /**
+   * Called on server exit. Under tmux this only detaches, so the next server
+   * adopts the shells; without it every shell is killed, so none are orphaned.
+   */
+  disposeAll(): Promise<void> {
+    for (const [id, term] of [...this.terms]) {
+      if (!this.socket) {
+        this.close(id);
+        continue;
+      }
+      this.terms.delete(id);
+      term.listeners.clear();
+      this.stop(term);
+    }
+    return Promise.all([...this.closing]).then(() => undefined);
+  }
 
-	private stop(term: Term): Promise<void> {
-		if (term.exit) return Promise.resolve();
-		let subscription: { dispose(): void } | undefined;
-		let escalate: ReturnType<typeof setTimeout> | undefined;
-		let deadline: ReturnType<typeof setTimeout> | undefined;
-		const exit = new Promise<void>((resolve, reject) => {
-			subscription = term.pty.onExit(() => resolve());
-			escalate = setTimeout(() => {
-				try { term.pty.kill("SIGKILL"); } catch { /* Exit may already be queued. */ }
-			}, 1_000);
-			deadline = setTimeout(() => reject(new Error(`Terminal ${term.id} (PTY pid ${term.pty.pid}) did not exit within 2000ms`)), 2_000);
-			try { term.pty.kill("SIGHUP"); } catch { /* Await the exit event even if the process is already gone. */ }
-		});
-		const stopped = exit.finally(() => {
-			clearTimeout(escalate);
-			clearTimeout(deadline);
-			subscription?.dispose();
-		});
-		this.closing.add(stopped);
-		void stopped.then(() => this.closing.delete(stopped), () => this.closing.delete(stopped));
-		return stopped;
-	}
+  private stop(term: Term): Promise<void> {
+    if (term.exit) return Promise.resolve();
+    let subscription: { dispose(): void } | undefined;
+    let escalate: ReturnType<typeof setTimeout> | undefined;
+    let deadline: ReturnType<typeof setTimeout> | undefined;
+    const exit = new Promise<void>((resolve, reject) => {
+      subscription = term.pty.onExit(() => resolve());
+      escalate = setTimeout(() => {
+        try {
+          term.pty.kill("SIGKILL");
+        } catch {
+          /* Exit may already be queued. */
+        }
+      }, 1_000);
+      deadline = setTimeout(
+        () =>
+          reject(
+            new Error(
+              `Terminal ${term.id} (PTY pid ${term.pty.pid}) did not exit within 2000ms`,
+            ),
+          ),
+        2_000,
+      );
+      try {
+        term.pty.kill("SIGHUP");
+      } catch {
+        /* Await the exit event even if the process is already gone. */
+      }
+    });
+    const stopped = exit.finally(() => {
+      clearTimeout(escalate);
+      clearTimeout(deadline);
+      subscription?.dispose();
+    });
+    this.closing.add(stopped);
+    void stopped.then(
+      () => this.closing.delete(stopped),
+      () => this.closing.delete(stopped),
+    );
+    return stopped;
+  }
 }

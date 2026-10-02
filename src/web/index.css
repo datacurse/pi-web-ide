@@ -30,9 +30,9 @@
 @custom-variant wide (@media (width > 768px));
 
 @layer base {
-	:focus-visible {
-		outline: none;
-	}
+  :focus-visible {
+    outline: none;
+  }
 }
 
 /*
@@ -41,54 +41,54 @@
  * no CSS; scripts/check-ui.sh catches them and arbitrary values.
  */
 @theme {
-	--text-*: initial;
-	--text-caption: 11px; /* floor: badges, counts, version */
-	--text-caption--line-height: 16px;
-	--text-meta: 12px; /* hints, secondary labels, mono chips */
-	--text-meta--line-height: 16px;
-	--text-ui: 13px; /* default chrome: buttons, rows, inputs */
-	--text-ui--line-height: 18px;
-	--text-body: 14px; /* chat content, tool output, editors */
-	--text-body--line-height: 20px;
-	--text-title: 16px; /* dialog titles, empty-state heading */
-	--text-title--line-height: 22px;
-	--text-display: 48px; /* the π mark on an empty session; nothing else */
-	--text-display--line-height: 1;
-	/* Relative to surrounding prose (17px, --prose-size). */
-	--text-h1: 1.25em;
-	--text-h2: 1.125em;
-	--text-h3: 1em;
-	--text-code-inline: 0.875em;
+  --text-*: initial;
+  --text-caption: 11px; /* floor: badges, counts, version */
+  --text-caption--line-height: 16px;
+  --text-meta: 12px; /* hints, secondary labels, mono chips */
+  --text-meta--line-height: 16px;
+  --text-ui: 13px; /* default chrome: buttons, rows, inputs */
+  --text-ui--line-height: 18px;
+  --text-body: 14px; /* chat content, tool output, editors */
+  --text-body--line-height: 20px;
+  --text-title: 16px; /* dialog titles, empty-state heading */
+  --text-title--line-height: 22px;
+  --text-display: 48px; /* the π mark on an empty session; nothing else */
+  --text-display--line-height: 1;
+  /* Relative to surrounding prose (17px, --prose-size). */
+  --text-h1: 1.25em;
+  --text-h2: 1.125em;
+  --text-h3: 1em;
+  --text-code-inline: 0.875em;
 
-	--radius-*: initial;
-	--radius-sm: 4px; /* controls, chips, inline code */
-	--radius-md: 8px; /* popovers, menus, dialogs, thumbnails */
-	--radius-lg: 12px; /* composer, message bubble */
+  --radius-*: initial;
+  --radius-sm: 4px; /* controls, chips, inline code */
+  --radius-md: 8px; /* popovers, menus, dialogs, thumbnails */
+  --radius-lg: 12px; /* composer, message bubble */
 
-	/* Control heights. Named spacing keys, so they work as h-*, size-*, min-h-*. */
-	--spacing-control-sm: 24px; /* toolbar buttons, icon buttons in headers */
-	--spacing-control-md: 28px; /* dialog buttons, composer icon buttons */
-	--spacing-bar: 36px; /* panel and editor header rows */
+  /* Control heights. Named spacing keys, so they work as h-*, size-*, min-h-*. */
+  --spacing-control-sm: 24px; /* toolbar buttons, icon buttons in headers */
+  --spacing-control-md: 28px; /* dialog buttons, composer icon buttons */
+  --spacing-bar: 36px; /* panel and editor header rows */
 
-	/* Context panel parts, Cursor's palette. Fixed, not themed. */
-	--color-ctx-system: #9e9e9e;
-	--color-ctx-tools: #b58ae6;
-	--color-ctx-rules: #3fa468;
-	--color-ctx-skills: #f2b264;
-	--color-ctx-personality: #7fa3c9;
-	--color-ctx-conversation: #6b4152;
+  /* Context panel parts, Cursor's palette. Fixed, not themed. */
+  --color-ctx-system: #9e9e9e;
+  --color-ctx-tools: #b58ae6;
+  --color-ctx-rules: #3fa468;
+  --color-ctx-skills: #f2b264;
+  --color-ctx-personality: #7fa3c9;
+  --color-ctx-conversation: #6b4152;
 
-	/* Workout exercises in Stats > Workouts: one theme accent each, two mixed for ten. */
-	--color-ex-pushups: var(--ct-peach);
-	--color-ex-situps: var(--ct-mauve);
-	--color-ex-squats: var(--ct-blue);
-	--color-ex-lunges: var(--ct-teal);
-	--color-ex-burpees: var(--ct-red);
-	--color-ex-jumping-jacks: var(--ct-yellow);
-	--color-ex-calf-raises: var(--ct-green);
-	--color-ex-glute-bridges: var(--ct-lavender);
-	--color-ex-plank: color-mix(in oklab, var(--ct-yellow) 50%, var(--ct-green));
-	--color-ex-wall-sit: color-mix(in oklab, var(--ct-red) 50%, var(--ct-mauve));
+  /* Workout exercises in Stats > Workouts: one theme accent each, two mixed for ten. */
+  --color-ex-pushups: var(--ct-peach);
+  --color-ex-situps: var(--ct-mauve);
+  --color-ex-squats: var(--ct-blue);
+  --color-ex-lunges: var(--ct-teal);
+  --color-ex-burpees: var(--ct-red);
+  --color-ex-jumping-jacks: var(--ct-yellow);
+  --color-ex-calf-raises: var(--ct-green);
+  --color-ex-glute-bridges: var(--ct-lavender);
+  --color-ex-plank: color-mix(in oklab, var(--ct-yellow) 50%, var(--ct-green));
+  --color-ex-wall-sit: color-mix(in oklab, var(--ct-red) 50%, var(--ct-mauve));
 }
 
 /*
@@ -112,66 +112,66 @@
  */
 :root,
 [data-theme="mocha"] {
-	--ct-base: #1e1e2e;
-	--ct-mantle: #181825;
-	--ct-surface0: #313244;
-	--ct-surface1: #45475a;
-	--ct-overlay0: #6c7086;
-	--ct-overlay1: #7f849c;
-	--ct-overlay2: #9399b2;
-	--ct-subtext0: #a6adc8;
-	--ct-subtext1: #bac2de;
-	--ct-text: #cdd6f4;
-	--ct-red: #f38ba8;
-	--ct-peach: #fab387;
-	--ct-yellow: #f9e2af;
-	--ct-green: #a6e3a1;
-	--ct-teal: #94e2d5;
-	--ct-blue: #89b4fa;
-	--ct-lavender: #b4befe;
-	--ct-mauve: #cba6f7;
+  --ct-base: #1e1e2e;
+  --ct-mantle: #181825;
+  --ct-surface0: #313244;
+  --ct-surface1: #45475a;
+  --ct-overlay0: #6c7086;
+  --ct-overlay1: #7f849c;
+  --ct-overlay2: #9399b2;
+  --ct-subtext0: #a6adc8;
+  --ct-subtext1: #bac2de;
+  --ct-text: #cdd6f4;
+  --ct-red: #f38ba8;
+  --ct-peach: #fab387;
+  --ct-yellow: #f9e2af;
+  --ct-green: #a6e3a1;
+  --ct-teal: #94e2d5;
+  --ct-blue: #89b4fa;
+  --ct-lavender: #b4befe;
+  --ct-mauve: #cba6f7;
 }
 
 [data-theme="macchiato"] {
-	--ct-base: #24273a;
-	--ct-mantle: #1e2030;
-	--ct-surface0: #363a4f;
-	--ct-surface1: #494d64;
-	--ct-overlay0: #6e738d;
-	--ct-overlay1: #8087a2;
-	--ct-overlay2: #939ab7;
-	--ct-subtext0: #a5adcb;
-	--ct-subtext1: #b8c0e0;
-	--ct-text: #cad3f5;
-	--ct-red: #ed8796;
-	--ct-peach: #f5a97f;
-	--ct-yellow: #eed49f;
-	--ct-green: #a6da95;
-	--ct-teal: #8bd5ca;
-	--ct-blue: #8aadf4;
-	--ct-lavender: #b7bdf8;
-	--ct-mauve: #c6a0f6;
+  --ct-base: #24273a;
+  --ct-mantle: #1e2030;
+  --ct-surface0: #363a4f;
+  --ct-surface1: #494d64;
+  --ct-overlay0: #6e738d;
+  --ct-overlay1: #8087a2;
+  --ct-overlay2: #939ab7;
+  --ct-subtext0: #a5adcb;
+  --ct-subtext1: #b8c0e0;
+  --ct-text: #cad3f5;
+  --ct-red: #ed8796;
+  --ct-peach: #f5a97f;
+  --ct-yellow: #eed49f;
+  --ct-green: #a6da95;
+  --ct-teal: #8bd5ca;
+  --ct-blue: #8aadf4;
+  --ct-lavender: #b7bdf8;
+  --ct-mauve: #c6a0f6;
 }
 
 [data-theme="frappe"] {
-	--ct-base: #303446;
-	--ct-mantle: #292c3c;
-	--ct-surface0: #414559;
-	--ct-surface1: #51576d;
-	--ct-overlay0: #737994;
-	--ct-overlay1: #838ba7;
-	--ct-overlay2: #949cbb;
-	--ct-subtext0: #a5adce;
-	--ct-subtext1: #b5bfe2;
-	--ct-text: #c6d0f4;
-	--ct-red: #e78284;
-	--ct-peach: #ef9f76;
-	--ct-yellow: #e5c890;
-	--ct-green: #a6d189;
-	--ct-teal: #81c8be;
-	--ct-blue: #8caaee;
-	--ct-lavender: #babbf1;
-	--ct-mauve: #ca9ee6;
+  --ct-base: #303446;
+  --ct-mantle: #292c3c;
+  --ct-surface0: #414559;
+  --ct-surface1: #51576d;
+  --ct-overlay0: #737994;
+  --ct-overlay1: #838ba7;
+  --ct-overlay2: #949cbb;
+  --ct-subtext0: #a5adce;
+  --ct-subtext1: #b5bfe2;
+  --ct-text: #c6d0f4;
+  --ct-red: #e78284;
+  --ct-peach: #ef9f76;
+  --ct-yellow: #e5c890;
+  --ct-green: #a6d189;
+  --ct-teal: #81c8be;
+  --ct-blue: #8caaee;
+  --ct-lavender: #babbf1;
+  --ct-mauve: #ca9ee6;
 }
 
 /*
@@ -182,24 +182,24 @@
  * than `neutral-100` in the four dark palettes and lighter in this one.
  */
 [data-theme="latte"] {
-	--ct-base: #eff1f5;
-	--ct-mantle: #e6e9ef;
-	--ct-surface0: #ccd0da;
-	--ct-surface1: #bcc0cc;
-	--ct-overlay0: #9ca0b0;
-	--ct-overlay1: #8c8fa1;
-	--ct-overlay2: #7c7f93;
-	--ct-subtext0: #6c6f85;
-	--ct-subtext1: #5c5f77;
-	--ct-text: #4c4f69;
-	--ct-red: #d20f39;
-	--ct-peach: #fe640b;
-	--ct-yellow: #df8e1d;
-	--ct-green: #40a02b;
-	--ct-teal: #179299;
-	--ct-blue: #1e66f5;
-	--ct-lavender: #7287fd;
-	--ct-mauve: #8839ef;
+  --ct-base: #eff1f5;
+  --ct-mantle: #e6e9ef;
+  --ct-surface0: #ccd0da;
+  --ct-surface1: #bcc0cc;
+  --ct-overlay0: #9ca0b0;
+  --ct-overlay1: #8c8fa1;
+  --ct-overlay2: #7c7f93;
+  --ct-subtext0: #6c6f85;
+  --ct-subtext1: #5c5f77;
+  --ct-text: #4c4f69;
+  --ct-red: #d20f39;
+  --ct-peach: #fe640b;
+  --ct-yellow: #df8e1d;
+  --ct-green: #40a02b;
+  --ct-teal: #179299;
+  --ct-blue: #1e66f5;
+  --ct-lavender: #7287fd;
+  --ct-mauve: #8839ef;
 }
 
 /*
@@ -216,24 +216,24 @@
  * rather than borrowed from another palette.
  */
 [data-theme="claude"] {
-	--ct-base: #1f1f1f;
-	--ct-mantle: #141414;
-	--ct-surface0: #2b2b2b;
-	--ct-surface1: #383838;
-	--ct-overlay0: #63635e;
-	--ct-overlay1: #7d7d77;
-	--ct-overlay2: #96968f;
-	--ct-subtext0: #b3b1a9;
-	--ct-subtext1: #cdcbc3;
-	--ct-text: #f5f4ef;
-	--ct-red: #e0697d;
-	--ct-peach: #d97757;
-	--ct-yellow: #dbb063;
-	--ct-green: #5cbf7c;
-	--ct-teal: #6fb5ab;
-	--ct-blue: #7ca7da;
-	--ct-lavender: #9dbbe4;
-	--ct-mauve: #b78dd4;
+  --ct-base: #1f1f1f;
+  --ct-mantle: #141414;
+  --ct-surface0: #2b2b2b;
+  --ct-surface1: #383838;
+  --ct-overlay0: #63635e;
+  --ct-overlay1: #7d7d77;
+  --ct-overlay2: #96968f;
+  --ct-subtext0: #b3b1a9;
+  --ct-subtext1: #cdcbc3;
+  --ct-text: #f5f4ef;
+  --ct-red: #e0697d;
+  --ct-peach: #d97757;
+  --ct-yellow: #dbb063;
+  --ct-green: #5cbf7c;
+  --ct-teal: #6fb5ab;
+  --ct-blue: #7ca7da;
+  --ct-lavender: #9dbbe4;
+  --ct-mauve: #b78dd4;
 }
 
 /*
@@ -243,24 +243,24 @@
  * same way.
  */
 [data-theme="claude-light"] {
-	--ct-base: #faf9f5;
-	--ct-mantle: #f0eee6;
-	--ct-surface0: #e3e1d7;
-	--ct-surface1: #d6d3c7;
-	--ct-overlay0: #a3a29b;
-	--ct-overlay1: #87867f;
-	--ct-overlay2: #73726c;
-	--ct-subtext0: #5e5d59;
-	--ct-subtext1: #3d3d3a;
-	--ct-text: #141413;
-	--ct-red: #b93d52;
-	--ct-peach: #c96442;
-	--ct-yellow: #a8781f;
-	--ct-green: #2f8a4f;
-	--ct-teal: #2a8078;
-	--ct-blue: #2c6cc0;
-	--ct-lavender: #5a7fc4;
-	--ct-mauve: #8a4fb8;
+  --ct-base: #faf9f5;
+  --ct-mantle: #f0eee6;
+  --ct-surface0: #e3e1d7;
+  --ct-surface1: #d6d3c7;
+  --ct-overlay0: #a3a29b;
+  --ct-overlay1: #87867f;
+  --ct-overlay2: #73726c;
+  --ct-subtext0: #5e5d59;
+  --ct-subtext1: #3d3d3a;
+  --ct-text: #141413;
+  --ct-red: #b93d52;
+  --ct-peach: #c96442;
+  --ct-yellow: #a8781f;
+  --ct-green: #2f8a4f;
+  --ct-teal: #2a8078;
+  --ct-blue: #2c6cc0;
+  --ct-lavender: #5a7fc4;
+  --ct-mauve: #8a4fb8;
 }
 
 /*
@@ -276,23 +276,23 @@
  */
 :root,
 [data-theme] {
-	/* Surfaces, from the backdrop up. */
-	--color-neutral-950: var(--ct-mantle);
-	--color-neutral-900: var(--ct-base);
-	--color-neutral-800: var(--ct-surface0);
-	--color-neutral-700: var(--ct-surface1);
-	/* Text, from barely-there to body. */
-	--color-neutral-600: var(--ct-overlay0);
-	--color-neutral-500: var(--ct-overlay1);
-	--color-neutral-400: var(--ct-overlay2);
-	--color-neutral-300: var(--ct-subtext0);
-	--color-neutral-200: var(--ct-subtext1);
-	--color-neutral-100: var(--ct-text);
-	--color-neutral-50: var(--ct-text);
+  /* Surfaces, from the backdrop up. */
+  --color-neutral-950: var(--ct-mantle);
+  --color-neutral-900: var(--ct-base);
+  --color-neutral-800: var(--ct-surface0);
+  --color-neutral-700: var(--ct-surface1);
+  /* Text, from barely-there to body. */
+  --color-neutral-600: var(--ct-overlay0);
+  --color-neutral-500: var(--ct-overlay1);
+  --color-neutral-400: var(--ct-overlay2);
+  --color-neutral-300: var(--ct-subtext0);
+  --color-neutral-200: var(--ct-subtext1);
+  --color-neutral-100: var(--ct-text);
+  --color-neutral-50: var(--ct-text);
 
-	/* Accents. Amber is "this session is working"; peach is its counterpart. */
-	--color-amber-400: var(--ct-peach);
-	/*
+  /* Accents. Amber is "this session is working"; peach is its counterpart. */
+  --color-amber-400: var(--ct-peach);
+  /*
 	 * The rest of the amber ramp, derived rather than sampled.
 	 *
 	 * Only `amber-400` was mapped for a long time, so every OTHER shade the UI
@@ -308,59 +308,59 @@
 	 * so a label on one of those grounds keeps its contrast in both
 	 * directions. Same `color-mix` trick as `red-900`/`red-950` below.
 	 */
-	--color-amber-200: color-mix(in oklab, var(--ct-peach) 55%, var(--ct-text));
-	--color-amber-300: color-mix(in oklab, var(--ct-peach) 75%, var(--ct-text));
-	--color-amber-500: color-mix(in oklab, var(--ct-peach) 88%, var(--ct-base));
-	--color-amber-600: color-mix(in oklab, var(--ct-peach) 74%, var(--ct-base));
-	--color-amber-700: color-mix(in oklab, var(--ct-peach) 58%, var(--ct-base));
-	--color-amber-800: color-mix(in oklab, var(--ct-peach) 44%, var(--ct-base));
-	--color-amber-900: color-mix(in oklab, var(--ct-peach) 30%, var(--ct-base));
-	--color-amber-950: color-mix(in oklab, var(--ct-peach) 16%, var(--ct-base));
-	--color-yellow-500: var(--ct-yellow);
-	--color-blue-400: var(--ct-blue);
-	--color-blue-300: var(--ct-lavender);
-	--color-pink-400: color-mix(in oklab, var(--ct-red), var(--ct-mauve));
-	/* Success. Only ever a tick on a settled call — the eye should be able to
+  --color-amber-200: color-mix(in oklab, var(--ct-peach) 55%, var(--ct-text));
+  --color-amber-300: color-mix(in oklab, var(--ct-peach) 75%, var(--ct-text));
+  --color-amber-500: color-mix(in oklab, var(--ct-peach) 88%, var(--ct-base));
+  --color-amber-600: color-mix(in oklab, var(--ct-peach) 74%, var(--ct-base));
+  --color-amber-700: color-mix(in oklab, var(--ct-peach) 58%, var(--ct-base));
+  --color-amber-800: color-mix(in oklab, var(--ct-peach) 44%, var(--ct-base));
+  --color-amber-900: color-mix(in oklab, var(--ct-peach) 30%, var(--ct-base));
+  --color-amber-950: color-mix(in oklab, var(--ct-peach) 16%, var(--ct-base));
+  --color-yellow-500: var(--ct-yellow);
+  --color-blue-400: var(--ct-blue);
+  --color-blue-300: var(--ct-lavender);
+  --color-pink-400: color-mix(in oklab, var(--ct-red), var(--ct-mauve));
+  /* Success. Only ever a tick on a settled call — the eye should be able to
 	   run down a column of them and see that none is red. */
-	--color-green-400: var(--ct-green);
-	--color-red-400: var(--ct-red);
-	--color-red-300: var(--ct-red);
-	/*
+  --color-green-400: var(--ct-green);
+  --color-red-400: var(--ct-red);
+  --color-red-300: var(--ct-red);
+  /*
 	 * Error boxes are a tint of the flavor's red over its own background,
 	 * rather than a fixed dark red: on Latte a `red-950` panel would be a
 	 * black hole in the middle of a light page.
 	 */
-	--color-red-900: color-mix(in oklab, var(--ct-red) 45%, var(--ct-base));
-	--color-red-950: color-mix(in oklab, var(--ct-red) 25%, var(--ct-base));
+  --color-red-900: color-mix(in oklab, var(--ct-red) 45%, var(--ct-base));
+  --color-red-950: color-mix(in oklab, var(--ct-red) 25%, var(--ct-base));
 
-	/*
+  /*
 	 * ANSI output follows the theme like everything else. It is rendered on
 	 * `neutral-900` (see Chat.tsx), which is the flavor's base — so pinning
 	 * these to a dark palette would make tool output unreadable on Latte.
 	 * Bright variants repeat the normal color, as Catppuccin's own terminal
 	 * ports do; only the greys have a genuine bright step.
 	 */
-	--ansi-black: var(--ct-surface1);
-	--ansi-red: var(--ct-red);
-	--ansi-green: var(--ct-green);
-	--ansi-yellow: var(--ct-yellow);
-	--ansi-blue: var(--ct-blue);
-	--ansi-magenta: var(--ct-mauve);
-	--ansi-cyan: var(--ct-teal);
-	--ansi-white: var(--ct-subtext1);
-	--ansi-bright-black: var(--ct-overlay0);
-	--ansi-bright-red: var(--ct-red);
-	--ansi-bright-green: var(--ct-green);
-	--ansi-bright-yellow: var(--ct-yellow);
-	--ansi-bright-blue: var(--ct-blue);
-	--ansi-bright-magenta: var(--ct-mauve);
-	--ansi-bright-cyan: var(--ct-teal);
-	--ansi-bright-white: var(--ct-text);
+  --ansi-black: var(--ct-surface1);
+  --ansi-red: var(--ct-red);
+  --ansi-green: var(--ct-green);
+  --ansi-yellow: var(--ct-yellow);
+  --ansi-blue: var(--ct-blue);
+  --ansi-magenta: var(--ct-mauve);
+  --ansi-cyan: var(--ct-teal);
+  --ansi-white: var(--ct-subtext1);
+  --ansi-bright-black: var(--ct-overlay0);
+  --ansi-bright-red: var(--ct-red);
+  --ansi-bright-green: var(--ct-green);
+  --ansi-bright-yellow: var(--ct-yellow);
+  --ansi-bright-blue: var(--ct-blue);
+  --ansi-bright-magenta: var(--ct-mauve);
+  --ansi-bright-cyan: var(--ct-teal);
+  --ansi-bright-white: var(--ct-text);
 }
 
 /* Form controls, scrollbars and the canvas behind a bounce-scroll. */
 :root {
-	color-scheme: dark;
+  color-scheme: dark;
 }
 
 /*
@@ -370,22 +370,22 @@
  * registered so the change transitions, and inherited so the thumb sees it.
  */
 @property --scrollbar-thumb {
-	syntax: "<color>";
-	inherits: true;
-	initial-value: transparent;
+  syntax: "<color>";
+  inherits: true;
+  initial-value: transparent;
 }
 
 @layer base {
-	/* In base, so Tailwind's transition-* utilities still win. */
-	* {
-		--scrollbar-thumb: transparent;
-		transition: --scrollbar-thumb 500ms;
-	}
+  /* In base, so Tailwind's transition-* utilities still win. */
+  * {
+    --scrollbar-thumb: transparent;
+    transition: --scrollbar-thumb 500ms;
+  }
 
-	[data-scrolling] {
-		--scrollbar-thumb: var(--color-neutral-700);
-		transition-duration: 100ms;
-	}
+  [data-scrolling] {
+    --scrollbar-thumb: var(--color-neutral-700);
+    transition-duration: 100ms;
+  }
 }
 
 /*
@@ -394,12 +394,12 @@
  * so CodeMirror, xterm and every future pane inherit it without a new rule.
  */
 @supports not selector(::-webkit-scrollbar) {
-	* {
-		scrollbar-width: thin;
-		/* var(), not theme(): theme() inlines the default at build time and would
+  * {
+    scrollbar-width: thin;
+    /* var(), not theme(): theme() inlines the default at build time and would
 		   ignore the active flavor. */
-		scrollbar-color: var(--scrollbar-thumb) transparent;
-	}
+    scrollbar-color: var(--scrollbar-thumb) transparent;
+  }
 }
 
 /*
@@ -408,27 +408,27 @@
  * thumb sits flush against the pane's edge.
  */
 @supports selector(::-webkit-scrollbar) {
-	/* 6px: the same thumb OverlayScrollbar draws over the transcript. */
-	::-webkit-scrollbar {
-		width: 6px;
-		height: 6px;
-		background: transparent;
-	}
+  /* 6px: the same thumb OverlayScrollbar draws over the transcript. */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+    background: transparent;
+  }
 
-	::-webkit-scrollbar-thumb {
-		background: var(--scrollbar-thumb);
-		border-radius: var(--radius-sm);
-	}
+  ::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+    border-radius: var(--radius-sm);
+  }
 
-	/* Hover only brightens a thumb already showing: passing over a hidden one must not pop it up. */
-	[data-scrolling]::-webkit-scrollbar-thumb:hover,
-	::-webkit-scrollbar-thumb:active {
-		background: var(--color-neutral-600);
-	}
+  /* Hover only brightens a thumb already showing: passing over a hidden one must not pop it up. */
+  [data-scrolling]::-webkit-scrollbar-thumb:hover,
+  ::-webkit-scrollbar-thumb:active {
+    background: var(--color-neutral-600);
+  }
 
-	::-webkit-scrollbar-corner {
-		background: transparent;
-	}
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
 }
 
 /*
@@ -436,18 +436,18 @@
  * default keeps the time right after the buttons. Unlayered, so it beats `ml-1`.
  */
 :root[data-footer="time-right"] .msg-footer-time {
-	margin-left: auto;
+  margin-left: auto;
 }
 
 :root[data-footer="buttons-right"] .msg-footer-time {
-	order: -1;
-	margin-left: 0;
-	margin-right: auto;
+  order: -1;
+  margin-left: 0;
+  margin-right: auto;
 }
 
 /* Settings > Hide scrollbars. The panes still scroll. */
 :root[data-scrollbars="hidden"] * {
-	scrollbar-width: none;
+  scrollbar-width: none;
 }
 
 /*
@@ -455,19 +455,19 @@
  * the native one reserves a strip at the edge that nothing can paint into.
  */
 .no-scrollbar {
-	scrollbar-width: none;
+  scrollbar-width: none;
 }
 
 .no-scrollbar::-webkit-scrollbar {
-	display: none;
+  display: none;
 }
 
 :root[data-scrollbars="hidden"] .overlay-scrollbar {
-	display: none;
+  display: none;
 }
 
 :root[data-light] {
-	color-scheme: light;
+  color-scheme: light;
 }
 
 /*
@@ -476,69 +476,69 @@
  * the native popup.
  */
 @supports (appearance: base-select) {
-	.pill-select,
-	.pill-select::picker(select) {
-		appearance: base-select;
-	}
-	.pill-select::picker(select) {
-		max-height: 60vh;
-		padding-block: 4px;
-		border: 1px solid var(--color-neutral-700);
-		border-radius: var(--radius-md);
-		background: var(--color-neutral-900);
-		box-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.5);
-	}
-	.pill-select optgroup {
-		padding-top: 4px;
-		font-size: var(--text-caption);
-		font-weight: normal;
-		letter-spacing: var(--tracking-wide);
-		text-transform: uppercase;
-		color: var(--color-neutral-500);
-	}
-	.pill-select option {
-		padding: 4px 12px;
-		font-size: var(--text-ui);
-		letter-spacing: normal;
-		text-transform: none;
-		color: var(--color-neutral-200);
-	}
-	.pill-select option:hover,
-	.pill-select option:focus-visible {
-		background: var(--color-neutral-800);
-		outline: none;
-	}
-	.pill-select option:checked {
-		color: var(--color-amber-400);
-	}
-	.pill-select option::checkmark {
-		display: none;
-	}
+  .pill-select,
+  .pill-select::picker(select) {
+    appearance: base-select;
+  }
+  .pill-select::picker(select) {
+    max-height: 60vh;
+    padding-block: 4px;
+    border: 1px solid var(--color-neutral-700);
+    border-radius: var(--radius-md);
+    background: var(--color-neutral-900);
+    box-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.5);
+  }
+  .pill-select optgroup {
+    padding-top: 4px;
+    font-size: var(--text-caption);
+    font-weight: normal;
+    letter-spacing: var(--tracking-wide);
+    text-transform: uppercase;
+    color: var(--color-neutral-500);
+  }
+  .pill-select option {
+    padding: 4px 12px;
+    font-size: var(--text-ui);
+    letter-spacing: normal;
+    text-transform: none;
+    color: var(--color-neutral-200);
+  }
+  .pill-select option:hover,
+  .pill-select option:focus-visible {
+    background: var(--color-neutral-800);
+    outline: none;
+  }
+  .pill-select option:checked {
+    color: var(--color-amber-400);
+  }
+  .pill-select option::checkmark {
+    display: none;
+  }
 }
 
 /* VS Code's Seti file icons (fileIcon.tsx). */
 @font-face {
-	font-family: seti;
-	src: url("/seti.woff") format("woff");
-	font-display: block;
+  font-family: seti;
+  src: url("/seti.woff") format("woff");
+  font-display: block;
 }
 .seti-icon {
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	font-family: seti;
-	line-height: 1;
-	color: var(--seti-dark);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: seti;
+  line-height: 1;
+  color: var(--seti-dark);
 }
 :root[data-light] .seti-icon {
-	color: var(--seti-light);
+  color: var(--seti-light);
 }
 
 html,
 body,
 #root {
-	height: 100%;
-	margin: 0;
+  height: 100%;
+  margin: 0;
 }
 
 /*
@@ -548,10 +548,10 @@ body,
  * scrollIntoView from scrolling it.
  */
 html {
-	overflow: hidden;
+  overflow: hidden;
 }
 body {
-	overflow: clip;
+  overflow: clip;
 }
 
 /*
@@ -559,10 +559,10 @@ body {
  * same color or an overscroll bounce reveals the browser canvas underneath.
  */
 body {
-	background: var(--color-neutral-950);
-	/* Unclassed text is chrome, so it defaults to the chrome size, not 16px. */
-	font-size: var(--text-ui);
-	line-height: var(--text-ui--line-height);
+  background: var(--color-neutral-950);
+  /* Unclassed text is chrome, so it defaults to the chrome size, not 16px. */
+  font-size: var(--text-ui);
+  line-height: var(--text-ui--line-height);
 }
 
 /*
@@ -584,7 +584,7 @@ body {
  * width lands in slack nothing else is using.
  */
 :root {
-	/*
+  /*
 	 * Not 66ch. Two reasons, both learned the hard way.
 	 *
 	 * `ch` is the width of "0", which in a proportional face is wider than the
@@ -599,14 +599,14 @@ body {
 	 * is the same width everywhere and still tracks the reader's own font
 	 * size, which is the part that matters.
 	 */
-	--measure: 38rem;
-	/* Wide track: ~120 columns of the code size, so ordinary source lines
+  --measure: 38rem;
+  /* Wide track: ~120 columns of the code size, so ordinary source lines
 	   and diff hunks land without wrapping or scrolling. */
-	--content-max: 68rem;
-	/* 17px. 16px is the floor, and a transcript is read for hours. */
-	--prose-size: 1.0625rem;
-	/* 15px monospace is the optical match for 17px sans. */
-	--code-size: 0.9375rem;
+  --content-max: 68rem;
+  /* 17px. 16px is the floor, and a transcript is read for hours. */
+  --prose-size: 1.0625rem;
+  /* 15px monospace is the optical match for 17px sans. */
+  --code-size: 0.9375rem;
 }
 
 /*
@@ -616,23 +616,22 @@ body {
  * track, and no component needs a wrapper div to say so.
  */
 .chat-gutter {
-	padding-inline: max(2.25rem, (100% - var(--content-max)) / 2);
+  padding-inline: max(2.25rem, (100% - var(--content-max)) / 2);
 }
 .chat-sticky-leading .chat-gutter {
-	padding-inline: 0;
+  padding-inline: 0;
 }
 
 /* Line height rises with the measure; 1.6 is the figure for ~66 characters. */
 .chat-prose {
-	font-size: var(--prose-size);
-	line-height: 1.6;
-	overflow-wrap: break-word;
+  font-size: var(--prose-size);
+  line-height: 1.6;
+  overflow-wrap: break-word;
 }
 /* Reasoning is italic by default; Markdown bold should remain upright. */
 .chat-reasoning strong {
-	font-style: normal;
+  font-style: normal;
 }
-
 
 /*
  * Anything read line by line. Applied per element, so a code block or table
@@ -646,8 +645,8 @@ body {
  * only the extra width a diff needs spills to the right.
  */
 .chat-measure {
-	max-width: var(--measure);
-	margin-inline: auto;
+  max-width: var(--measure);
+  margin-inline: auto;
 }
 
 /*
@@ -666,7 +665,7 @@ body {
  * construction rather than by a matching magic number.
  */
 .chat-wide {
-	margin-inline-start: max(0px, (100% - var(--measure)) / 2);
+  margin-inline-start: max(0px, (100% - var(--measure)) / 2);
 }
 
 /*
@@ -684,12 +683,12 @@ body {
  * rule knowing it is nested.
  */
 .chat-nested {
-	--measure: 100%;
+  --measure: 100%;
 }
 
 .chat-code {
-	font-size: var(--code-size);
-	line-height: 1.5;
+  font-size: var(--code-size);
+  line-height: 1.5;
 }
 
 /*
@@ -700,13 +699,13 @@ body {
  * which plain `overflow-x: auto` inside a flex row does not get on its own.
  */
 .tab-strip {
-	-webkit-overflow-scrolling: touch;
-	/* Flicking to the end of the strip must not start a page/pull-to-refresh
+  -webkit-overflow-scrolling: touch;
+  /* Flicking to the end of the strip must not start a page/pull-to-refresh
 	   gesture behind it. */
-	overscroll-behavior-x: contain;
-	/* The wheel and touch already scroll it; a scrollbar row under the tabs is
+  overscroll-behavior-x: contain;
+  /* The wheel and touch already scroll it; a scrollbar row under the tabs is
 	   clutter. */
-	scrollbar-width: none;
+  scrollbar-width: none;
 }
 
 /*
@@ -716,66 +715,66 @@ body {
  * has no timeline, so no fade.
  */
 @property --scroll-fade-start {
-	syntax: "<length>";
-	inherits: false;
-	initial-value: 0px;
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
 }
 
 @property --scroll-fade-end {
-	syntax: "<length>";
-	inherits: false;
-	initial-value: 0px;
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
 }
 
 @supports (animation-timeline: scroll()) {
-	.scroll-fade-x,
-	.scroll-fade-y {
-		animation:
-			scroll-fade-start linear both,
-			scroll-fade-end linear both;
-		animation-range:
-			0 2em,
-			calc(100% - 2em) 100%;
-	}
+  .scroll-fade-x,
+  .scroll-fade-y {
+    animation:
+      scroll-fade-start linear both,
+      scroll-fade-end linear both;
+    animation-range:
+      0 2em,
+      calc(100% - 2em) 100%;
+  }
 
-	.scroll-fade-x {
-		mask-image: linear-gradient(
-			to right,
-			transparent,
-			#000 var(--scroll-fade-start),
-			#000 calc(100% - var(--scroll-fade-end)),
-			transparent
-		);
-		animation-timeline: scroll(self inline);
-	}
+  .scroll-fade-x {
+    mask-image: linear-gradient(
+      to right,
+      transparent,
+      #000 var(--scroll-fade-start),
+      #000 calc(100% - var(--scroll-fade-end)),
+      transparent
+    );
+    animation-timeline: scroll(self inline);
+  }
 
-	.scroll-fade-y {
-		mask-image: linear-gradient(
-			transparent,
-			#000 var(--scroll-fade-start),
-			#000 calc(100% - var(--scroll-fade-end)),
-			transparent
-		);
-		animation-timeline: scroll(self block);
-	}
+  .scroll-fade-y {
+    mask-image: linear-gradient(
+      transparent,
+      #000 var(--scroll-fade-start),
+      #000 calc(100% - var(--scroll-fade-end)),
+      transparent
+    );
+    animation-timeline: scroll(self block);
+  }
 }
 
 @keyframes scroll-fade-start {
-	from {
-		--scroll-fade-start: 0px;
-	}
-	to {
-		--scroll-fade-start: 2em;
-	}
+  from {
+    --scroll-fade-start: 0px;
+  }
+  to {
+    --scroll-fade-start: 2em;
+  }
 }
 
 @keyframes scroll-fade-end {
-	from {
-		--scroll-fade-end: 2em;
-	}
-	to {
-		--scroll-fade-end: 0px;
-	}
+  from {
+    --scroll-fade-end: 2em;
+  }
+  to {
+    --scroll-fade-end: 0px;
+  }
 }
 
 /*
@@ -785,9 +784,9 @@ body {
  * utility, and utilities live in a cascade layer.
  */
 @media (pointer: coarse) {
-	.tab-close {
-		opacity: 1;
-	}
+  .tab-close {
+    opacity: 1;
+  }
 }
 
 /*
@@ -797,85 +796,89 @@ body {
  * without scroll timelines keep the ellipsis.
  */
 .fade-end {
-	overflow: hidden;
-	white-space: nowrap;
-	text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 @supports (animation-timeline: scroll()) {
-	.fade-end {
-		text-overflow: clip;
-		animation: fade-end linear both;
-		animation-timeline: scroll(self inline);
-	}
+  .fade-end {
+    text-overflow: clip;
+    animation: fade-end linear both;
+    animation-timeline: scroll(self inline);
+  }
 }
 
 .tab-strip:not([data-overflow]),
 .tab-strip .fade-end:not([data-overflow]) {
-	animation: none;
-	mask-image: none;
+  animation: none;
+  mask-image: none;
 }
 
 @keyframes fade-end {
-	from,
-	to {
-		mask-image: linear-gradient(to right, #000 calc(100% - 2em), transparent);
-	}
+  from,
+  to {
+    mask-image: linear-gradient(to right, #000 calc(100% - 2em), transparent);
+  }
 }
 
 /* A label stretched to its row's right edge: whatever reaches the last 2em fades, fitting or not. */
 .fade-edge {
-	overflow: hidden;
-	white-space: nowrap;
-	mask-image: linear-gradient(to right, #000 calc(100% - 2em), transparent);
+  overflow: hidden;
+  white-space: nowrap;
+  mask-image: linear-gradient(to right, #000 calc(100% - 2em), transparent);
 }
 
 /* A session list title: one `.fade-edge` line, or wrapped to Settings > Sessions > Title lines with its last line fading at the edge. */
 .session-title {
-	max-height: 1lh;
-	overflow: hidden;
-	white-space: nowrap;
-	mask-image: linear-gradient(#000 0 0), linear-gradient(to right, #000 calc(100% - 2em), transparent);
-	mask-size:
-		100% calc(100% - 1lh),
-		100% 1lh;
-	mask-position: top, bottom;
-	mask-repeat: no-repeat;
+  max-height: 1lh;
+  overflow: hidden;
+  white-space: nowrap;
+  mask-image:
+    linear-gradient(#000 0 0),
+    linear-gradient(to right, #000 calc(100% - 2em), transparent);
+  mask-size:
+    100% calc(100% - 1lh),
+    100% 1lh;
+  mask-position: top, bottom;
+  mask-repeat: no-repeat;
 }
 [data-session-lines] .session-title {
-	white-space: normal;
-	overflow-wrap: anywhere;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 [data-session-lines="2"] .session-title {
-	max-height: 2lh;
+  max-height: 2lh;
 }
 [data-session-lines="3"] .session-title {
-	max-height: 3lh;
+  max-height: 3lh;
 }
 [data-session-lines="all"] .session-title {
-	max-height: none;
+  max-height: none;
 }
 
 /* Three lines, the last fading out at its end like `.fade-end`. Only set it when the text overflows. */
 .fade-clamp {
-	max-height: 3lh;
-	overflow: hidden;
-	mask-image: linear-gradient(#000 0 0), linear-gradient(to right, #000 calc(100% - 4em), transparent);
-	mask-size:
-		100% calc(100% - 1lh),
-		100% 1lh;
-	mask-position: top, bottom;
-	mask-repeat: no-repeat;
+  max-height: 3lh;
+  overflow: hidden;
+  mask-image:
+    linear-gradient(#000 0 0),
+    linear-gradient(to right, #000 calc(100% - 4em), transparent);
+  mask-size:
+    100% calc(100% - 1lh),
+    100% 1lh;
+  mask-position: top, bottom;
+  mask-repeat: no-repeat;
 }
 
 /* Number fields are typed into; the browser's spin arrows are clutter. */
 input[type="number"] {
-	appearance: textfield;
+  appearance: textfield;
 }
 input[type="number"]::-webkit-inner-spin-button,
 input[type="number"]::-webkit-outer-spin-button {
-	appearance: none;
-	margin: 0;
+  appearance: none;
+  margin: 0;
 }
 
 /*
@@ -883,54 +886,54 @@ input[type="number"]::-webkit-outer-spin-button {
  * inline), and a 12px amber dot.
  */
 .range {
-	appearance: none;
-	height: 1rem;
-	background: transparent;
-	cursor: pointer;
+  appearance: none;
+  height: 1rem;
+  background: transparent;
+  cursor: pointer;
 }
 .range::-webkit-slider-runnable-track {
-	height: 4px;
-	border-radius: 9999px;
-	background: linear-gradient(
-		to right,
-		var(--color-amber-400) var(--fill),
-		var(--color-neutral-700) var(--fill)
-	);
+  height: 4px;
+  border-radius: 9999px;
+  background: linear-gradient(
+    to right,
+    var(--color-amber-400) var(--fill),
+    var(--color-neutral-700) var(--fill)
+  );
 }
 .range::-webkit-slider-thumb {
-	appearance: none;
-	width: 12px;
-	height: 12px;
-	margin-top: -4px;
-	border-radius: 9999px;
-	background: var(--color-amber-400);
-	transition: transform 150ms ease-out;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  margin-top: -4px;
+  border-radius: 9999px;
+  background: var(--color-amber-400);
+  transition: transform 150ms ease-out;
 }
 .range:hover::-webkit-slider-thumb,
 .range:active::-webkit-slider-thumb {
-	transform: scale(1.25);
+  transform: scale(1.25);
 }
 .range::-moz-range-track {
-	height: 4px;
-	border-radius: 9999px;
-	background: var(--color-neutral-700);
+  height: 4px;
+  border-radius: 9999px;
+  background: var(--color-neutral-700);
 }
 .range::-moz-range-progress {
-	height: 4px;
-	border-radius: 9999px;
-	background: var(--color-amber-400);
+  height: 4px;
+  border-radius: 9999px;
+  background: var(--color-amber-400);
 }
 .range::-moz-range-thumb {
-	width: 12px;
-	height: 12px;
-	border: none;
-	border-radius: 9999px;
-	background: var(--color-amber-400);
+  width: 12px;
+  height: 12px;
+  border: none;
+  border-radius: 9999px;
+  background: var(--color-amber-400);
 }
 
 /* The transcript fades out above the composer; the gradient is built from Settings (prefs.ts `applyChatFade`). */
 .fade-bottom {
-	mask-image: var(--chat-fade);
+  mask-image: var(--chat-fade);
 }
 
 /*
@@ -941,54 +944,55 @@ input[type="number"]::-webkit-outer-spin-button {
  */
 .flow-trim-start > :first-child,
 .flow-trim > :first-child {
-	margin-top: 0;
+  margin-top: 0;
 }
 .flow-trim-end > :last-child,
 .flow-trim > :last-child {
-	margin-bottom: 0;
+  margin-bottom: 0;
 }
 /* Dense work folds use tighter Markdown spacing than the main transcript. */
 .chat-round-work :is(p, ul, ol, blockquote, h1, h2, h3, h4, pre, table) {
-	margin-block: 0;
+  margin-block: 0;
 }
 /* Tool disclosures sit flush against the prose and one another in round work. */
 .chat-round-work > .chat-wide {
-	margin-block: 0;
+  margin-block: 0;
 }
 
 /* React Bits-style live progress: muted base, lavender shine, no white.
  * Motion moves the highlight fully off-screen before looping. This requested
  * progress signal stays animated independently of decorative motion settings. */
 .work-shimmer {
-	display: inline-block;
-	color: var(--color-neutral-500);
+  display: inline-block;
+  color: var(--color-neutral-500);
 }
 
 @supports (background-clip: text) or (-webkit-background-clip: text) {
-	.work-shimmer {
-		background-image: linear-gradient(120deg,
-			var(--color-neutral-500) 0%,
-			var(--color-neutral-500) 35%,
-			var(--ct-mauve) 50%,
-			var(--color-neutral-500) 65%,
-			var(--color-neutral-500) 100%);
-		background-size: 200% 100%;
-		background-clip: text;
-		-webkit-background-clip: text;
-		color: transparent;
-		-webkit-text-fill-color: transparent;
-	}
+  .work-shimmer {
+    background-image: linear-gradient(
+      120deg,
+      var(--color-neutral-500) 0%,
+      var(--color-neutral-500) 35%,
+      var(--ct-mauve) 50%,
+      var(--color-neutral-500) 65%,
+      var(--color-neutral-500) 100%
+    );
+    background-size: 200% 100%;
+    background-clip: text;
+    -webkit-background-clip: text;
+    color: transparent;
+    -webkit-text-fill-color: transparent;
+  }
 }
-
 
 /*
  * The streaming dot pulses to mean "live". Under reduced motion the amber dot
  * alone still carries that, so the animation goes and the signal stays.
  */
 @media (prefers-reduced-motion: reduce) {
-	.animate-pulse {
-		animation: none;
-	}
+  .animate-pulse {
+    animation: none;
+  }
 }
 
 /*
@@ -1003,18 +1007,18 @@ input[type="number"]::-webkit-outer-spin-button {
  * readable to target — same reasoning as `.tab-close`.
  */
 @keyframes fade-in-late {
-	0%,
-	25% {
-		opacity: 0;
-	}
-	100% {
-		opacity: 1;
-	}
+  0%,
+  25% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
 }
 
 .opening-label {
-	opacity: 0;
-	animation: fade-in-late 1.2s ease-out forwards;
+  opacity: 0;
+  animation: fade-in-late 1.2s ease-out forwards;
 }
 
 /*
@@ -1023,9 +1027,9 @@ input[type="number"]::-webkit-outer-spin-button {
  * survives and nothing animates.
  */
 @media (prefers-reduced-motion: reduce) {
-	.opening-label {
-		animation: fade-in-late 1.2s steps(1, jump-end) forwards;
-	}
+  .opening-label {
+    animation: fade-in-late 1.2s steps(1, jump-end) forwards;
+  }
 }
 
 /*
@@ -1037,19 +1041,19 @@ input[type="number"]::-webkit-outer-spin-button {
  * its own colours — the mistake Terminal.tsx records having made with xterm.
  */
 .cm-review .cm-editor {
-	background: var(--color-neutral-950);
-	color: var(--color-neutral-200);
+  background: var(--color-neutral-950);
+  color: var(--color-neutral-200);
 }
 
 .cm-review .cm-gutters {
-	background: var(--color-neutral-950);
-	color: var(--color-neutral-600);
-	border-right: 1px solid var(--color-neutral-800);
+  background: var(--color-neutral-950);
+  color: var(--color-neutral-600);
+  border-right: 1px solid var(--color-neutral-800);
 }
 
 /* A read-only pane still draws a cursor without this, which invites typing. */
 .cm-review .cm-cursor {
-	display: none;
+  display: none;
 }
 
 /*
@@ -1058,16 +1062,16 @@ input[type="number"]::-webkit-outer-spin-button {
  * into noise.
  */
 .cm-review .cm-changedLine {
-	background: color-mix(in oklab, var(--color-green-500) 12%, transparent);
+  background: color-mix(in oklab, var(--color-green-500) 12%, transparent);
 }
 
 .cm-review .cm-deletedChunk {
-	background: color-mix(in oklab, var(--color-red-500) 12%, transparent);
-	color: var(--color-neutral-400);
+  background: color-mix(in oklab, var(--color-red-500) 12%, transparent);
+  color: var(--color-neutral-400);
 }
 
 .cm-review .cm-changedText {
-	background: color-mix(in oklab, var(--color-green-500) 22%, transparent);
+  background: color-mix(in oklab, var(--color-green-500) 22%, transparent);
 }
 
 /*
@@ -1084,45 +1088,45 @@ input[type="number"]::-webkit-outer-spin-button {
  */
 .cm-editor-host,
 .cm-editor-host .cm-editor {
-	height: 100%;
+  height: 100%;
 }
 
 .cm-editor-host .cm-editor {
-	background: var(--ed-bg);
-	color: var(--ed-fg);
+  background: var(--ed-bg);
+  color: var(--ed-fg);
 }
 
 /* Without this the focused editor wears the browser's default focus ring. */
 .cm-editor-host .cm-editor.cm-focused {
-	outline: none;
+  outline: none;
 }
 
 .cm-editor-host .cm-scroller {
-	font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-	line-height: 1.5;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  line-height: 1.5;
 }
 
 .cm-editor-host .cm-gutters {
-	background: var(--ed-bg);
-	color: var(--ed-gutter);
-	border-right: none;
+  background: var(--ed-bg);
+  color: var(--ed-gutter);
+  border-right: none;
 }
 
 .cm-editor-host .cm-activeLine {
-	background: var(--ed-line);
+  background: var(--ed-line);
 }
 
 .cm-editor-host .cm-hasSelection .cm-activeLine {
-	background: transparent;
+  background: transparent;
 }
 
 .cm-editor-host .cm-activeLineGutter {
-	background: transparent;
-	color: var(--ed-gutter-active);
+  background: transparent;
+  color: var(--ed-gutter-active);
 }
 
 .cm-editor-host .cm-cursor {
-	border-left-color: var(--ed-cursor);
+  border-left-color: var(--ed-cursor);
 }
 
 /*
@@ -1132,20 +1136,20 @@ input[type="number"]::-webkit-outer-spin-button {
  * leading tabs short. 6px is CodeMirror's own .cm-line left padding.
  */
 .cm-content .cm-wrapIndent {
-	--wrap-pad: 6px;
+  --wrap-pad: 6px;
 }
 
 /* The same wrapping for chat code blocks, one block per line. */
 .code-line {
-	--wrap-pad: 0px;
-	display: block;
-	min-height: 1lh;
+  --wrap-pad: 0px;
+  display: block;
+  min-height: 1lh;
 }
 
 .cm-content .cm-wrapIndent,
 .code-line {
-	position: relative;
-	text-indent: var(--indent) hanging;
+  position: relative;
+  text-indent: var(--indent) hanging;
 }
 
 /*
@@ -1153,46 +1157,50 @@ input[type="number"]::-webkit-outer-spin-button {
  * clicking the tree and back should not make you lose what you had selected.
  */
 /* Specific enough to beat CodeMirror's light base theme (#d7d4f0 when focused). */
-.cm-editor-host .cm-editor.cm-focused .cm-scroller .cm-selectionLayer .cm-selectionBackground,
+.cm-editor-host
+  .cm-editor.cm-focused
+  .cm-scroller
+  .cm-selectionLayer
+  .cm-selectionBackground,
 .cm-editor-host .cm-content ::selection {
-	background: var(--ed-selection);
+  background: var(--ed-selection);
 }
 
 .cm-editor-host .cm-editor .cm-selectionLayer .cm-selectionBackground {
-	background: var(--ed-selection-inactive);
+  background: var(--ed-selection-inactive);
 }
 
 .cm-editor-host .cm-selectionMatch {
-	background: var(--ed-selection-match);
+  background: var(--ed-selection-match);
 }
 
 .cm-editor-host .cm-matchingBracket {
-	background: var(--ed-bracket);
-	outline: 1px solid var(--ed-bracket-border);
+  background: var(--ed-bracket);
+  outline: 1px solid var(--ed-bracket-border);
 }
 
 /* The search panel and autocomplete popup are chrome CodeMirror draws itself,
    and default to a light theme that flashes white over a dark editor. */
 .cm-editor-host .cm-panels {
-	background: var(--ed-widget);
-	color: var(--ed-widget-fg);
-	border-color: var(--ed-widget-border);
+  background: var(--ed-widget);
+  color: var(--ed-widget-fg);
+  border-color: var(--ed-widget-border);
 }
 
 .cm-editor-host .cm-panel input,
 .cm-editor-host .cm-panel button {
-	background: var(--ed-input);
-	color: var(--ed-widget-fg);
-	border: 1px solid var(--ed-widget-border);
+  background: var(--ed-input);
+  color: var(--ed-widget-fg);
+  border: 1px solid var(--ed-widget-border);
 }
 
 .cm-editor-host .cm-tooltip {
-	background: var(--ed-widget);
-	color: var(--ed-widget-fg);
-	border: 1px solid var(--ed-widget-border);
+  background: var(--ed-widget);
+  color: var(--ed-widget-fg);
+  border: 1px solid var(--ed-widget-border);
 }
 
 .cm-editor-host .cm-tooltip-autocomplete ul li[aria-selected] {
-	background: var(--ed-list-active);
-	color: var(--ed-list-active-fg);
+  background: var(--ed-list-active);
+  color: var(--ed-list-active-fg);
 }

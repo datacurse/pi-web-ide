@@ -2,18 +2,30 @@ import type { PiMessage, PiSessionInfo } from "../shared/types.js";
 import { sessionPreview } from "../shared/sessionPreview.js";
 import { t } from "./i18n.js";
 
-export function sessionPrompts(messages: PiMessage[]): Partial<Pick<PiSessionInfo, "firstMessage" | "lastPrompt" | "firstAttachments" | "lastAttachments">> {
-	const prompts = messages
-		.filter((m) => m.role === "user")
-		.map((m) => sessionPreview(m.blocks.find((b) => b.kind === "text")?.text ?? "", m.blocks.filter((b) => b.kind === "image").length))
-		.filter((preview) => preview.text || preview.attachments.length);
-	if (!prompts.length) return {};
-	return {
-		firstMessage: prompts[0].text,
-		lastPrompt: prompts[prompts.length - 1].text,
-		firstAttachments: prompts[0].attachments,
-		lastAttachments: prompts[prompts.length - 1].attachments,
-	};
+export function sessionPrompts(
+  messages: PiMessage[],
+): Partial<
+  Pick<
+    PiSessionInfo,
+    "firstMessage" | "lastPrompt" | "firstAttachments" | "lastAttachments"
+  >
+> {
+  const prompts = messages
+    .filter((m) => m.role === "user")
+    .map((m) =>
+      sessionPreview(
+        m.blocks.find((b) => b.kind === "text")?.text ?? "",
+        m.blocks.filter((b) => b.kind === "image").length,
+      ),
+    )
+    .filter((preview) => preview.text || preview.attachments.length);
+  if (!prompts.length) return {};
+  return {
+    firstMessage: prompts[0].text,
+    lastPrompt: prompts[prompts.length - 1].text,
+    firstAttachments: prompts[0].attachments,
+    lastAttachments: prompts[prompts.length - 1].attachments,
+  };
 }
 /**
  * What a session is CALLED, in one place.
@@ -32,18 +44,34 @@ export function sessionPrompts(messages: PiMessage[]): Partial<Pick<PiSessionInf
  * the row wraps or fades at its edge rather than cutting it short.
  */
 export function sessionLabel(
-	info: Partial<Pick<PiSessionInfo, "name" | "firstMessage" | "lastPrompt" | "firstAttachments" | "lastAttachments">> | undefined,
-	latest: boolean,
+  info:
+    | Partial<
+        Pick<
+          PiSessionInfo,
+          | "name"
+          | "firstMessage"
+          | "lastPrompt"
+          | "firstAttachments"
+          | "lastAttachments"
+        >
+      >
+    | undefined,
+  latest: boolean,
 ): string {
-	const name = info?.name?.trim();
-	if (name) return name;
-	// One line: this is raw prompt text, and a leading newline would render as
-	// an empty row.
-	const source = latest ? info?.lastPrompt ?? info?.firstMessage : info?.firstMessage;
-	const preview = sessionPreview(source ?? "");
-	const prompt = preview.text.replace(/\s+/g, " ").trim();
-	const attachments = (latest ? info?.lastAttachments ?? info?.firstAttachments : info?.firstAttachments) ?? preview.attachments;
-	return prompt || (attachments.length ? t("Attachments") : t("New session"));
+  const name = info?.name?.trim();
+  if (name) return name;
+  // One line: this is raw prompt text, and a leading newline would render as
+  // an empty row.
+  const source = latest
+    ? (info?.lastPrompt ?? info?.firstMessage)
+    : info?.firstMessage;
+  const preview = sessionPreview(source ?? "");
+  const prompt = preview.text.replace(/\s+/g, " ").trim();
+  const attachments =
+    (latest
+      ? (info?.lastAttachments ?? info?.firstAttachments)
+      : info?.firstAttachments) ?? preview.attachments;
+  return prompt || (attachments.length ? t("Attachments") : t("New session"));
 }
 
 /**
@@ -75,38 +103,37 @@ const SHORT_CHARS = 48;
  * item, which hands the job to the server's one-shot naming child.
  */
 export function shortName(firstMessage: string): string {
-	const line = sessionPreview(firstMessage).text.replace(/\s+/g, " ").trim();
-	if (!line) return "";
-	// Up to the first sentence end. `[^.!?]+` and not a split, so a prompt with
-	// no punctuation at all is simply the whole line.
-	let sentence = /^[^.!?]+/.exec(line)?.[0] ?? line;
-	/*
-	 * A comma ends the clause too, but ONLY when what follows it is another
-	 * instruction: "fix the parser, and then run the tests" is about fixing
-	 * the parser. A word-count rule was the first attempt and it cut in the
-	 * wrong place twice over — "hey, can you fix the parser" became "Hey", and
-	 * "tell me please, do i have code for X" became "Tell me please", which
-	 * names the politeness and drops the subject.
-	 */
-	const clause = /^(.+?),\s+(?:and|then|but|so|or|also|plus)\b/i.exec(sentence);
-	if (clause) sentence = clause[1];
+  const line = sessionPreview(firstMessage).text.replace(/\s+/g, " ").trim();
+  if (!line) return "";
+  // Up to the first sentence end. `[^.!?]+` and not a split, so a prompt with
+  // no punctuation at all is simply the whole line.
+  let sentence = /^[^.!?]+/.exec(line)?.[0] ?? line;
+  /*
+   * A comma ends the clause too, but ONLY when what follows it is another
+   * instruction: "fix the parser, and then run the tests" is about fixing
+   * the parser. A word-count rule was the first attempt and it cut in the
+   * wrong place twice over — "hey, can you fix the parser" became "Hey", and
+   * "tell me please, do i have code for X" became "Tell me please", which
+   * names the politeness and drops the subject.
+   */
+  const clause = /^(.+?),\s+(?:and|then|but|so|or|also|plus)\b/i.exec(sentence);
+  if (clause) sentence = clause[1];
 
-	let out = "";
-	for (const word of sentence.trim().split(" ").slice(0, SHORT_WORDS)) {
-		const next = out ? `${out} ${word}` : word;
-		// A single word past the ceiling is still that word, truncated: the
-		// alternative is an empty name.
-		if (next.length > SHORT_CHARS) {
-			if (out) break;
-			out = word.slice(0, SHORT_CHARS);
-			break;
-		}
-		out = next;
-	}
+  let out = "";
+  for (const word of sentence.trim().split(" ").slice(0, SHORT_WORDS)) {
+    const next = out ? `${out} ${word}` : word;
+    // A single word past the ceiling is still that word, truncated: the
+    // alternative is an empty name.
+    if (next.length > SHORT_CHARS) {
+      if (out) break;
+      out = word.slice(0, SHORT_CHARS);
+      break;
+    }
+    out = next;
+  }
 
-	// Trailing punctuation is a leftover of where the clause was cut, never
-	// part of the name: "fix the parser," reads as unfinished.
-	out = out.replace(/[\s,;:–—-]+$/, "");
-	return out ? out[0].toUpperCase() + out.slice(1) : line.slice(0, SHORT_CHARS);
+  // Trailing punctuation is a leftover of where the clause was cut, never
+  // part of the name: "fix the parser," reads as unfinished.
+  out = out.replace(/[\s,;:–—-]+$/, "");
+  return out ? out[0].toUpperCase() + out.slice(1) : line.slice(0, SHORT_CHARS);
 }
-

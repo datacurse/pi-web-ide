@@ -25,29 +25,35 @@ const TERM_PREFIX = "term:";
 
 /** A server shell shown as an editor tab instead of in the dock. */
 export const termTab = (id: string): string => `${TERM_PREFIX}${id}`;
-export const isTermTab = (entry: string): boolean => entry.startsWith(TERM_PREFIX);
-export const termId = (entry: string): string => entry.slice(TERM_PREFIX.length);
+export const isTermTab = (entry: string): boolean =>
+  entry.startsWith(TERM_PREFIX);
+export const termId = (entry: string): string =>
+  entry.slice(TERM_PREFIX.length);
 
 /**
  * A `page:` entry stored when Stats, Packages and Settings were tabs. They are a
  * dialog now; this only keeps a stale one from being taken for a session.
  */
-export const isPageTab = (entry: string): boolean => entry.startsWith(PAGE_PREFIX);
+export const isPageTab = (entry: string): boolean =>
+  entry.startsWith(PAGE_PREFIX);
 
 /** The tab entry for an open file. */
 export const fileTab = (path: string): string => `${FILE_PREFIX}${path}`;
 
 /** True when this entry is a file rather than a chat session or a diff. */
-export const isFileTab = (entry: string): boolean => entry.startsWith(FILE_PREFIX);
+export const isFileTab = (entry: string): boolean =>
+  entry.startsWith(FILE_PREFIX);
 
 /**
  * The tab entry for one file's diff. `ref` is a commit sha, or "" for the
  * working tree — the same two cases `/api/git/show` takes.
  */
-export const diffTab = (ref: string, path: string): string => `${DIFF_PREFIX}${ref}:${path}`;
+export const diffTab = (ref: string, path: string): string =>
+  `${DIFF_PREFIX}${ref}:${path}`;
 
 /** True when this entry is a diff view rather than an editable file. */
-export const isDiffTab = (entry: string): boolean => entry.startsWith(DIFF_PREFIX);
+export const isDiffTab = (entry: string): boolean =>
+  entry.startsWith(DIFF_PREFIX);
 
 /**
  * The commit and path inside a diff entry.
@@ -56,18 +62,23 @@ export const isDiffTab = (entry: string): boolean => entry.startsWith(DIFF_PREFI
  * path legitimately can.
  */
 export function diffParts(entry: string): { ref: string; path: string } {
-	const rest = entry.slice(DIFF_PREFIX.length);
-	const cut = rest.indexOf(":");
-	return cut < 0 ? { ref: "", path: rest } : { ref: rest.slice(0, cut), path: rest.slice(cut + 1) };
+  const rest = entry.slice(DIFF_PREFIX.length);
+  const cut = rest.indexOf(":");
+  return cut < 0
+    ? { ref: "", path: rest }
+    : { ref: rest.slice(0, cut), path: rest.slice(cut + 1) };
 }
 
 /** True when this entry is a chat session: the only kind App attaches to. */
 export const isSessionTab = (entry: string): boolean =>
-	!isFileTab(entry) && !isDiffTab(entry) && !isPageTab(entry) && !isTermTab(entry);
+  !isFileTab(entry) &&
+  !isDiffTab(entry) &&
+  !isPageTab(entry) &&
+  !isTermTab(entry);
 
 /** The absolute path inside a file or diff entry. Meaningless for a session. */
 export const tabPath = (entry: string): string =>
-	isDiffTab(entry) ? diffParts(entry).path : entry.slice(FILE_PREFIX.length);
+  isDiffTab(entry) ? diffParts(entry).path : entry.slice(FILE_PREFIX.length);
 
 /**
  * The name a tab shows: its basename, or the whole path if it has none.
@@ -77,12 +88,14 @@ export const tabPath = (entry: string): string =>
  * identical tabs.
  */
 export const tabLabel = (entry: string): string => {
-	if (isTermTab(entry)) return t("Terminal");
-	const path = tabPath(entry);
-	const name = path.split("/").pop() || path;
-	if (!isDiffTab(entry)) return name;
-	const { ref } = diffParts(entry);
-	return ref ? `${name} (${ref.slice(0, 7)})` : t("{name} ↔ working tree", { name });
+  if (isTermTab(entry)) return t("Terminal");
+  const path = tabPath(entry);
+  const name = path.split("/").pop() || path;
+  if (!isDiffTab(entry)) return name;
+  const { ref } = diffParts(entry);
+  return ref
+    ? `${name} (${ref.slice(0, 7)})`
+    : t("{name} ↔ working tree", { name });
 };
 
 /**
@@ -93,8 +106,8 @@ export const tabLabel = (entry: string): string => {
  * resizable tree of splits, which is a different feature.
  */
 export interface TabGroup {
-	files: string[];
-	active?: string;
+  files: string[];
+  active?: string;
 }
 
 /** Which editor column. The split has exactly two; see TabGroup. */
@@ -108,17 +121,17 @@ export type Side = "left" | "right";
  * would drop every remembered tab on upgrade, to no benefit.
  */
 export interface TabState {
-	files: string[];
-	active?: string;
-	/** Undefined means unsplit; an empty group cannot occur (see `withGroup`). */
-	right?: TabGroup;
+  files: string[];
+  active?: string;
+  /** Undefined means unsplit; an empty group cannot occur (see `withGroup`). */
+  right?: TabGroup;
 }
 
 /** One column's tabs, whichever half it is. */
 export function groupOf<T extends TabState>(tabs: T, side: Side): TabGroup {
-	return side === "left"
-		? { files: tabs.files, active: tabs.active }
-		: (tabs.right ?? { files: [] });
+  return side === "left"
+    ? { files: tabs.files, active: tabs.active }
+    : (tabs.right ?? { files: [] });
 }
 
 /**
@@ -134,13 +147,14 @@ export function groupOf<T extends TabState>(tabs: T, side: Side): TabGroup {
  * different tabs.
  */
 export function sideOfTab<T extends TabState>(
-	tabs: T,
-	entry: string,
-	alt?: string,
+  tabs: T,
+  entry: string,
+  alt?: string,
 ): Side | null {
-	const has = (files: string[]) => files.some((f) => f === entry || (alt !== undefined && f === alt));
-	if (has(tabs.right?.files ?? [])) return "right";
-	return has(tabs.files) ? "left" : null;
+  const has = (files: string[]) =>
+    files.some((f) => f === entry || (alt !== undefined && f === alt));
+  if (has(tabs.right?.files ?? [])) return "right";
+  return has(tabs.files) ? "left" : null;
 }
 
 /**
@@ -151,10 +165,14 @@ export function sideOfTab<T extends TabState>(
  * "no open sessions" hint, and a layout with no first column would have
  * nowhere to put a tab back.
  */
-export function withGroup<T extends TabState>(tabs: T, side: Side, group: TabGroup): T {
-	return side === "left"
-		? { ...tabs, files: group.files, active: group.active }
-		: { ...tabs, right: group.files.length > 0 ? group : undefined };
+export function withGroup<T extends TabState>(
+  tabs: T,
+  side: Side,
+  group: TabGroup,
+): T {
+  return side === "left"
+    ? { ...tabs, files: group.files, active: group.active }
+    : { ...tabs, right: group.files.length > 0 ? group : undefined };
 }
 
 /**
@@ -169,8 +187,13 @@ export function withGroup<T extends TabState>(tabs: T, side: Side, group: TabGro
  * the right column's tabs into the left before the second write lands.
  */
 export function collapse<T extends TabState>(tabs: T): T {
-	if (tabs.files.length > 0 || !tabs.right) return tabs;
-	return { ...tabs, files: tabs.right.files, active: tabs.right.active, right: undefined };
+  if (tabs.files.length > 0 || !tabs.right) return tabs;
+  return {
+    ...tabs,
+    files: tabs.right.files,
+    active: tabs.right.active,
+    right: undefined,
+  };
 }
 
 /**
@@ -188,13 +211,16 @@ export function collapse<T extends TabState>(tabs: T): T {
  * is how the two drift apart.
  */
 export function withoutTab(group: TabGroup, file: string): TabGroup | null {
-	const index = group.files.indexOf(file);
-	if (index < 0) return null;
-	const files = group.files.filter((f) => f !== file);
-	return {
-		files,
-		active: group.active === file ? files[Math.min(index, files.length - 1)] : group.active,
-	};
+  const index = group.files.indexOf(file);
+  if (index < 0) return null;
+  const files = group.files.filter((f) => f !== file);
+  return {
+    files,
+    active:
+      group.active === file
+        ? files[Math.min(index, files.length - 1)]
+        : group.active,
+  };
 }
 
 /**
@@ -205,16 +231,21 @@ export function withoutTab(group: TabGroup, file: string): TabGroup | null {
  * growing a duplicate.
  */
 export function withTab(group: TabGroup, file: string): TabGroup {
-	return {
-		files: group.files.includes(file) ? group.files : [...group.files, file],
-		active: file,
-	};
+  return {
+    files: group.files.includes(file) ? group.files : [...group.files, file],
+    active: file,
+  };
 }
 
 /** The strip with pinned entries moved to the front, each group keeping its order. */
-export function pinnedFirst(files: string[], pinned: readonly string[]): string[] {
-	const front = files.filter((f) => pinned.includes(f));
-	return front.length === 0 ? files : [...front, ...files.filter((f) => !pinned.includes(f))];
+export function pinnedFirst(
+  files: string[],
+  pinned: readonly string[],
+): string[] {
+  const front = files.filter((f) => pinned.includes(f));
+  return front.length === 0
+    ? files
+    : [...front, ...files.filter((f) => !pinned.includes(f))];
 }
 
 /**
@@ -226,13 +257,14 @@ export function pinnedFirst(files: string[], pinned: readonly string[]): string[
  * crash or a tab teleported to the end.
  */
 export function moveTab(files: string[], from: number, to: number): string[] {
-	if (from === to) return files;
-	if (from < 0 || from >= files.length || to < 0 || to >= files.length) return files;
-	const next = [...files];
-	const [moved] = next.splice(from, 1);
-	if (moved === undefined) return files;
-	next.splice(to, 0, moved);
-	return next;
+  if (from === to) return files;
+  if (from < 0 || from >= files.length || to < 0 || to >= files.length)
+    return files;
+  const next = [...files];
+  const [moved] = next.splice(from, 1);
+  if (moved === undefined) return files;
+  next.splice(to, 0, moved);
+  return next;
 }
 
 /**
@@ -240,25 +272,32 @@ export function moveTab(files: string[], from: number, to: number): string[] {
  * when `to` is null. File tabs at or under `from` follow it or close; diff
  * tabs are left alone, because they show git's history of a path, not a file.
  */
-export function afterPathChange<T extends TabState>(tabs: T, from: string, to: string | null): T {
-	const hit = (e: string) => {
-		if (!isFileTab(e)) return false;
-		const p = tabPath(e);
-		return p === from || p.startsWith(`${from}/`);
-	};
-	const moved = (e: string) => fileTab(`${to}${tabPath(e).slice(from.length)}`);
-	const fix = (group: TabGroup): TabGroup => {
-		if (to !== null) {
-			return {
-				files: group.files.map((e) => (hit(e) ? moved(e) : e)),
-				active: group.active && hit(group.active) ? moved(group.active) : group.active,
-			};
-		}
-		// One at a time through withoutTab, so the selection lands on a neighbour.
-		let g = group;
-		for (const e of group.files) if (hit(e)) g = withoutTab(g, e) ?? g;
-		return g;
-	};
-	const next = withGroup(tabs, "left", fix(groupOf(tabs, "left")));
-	return tabs.right ? withGroup(next, "right", fix(tabs.right)) : next;
+export function afterPathChange<T extends TabState>(
+  tabs: T,
+  from: string,
+  to: string | null,
+): T {
+  const hit = (e: string) => {
+    if (!isFileTab(e)) return false;
+    const p = tabPath(e);
+    return p === from || p.startsWith(`${from}/`);
+  };
+  const moved = (e: string) => fileTab(`${to}${tabPath(e).slice(from.length)}`);
+  const fix = (group: TabGroup): TabGroup => {
+    if (to !== null) {
+      return {
+        files: group.files.map((e) => (hit(e) ? moved(e) : e)),
+        active:
+          group.active && hit(group.active)
+            ? moved(group.active)
+            : group.active,
+      };
+    }
+    // One at a time through withoutTab, so the selection lands on a neighbour.
+    let g = group;
+    for (const e of group.files) if (hit(e)) g = withoutTab(g, e) ?? g;
+    return g;
+  };
+  const next = withGroup(tabs, "left", fix(groupOf(tabs, "left")));
+  return tabs.right ? withGroup(next, "right", fix(tabs.right)) : next;
 }

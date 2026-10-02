@@ -22,14 +22,14 @@ import { isRecord, records } from "./guards.js";
 const TTL_MS = 10 * 60_000;
 
 export interface ModelMeta {
-	/** "provider/id", the string every other module passes around. */
-	selector: string;
-	provider: string;
-	id: string;
-	name: string;
-	/** Accepted input modalities, e.g. `["text", "image"]`. */
-	input: string[];
-	contextWindow: number;
+  /** "provider/id", the string every other module passes around. */
+  selector: string;
+  provider: string;
+  id: string;
+  name: string;
+  /** Accepted input modalities, e.g. `["text", "image"]`. */
+  input: string[];
+  contextWindow: number;
 }
 
 let cached: { at: number; catalog: Map<string, ModelMeta> } | undefined;
@@ -42,21 +42,22 @@ let inFlight: Promise<Map<string, ModelMeta>> | undefined;
  * open, and each miss costs a `pi` spawn.
  */
 export function modelCatalog(): Promise<Map<string, ModelMeta>> {
-	if (cached && Date.now() - cached.at < TTL_MS) return Promise.resolve(cached.catalog);
-	inFlight ??= fetchCatalog()
-		.then((catalog) => {
-			cached = { at: Date.now(), catalog };
-			return catalog;
-		})
-		.finally(() => {
-			inFlight = undefined;
-		});
-	return inFlight;
+  if (cached && Date.now() - cached.at < TTL_MS)
+    return Promise.resolve(cached.catalog);
+  inFlight ??= fetchCatalog()
+    .then((catalog) => {
+      cached = { at: Date.now(), catalog };
+      return catalog;
+    })
+    .finally(() => {
+      inFlight = undefined;
+    });
+  return inFlight;
 }
 
 /** Models with usable credentials, as sorted "provider/id". */
 export async function listModels(): Promise<string[]> {
-	return [...(await modelCatalog()).keys()].sort();
+  return [...(await modelCatalog()).keys()].sort();
 }
 
 /**
@@ -73,27 +74,29 @@ export async function listModels(): Promise<string[]> {
  * every real session has.
  */
 async function fetchCatalog(): Promise<Map<string, ModelMeta>> {
-	const data = await askOnce("get_available_models", process.cwd());
-	if (!isRecord(data)) throw new Error("pi returned no model catalog");
+  const data = await askOnce("get_available_models", process.cwd());
+  if (!isRecord(data)) throw new Error("pi returned no model catalog");
 
-	const catalog = new Map<string, ModelMeta>();
-	for (const m of records(data.models)) {
-		const { provider, id, name, input, contextWindow } = m;
-		// A row without provider+id has no selector, so it cannot be named,
-		// chosen, or persisted. Skipping one bad row beats failing the catalog.
-		if (typeof provider !== "string" || typeof id !== "string") continue;
-		const key = `${provider}/${id}`;
-		catalog.set(key, {
-			selector: key,
-			provider,
-			id,
-			name: typeof name === "string" ? name : id,
-			input: Array.isArray(input) ? input.filter((i): i is string => typeof i === "string") : [],
-			contextWindow: typeof contextWindow === "number" ? contextWindow : 0,
-		});
-	}
-	if (catalog.size === 0) throw new Error("pi reported no models");
-	return catalog;
+  const catalog = new Map<string, ModelMeta>();
+  for (const m of records(data.models)) {
+    const { provider, id, name, input, contextWindow } = m;
+    // A row without provider+id has no selector, so it cannot be named,
+    // chosen, or persisted. Skipping one bad row beats failing the catalog.
+    if (typeof provider !== "string" || typeof id !== "string") continue;
+    const key = `${provider}/${id}`;
+    catalog.set(key, {
+      selector: key,
+      provider,
+      id,
+      name: typeof name === "string" ? name : id,
+      input: Array.isArray(input)
+        ? input.filter((i): i is string => typeof i === "string")
+        : [],
+      contextWindow: typeof contextWindow === "number" ? contextWindow : 0,
+    });
+  }
+  if (catalog.size === 0) throw new Error("pi reported no models");
+  return catalog;
 }
 
 // ---------------------------------------------------------------------------
@@ -102,19 +105,22 @@ async function fetchCatalog(): Promise<Map<string, ModelMeta>> {
 
 /** pi's own settings file. `PWI_PI_SETTINGS` is the test seam. */
 export function settingsPath(): string {
-	return process.env.PWI_PI_SETTINGS ?? join(homedir(), ".pi", "agent", "settings.json");
+  return (
+    process.env.PWI_PI_SETTINGS ??
+    join(homedir(), ".pi", "agent", "settings.json")
+  );
 }
 
 /** pi's settings as a record, or an empty one when the file is absent. */
 export function readSettings(): Record<string, unknown> {
-	let raw: unknown;
-	try {
-		raw = JSON.parse(readFileSync(settingsPath(), "utf8"));
-	} catch {
-		// No settings yet is the normal state of a fresh install.
-		return {};
-	}
-	return isRecord(raw) ? raw : {};
+  let raw: unknown;
+  try {
+    raw = JSON.parse(readFileSync(settingsPath(), "utf8"));
+  } catch {
+    // No settings yet is the normal state of a fresh install.
+    return {};
+  }
+  return isRecord(raw) ? raw : {};
 }
 
 /**
@@ -125,11 +131,11 @@ export function readSettings(): Record<string, unknown> {
  * temp file is a sibling so the rename stays within one filesystem.
  */
 export function writeSettings(settings: Record<string, unknown>): void {
-	const path = settingsPath();
-	mkdirSync(dirname(path), { recursive: true });
-	const tmp = `${path}.pwi-tmp`;
-	writeFileSync(tmp, `${JSON.stringify(settings, null, 2)}\n`, { mode: 0o600 });
-	renameSync(tmp, path);
+  const path = settingsPath();
+  mkdirSync(dirname(path), { recursive: true });
+  const tmp = `${path}.pwi-tmp`;
+  writeFileSync(tmp, `${JSON.stringify(settings, null, 2)}\n`, { mode: 0o600 });
+  renameSync(tmp, path);
 }
 
 /**
@@ -140,24 +146,24 @@ export function writeSettings(settings: Record<string, unknown>): void {
  * future session, far from the mistake.
  */
 export async function setDefaultModel(spec: string | null): Promise<void> {
-	if (spec === null) {
-		const settings = readSettings();
-		delete settings.defaultProvider;
-		delete settings.defaultModel;
-		return writeSettings(settings);
-	}
-	const slash = spec.indexOf("/");
-	if (slash <= 0 || slash === spec.length - 1) {
-		throw new Error(`model must be "provider/id", got: ${spec}`);
-	}
-	const catalog = await modelCatalog();
-	if (!catalog.has(spec)) throw new Error(`unknown model: ${spec}`);
+  if (spec === null) {
+    const settings = readSettings();
+    delete settings.defaultProvider;
+    delete settings.defaultModel;
+    return writeSettings(settings);
+  }
+  const slash = spec.indexOf("/");
+  if (slash <= 0 || slash === spec.length - 1) {
+    throw new Error(`model must be "provider/id", got: ${spec}`);
+  }
+  const catalog = await modelCatalog();
+  if (!catalog.has(spec)) throw new Error(`unknown model: ${spec}`);
 
-	writeSettings({
-		...readSettings(),
-		defaultProvider: spec.slice(0, slash),
-		defaultModel: spec.slice(slash + 1),
-	});
+  writeSettings({
+    ...readSettings(),
+    defaultProvider: spec.slice(0, slash),
+    defaultModel: spec.slice(slash + 1),
+  });
 }
 
 /** pi's reasoning levels; `defaultThinkingLevel` is read at every session start. */
@@ -165,9 +171,10 @@ const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh"];
 
 /** Persist pi's startup reasoning level; `null` clears it. */
 export function setDefaultThinkingLevel(level: string | null): void {
-	const settings = readSettings();
-	if (level === null) delete settings.defaultThinkingLevel;
-	else if (!THINKING_LEVELS.includes(level)) throw new Error(`unknown thinking level: ${level}`);
-	else settings.defaultThinkingLevel = level;
-	writeSettings(settings);
+  const settings = readSettings();
+  if (level === null) delete settings.defaultThinkingLevel;
+  else if (!THINKING_LEVELS.includes(level))
+    throw new Error(`unknown thinking level: ${level}`);
+  else settings.defaultThinkingLevel = level;
+  writeSettings(settings);
 }

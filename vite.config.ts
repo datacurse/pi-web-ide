@@ -13,91 +13,97 @@ import pkg from "./package.json" with { type: "json" };
 // — and crucially there is no version-bump COMMIT, which would increment the
 // count it is trying to record.
 function gitVersion(): string {
-	try {
-		const git = (args: string[]) =>
-			execSync(`git ${args.join(" ")}`, { stdio: ["ignore", "pipe", "ignore"] })
-				.toString()
-				.trim();
-		// Counts THIS branch's history, so it only goes backwards if you do —
-		// and a shallow clone (CI with fetch-depth 1) counts what it has, which
-		// is why the sha below is the real identity and this is only a label.
-		const count = git(["rev-list", "--count", "HEAD"]);
-		const sha = git(["rev-parse", "--short", "HEAD"]);
-		const dirty = git(["status", "--porcelain"]);
-		return `v${count}+${sha}${dirty ? "*" : ""}`;
-	} catch {
-		// No git (tarball, Docker build context without .git). The version alone
-		// is still more than nothing.
-		return pkg.version;
-	}
+  try {
+    const git = (args: string[]) =>
+      execSync(`git ${args.join(" ")}`, { stdio: ["ignore", "pipe", "ignore"] })
+        .toString()
+        .trim();
+    // Counts THIS branch's history, so it only goes backwards if you do —
+    // and a shallow clone (CI with fetch-depth 1) counts what it has, which
+    // is why the sha below is the real identity and this is only a label.
+    const count = git(["rev-list", "--count", "HEAD"]);
+    const sha = git(["rev-parse", "--short", "HEAD"]);
+    const dirty = git(["status", "--porcelain"]);
+    return `v${count}+${sha}${dirty ? "*" : ""}`;
+  } catch {
+    // No git (tarball, Docker build context without .git). The version alone
+    // is still more than nothing.
+    return pkg.version;
+  }
 }
 
 // Each Phosphor icon ships all six weights in one Map, so tree-shaking keeps
 // them all. The app uses regular, bold and fill (docs/ui.md, enforced by
 // scripts/check-ui.sh); dropping the other three cuts ~70KB from the bundle.
 const phosphorWeights: Plugin = {
-	name: "phosphor-weights",
-	transform(code, id) {
-		if (!id.includes("@phosphor-icons/react/dist/defs/")) return;
-		return code.replace(/\[\s*"(thin|light|duotone)",[\s\S]*?\n {2}\],?/g, "");
-	},
+  name: "phosphor-weights",
+  transform(code, id) {
+    if (!id.includes("@phosphor-icons/react/dist/defs/")) return;
+    return code.replace(/\[\s*"(thin|light|duotone)",[\s\S]*?\n {2}\],?/g, "");
+  },
 };
 
 // Dev: Vite serves the client and proxies /api to the Node server.
 // Prod: `pnpm build` emits dist/, which the Node server serves itself.
 // Either way it is a single origin, so there is no CORS machinery to own.
 export default defineConfig({
-	plugins: [react(), tailwindcss(), phosphorWeights],
-	define: { __APP_VERSION__: JSON.stringify(gitVersion()) },
-	server: {
-		// Same env var the server reads to build its dev redirect (see index.ts):
-		// two places deciding this independently is how you get a 302 to a port
-		// nothing is listening on.
-		port: Number(process.env.PWI_VITE_PORT ?? 5480),
-		// A dev server that silently moves to the next free port makes that
-		// redirect wrong, which is worse than failing to start.
-		strictPort: true,
-		// Loopback only. Windows reaches 127.0.0.1 inside WSL via localhost
-		// forwarding (NAT) or mirrored networking (see ~/.wslconfig). Do NOT set
-		// `host: true` to work around a networking problem — that exposes the dev
-		// server to the LAN to fix something that belongs in WSL config.
-		host: "127.0.0.1",
-		proxy: {
-			"/api": {
-				target: `http://127.0.0.1:${process.env.PWI_PORT ?? 8890}`,
-				changeOrigin: true,
-				// `changeOrigin` rewrites Host but NOT Origin, so the server sees
-				// Origin: <vite> against Host: <server> and refuses the terminal's
-				// upgrade (originAllowed in server/index.ts) — a pane stuck on
-				// [reconnecting…] beside a shell that is running fine. The server
-				// can allow the Vite origin itself, but only when started with
-				// PWI_DEV=1; rewriting Origin here makes the proxy consistent about
-				// which origin it claims to be, so the client works against a
-				// server started either way. Dev-only, and no wider than PWI_DEV
-				// already is — both are this same loopback port.
-				headers: { Origin: `http://127.0.0.1:${process.env.PWI_PORT ?? 8890}` },
-				// The terminal is a WebSocket on /api/terminal/socket, and a proxy
-				// entry without this answers its upgrade with a 200 and no socket
-				// — which in the browser is a terminal that connects, says
-				// nothing, and closes.
-				ws: true,
-			},
-		},
-	},
-	build: {
-		outDir: "dist",
-		rollupOptions: {
-			output: {
-				manualChunks(id) {
-					if (!id.includes("/node_modules/")) return;
-					// Leave language packages lazy; grouping them pulls every grammar
-					// into the initial download. Only share the editor runtime.
-					if (/\/(?:@codemirror\/(?:state|view|language|commands|search|autocomplete|merge)|@lezer\/(?:common|highlight|lr))\//.test(id)) return "editor";
-					if (/\/(?:react-virtuoso|markdown-to-jsx|fancy-ansi)\//.test(id)) return "rendering";
-					if (id.includes("/@phosphor-icons/")) return "icons";
-					if (/\/(?:react|react-dom|scheduler)\//.test(id)) return "react";
-				},
-			},
-		},
-	},
+  plugins: [react(), tailwindcss(), phosphorWeights],
+  define: { __APP_VERSION__: JSON.stringify(gitVersion()) },
+  server: {
+    // Same env var the server reads to build its dev redirect (see index.ts):
+    // two places deciding this independently is how you get a 302 to a port
+    // nothing is listening on.
+    port: Number(process.env.PWI_VITE_PORT ?? 5480),
+    // A dev server that silently moves to the next free port makes that
+    // redirect wrong, which is worse than failing to start.
+    strictPort: true,
+    // Loopback only. Windows reaches 127.0.0.1 inside WSL via localhost
+    // forwarding (NAT) or mirrored networking (see ~/.wslconfig). Do NOT set
+    // `host: true` to work around a networking problem — that exposes the dev
+    // server to the LAN to fix something that belongs in WSL config.
+    host: "127.0.0.1",
+    proxy: {
+      "/api": {
+        target: `http://127.0.0.1:${process.env.PWI_PORT ?? 8890}`,
+        changeOrigin: true,
+        // `changeOrigin` rewrites Host but NOT Origin, so the server sees
+        // Origin: <vite> against Host: <server> and refuses the terminal's
+        // upgrade (originAllowed in server/index.ts) — a pane stuck on
+        // [reconnecting…] beside a shell that is running fine. The server
+        // can allow the Vite origin itself, but only when started with
+        // PWI_DEV=1; rewriting Origin here makes the proxy consistent about
+        // which origin it claims to be, so the client works against a
+        // server started either way. Dev-only, and no wider than PWI_DEV
+        // already is — both are this same loopback port.
+        headers: { Origin: `http://127.0.0.1:${process.env.PWI_PORT ?? 8890}` },
+        // The terminal is a WebSocket on /api/terminal/socket, and a proxy
+        // entry without this answers its upgrade with a 200 and no socket
+        // — which in the browser is a terminal that connects, says
+        // nothing, and closes.
+        ws: true,
+      },
+    },
+  },
+  build: {
+    outDir: "dist",
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes("/node_modules/")) return;
+          // Leave language packages lazy; grouping them pulls every grammar
+          // into the initial download. Only share the editor runtime.
+          if (
+            /\/(?:@codemirror\/(?:state|view|language|commands|search|autocomplete|merge)|@lezer\/(?:common|highlight|lr))\//.test(
+              id,
+            )
+          )
+            return "editor";
+          if (/\/(?:react-virtuoso|markdown-to-jsx|fancy-ansi)\//.test(id))
+            return "rendering";
+          if (id.includes("/@phosphor-icons/")) return "icons";
+          if (/\/(?:react|react-dom|scheduler)\//.test(id)) return "react";
+        },
+      },
+    },
+  },
 });

@@ -27,37 +27,37 @@ const FAVORITES = "favorites.json";
 
 /** A stored flat array of paths, or nothing when the file is absent or corrupt. */
 function read(name: string): string[] | null {
-	const text = readStateFile(statePath(name));
-	if (text === undefined) return null;
-	try {
-		const raw: unknown = JSON.parse(text);
-		if (!Array.isArray(raw)) return null;
-		return raw.filter((p): p is string => typeof p === "string");
-	} catch {
-		// A corrupt file is not an error: it just means "nothing stored here
-		// yet". Overwriting it on the next add is the only sane recovery.
-		return null;
-	}
+  const text = readStateFile(statePath(name));
+  if (text === undefined) return null;
+  try {
+    const raw: unknown = JSON.parse(text);
+    if (!Array.isArray(raw)) return null;
+    return raw.filter((p): p is string => typeof p === "string");
+  } catch {
+    // A corrupt file is not an error: it just means "nothing stored here
+    // yet". Overwriting it on the next add is the only sane recovery.
+    return null;
+  }
 }
 
 /** `~` is typed by hand, pasted, and sent by the picker, so expand it once. */
 function expand(path: string): string {
-	const raw = path.trim();
-	return resolve(raw.startsWith("~") ? join(homedir(), raw.slice(1)) : raw);
+  const raw = path.trim();
+  return resolve(raw.startsWith("~") ? join(homedir(), raw.slice(1)) : raw);
 }
 
 function requireDir(path: string): string {
-	const dir = expand(path);
-	if (!existsSync(dir) || !statSync(dir).isDirectory())
-		throw new Error(`not a directory: ${dir}`);
-	return dir;
+  const dir = expand(path);
+  if (!existsSync(dir) || !statSync(dir).isDirectory())
+    throw new Error(`not a directory: ${dir}`);
+  return dir;
 }
 
 export function listProjects(seed: string): string[] {
-	const stored = read(PROJECTS) ?? [];
-	// The startup cwd is always present — pwi launched against a directory must
-	// be able to show that directory's sessions without an explicit add.
-	return stored.includes(seed) ? stored : [seed, ...stored];
+  const stored = read(PROJECTS) ?? [];
+  // The startup cwd is always present — pwi launched against a directory must
+  // be able to show that directory's sessions without an explicit add.
+  return stored.includes(seed) ? stored : [seed, ...stored];
 }
 
 /**
@@ -66,11 +66,11 @@ export function listProjects(seed: string): string[] {
  * pi create a session directory for a typo.
  */
 export function addProject(seed: string, path: string): string[] {
-	const dir = requireDir(path);
-	const next = listProjects(seed);
-	if (!next.includes(dir)) next.push(dir);
-	save(PROJECTS, next);
-	return next;
+  const dir = requireDir(path);
+  const next = listProjects(seed);
+  if (!next.includes(dir)) next.push(dir);
+  save(PROJECTS, next);
+  return next;
 }
 
 /**
@@ -83,15 +83,15 @@ export function addProject(seed: string, path: string): string[] {
  * make every shortcut cost a session poll.
  */
 export function listFavorites(): string[] {
-	return read(FAVORITES) ?? [];
+  return read(FAVORITES) ?? [];
 }
 
 export function addFavorite(path: string): string[] {
-	const dir = requireDir(path);
-	const next = listFavorites();
-	if (!next.includes(dir)) next.push(dir);
-	save(FAVORITES, next);
-	return next;
+  const dir = requireDir(path);
+  const next = listFavorites();
+  if (!next.includes(dir)) next.push(dir);
+  save(FAVORITES, next);
+  return next;
 }
 
 /**
@@ -99,9 +99,9 @@ export function addFavorite(path: string): string[] {
  * exactly the one you most need to be able to remove.
  */
 export function removeFavorite(path: string): string[] {
-	const next = listFavorites().filter((p) => p !== expand(path));
-	save(FAVORITES, next);
-	return next;
+  const next = listFavorites().filter((p) => p !== expand(path));
+  save(FAVORITES, next);
+  return next;
 }
 
 /**
@@ -115,55 +115,55 @@ export function removeFavorite(path: string): string[] {
  * files cannot be projects.
  */
 export function browse(path: string): PiwDirListing {
-	const dir = expand(path.trim() || homedir());
-	if (!statSync(dir).isDirectory()) throw new Error(`not a directory: ${dir}`);
+  const dir = expand(path.trim() || homedir());
+  if (!statSync(dir).isDirectory()) throw new Error(`not a directory: ${dir}`);
 
-	const entries: PiwDirEntry[] = [];
-	for (const child of readdirSync(dir, { withFileTypes: true })) {
-		const full = join(dir, child.name);
-		// withFileTypes to avoid a stat per child. A symlink is the one dirent
-		// whose kind readdir cannot answer, so only those are stat'd — and its
-		// target may be missing or unreadable, which is not a directory either.
-		if (!child.isDirectory()) {
-			if (!child.isSymbolicLink()) continue;
-			try {
-				if (!statSync(full).isDirectory()) continue;
-			} catch {
-				continue;
-			}
-		}
-		entries.push({
-			name: child.name,
-			path: full,
-			repo: existsSync(join(full, ".git")),
-			hidden: child.name.startsWith("."),
-		});
-	}
-	// Dotted names last instead of hidden: an ASCII sort would otherwise put
-	// ~/.cache above every directory you actually came here to click.
-	entries.sort(
-		(a, b) =>
-			Number(a.hidden) - Number(b.hidden) ||
-			a.name.localeCompare(b.name, undefined, { numeric: true }),
-	);
+  const entries: PiwDirEntry[] = [];
+  for (const child of readdirSync(dir, { withFileTypes: true })) {
+    const full = join(dir, child.name);
+    // withFileTypes to avoid a stat per child. A symlink is the one dirent
+    // whose kind readdir cannot answer, so only those are stat'd — and its
+    // target may be missing or unreadable, which is not a directory either.
+    if (!child.isDirectory()) {
+      if (!child.isSymbolicLink()) continue;
+      try {
+        if (!statSync(full).isDirectory()) continue;
+      } catch {
+        continue;
+      }
+    }
+    entries.push({
+      name: child.name,
+      path: full,
+      repo: existsSync(join(full, ".git")),
+      hidden: child.name.startsWith("."),
+    });
+  }
+  // Dotted names last instead of hidden: an ASCII sort would otherwise put
+  // ~/.cache above every directory you actually came here to click.
+  entries.sort(
+    (a, b) =>
+      Number(a.hidden) - Number(b.hidden) ||
+      a.name.localeCompare(b.name, undefined, { numeric: true }),
+  );
 
-	// `dirname("/") === "/"`, which is how the root announces it has no parent.
-	const parent = dirname(dir);
-	return {
-		path: dir,
-		parent: parent === dir ? null : parent,
-		home: homedir(),
-		entries,
-	};
+  // `dirname("/") === "/"`, which is how the root announces it has no parent.
+  const parent = dirname(dir);
+  return {
+    path: dir,
+    parent: parent === dir ? null : parent,
+    home: homedir(),
+    entries,
+  };
 }
 
 /** Remove a directory from the list. Sessions on disk are untouched. */
 export function removeProject(seed: string, path: string): string[] {
-	const next = listProjects(seed).filter((p) => p !== path);
-	save(PROJECTS, next);
-	return next;
+  const next = listProjects(seed).filter((p) => p !== path);
+  save(PROJECTS, next);
+  return next;
 }
 
 function save(name: string, paths: string[]): void {
-	writeStateFile(statePath(name), JSON.stringify(paths, null, "\t"), 0o644);
+  writeStateFile(statePath(name), JSON.stringify(paths, null, "\t"), 0o644);
 }

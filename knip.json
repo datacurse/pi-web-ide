@@ -1,15 +1,15 @@
 {
-	"$schema": "https://unpkg.com/knip@6/schema.json",
-	"entry": [
-		"src/server/index.ts!",
-		"src/web/main.tsx!",
-		"src/server/*-extension.ts!",
-		"src/tool-metrics/collector.ts!",
-		"scripts/seti.mjs!",
-		"scripts/vscode-themes.ts!",
-		"scripts/dev.mjs!"
-	],
-	"project": ["src/**/*.{ts,tsx,css}!", "scripts/**/*.{ts,mjs}!"],
-	"ignoreExportsUsedInFile": true,
-	"ignoreBinaries": ["mkfifo", "concurrently"]
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "entry": [
+    "src/server/index.ts!",
+    "src/web/main.tsx!",
+    "src/server/*-extension.ts!",
+    "src/tool-metrics/collector.ts!",
+    "scripts/seti.mjs!",
+    "scripts/vscode-themes.ts!",
+    "scripts/dev.mjs!"
+  ],
+  "project": ["src/**/*.{ts,tsx,css}!", "scripts/**/*.{ts,mjs}!"],
+  "ignoreExportsUsedInFile": true,
+  "ignoreBinaries": ["mkfifo", "concurrently"]
 }

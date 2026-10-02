@@ -21,21 +21,26 @@ import { ArrowCounterClockwise, Check } from "@phosphor-icons/react";
 import type { EditorView } from "@codemirror/view";
 import type { Hunk, HunkState } from "../shared/hunks.js";
 import { fitHunk } from "../shared/hunks.js";
-import { languageFor, loadCodeMirror, syntaxStyle, wrapIndent } from "./codemirror.js";
+import {
+  languageFor,
+  loadCodeMirror,
+  syntaxStyle,
+  wrapIndent,
+} from "./codemirror.js";
 import { Button, PanelHeader } from "./ui.js";
 import { api, unwrap } from "./api.js";
 import { t } from "./i18n.js";
 
 /** `/home/me/proj/src/web/App.tsx` → `src/web/App.tsx` when it is under `cwd`. */
 function shortPath(path: string, cwd: string): string {
-	return cwd && path.startsWith(`${cwd}/`) ? path.slice(cwd.length + 1) : path;
+  return cwd && path.startsWith(`${cwd}/`) ? path.slice(cwd.length + 1) : path;
 }
 
 interface FileDiff {
-	path: string;
-	before: string;
-	after: string;
-	skipped?: string;
+  path: string;
+  before: string;
+  after: string;
+  skipped?: string;
 }
 
 /**
@@ -46,53 +51,68 @@ interface FileDiff {
  * two that survives a phone screen, which is where checking on a running
  * agent actually happens.
  */
-export function Merge({ path, before, after }: { path: string; before: string; after: string }) {
-	const host = useRef<HTMLDivElement | null>(null);
-	const view = useRef<EditorView | null>(null);
+export function Merge({
+  path,
+  before,
+  after,
+}: {
+  path: string;
+  before: string;
+  after: string;
+}) {
+  const host = useRef<HTMLDivElement | null>(null);
+  const view = useRef<EditorView | null>(null);
 
-	useEffect(() => {
-		const node = host.current;
-		if (!node) return;
-		let live = true;
+  useEffect(() => {
+    const node = host.current;
+    if (!node) return;
+    let live = true;
 
-		void Promise.all([loadCodeMirror(), languageFor(path)]).then(([cm, lang]) => {
-			if (!live || !host.current) return;
-			view.current = new cm.EditorView({
-				parent: host.current,
-				state: cm.EditorState.create({
-					doc: after,
-					extensions: [
-						cm.EditorView.editable.of(false),
-						cm.EditorState.readOnly.of(true),
-						cm.EditorView.lineWrapping,
-						wrapIndent(cm),
-						cm.lineNumbers(),
-						cm.unifiedMergeView({ original: before, mergeControls: false }),
-						// Highlighting is best-effort: a language this does not
-						// cover still diffs, just without colour.
-						...lang,
-						/*
-						 * The stock highlighter, not a CodeMirror theme. This app
-						 * paints everything from its own CSS variables (see
-						 * index.css), so a bundled theme would be the one pane
-						 * ignoring the palette.
-						 */
-						cm.syntaxHighlighting(syntaxStyle(cm, "tk"), { fallback: true }),
-					],
-				}),
-			});
-		});
+    void Promise.all([loadCodeMirror(), languageFor(path)]).then(
+      ([cm, lang]) => {
+        if (!live || !host.current) return;
+        view.current = new cm.EditorView({
+          parent: host.current,
+          state: cm.EditorState.create({
+            doc: after,
+            extensions: [
+              cm.EditorView.editable.of(false),
+              cm.EditorState.readOnly.of(true),
+              cm.EditorView.lineWrapping,
+              wrapIndent(cm),
+              cm.lineNumbers(),
+              cm.unifiedMergeView({ original: before, mergeControls: false }),
+              // Highlighting is best-effort: a language this does not
+              // cover still diffs, just without colour.
+              ...lang,
+              /*
+               * The stock highlighter, not a CodeMirror theme. This app
+               * paints everything from its own CSS variables (see
+               * index.css), so a bundled theme would be the one pane
+               * ignoring the palette.
+               */
+              cm.syntaxHighlighting(syntaxStyle(cm, "tk"), { fallback: true }),
+            ],
+          }),
+        });
+      },
+    );
 
-		return () => {
-			live = false;
-			view.current?.destroy();
-			view.current = null;
-		};
-		// Rebuilt when either side's text changes: a merge view's `original` is
-		// fixed at construction, so there is nothing to reconfigure in place.
-	}, [path, before, after]);
+    return () => {
+      live = false;
+      view.current?.destroy();
+      view.current = null;
+    };
+    // Rebuilt when either side's text changes: a merge view's `original` is
+    // fixed at construction, so there is nothing to reconfigure in place.
+  }, [path, before, after]);
 
-	return <div ref={host} className="cm-review min-h-0 flex-1 overflow-auto text-body" />;
+  return (
+    <div
+      ref={host}
+      className="cm-review min-h-0 flex-1 overflow-auto text-body"
+    />
+  );
 }
 
 /**
@@ -104,81 +124,99 @@ export function Merge({ path, before, after }: { path: string; before: string; a
  *
  */
 export function HunkRow({
-	hunk,
-	current,
-	busy,
-	onDecide,
+  hunk,
+  current,
+  busy,
+  onDecide,
 }: {
-	hunk: Hunk;
-	current: string | null;
-	busy: boolean;
-	onDecide: (state: HunkState) => void;
+  hunk: Hunk;
+  current: string | null;
+  busy: boolean;
+  onDecide: (state: HunkState) => void;
 }) {
-	const fit = current === null ? null : fitHunk(hunk, current);
-	const gone = fit?.fit === "missing";
-	const ambiguous = fit?.fit === "ambiguous";
-	const added = hunk.newText.split("\n").length;
-	const removed = hunk.oldText.split("\n").length;
+  const fit = current === null ? null : fitHunk(hunk, current);
+  const gone = fit?.fit === "missing";
+  const ambiguous = fit?.fit === "ambiguous";
+  const added = hunk.newText.split("\n").length;
+  const removed = hunk.oldText.split("\n").length;
 
-	return (
-		<div className="flex items-center gap-2 border-b border-neutral-800 px-3 py-1.5 text-ui">
-			<span className="font-mono text-meta text-neutral-500">L{hunk.anchor.line + 1}</span>
-			<span className="font-mono text-meta">
-				{hunk.oldText !== "" && <span className="text-red-400">-{removed}</span>}
-				{hunk.oldText !== "" && hunk.newText !== "" && " "}
-				{hunk.newText !== "" && <span className="text-green-400">+{added}</span>}
-			</span>
+  return (
+    <div className="flex items-center gap-2 border-b border-neutral-800 px-3 py-1.5 text-ui">
+      <span className="font-mono text-meta text-neutral-500">
+        L{hunk.anchor.line + 1}
+      </span>
+      <span className="font-mono text-meta">
+        {hunk.oldText !== "" && (
+          <span className="text-red-400">-{removed}</span>
+        )}
+        {hunk.oldText !== "" && hunk.newText !== "" && " "}
+        {hunk.newText !== "" && (
+          <span className="text-green-400">+{added}</span>
+        )}
+      </span>
 
-			{gone ? (
-				<span className="text-meta text-amber-500">{t("not in the file any more — nothing to revert")}</span>
-			) : ambiguous ? (
-				<span className="text-meta text-amber-500">{t("appears {count}× — reverting the nearest", { count: fit.count })}</span>
-			) : null}
+      {gone ? (
+        <span className="text-meta text-amber-500">
+          {t("not in the file any more — nothing to revert")}
+        </span>
+      ) : ambiguous ? (
+        <span className="text-meta text-amber-500">
+          {t("appears {count}× — reverting the nearest", { count: fit.count })}
+        </span>
+      ) : null}
 
-			<div className="ml-auto flex items-center gap-1">
-				{hunk.state === "pending" ? (
-					<>
-						<Button
-							variant="ghost"
-							size="sm"
-							disabled={busy}
-							onClick={() => onDecide("accepted")}
-						>
-							<span className="flex items-center gap-1 text-green-400">
-								<Check size={12} weight="bold" />
-								{t("Keep")}
-							</span>
-						</Button>
-						<Button
-							variant="ghost"
-							size="sm"
-							// A hunk whose text is gone cannot be reverted, and
-							// offering the button would promise a write the server is
-							// right to refuse.
-							disabled={busy || gone}
-							onClick={() => onDecide("rejected")}
-						>
-							<span className="flex items-center gap-1 text-red-400">
-								<ArrowCounterClockwise size={12} weight="bold" />
-								{t("Revert")}
-							</span>
-						</Button>
-					</>
-				) : (
-					<Button
-						variant="ghost"
-						size="sm"
-						disabled={busy}
-						onClick={() => onDecide("pending")}
-					>
-						<span className={hunk.state === "accepted" ? "text-green-400" : "text-neutral-500"}>
-							{hunk.state === "accepted" ? t("Kept · undo") : t("Reverted · undo")}
-						</span>
-					</Button>
-				)}
-			</div>
-		</div>
-	);
+      <div className="ml-auto flex items-center gap-1">
+        {hunk.state === "pending" ? (
+          <>
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={busy}
+              onClick={() => onDecide("accepted")}
+            >
+              <span className="flex items-center gap-1 text-green-400">
+                <Check size={12} weight="bold" />
+                {t("Keep")}
+              </span>
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              // A hunk whose text is gone cannot be reverted, and
+              // offering the button would promise a write the server is
+              // right to refuse.
+              disabled={busy || gone}
+              onClick={() => onDecide("rejected")}
+            >
+              <span className="flex items-center gap-1 text-red-400">
+                <ArrowCounterClockwise size={12} weight="bold" />
+                {t("Revert")}
+              </span>
+            </Button>
+          </>
+        ) : (
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={busy}
+            onClick={() => onDecide("pending")}
+          >
+            <span
+              className={
+                hunk.state === "accepted"
+                  ? "text-green-400"
+                  : "text-neutral-500"
+              }
+            >
+              {hunk.state === "accepted"
+                ? t("Kept · undo")
+                : t("Reverted · undo")}
+            </span>
+          </Button>
+        )}
+      </div>
+    </div>
+  );
 }
 
 /**
@@ -189,110 +227,118 @@ export function HunkRow({
  * hunk would be a rewrite of history, which this is deliberately not.
  */
 export function DiffView({
-	path,
-	refName,
-	cwd,
-	sessionId,
-	hunks,
-	onChanged,
+  path,
+  refName,
+  cwd,
+  sessionId,
+  hunks,
+  onChanged,
 }: {
-	path: string;
-	/** Commit sha, or "" for the working tree. */
-	refName: string;
-	cwd: string;
-	/** The attached session, when there is one: hunk decisions post against it. */
-	sessionId?: string;
-	/** This session's hunks for THIS file. Empty for a commit's diff. */
-	hunks: Hunk[];
-	/** A revert wrote to disk; the snapshot's hunk states are now out of date. */
-	onChanged?: () => void;
+  path: string;
+  /** Commit sha, or "" for the working tree. */
+  refName: string;
+  cwd: string;
+  /** The attached session, when there is one: hunk decisions post against it. */
+  sessionId?: string;
+  /** This session's hunks for THIS file. Empty for a commit's diff. */
+  hunks: Hunk[];
+  /** A revert wrote to disk; the snapshot's hunk states are now out of date. */
+  onChanged?: () => void;
 }) {
-	const [file, setFile] = useState<FileDiff | null>(null);
-	const [error, setError] = useState<string | null>(null);
-	const [busy, setBusy] = useState(false);
+  const [file, setFile] = useState<FileDiff | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
-	const reload = useCallback(async () => {
-		try {
-			setFile(
-				await unwrap(api.git.show.$get({ query: { cwd, path, ref: refName } })),
-			);
-			setError(null);
-		} catch (err) {
-			setError(err instanceof Error ? err.message : String(err));
-		}
-	}, [cwd, path, refName]);
+  const reload = useCallback(async () => {
+    try {
+      setFile(
+        await unwrap(api.git.show.$get({ query: { cwd, path, ref: refName } })),
+      );
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }, [cwd, path, refName]);
 
-	useEffect(() => {
-		void reload();
-	}, [reload]);
+  useEffect(() => {
+    void reload();
+  }, [reload]);
 
-	/*
-	 * A commit's diff is immutable, so it is read once. The working tree is
-	 * not: the agent is writing into it while this is open, and the hunk list
-	 * changing is the cheapest signal that it did.
-	 */
-	useEffect(() => {
-		if (refName) return;
-		void reload();
-	}, [hunks, refName, reload]);
+  /*
+   * A commit's diff is immutable, so it is read once. The working tree is
+   * not: the agent is writing into it while this is open, and the hunk list
+   * changing is the cheapest signal that it did.
+   */
+  useEffect(() => {
+    if (refName) return;
+    void reload();
+  }, [hunks, refName, reload]);
 
-	const decide = async (hunk: Hunk, state: HunkState) => {
-		if (!sessionId) return;
-		setBusy(true);
-		setError(null);
-		try {
-			const r = await api.sessions[":id"].hunks[":hunkId"].$post({
-				param: { id: sessionId, hunkId: encodeURIComponent(hunk.id) },
-				json: { state },
-			});
-			if (!r.ok) throw new Error(((await r.json()) as { error?: string }).error ?? `${r.status}`);
-			// Re-read from disk rather than patching local state: a revert
-			// changed the file, and every other hunk in it has just moved.
-			await reload();
-			onChanged?.();
-		} catch (err) {
-			setError(err instanceof Error ? err.message : String(err));
-		} finally {
-			setBusy(false);
-		}
-	};
+  const decide = async (hunk: Hunk, state: HunkState) => {
+    if (!sessionId) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const r = await api.sessions[":id"].hunks[":hunkId"].$post({
+        param: { id: sessionId, hunkId: encodeURIComponent(hunk.id) },
+        json: { state },
+      });
+      if (!r.ok)
+        throw new Error(
+          ((await r.json()) as { error?: string }).error ?? `${r.status}`,
+        );
+      // Re-read from disk rather than patching local state: a revert
+      // changed the file, and every other hunk in it has just moved.
+      await reload();
+      onChanged?.();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  };
 
-	const mine = refName ? [] : hunks;
+  const mine = refName ? [] : hunks;
 
-	return (
-		<div className="flex min-h-0 min-w-0 flex-1 flex-col bg-neutral-950">
-			<PanelHeader>
-				<span className="min-w-0 fade-end font-mono text-meta text-neutral-400" title={path}>
-					{shortPath(path, cwd)}
-				</span>
-				<span className="shrink-0 text-meta text-neutral-500">
-					{refName ? t("{ref} ↔ parent", { ref: refName.slice(0, 7) }) : t("HEAD ↔ working tree")}
-				</span>
-			</PanelHeader>
+  return (
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-neutral-950">
+      <PanelHeader>
+        <span
+          className="min-w-0 fade-end font-mono text-meta text-neutral-400"
+          title={path}
+        >
+          {shortPath(path, cwd)}
+        </span>
+        <span className="shrink-0 text-meta text-neutral-500">
+          {refName
+            ? t("{ref} ↔ parent", { ref: refName.slice(0, 7) })
+            : t("HEAD ↔ working tree")}
+        </span>
+      </PanelHeader>
 
-			{error && (
-				<div className="border-b border-red-900 bg-red-950/40 px-3 py-2 text-meta text-red-300">
-					{error}
-				</div>
-			)}
+      {error && (
+        <div className="border-b border-red-900 bg-red-950/40 px-3 py-2 text-meta text-red-300">
+          {error}
+        </div>
+      )}
 
-			{mine.map((h) => (
-				<HunkRow
-					key={h.id}
-					hunk={h}
-					current={file?.after ?? null}
-					busy={busy}
-					onDecide={(state) => void decide(h, state)}
-				/>
-			))}
+      {mine.map((h) => (
+        <HunkRow
+          key={h.id}
+          hunk={h}
+          current={file?.after ?? null}
+          busy={busy}
+          onDecide={(state) => void decide(h, state)}
+        />
+      ))}
 
-			{file === null ? (
-				<p className="p-4 text-ui text-neutral-500">{t("Reading…")}</p>
-			) : file.skipped ? (
-				<p className="p-4 text-ui text-amber-500">{file.skipped}</p>
-			) : (
-				<Merge path={path} before={file.before} after={file.after} />
-			)}
-		</div>
-	);
+      {file === null ? (
+        <p className="p-4 text-ui text-neutral-500">{t("Reading…")}</p>
+      ) : file.skipped ? (
+        <p className="p-4 text-ui text-amber-500">{file.skipped}</p>
+      ) : (
+        <Merge path={path} before={file.before} after={file.after} />
+      )}
+    </div>
+  );
 }

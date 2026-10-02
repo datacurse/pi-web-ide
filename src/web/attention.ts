@@ -14,33 +14,45 @@ import type { SeenSessions } from "./prefs.js";
 export type Attention = "needs" | "ready" | "working" | null;
 
 export function attentionOf(s: PiSessionInfo, seen: SeenSessions): Attention {
-	if (s.needsInput) return "needs";
-	if (s.isStreaming) return "working";
-	// A blank session's file timestamp is not evidence of a reply. Only sessions
-	// that have received a prompt can become unread-ready.
-	if (!s.lastAsked) return null;
-	const last = Date.parse(s.lastActive);
-	const saw = Date.parse(seen.seen[s.path] ?? seen.baseline);
-	return last > saw ? "ready" : null;
+  if (s.needsInput) return "needs";
+  if (s.isStreaming) return "working";
+  // A blank session's file timestamp is not evidence of a reply. Only sessions
+  // that have received a prompt can become unread-ready.
+  if (!s.lastAsked) return null;
+  const last = Date.parse(s.lastActive);
+  const saw = Date.parse(seen.seen[s.path] ?? seen.baseline);
+  return last > saw ? "ready" : null;
 }
 
 /** How each state looks, shared by the tab π and the session-list dot. */
 export const ATTENTION_UI = {
-	needs: { text: "text-red-400", dot: "bg-red-400", label: "needs your answer" },
-	ready: { text: "text-green-400 drop-shadow-sm drop-shadow-current", dot: "bg-green-400", label: "new reply" },
-	working: { text: "animate-pulse text-amber-400 drop-shadow-sm drop-shadow-current", dot: "animate-pulse bg-amber-400", label: "working" },
+  needs: {
+    text: "text-red-400",
+    dot: "bg-red-400",
+    label: "needs your answer",
+  },
+  ready: {
+    text: "text-green-400 drop-shadow-sm drop-shadow-current",
+    dot: "bg-green-400",
+    label: "new reply",
+  },
+  working: {
+    text: "animate-pulse text-amber-400 drop-shadow-sm drop-shadow-current",
+    dot: "animate-pulse bg-amber-400",
+    label: "working",
+  },
 } as const;
 
 /** Sort rank: what to look at first. */
 export function attentionRank(a: Attention): number {
-	return a === "needs" ? 0 : a === "ready" ? 1 : 2;
+  return a === "needs" ? 0 : a === "ready" ? 1 : 2;
 }
 
 /** The window title: waiting count, then `●` while anything works. */
 export function attentionTitle(states: Attention[]): string {
-	const waiting = states.filter((a) => a === "needs" || a === "ready").length;
-	const working = states.includes("working");
-	return `${waiting ? `${waiting} ` : ""}${working ? "\u25cf " : ""}pwi`;
+  const waiting = states.filter((a) => a === "needs" || a === "ready").length;
+  const working = states.includes("working");
+  return `${waiting ? `${waiting} ` : ""}${working ? "\u25cf " : ""}pwi`;
 }
 
 /**
@@ -48,15 +60,19 @@ export function attentionTitle(states: Attention[]): string {
  * waiting longest first, and never the one already on screen.
  */
 export function nextWaiting(
-	sessions: PiSessionInfo[],
-	states: Map<string, Attention>,
-	current: string | undefined,
+  sessions: PiSessionInfo[],
+  states: Map<string, Attention>,
+  current: string | undefined,
 ): string | undefined {
-	return sessions
-		.filter((s) => s.path !== current && attentionRank(states.get(s.path) ?? null) < 2)
-		.sort(
-			(a, b) =>
-				attentionRank(states.get(a.path) ?? null) - attentionRank(states.get(b.path) ?? null) ||
-				Date.parse(a.lastActive) - Date.parse(b.lastActive),
-		)[0]?.path;
+  return sessions
+    .filter(
+      (s) =>
+        s.path !== current && attentionRank(states.get(s.path) ?? null) < 2,
+    )
+    .sort(
+      (a, b) =>
+        attentionRank(states.get(a.path) ?? null) -
+          attentionRank(states.get(b.path) ?? null) ||
+        Date.parse(a.lastActive) - Date.parse(b.lastActive),
+    )[0]?.path;
 }

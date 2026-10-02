@@ -23,9 +23,9 @@ import type { Terminals } from "./terminals.js";
  */
 export const VITE_PORT = Number(process.env.PWI_VITE_PORT ?? 5480);
 const DEV_ORIGINS = new Set(
-	process.env.PWI_DEV === "1"
-		? [`http://127.0.0.1:${VITE_PORT}`, `http://localhost:${VITE_PORT}`]
-		: [],
+  process.env.PWI_DEV === "1"
+    ? [`http://127.0.0.1:${VITE_PORT}`, `http://localhost:${VITE_PORT}`]
+    : [],
 );
 
 /**
@@ -46,31 +46,35 @@ const DEV_ORIGINS = new Set(
 export type Header = (name: string) => string | undefined;
 
 export function hostAllowed(header: Header): boolean {
-	let name: string;
-	try {
-		name = new URL(`http://${header("host") ?? ""}`).hostname.replace(/\.$/, "");
-	} catch {
-		return false;
-	}
-	if (name === "localhost" || name === "127.0.0.1" || name === "[::1]") return true;
-	// A MagicDNS short name has no dot; a rebinding domain always has one.
-	if (!name.includes(".") || name.endsWith(".ts.net")) return true;
-	// Tailscale's CGNAT range, 100.64.0.0/10.
-	const m = /^100\.(\d+)\.\d+\.\d+$/.exec(name);
-	return m !== null && Number(m[1]) >= 64 && Number(m[1]) <= 127;
+  let name: string;
+  try {
+    name = new URL(`http://${header("host") ?? ""}`).hostname.replace(
+      /\.$/,
+      "",
+    );
+  } catch {
+    return false;
+  }
+  if (name === "localhost" || name === "127.0.0.1" || name === "[::1]")
+    return true;
+  // A MagicDNS short name has no dot; a rebinding domain always has one.
+  if (!name.includes(".") || name.endsWith(".ts.net")) return true;
+  // Tailscale's CGNAT range, 100.64.0.0/10.
+  const m = /^100\.(\d+)\.\d+\.\d+$/.exec(name);
+  return m !== null && Number(m[1]) >= 64 && Number(m[1]) <= 127;
 }
 
 export function originAllowed(header: Header): boolean {
-	const origin = header("origin");
-	if (!origin) return true;
-	if (DEV_ORIGINS.has(origin)) return true;
-	let host: string;
-	try {
-		host = new URL(origin).host;
-	} catch {
-		return false;
-	}
-	return host === header("host") || host === header("x-forwarded-host");
+  const origin = header("origin");
+  if (!origin) return true;
+  if (DEV_ORIGINS.has(origin)) return true;
+  let host: string;
+  try {
+    host = new URL(origin).host;
+  } catch {
+    return false;
+  }
+  return host === header("host") || host === header("x-forwarded-host");
 }
 
 /** `HttpBindings` puts Node's own req/res in `c.env`, for the routes that stream. */
@@ -78,14 +82,14 @@ export type Env = { Bindings: HttpBindings };
 
 /** What the routes are built from: this server's settings and its two long-lived stores. */
 export interface Deps {
-	cwd: string;
-	model: string | undefined;
-	registry: Registry;
-	terminals: Terminals;
-	piVersion: string | undefined;
-	pwiVersion: string;
-	boot: string;
-	degraded: () => boolean;
+  cwd: string;
+  model: string | undefined;
+  registry: Registry;
+  terminals: Terminals;
+  piVersion: string | undefined;
+  pwiVersion: string;
+  boot: string;
+  degraded: () => boolean;
 }
 
 /**
@@ -98,10 +102,14 @@ export interface Deps {
  * too, so a route reading `body.x` never meets `null`.
  */
 export const json = <T extends object>() =>
-	validator("json", (value): T =>
-		(value && typeof value === "object" && !Array.isArray(value) ? value : {}) as T,
-	);
+  validator(
+    "json",
+    (value): T =>
+      (value && typeof value === "object" && !Array.isArray(value)
+        ? value
+        : {}) as T,
+  );
 
 /** A route's query string, typed for `hc` the same way. */
 export const query = <T extends Record<string, string | undefined>>() =>
-	validator("query", (value) => value as T);
+  validator("query", (value) => value as T);

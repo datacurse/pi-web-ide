@@ -14,7 +14,7 @@
  */
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null;
+  return typeof value === "object" && value !== null;
 }
 
 /**
@@ -24,5 +24,5 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
  * should cost that entry, not the whole message.
  */
 export function records(value: unknown): Record<string, unknown>[] {
-	return Array.isArray(value) ? value.filter(isRecord) : [];
+  return Array.isArray(value) ? value.filter(isRecord) : [];
 }

@@ -9,28 +9,35 @@
 import { writeFile } from "node:fs/promises";
 
 const BASE =
-	"https://raw.githubusercontent.com/microsoft/vscode/main/extensions/theme-seti/icons";
+  "https://raw.githubusercontent.com/microsoft/vscode/main/extensions/theme-seti/icons";
 const get = async (f) => {
-	const res = await fetch(`${BASE}/${f}`);
-	if (!res.ok) throw new Error(`${f}: HTTP ${res.status}`);
-	return res;
+  const res = await fetch(`${BASE}/${f}`);
+  if (!res.ok) throw new Error(`${f}: HTTP ${res.status}`);
+  return res;
 };
 
 const theme = await (await get("vs-seti-icon-theme.json")).json();
 const defs = theme.iconDefinitions;
 const icons = {};
 for (const [id, d] of Object.entries(defs)) {
-	if (id.endsWith("_light")) continue;
-	const light = defs[`${id}_light`] ?? d;
-	icons[id] = [parseInt(d.fontCharacter.slice(1), 16), d.fontColor, light.fontColor];
+  if (id.endsWith("_light")) continue;
+  const light = defs[`${id}_light`] ?? d;
+  icons[id] = [
+    parseInt(d.fontCharacter.slice(1), 16),
+    d.fontColor,
+    light.fontColor,
+  ];
 }
 const out = {
-	file: theme.file,
-	icons,
-	fileNames: theme.fileNames,
-	fileExtensions: theme.fileExtensions,
-	languageIds: theme.languageIds,
+  file: theme.file,
+  icons,
+  fileNames: theme.fileNames,
+  fileExtensions: theme.fileExtensions,
+  languageIds: theme.languageIds,
 };
 await writeFile("src/web/seti.json", `${JSON.stringify(out)}\n`);
-await writeFile("public/seti.woff", Buffer.from(await (await get("seti.woff")).arrayBuffer()));
+await writeFile(
+  "public/seti.woff",
+  Buffer.from(await (await get("seti.woff")).arrayBuffer()),
+);
 console.log(`seti: ${Object.keys(icons).length} icons`);

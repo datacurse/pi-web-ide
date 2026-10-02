@@ -59,17 +59,19 @@ export type Badge = "needs" | "ready" | null;
 const MARK_SCALE = 64 / 560;
 
 function frame(k: number, badge: Badge, tick: number): string {
-	const scale = MARK_SCALE * (1 - SCALE_DIP * k);
-	// Scale about the middle of the icon, so the π breathes in place
-	// instead of drifting towards the origin.
-	const doc =
-		'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">' +
-		`<!--${tick}-->` +
-		`<path fill="${badge === "ready" ? "#5ec98b" : "#fff"}" opacity="${(1 - ALPHA_DIP * k).toFixed(3)}"` +
-		` transform="translate(32 32) scale(${scale.toFixed(4)}) translate(-280 -280)" d="${PI_MARK}"/>` +
-		(badge === "needs" ? '<circle cx="49" cy="15" r="13" fill="#f87171" stroke="#000" stroke-width="4"/>' : "") +
-		"</svg>";
-	return `data:image/svg+xml,${encodeURIComponent(doc)}`;
+  const scale = MARK_SCALE * (1 - SCALE_DIP * k);
+  // Scale about the middle of the icon, so the π breathes in place
+  // instead of drifting towards the origin.
+  const doc =
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">' +
+    `<!--${tick}-->` +
+    `<path fill="${badge === "ready" ? "#5ec98b" : "#fff"}" opacity="${(1 - ALPHA_DIP * k).toFixed(3)}"` +
+    ` transform="translate(32 32) scale(${scale.toFixed(4)}) translate(-280 -280)" d="${PI_MARK}"/>` +
+    (badge === "needs"
+      ? '<circle cx="49" cy="15" r="13" fill="#f87171" stroke="#000" stroke-width="4"/>'
+      : "") +
+    "</svg>";
+  return `data:image/svg+xml,${encodeURIComponent(doc)}`;
 }
 
 /** The page's own icon link, captured before the first frame replaces it. */
@@ -79,16 +81,16 @@ let timer: number | undefined;
 let tick = 0;
 
 function show(k: number, badge: Badge) {
-	const next = document.createElement("link");
-	next.rel = "icon";
-	next.type = "image/svg+xml";
-	next.href = frame(k, badge, tick++);
-	// Appended, then the previous one dropped: with two icon links in the
-	// head Chrome renders the first, so the old frame must not outlive the
-	// new one.
-	document.head.appendChild(next);
-	live?.remove();
-	live = next;
+  const next = document.createElement("link");
+  next.rel = "icon";
+  next.type = "image/svg+xml";
+  next.href = frame(k, badge, tick++);
+  // Appended, then the previous one dropped: with two icon links in the
+  // head Chrome renders the first, so the old frame must not outlive the
+  // new one.
+  document.head.appendChild(next);
+  live?.remove();
+  live = next;
 }
 
 /**
@@ -96,26 +98,31 @@ function show(k: number, badge: Badge) {
  * green or a corner dot while anything waits. Call again whenever either changes.
  */
 export function setFavicon(working: boolean, badge: Badge): void {
-	if (timer !== undefined) window.clearInterval(timer);
-	timer = undefined;
+  if (timer !== undefined) window.clearInterval(timer);
+  timer = undefined;
 
-	if (original === undefined) original = document.querySelector<HTMLLinkElement>('link[rel~="icon"]');
-	// Nothing to say and the page's icon still up: leave it be.
-	if (!working && !badge && !live) return;
+  if (original === undefined)
+    original = document.querySelector<HTMLLinkElement>('link[rel~="icon"]');
+  // Nothing to say and the page's icon still up: leave it be.
+  if (!working && !badge && !live) return;
 
-	// The original link has to go: it is first in the head, so Chrome
-	// would keep drawing it and ignore every frame.
-	original?.remove();
-	show(0, badge);
-	// Someone who asked the OS for less motion gets a still icon; the
-	// title already says "working" for them. Settling is a fresh rest
-	// frame rather than the original link, because Chrome ignores a
-	// return to an icon URL this tab has already loaded.
-	if (!working || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
-	const started = Date.now();
-	timer = window.setInterval(() => {
-		const phase = ((Date.now() - started) % PERIOD_MS) / PERIOD_MS;
-		// Cosine, so the breath eases at both ends instead of bouncing.
-		show(0.5 - 0.5 * Math.cos(phase * 2 * Math.PI), badge);
-	}, STEP_MS);
+  // The original link has to go: it is first in the head, so Chrome
+  // would keep drawing it and ignore every frame.
+  original?.remove();
+  show(0, badge);
+  // Someone who asked the OS for less motion gets a still icon; the
+  // title already says "working" for them. Settling is a fresh rest
+  // frame rather than the original link, because Chrome ignores a
+  // return to an icon URL this tab has already loaded.
+  if (
+    !working ||
+    window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
+  )
+    return;
+  const started = Date.now();
+  timer = window.setInterval(() => {
+    const phase = ((Date.now() - started) % PERIOD_MS) / PERIOD_MS;
+    // Cosine, so the breath eases at both ends instead of bouncing.
+    show(0.5 - 0.5 * Math.cos(phase * 2 * Math.PI), badge);
+  }, STEP_MS);
 }

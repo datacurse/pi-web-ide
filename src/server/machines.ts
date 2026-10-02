@@ -19,117 +19,149 @@ import { readStateFile, statePath, writeStateFile } from "./state.js";
 
 const run = promisify(execFile);
 /** Never prompt, never hang: a host that needs a password or is off is skipped. */
-const SSH = ["-o", "BatchMode=yes", "-o", "ConnectTimeout=5", "-o", "ServerAliveInterval=5", "-o", "ServerAliveCountMax=2"];
+const SSH = [
+  "-o",
+  "BatchMode=yes",
+  "-o",
+  "ConnectTimeout=5",
+  "-o",
+  "ServerAliveInterval=5",
+  "-o",
+  "ServerAliveCountMax=2",
+];
 const INDEX = "machines.json";
 /** Stats reloads after every reply; this keeps that from ssh-ing each time. */
 const THROTTLE_MS = 30_000;
 
 export interface Machine {
-	/** The first ssh alias for it, in config order. */
-	name: string;
-	/** The mirror of its `~/.pi/agent/sessions`. */
-	root: string;
-	/** The mirror of its pwi's tool metrics (tool-metrics/FORMAT.md), kept apart so it is never read as sessions. */
-	metrics: string;
-	/** The mirror of its pwi's workout sets (workouts.ts); absent until it has any. */
-	workouts: string;
-	/** When its mirror last synced, ISO. */
-	synced: string;
-	/** Why the last sync did not reach it. */
-	error?: string;
+  /** The first ssh alias for it, in config order. */
+  name: string;
+  /** The mirror of its `~/.pi/agent/sessions`. */
+  root: string;
+  /** The mirror of its pwi's tool metrics (tool-metrics/FORMAT.md), kept apart so it is never read as sessions. */
+  metrics: string;
+  /** The mirror of its pwi's workout sets (workouts.ts); absent until it has any. */
+  workouts: string;
+  /** When its mirror last synced, ISO. */
+  synced: string;
+  /** Why the last sync did not reach it. */
+  error?: string;
 }
 
 interface Index {
-	/** ssh alias → machine id, as last seen. */
-	hosts: Record<string, string>;
-	/** machine id → last successful sync, ISO. */
-	synced: Record<string, string>;
+  /** ssh alias → machine id, as last seen. */
+  hosts: Record<string, string>;
+  /** machine id → last successful sync, ISO. */
+  synced: Record<string, string>;
 }
 
 /** Concrete host aliases in an ssh config, in order; wildcards and negations are patterns, not machines. */
 export function parseSshHosts(text: string): string[] {
-	const out: string[] = [];
-	for (const line of text.split("\n")) {
-		const m = /^\s*host(?:\s*=\s*|\s+)(.+)$/i.exec(line);
-		for (const h of m?.[1]?.trim().split(/\s+/) ?? [])
-			if (!/[*?!]/.test(h) && !out.includes(h)) out.push(h);
-	}
-	return out;
+  const out: string[] = [];
+  for (const line of text.split("\n")) {
+    const m = /^\s*host(?:\s*=\s*|\s+)(.+)$/i.exec(line);
+    for (const h of m?.[1]?.trim().split(/\s+/) ?? [])
+      if (!/[*?!]/.test(h) && !out.includes(h)) out.push(h);
+  }
+  return out;
 }
 
 export function sshHosts(): string[] {
-	try {
-		return parseSshHosts(readFileSync(join(homedir(), ".ssh", "config"), "utf8"));
-	} catch {
-		return [];
-	}
+  try {
+    return parseSshHosts(
+      readFileSync(join(homedir(), ".ssh", "config"), "utf8"),
+    );
+  } catch {
+    return [];
+  }
 }
 
 function readIndex(): Index {
-	try {
-		const raw = JSON.parse(readStateFile(statePath(INDEX)) ?? "") as Partial<Index>;
-		return { hosts: raw.hosts ?? {}, synced: raw.synced ?? {} };
-	} catch {
-		return { hosts: {}, synced: {} };
-	}
+  try {
+    const raw = JSON.parse(
+      readStateFile(statePath(INDEX)) ?? "",
+    ) as Partial<Index>;
+    return { hosts: raw.hosts ?? {}, synced: raw.synced ?? {} };
+  } catch {
+    return { hosts: {}, synced: {} };
+  }
 }
 
-const mirror = (id: string) => join(statePath("machines"), id.replace(/[^\w.-]/g, "_"));
-const metricsMirror = (id: string) => join(statePath("machine-metrics"), id.replace(/[^\w.-]/g, "_"));
-const workoutsMirror = (id: string) => join(statePath("machine-workouts"), `${id.replace(/[^\w.-]/g, "_")}.json`);
+const mirror = (id: string) =>
+  join(statePath("machines"), id.replace(/[^\w.-]/g, "_"));
+const metricsMirror = (id: string) =>
+  join(statePath("machine-metrics"), id.replace(/[^\w.-]/g, "_"));
+const workoutsMirror = (id: string) =>
+  join(statePath("machine-workouts"), `${id.replace(/[^\w.-]/g, "_")}.json`);
 /** Where pwi keeps them on the other machine, assuming its default state dir. */
 const REMOTE_METRICS = ".config/pi-web-ide/tool-metrics/";
 const REMOTE_WORKOUTS = ".config/pi-web-ide/workouts.json";
 
 function localId(): string {
-	let id = "";
-	try {
-		id = readFileSync("/etc/machine-id", "utf8").trim();
-	} catch {
-		// Not Linux: the hostname alone.
-	}
-	return `${id}-${hostname()}`;
+  let id = "";
+  try {
+    id = readFileSync("/etc/machine-id", "utf8").trim();
+  } catch {
+    // Not Linux: the hostname alone.
+  }
+  return `${id}-${hostname()}`;
 }
 
 /** The last line ssh or rsync wrote to stderr, which is the one that says why. */
 function reason(err: unknown): string {
-	const stderr = (err as { stderr?: string }).stderr?.trim().split("\n").pop();
-	return stderr || (err instanceof Error ? err.message : String(err));
+  const stderr = (err as { stderr?: string }).stderr?.trim().split("\n").pop();
+  return stderr || (err instanceof Error ? err.message : String(err));
 }
 
 async function probe(host: string): Promise<{ id: string; pi: boolean }> {
-	const { stdout } = await run(
-		"ssh",
-		[...SSH, host, 'echo "$(cat /etc/machine-id 2>/dev/null)-$(hostname)"; test -d .pi/agent/sessions && echo pi'],
-		{ timeout: 15_000 },
-	);
-	const lines = stdout.split("\n").map((l) => l.trim());
-	return { id: lines[0] ?? "", pi: lines.includes("pi") };
+  const { stdout } = await run(
+    "ssh",
+    [
+      ...SSH,
+      host,
+      'echo "$(cat /etc/machine-id 2>/dev/null)-$(hostname)"; test -d .pi/agent/sessions && echo pi',
+    ],
+    { timeout: 15_000 },
+  );
+  const lines = stdout.split("\n").map((l) => l.trim());
+  return { id: lines[0] ?? "", pi: lines.includes("pi") };
 }
 
-async function copyFile(host: string, from: string, dest: string): Promise<void> {
-	mkdirSync(dirname(dest), { recursive: true });
-	await run("rsync", ["-a", "-e", `ssh ${SSH.join(" ")}`, `${host}:${from}`, dest], { timeout: 60_000 });
+async function copyFile(
+  host: string,
+  from: string,
+  dest: string,
+): Promise<void> {
+  mkdirSync(dirname(dest), { recursive: true });
+  await run(
+    "rsync",
+    ["-a", "-e", `ssh ${SSH.join(" ")}`, `${host}:${from}`, dest],
+    { timeout: 60_000 },
+  );
 }
 
-async function rsync(host: string, dest: string, from = ".pi/agent/sessions/"): Promise<void> {
-	mkdirSync(dest, { recursive: true });
-	await run(
-		"rsync",
-		[
-			"-a",
-			"--delete",
-			"--append-verify",
-			"--include=*/",
-			"--include=*.jsonl",
-			"--exclude=*",
-			"-e",
-			`ssh ${SSH.join(" ")}`,
-			`${host}:${from}`,
-			`${dest}/`,
-		],
-		{ timeout: 10 * 60_000, maxBuffer: 16 * 1024 * 1024 },
-	);
+async function rsync(
+  host: string,
+  dest: string,
+  from = ".pi/agent/sessions/",
+): Promise<void> {
+  mkdirSync(dest, { recursive: true });
+  await run(
+    "rsync",
+    [
+      "-a",
+      "--delete",
+      "--append-verify",
+      "--include=*/",
+      "--include=*.jsonl",
+      "--exclude=*",
+      "-e",
+      `ssh ${SSH.join(" ")}`,
+      `${host}:${from}`,
+      `${dest}/`,
+    ],
+    { timeout: 10 * 60_000, maxBuffer: 16 * 1024 * 1024 },
+  );
 }
 
 const errors = new Map<string, string>();
@@ -138,81 +170,84 @@ let last = 0;
 
 /** Bring every mirror up to date. Concurrent calls share one run; `force` skips the throttle. */
 export function syncMachines(force = false): Promise<void> {
-	if (running) return running;
-	if (!force && Date.now() - last < THROTTLE_MS) return Promise.resolve();
-	running = sync().finally(() => {
-		last = Date.now();
-		running = undefined;
-	});
-	return running;
+  if (running) return running;
+  if (!force && Date.now() - last < THROTTLE_MS) return Promise.resolve();
+  running = sync().finally(() => {
+    last = Date.now();
+    running = undefined;
+  });
+  return running;
 }
 
 async function sync(): Promise<void> {
-	const index = readIndex();
-	const self = localId();
-	const probes = await Promise.all(
-		sshHosts().map(async (host) => {
-			try {
-				return { host, ...(await probe(host)) };
-			} catch (err) {
-				return { host, id: "", pi: false, error: reason(err) };
-			}
-		}),
-	);
-	for (const p of probes) if (p.id) index.hosts[p.host] = p.id;
+  const index = readIndex();
+  const self = localId();
+  const probes = await Promise.all(
+    sshHosts().map(async (host) => {
+      try {
+        return { host, ...(await probe(host)) };
+      } catch (err) {
+        return { host, id: "", pi: false, error: reason(err) };
+      }
+    }),
+  );
+  for (const p of probes) if (p.id) index.hosts[p.host] = p.id;
 
-	// One alias per machine: the first reachable one, in config order.
-	const reached = new Set<string>();
-	const jobs = probes.filter((p) => {
-		if (!p.id || !p.pi || p.id === self || reached.has(p.id)) return false;
-		reached.add(p.id);
-		return true;
-	});
-	errors.clear();
-	await Promise.all(
-		jobs.map((p) =>
-			rsync(p.host, mirror(p.id)).then(
-				async () => {
-					index.synced[p.id] = new Date().toISOString();
-					// Only machines that run pwi have them; without, it has estimates only.
-					await Promise.all([
-						rsync(p.host, metricsMirror(p.id), REMOTE_METRICS).catch(() => {}),
-						copyFile(p.host, REMOTE_WORKOUTS, workoutsMirror(p.id)).catch(() => {}),
-					]);
-				},
-				(err: unknown) => {
-					errors.set(p.id, reason(err));
-				},
-			),
-		),
-	);
-	// A known machine no alias reached this time: say why on its button.
-	for (const p of probes) {
-		const id = index.hosts[p.host];
-		const error = "error" in p ? p.error : undefined;
-		if (error && id && !reached.has(id) && !errors.has(id)) errors.set(id, error);
-	}
-	writeStateFile(statePath(INDEX), JSON.stringify(index));
+  // One alias per machine: the first reachable one, in config order.
+  const reached = new Set<string>();
+  const jobs = probes.filter((p) => {
+    if (!p.id || !p.pi || p.id === self || reached.has(p.id)) return false;
+    reached.add(p.id);
+    return true;
+  });
+  errors.clear();
+  await Promise.all(
+    jobs.map((p) =>
+      rsync(p.host, mirror(p.id)).then(
+        async () => {
+          index.synced[p.id] = new Date().toISOString();
+          // Only machines that run pwi have them; without, it has estimates only.
+          await Promise.all([
+            rsync(p.host, metricsMirror(p.id), REMOTE_METRICS).catch(() => {}),
+            copyFile(p.host, REMOTE_WORKOUTS, workoutsMirror(p.id)).catch(
+              () => {},
+            ),
+          ]);
+        },
+        (err: unknown) => {
+          errors.set(p.id, reason(err));
+        },
+      ),
+    ),
+  );
+  // A known machine no alias reached this time: say why on its button.
+  for (const p of probes) {
+    const id = index.hosts[p.host];
+    const error = "error" in p ? p.error : undefined;
+    if (error && id && !reached.has(id) && !errors.has(id))
+      errors.set(id, error);
+  }
+  writeStateFile(statePath(INDEX), JSON.stringify(index));
 }
 
 /** Machines with a mirror, one per machine, in ssh config order. */
 export function machines(): Machine[] {
-	const index = readIndex();
-	const seen = new Set<string>();
-	const out: Machine[] = [];
-	for (const host of sshHosts()) {
-		const id = index.hosts[host];
-		const synced = id && index.synced[id];
-		if (!id || !synced || seen.has(id)) continue;
-		seen.add(id);
-		out.push({
-			name: host,
-			root: mirror(id),
-			metrics: metricsMirror(id),
-			workouts: workoutsMirror(id),
-			synced,
-			error: errors.get(id),
-		});
-	}
-	return out;
+  const index = readIndex();
+  const seen = new Set<string>();
+  const out: Machine[] = [];
+  for (const host of sshHosts()) {
+    const id = index.hosts[host];
+    const synced = id && index.synced[id];
+    if (!id || !synced || seen.has(id)) continue;
+    seen.add(id);
+    out.push({
+      name: host,
+      root: mirror(id),
+      metrics: metricsMirror(id),
+      workouts: workoutsMirror(id),
+      synced,
+      error: errors.get(id),
+    });
+  }
+  return out;
 }

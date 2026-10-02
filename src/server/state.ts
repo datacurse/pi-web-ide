@@ -15,11 +15,11 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 
 export function stateDir(): string {
-	return process.env.PWI_STATE_DIR ?? join(homedir(), ".config", "pi-web-ide");
+  return process.env.PWI_STATE_DIR ?? join(homedir(), ".config", "pi-web-ide");
 }
 
 export function statePath(name: string): string {
-	return join(stateDir(), name);
+  return join(stateDir(), name);
 }
 
 /**
@@ -31,17 +31,17 @@ export function statePath(name: string): string {
  * directory is atomic.
  */
 export function writeStateFile(path: string, text: string, mode = 0o600): void {
-	mkdirSync(stateDir(), { recursive: true });
-	const tmp = `${path}.tmp`;
-	writeFileSync(tmp, text, { mode });
-	renameSync(tmp, path);
+  mkdirSync(stateDir(), { recursive: true });
+  const tmp = `${path}.tmp`;
+  writeFileSync(tmp, text, { mode });
+  renameSync(tmp, path);
 }
 
 /** A state file's text, or undefined when it is absent or unreadable. */
 export function readStateFile(path: string): string | undefined {
-	try {
-		return readFileSync(path, "utf8");
-	} catch {
-		return undefined;
-	}
+  try {
+    return readFileSync(path, "utf8");
+  } catch {
+    return undefined;
+  }
 }

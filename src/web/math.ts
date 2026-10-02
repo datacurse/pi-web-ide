@@ -19,15 +19,15 @@
  * block — versus `$…$`/`\(…\)` inline in a sentence.
  */
 export interface MathSpan {
-	tex: string;
-	display: boolean;
+  tex: string;
+  display: boolean;
 }
 
 export interface Extracted {
-	/** The source with every expression replaced by a placeholder. */
-	source: string;
-	/** The expressions, in the order their placeholders appear. */
-	math: MathSpan[];
+  /** The source with every expression replaced by a placeholder. */
+  source: string;
+  /** The expressions, in the order their placeholders appear. */
+  math: MathSpan[];
 }
 
 /**
@@ -53,28 +53,28 @@ export const PLACEHOLDER = /\uE000(\d+)\uE001/;
  * and the start of the next is money twice, not math.
  */
 function inlineEnd(src: string, from: number): number {
-	for (let i = from; i < src.length; i++) {
-		const c = src[i];
-		if (c === "\\") {
-			i++;
-			continue;
-		}
-		if (c === "\n") return -1;
-		if (c === "$") return /\s/.test(src[i - 1] ?? "") ? -1 : i;
-	}
-	return -1;
+  for (let i = from; i < src.length; i++) {
+    const c = src[i];
+    if (c === "\\") {
+      i++;
+      continue;
+    }
+    if (c === "\n") return -1;
+    if (c === "$") return /\s/.test(src[i - 1] ?? "") ? -1 : i;
+  }
+  return -1;
 }
 
 /** The end of a delimiter-terminated run, or -1. Escapes are skipped. */
 function findClose(src: string, from: number, close: string): number {
-	for (let i = from; i < src.length; i++) {
-		if (src[i] === "\\" && close !== "\\]" && close !== "\\)") {
-			i++;
-			continue;
-		}
-		if (src.startsWith(close, i)) return i;
-	}
-	return -1;
+  for (let i = from; i < src.length; i++) {
+    if (src[i] === "\\" && close !== "\\]" && close !== "\\)") {
+      i++;
+      continue;
+    }
+    if (src.startsWith(close, i)) return i;
+  }
+  return -1;
 }
 
 /**
@@ -83,91 +83,91 @@ function findClose(src: string, from: number, close: string): number {
  * otherwise be read as an expression and rendered as one.
  */
 function skipCode(src: string, i: number): number {
-	const fence = /^(```+|~~~+)/.exec(src.slice(i));
-	if (fence) {
-		const end = src.indexOf(fence[1], i + fence[1].length);
-		return end === -1 ? src.length : end + fence[1].length;
-	}
-	// Inline code: N backticks, closed by the same run length.
-	const ticks = /^`+/.exec(src.slice(i))?.[0];
-	if (!ticks) return i;
-	const end = src.indexOf(ticks, i + ticks.length);
-	return end === -1 ? i + ticks.length : end + ticks.length;
+  const fence = /^(```+|~~~+)/.exec(src.slice(i));
+  if (fence) {
+    const end = src.indexOf(fence[1], i + fence[1].length);
+    return end === -1 ? src.length : end + fence[1].length;
+  }
+  // Inline code: N backticks, closed by the same run length.
+  const ticks = /^`+/.exec(src.slice(i))?.[0];
+  if (!ticks) return i;
+  const end = src.indexOf(ticks, i + ticks.length);
+  return end === -1 ? i + ticks.length : end + ticks.length;
 }
 
 export function extractMath(src: string): Extracted {
-	// Cheap bail-out: most messages have no math, and this runs on every
-	// streamed delta of the one being written.
-	if (!src.includes("$") && !src.includes("\\[") && !src.includes("\\(")) {
-		return { source: src, math: [] };
-	}
+  // Cheap bail-out: most messages have no math, and this runs on every
+  // streamed delta of the one being written.
+  if (!src.includes("$") && !src.includes("\\[") && !src.includes("\\(")) {
+    return { source: src, math: [] };
+  }
 
-	const math: MathSpan[] = [];
-	let out = "";
-	let i = 0;
+  const math: MathSpan[] = [];
+  let out = "";
+  let i = 0;
 
-	const push = (tex: string, display: boolean) => {
-		out += `${OPEN}${math.length}${CLOSE}`;
-		math.push({ tex, display });
-	};
+  const push = (tex: string, display: boolean) => {
+    out += `${OPEN}${math.length}${CLOSE}`;
+    math.push({ tex, display });
+  };
 
-	while (i < src.length) {
-		const c = src[i];
+  while (i < src.length) {
+    const c = src[i];
 
-		if (c === "`") {
-			const to = skipCode(src, i);
-			out += src.slice(i, to);
-			i = to;
-			continue;
-		}
+    if (c === "`") {
+      const to = skipCode(src, i);
+      out += src.slice(i, to);
+      i = to;
+      continue;
+    }
 
-		// An escaped dollar is a dollar. It stays escaped: markdown resolves
-		// `\$` to `$` itself, and unescaping here would produce a delimiter.
-		if (c === "\\" && src[i + 1] === "$") {
-			out += "\\$";
-			i += 2;
-			continue;
-		}
+    // An escaped dollar is a dollar. It stays escaped: markdown resolves
+    // `\$` to `$` itself, and unescaping here would produce a delimiter.
+    if (c === "\\" && src[i + 1] === "$") {
+      out += "\\$";
+      i += 2;
+      continue;
+    }
 
-		if (src.startsWith("$$", i)) {
-			const end = findClose(src, i + 2, "$$");
-			if (end !== -1) {
-				push(src.slice(i + 2, end).trim(), true);
-				i = end + 2;
-				continue;
-			}
-		} else if (src.startsWith("\\[", i)) {
-			const end = findClose(src, i + 2, "\\]");
-			if (end !== -1) {
-				push(src.slice(i + 2, end).trim(), true);
-				i = end + 2;
-				continue;
-			}
-		} else if (src.startsWith("\\(", i)) {
-			const end = findClose(src, i + 2, "\\)");
-			if (end !== -1) {
-				push(src.slice(i + 2, end).trim(), false);
-				i = end + 2;
-				continue;
-			}
-		} else if (c === "$" && !/\s/.test(src[i + 1] ?? " ")) {
-			const end = inlineEnd(src, i + 1);
-			if (end !== -1) {
-				push(src.slice(i + 1, end).trim(), false);
-				i = end + 1;
-				continue;
-			}
-		}
+    if (src.startsWith("$$", i)) {
+      const end = findClose(src, i + 2, "$$");
+      if (end !== -1) {
+        push(src.slice(i + 2, end).trim(), true);
+        i = end + 2;
+        continue;
+      }
+    } else if (src.startsWith("\\[", i)) {
+      const end = findClose(src, i + 2, "\\]");
+      if (end !== -1) {
+        push(src.slice(i + 2, end).trim(), true);
+        i = end + 2;
+        continue;
+      }
+    } else if (src.startsWith("\\(", i)) {
+      const end = findClose(src, i + 2, "\\)");
+      if (end !== -1) {
+        push(src.slice(i + 2, end).trim(), false);
+        i = end + 2;
+        continue;
+      }
+    } else if (c === "$" && !/\s/.test(src[i + 1] ?? " ")) {
+      const end = inlineEnd(src, i + 1);
+      if (end !== -1) {
+        push(src.slice(i + 1, end).trim(), false);
+        i = end + 1;
+        continue;
+      }
+    }
 
-		/*
-		 * Everything that did not close is ordinary text, INCLUDING a lone
-		 * `$$` at the end of a message being streamed: the closing delimiter
-		 * is still being typed, and rendering a guess would make the answer
-		 * flicker between prose and math as it arrives.
-		 */
-		out += c;
-		i++;
-	}
+    /*
+     * Everything that did not close is ordinary text, INCLUDING a lone
+     * `$$` at the end of a message being streamed: the closing delimiter
+     * is still being typed, and rendering a guess would make the answer
+     * flicker between prose and math as it arrives.
+     */
+    out += c;
+    i++;
+  }
 
-	return { source: out, math };
+  return { source: out, math };
 }

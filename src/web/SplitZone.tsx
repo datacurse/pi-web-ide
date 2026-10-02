@@ -34,98 +34,102 @@ type Side = "left" | "right";
  * once to paint the target, and again to honour the drop.
  */
 export function halfOf(x: number, left: number, width: number): Side {
-	return x < left + width / 2 ? "left" : "right";
+  return x < left + width / 2 ? "left" : "right";
 }
 
 export function SplitZone({
-	children,
-	onDrop,
-	splits = true,
-	className = "",
+  children,
+  onDrop,
+  splits = true,
+  className = "",
 }: {
-	children: ReactNode;
-	/** Take this tab into the column on `side` of this one. */
-	onDrop: (entry: string, side: Side) => void;
-	/**
-	 * Whether a drop here can create a column, which is what makes the two
-	 * halves mean different things.
-	 *
-	 * False for the rightmost column: there is nothing further right to make,
-	 * so both halves mean "put it here" and the highlight covers the WHOLE
-	 * body. A half-lit overlay there promises a split that cannot happen.
-	 */
-	splits?: boolean;
-	className?: string;
+  children: ReactNode;
+  /** Take this tab into the column on `side` of this one. */
+  onDrop: (entry: string, side: Side) => void;
+  /**
+   * Whether a drop here can create a column, which is what makes the two
+   * halves mean different things.
+   *
+   * False for the rightmost column: there is nothing further right to make,
+   * so both halves mean "put it here" and the highlight covers the WHOLE
+   * body. A half-lit overlay there promises a split that cannot happen.
+   */
+  splits?: boolean;
+  className?: string;
 }) {
-	/**
-	 * Null when no tab drag is over the body, which is also what makes the
-	 * overlay absent rather than transparent.
-	 */
-	const [side, setSide] = useState<Side | null>(null);
+  /**
+   * Null when no tab drag is over the body, which is also what makes the
+   * overlay absent rather than transparent.
+   */
+  const [side, setSide] = useState<Side | null>(null);
 
-	const sideOf = (e: DragEvent<HTMLDivElement>): Side => {
-		const box = e.currentTarget.getBoundingClientRect();
-		return halfOf(e.clientX, box.left, box.width);
-	};
+  const sideOf = (e: DragEvent<HTMLDivElement>): Side => {
+    const box = e.currentTarget.getBoundingClientRect();
+    return halfOf(e.clientX, box.left, box.width);
+  };
 
-	return (
-		<div
-			className={`relative ${className}`}
-			onDragOver={(e) => {
-				// Only our tabs. A file dragged in from the desktop, or a text
-				// selection, must not paint a split target it cannot honour.
-				if (!isTabDrag(e.dataTransfer.types)) return;
-				e.preventDefault();
-				e.dataTransfer.dropEffect = "move";
-				const next = sideOf(e);
-				if (next !== side) setSide(next);
-			}}
-			/*
-			 * `relatedTarget` outside this subtree is what distinguishes LEAVING
-			 * the body from crossing between its own children: dragleave fires on
-			 * every internal boundary, and clearing on all of them makes the
-			 * highlight flicker off under a moving pointer.
-			 */
-			onDragLeave={(e) => {
-				if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
-				setSide(null);
-			}}
-			/*
-			 * The side is recomputed from THIS event rather than read back from the
-			 * highlight's state, and that is the whole bug this once had: a
-			 * `dragleave` fires on the drop target immediately BEFORE `drop`, with
-			 * a null relatedTarget — indistinguishable from the pointer genuinely
-			 * leaving. It cleared `side` a beat before the drop read it, which
-			 * presented as a split that highlighted correctly and then did nothing
-			 * on release.
-			 */
-			onDrop={(e) => {
-				const entry = e.dataTransfer.getData(TAB_DRAG_TYPE);
-				setSide(null);
-				if (!entry) return;
-				e.preventDefault();
-				onDrop(entry, sideOf(e));
-			}}
-			// A drag that ends anywhere (Escape, a drop elsewhere) has to clear
-			// the highlight, or it stays lit until the next drag enters.
-			onDragEnd={() => setSide(null)}
-		>
-			{children}
+  return (
+    <div
+      className={`relative ${className}`}
+      onDragOver={(e) => {
+        // Only our tabs. A file dragged in from the desktop, or a text
+        // selection, must not paint a split target it cannot honour.
+        if (!isTabDrag(e.dataTransfer.types)) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+        const next = sideOf(e);
+        if (next !== side) setSide(next);
+      }}
+      /*
+       * `relatedTarget` outside this subtree is what distinguishes LEAVING
+       * the body from crossing between its own children: dragleave fires on
+       * every internal boundary, and clearing on all of them makes the
+       * highlight flicker off under a moving pointer.
+       */
+      onDragLeave={(e) => {
+        if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
+        setSide(null);
+      }}
+      /*
+       * The side is recomputed from THIS event rather than read back from the
+       * highlight's state, and that is the whole bug this once had: a
+       * `dragleave` fires on the drop target immediately BEFORE `drop`, with
+       * a null relatedTarget — indistinguishable from the pointer genuinely
+       * leaving. It cleared `side` a beat before the drop read it, which
+       * presented as a split that highlighted correctly and then did nothing
+       * on release.
+       */
+      onDrop={(e) => {
+        const entry = e.dataTransfer.getData(TAB_DRAG_TYPE);
+        setSide(null);
+        if (!entry) return;
+        e.preventDefault();
+        onDrop(entry, sideOf(e));
+      }}
+      // A drag that ends anywhere (Escape, a drop elsewhere) has to clear
+      // the highlight, or it stays lit until the next drag enters.
+      onDragEnd={() => setSide(null)}
+    >
+      {children}
 
-			{side && (
-				<div
-					aria-hidden
-					/*
-					 * Transitioned so the target SLIDES between halves instead of
-					 * teleporting as the pointer crosses the midpoint — the movement is
-					 * what tells you the two halves are one control with two positions.
-					 * inset-x-0 rather than a width swap so it animates at all.
-					 */
-					className={`pointer-events-none absolute inset-y-0 rounded-sm bg-amber-400/15 ring-2 ring-inset ring-amber-400/60 transition-[left,right] duration-150 ease-out motion-reduce:transition-none ${
-						!splits ? "inset-x-0" : side === "left" ? "left-0 right-1/2" : "left-1/2 right-0"
-					}`}
-				/>
-			)}
-		</div>
-	);
+      {side && (
+        <div
+          aria-hidden
+          /*
+           * Transitioned so the target SLIDES between halves instead of
+           * teleporting as the pointer crosses the midpoint — the movement is
+           * what tells you the two halves are one control with two positions.
+           * inset-x-0 rather than a width swap so it animates at all.
+           */
+          className={`pointer-events-none absolute inset-y-0 rounded-sm bg-amber-400/15 ring-2 ring-inset ring-amber-400/60 transition-[left,right] duration-150 ease-out motion-reduce:transition-none ${
+            !splits
+              ? "inset-x-0"
+              : side === "left"
+                ? "left-0 right-1/2"
+                : "left-1/2 right-0"
+          }`}
+        />
+      )}
+    </div>
+  );
 }

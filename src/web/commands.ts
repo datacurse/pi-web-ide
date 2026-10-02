@@ -16,8 +16,8 @@ import type { PiCommand } from "../shared/types.js";
 
 /** What the composer is currently completing: the command word itself. */
 export interface Completion {
-	/** The text after the slash: "" for a bare `/`, "co" for `/co`. */
-	query: string;
+  /** The text after the slash: "" for a bare `/`, "co" for `/co`. */
+  query: string;
 }
 
 /**
@@ -25,11 +25,11 @@ export interface Completion {
  * is the row as it reads, which is why it carries its own leading slash.
  */
 export interface CommandOption {
-	insert: string;
-	label: string;
-	description?: string;
-	/** `extension`, `prompt` or `skill`, shown as a dim tag on the right. */
-	source?: string;
+  insert: string;
+  label: string;
+  description?: string;
+  /** `extension`, `prompt` or `skill`, shown as a dim tag on the right. */
+  source?: string;
 }
 
 /**
@@ -42,17 +42,17 @@ export interface CommandOption {
  * can help with.
  */
 export function parseCompletion(text: string): Completion | null {
-	if (text.includes("\n")) return null;
-	const m = /^\/(\S*)$/.exec(text);
-	return m ? { query: m[1] ?? "" } : null;
+  if (text.includes("\n")) return null;
+  const m = /^\/(\S*)$/.exec(text);
+  return m ? { query: m[1] ?? "" } : null;
 }
 
 /** Case-insensitive, prefix-first ranking. `-1` means "no match". */
 function rank(candidate: string, query: string): number {
-	if (!query) return 0;
-	const at = candidate.toLowerCase().indexOf(query.toLowerCase());
-	if (at < 0) return -1;
-	return at === 0 ? 0 : 1;
+  if (!query) return 0;
+  const at = candidate.toLowerCase().indexOf(query.toLowerCase());
+  if (at < 0) return -1;
+  return at === 0 ? 0 : 1;
 }
 
 /**
@@ -62,15 +62,18 @@ function rank(candidate: string, query: string): number {
  * arguments takes them as free text after the name: `/skill:review the auth
  * change`. One keypress leaves the caret where the argument goes.
  */
-export function completionOptions(commands: PiCommand[], completion: Completion): CommandOption[] {
-	return commands
-		.map((c) => ({ c, r: rank(c.name, completion.query) }))
-		.filter(({ r }) => r >= 0)
-		.sort((a, b) => a.r - b.r || a.c.name.localeCompare(b.c.name))
-		.map(({ c }) => ({
-			insert: `/${c.name} `,
-			label: `/${c.name}`,
-			...(c.description ? { description: c.description } : {}),
-			...(c.source ? { source: c.source } : {}),
-		}));
+export function completionOptions(
+  commands: PiCommand[],
+  completion: Completion,
+): CommandOption[] {
+  return commands
+    .map((c) => ({ c, r: rank(c.name, completion.query) }))
+    .filter(({ r }) => r >= 0)
+    .sort((a, b) => a.r - b.r || a.c.name.localeCompare(b.c.name))
+    .map(({ c }) => ({
+      insert: `/${c.name} `,
+      label: `/${c.name}`,
+      ...(c.description ? { description: c.description } : {}),
+      ...(c.source ? { source: c.source } : {}),
+    }));
 }

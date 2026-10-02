@@ -26,7 +26,7 @@ export const PRODUCT = "pi-web-ide";
  * server strips it again in toPiMessage, so the transcript never shows it.
  */
 export const ASK_ONLY =
-	"\n\n<system-reminder>\nThis is a question only. Do not write or edit code or files, and do not run commands that change anything. Reading files to answer is fine.\n</system-reminder>";
+  "\n\n<system-reminder>\nThis is a question only. Do not write or edit code or files, and do not run commands that change anything. Reading files to answer is fine.\n</system-reminder>";
 
 /**
  * A base64 image. `data` is RAW base64 with no `data:` URL prefix, because
@@ -35,57 +35,57 @@ export const ASK_ONLY =
  * nobody downstream has to guess which form they were handed.
  */
 export interface PiImage {
-	data: string;
-	mimeType: string;
+  data: string;
+  mimeType: string;
 }
 
 /** Display metadata captured at execution; currentLine is a best-effort lookup, never historical. */
 export interface ToolSource {
-	path: string;
-	line?: number;
-	currentLine?: number;
+  path: string;
+  line?: number;
+  currentLine?: number;
 }
 
 export interface PiTool {
-	id: string;
-	name: string;
-	args: unknown;
-	result?: string;
-	diff?: string;
-	source?: ToolSource;
-	isError?: boolean;
-	parentId?: string;
-	startedAt?: number;
-	durationMs?: number;
-	running?: boolean;
-	interrupted?: boolean;
-	outputUnavailable?: boolean;
-	children?: PiTool[];
-	childrenIncomplete?: boolean;
+  id: string;
+  name: string;
+  args: unknown;
+  result?: string;
+  diff?: string;
+  source?: ToolSource;
+  isError?: boolean;
+  parentId?: string;
+  startedAt?: number;
+  durationMs?: number;
+  running?: boolean;
+  interrupted?: boolean;
+  outputUnavailable?: boolean;
+  children?: PiTool[];
+  childrenIncomplete?: boolean;
 }
 
 export type PiBlock =
-	| { kind: "text"; text: string }
-	| { kind: "thinking"; text: string }
-	| { kind: "image"; data: string; mimeType: string }
-	| ({ kind: "tool" } & PiTool);
+  | { kind: "text"; text: string }
+  | { kind: "thinking"; text: string }
+  | { kind: "image"; data: string; mimeType: string }
+  | ({ kind: "tool" } & PiTool);
 
 export interface PiMessage {
-	/**
-	 * `compaction` is pi's `compactionSummary` message role: the history it
-	 * folded away, as one summary. Its own role because it is not something
-	 * anyone SAID — rendering it as an ordinary message makes a session look
-	 * like it opened with a wall of third-person notes about itself.
-	 */
-	role: "user" | "assistant" | "toolResult" | "compaction" | "other";
-	blocks: PiBlock[];
-	/** When the message STARTED (pi's `message.timestamp`). */
-	timestamp: number;
-	/**
-	 * Assistant only: when it finished, i.e. when pi appended its entry. pi's
-	 * message carries no end time; see `ends` in agent.ts.
-	 */
-	endedAt?: number;
+  /**
+   * `compaction` is pi's `compactionSummary` message role: the history it
+   * folded away, as one summary. Its own role because it is not something
+   * anyone SAID — rendering it as an ordinary message makes a session look
+   * like it opened with a wall of third-person notes about itself.
+   */
+  role: "user" | "assistant" | "toolResult" | "compaction" | "other";
+  blocks: PiBlock[];
+  /** When the message STARTED (pi's `message.timestamp`). */
+  timestamp: number;
+  /**
+   * Assistant only: when it finished, i.e. when pi appended its entry. pi's
+   * message carries no end time; see `ends` in agent.ts.
+   */
+  endedAt?: number;
 }
 
 /**
@@ -98,15 +98,15 @@ export interface PiMessage {
  * command is dropped and the command looks like it did nothing.
  */
 export interface PiNotice {
-	level: "info" | "warning" | "error";
-	text: string;
-	/** A later notice with the same key replaces this one; empty text clears it. */
-	key?: string;
+  level: "info" | "warning" | "error";
+  text: string;
+  /** A later notice with the same key replaces this one; empty text clears it. */
+  key?: string;
 }
 
 export function addNotice(notices: PiNotice[], n: PiNotice): PiNotice[] {
-	const remaining = notices.filter((o) => !n.key || o.key !== n.key);
-	return n.key && !n.text ? remaining : [...remaining, n];
+  const remaining = notices.filter((o) => !n.key || o.key !== n.key);
+  return n.key && !n.text ? remaining : [...remaining, n];
 }
 
 /**
@@ -115,10 +115,10 @@ export function addNotice(notices: PiNotice[], n: PiNotice): PiNotice[] {
  * paths and scopes that has no place in a two-line row.
  */
 export interface PiCommand {
-	name: string;
-	description?: string;
-	/** `extension`, `prompt` or `skill` — shown as the row's right-hand tag. */
-	source?: string;
+  name: string;
+  description?: string;
+  /** `extension`, `prompt` or `skill` — shown as the row's right-hand tag. */
+  source?: string;
 }
 
 /**
@@ -132,20 +132,20 @@ export interface PiCommand {
  * answer a question the user never saw.
  */
 export interface PiAsk {
-	id: string;
-	/**
-	 * `select` renders the options, `confirm` two buttons, `text` a field.
-	 * pi's `input` and `editor` collapse into `text` — the difference is a
-	 * one-line prompt versus a full editor, which `multiline` carries.
-	 */
-	kind: "select" | "confirm" | "text";
-	title?: string;
-	message?: string;
-	/** `select` only. pi sends plain option strings. */
-	options?: Array<{ label: string }>;
-	/** `text` only: pi's prefill, and whether it expects more than a line. */
-	value?: string;
-	multiline?: boolean;
+  id: string;
+  /**
+   * `select` renders the options, `confirm` two buttons, `text` a field.
+   * pi's `input` and `editor` collapse into `text` — the difference is a
+   * one-line prompt versus a full editor, which `multiline` carries.
+   */
+  kind: "select" | "confirm" | "text";
+  title?: string;
+  message?: string;
+  /** `select` only. pi sends plain option strings. */
+  options?: Array<{ label: string }>;
+  /** `text` only: pi's prefill, and whether it expects more than a line. */
+  value?: string;
+  multiline?: boolean;
 }
 
 /**
@@ -155,7 +155,8 @@ export interface PiAsk {
  * dismiss the panel — pi treats it as the dialog being dismissed, which for
  * the `ask` tool fails the tool call.
  */
-export type AskAnswer = { value: string } | { confirmed: boolean } | { cancelled: true };
+export type AskAnswer =
+  { value: string } | { confirmed: boolean } | { cancelled: true };
 
 /**
  * The normalized event union. pi emits ~25 event shapes; these are the ones
@@ -163,159 +164,176 @@ export type AskAnswer = { value: string } | { confirmed: boolean } | { cancelled
  * Anything not here is dropped at the adapter on purpose.
  */
 export type PiEvent =
-	| { type: "text"; delta: string }
-	| { type: "thinking"; delta: string }
-	| { type: "tool_start"; id: string; name: string; args: unknown; parentId?: string; at?: number; source?: ToolSource }
-	/**
-	 * Streaming tool output. `result` is CUMULATIVE — pi's `partialResult`
-	 * carries everything produced so far — so a consumer replaces the card's
-	 * output with it rather than appending.
-	 */
-	| { type: "tool_update"; id: string; result: string }
-	| { type: "tool_end"; id: string; name: string; isError: boolean; result: string; at?: number; source?: ToolSource }
-	| { type: "message_done"; message: PiMessage }
-	| { type: "notice"; notice: PiNotice }
-	| { type: "ask"; ask: PiAsk | null }
-	| { type: "activity"; activity: TurnActivity }
-	| { type: "idle" }
-	| { type: "error"; message: string };
+  | { type: "text"; delta: string }
+  | { type: "thinking"; delta: string }
+  | {
+      type: "tool_start";
+      id: string;
+      name: string;
+      args: unknown;
+      parentId?: string;
+      at?: number;
+      source?: ToolSource;
+    }
+  /**
+   * Streaming tool output. `result` is CUMULATIVE — pi's `partialResult`
+   * carries everything produced so far — so a consumer replaces the card's
+   * output with it rather than appending.
+   */
+  | { type: "tool_update"; id: string; result: string }
+  | {
+      type: "tool_end";
+      id: string;
+      name: string;
+      isError: boolean;
+      result: string;
+      at?: number;
+      source?: ToolSource;
+    }
+  | { type: "message_done"; message: PiMessage }
+  | { type: "notice"; notice: PiNotice }
+  | { type: "ask"; ask: PiAsk | null }
+  | { type: "activity"; activity: TurnActivity }
+  | { type: "idle" }
+  | { type: "error"; message: string };
 
-export type SessionAttachment = { kind: "text"; name: string } | { kind: "image"; index: number };
+export type SessionAttachment =
+  { kind: "text"; name: string } | { kind: "image"; index: number };
 
 export interface PiSessionInfo {
-	id: string;
-	path: string;
-	name?: string;
-	created: string;
-	/**
-	 * The last real conversation activity: the timestamp of the last `message`
-	 * entry in the session file, NOT the file's mtime. pi appends bookkeeping
-	 * rows (`session_info`, `model_change`) when a session is merely resumed, so
-	 * an mtime-ordered list reshuffles itself just from being looked at.
-	 */
-	lastActive: string;
-	/** Timestamp of the last user prompt; absent until the session has one. */
-	lastAsked?: string;
-	messageCount: number;
-	firstMessage: string;
-	/** The newest user prompt; absent until the session has one. */
-	lastPrompt?: string;
-	firstAttachments?: SessionAttachment[];
-	lastAttachments?: SessionAttachment[];
-	/** True if this session is currently streaming, even with no client attached. */
-	isStreaming?: boolean;
-	/** True if the session is blocked on a question (`ask`) only the user can answer. */
-	needsInput?: boolean;
+  id: string;
+  path: string;
+  name?: string;
+  created: string;
+  /**
+   * The last real conversation activity: the timestamp of the last `message`
+   * entry in the session file, NOT the file's mtime. pi appends bookkeeping
+   * rows (`session_info`, `model_change`) when a session is merely resumed, so
+   * an mtime-ordered list reshuffles itself just from being looked at.
+   */
+  lastActive: string;
+  /** Timestamp of the last user prompt; absent until the session has one. */
+  lastAsked?: string;
+  messageCount: number;
+  firstMessage: string;
+  /** The newest user prompt; absent until the session has one. */
+  lastPrompt?: string;
+  firstAttachments?: SessionAttachment[];
+  lastAttachments?: SessionAttachment[];
+  /** True if this session is currently streaming, even with no client attached. */
+  isStreaming?: boolean;
+  /** True if the session is blocked on a question (`ask`) only the user can answer. */
+  needsInput?: boolean;
 }
 
 /** A session search result: the session and a one-line excerpt around the match. */
 export interface PiSessionHit {
-	session: PiSessionInfo;
-	snippet: string;
+  session: PiSessionInfo;
+  snippet: string;
 }
 
 /** One prompt and everything pi did to answer it, from a session file. */
 export interface StatsTurn {
-	session: string;
-	cwd: string;
-	/** The user message's timestamp, epoch ms. */
-	start: number;
-	/** Until the last message of the turn was written. */
-	ms: number;
-	model: string;
-	provider: string;
-	/** Answers that changed provider/model mid-prompt are compared separately. */
-	mixedModels: boolean;
-	/** Requested Fast setting; absent when historical data cannot establish it. */
-	fastMode?: boolean;
-	/** Requests within this prompt used different Fast settings (including unknown). */
-	mixedFastMode?: boolean;
-	inputTokens: number;
-	cacheReadTokens: number;
-	cacheWriteTokens: number;
-	prompt: string;
-	/** Tool name \u2192 calls in this turn. */
-	tools: Record<string, number>;
-	/** Tool, bash split by program (`bash: git status`) \u2192 what its calls cost. */
-	costs: Record<string, ToolCost>;
-	/** This turn's slowest and largest calls (a measured bash call's commands in its place). */
-	outliers: ToolOutlier[];
-	/** Background jobs this turn's commands started, and how long they ran (tool-metrics). */
-	background: { text: string; ms: number }[];
-	outputTokens: number;
-	/** First-to-last streamed delta time, summed across every output message; absent if incomplete. */
-	generationMs?: number;
-	cost: number;
-	/** The last assistant message's `stopReason`: `stop`, `error`, `aborted`\u2026 */
-	outcome: string;
-	/** The ssh alias of the machine it ran on; "" for this one. */
-	machine: string;
+  session: string;
+  cwd: string;
+  /** The user message's timestamp, epoch ms. */
+  start: number;
+  /** Until the last message of the turn was written. */
+  ms: number;
+  model: string;
+  provider: string;
+  /** Answers that changed provider/model mid-prompt are compared separately. */
+  mixedModels: boolean;
+  /** Requested Fast setting; absent when historical data cannot establish it. */
+  fastMode?: boolean;
+  /** Requests within this prompt used different Fast settings (including unknown). */
+  mixedFastMode?: boolean;
+  inputTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
+  prompt: string;
+  /** Tool name \u2192 calls in this turn. */
+  tools: Record<string, number>;
+  /** Tool, bash split by program (`bash: git status`) \u2192 what its calls cost. */
+  costs: Record<string, ToolCost>;
+  /** This turn's slowest and largest calls (a measured bash call's commands in its place). */
+  outliers: ToolOutlier[];
+  /** Background jobs this turn's commands started, and how long they ran (tool-metrics). */
+  background: { text: string; ms: number }[];
+  outputTokens: number;
+  /** First-to-last streamed delta time, summed across every output message; absent if incomplete. */
+  generationMs?: number;
+  cost: number;
+  /** The last assistant message's `stopReason`: `stop`, `error`, `aborted`\u2026 */
+  outcome: string;
+  /** The ssh alias of the machine it ran on; "" for this one. */
+  machine: string;
 }
 
 /** Another machine whose sessions Stats mirrors over ssh. */
 export interface StatsMachine {
-	name: string;
-	/** Last successful sync, ISO. */
-	synced: string;
-	/** Why the last sync did not reach it. */
-	error?: string;
+  name: string;
+  /** Last successful sync, ISO. */
+  synced: string;
+  /** Why the last sync did not reach it. */
+  error?: string;
 }
 
 export interface StatsView {
-	turns: StatsTurn[];
-	/** Workout sets from this machine ("") and every mirrored one, by ssh alias. */
-	workouts: (WorkoutSet & { machine: string })[];
-	/**
-	 * The plan and the body for calories, in the same answer as the sets: as
-	 * separate requests they queued behind the machine sync (the browser's six
-	 * connections are mostly held by event streams) and showed as empty.
-	 */
-	workoutPlan: WorkoutPlan;
-	workoutProfile: WorkoutProfile | null;
-	sessions: number;
-	machines: StatsMachine[];
+  turns: StatsTurn[];
+  /** Workout sets from this machine ("") and every mirrored one, by ssh alias. */
+  workouts: (WorkoutSet & { machine: string })[];
+  /**
+   * The plan and the body for calories, in the same answer as the sets: as
+   * separate requests they queued behind the machine sync (the browser's six
+   * connections are mostly held by event streams) and showed as empty.
+   */
+  workoutPlan: WorkoutPlan;
+  workoutProfile: WorkoutProfile | null;
+  sessions: number;
+  machines: StatsMachine[];
 }
 
 /** The switchable pi extensions pwi loads into the sessions it starts (server/pwiExtensions.ts). */
 export interface PwiExtensions {
-	toolMetrics: boolean;
-	/** Ask for a short exercise after each prompt goes out (web/Workout.tsx). */
-	workout: boolean;
-	/** Exercises switched off; the dialog picks from the rest. */
-	workoutOff: WorkoutKind[];
-	/** For calorie estimates; null until entered. */
-	workoutProfile: WorkoutProfile | null;
-	/** How often a set is due, and in which hours (shared/rotation.ts). */
-	workoutSchedule: WorkoutSchedule;
+  toolMetrics: boolean;
+  /** Ask for a short exercise after each prompt goes out (web/Workout.tsx). */
+  workout: boolean;
+  /** Exercises switched off; the dialog picks from the rest. */
+  workoutOff: WorkoutKind[];
+  /** For calorie estimates; null until entered. */
+  workoutProfile: WorkoutProfile | null;
+  /** How often a set is due, and in which hours (shared/rotation.ts). */
+  workoutSchedule: WorkoutSchedule;
 }
 
 export interface WorkoutSchedule {
-	/** Minutes from one set to the next, 1–240. */
-	every: number;
-	/** Local hours sets are due in, `from` to `to` (0–24, from < to). */
-	from: number;
-	to: number;
+  /** Minutes from one set to the next, 1–240. */
+  every: number;
+  /** Local hours sets are due in, `from` to `to` (0–24, from < to). */
+  from: number;
+  to: number;
 }
 
 /** A set the schedule has coming up. */
 export interface WorkoutPlanned {
-	/** ISO; the first may be past, meaning overdue. */
-	at: string;
-	kind: WorkoutKind;
+  /** ISO; the first may be past, meaning overdue. */
+  at: string;
+  kind: WorkoutKind;
 }
 
 /** `GET /api/workouts/plan`: what the corner card and Stats show. */
 export interface WorkoutPlan {
-	on: boolean;
-	schedule: WorkoutSchedule;
-	planned: WorkoutPlanned[];
-	/**
-	 * The next days, each planned as a full working day from `from` to `to`
-	 * (shared/rotation.ts `daysAhead`): when it starts, and how many sets of each exercise.
-	 */
-	ahead: { at: string; kinds: Partial<Record<WorkoutKind, number>> }[];
-	/** Each muscle group's load right now (shared/rotation.ts `fatigue`). */
-	fatigue: Record<Muscle, number>;
+  on: boolean;
+  schedule: WorkoutSchedule;
+  planned: WorkoutPlanned[];
+  /**
+   * The next days, each planned as a full working day from `from` to `to`
+   * (shared/rotation.ts `daysAhead`): when it starts, and how many sets of each exercise.
+   */
+  ahead: { at: string; kinds: Partial<Record<WorkoutKind, number>> }[];
+  /** Each muscle group's load right now (shared/rotation.ts `fatigue`). */
+  fatigue: Record<Muscle, number>;
 }
 
 /**
@@ -329,71 +347,160 @@ export interface WorkoutPlan {
  * next pick rotates around (shared/rotation.ts).
  */
 export const EXERCISES = {
-	pushups: { amount: 10, unit: "reps", wait: 15, met: 8, rep: 2, muscles: ["chest", "arms", "core"] },
-	situps: { amount: 10, unit: "reps", wait: 15, met: 5, rep: 2.5, muscles: ["core"] },
-	squats: { amount: 10, unit: "reps", wait: 15, met: 7, rep: 2.5, muscles: ["legs", "glutes"] },
-	lunges: { amount: 10, unit: "reps", wait: 20, met: 6, rep: 3, muscles: ["legs", "glutes"] },
-	burpees: { amount: 5, unit: "reps", wait: 20, met: 12, rep: 5, muscles: ["chest", "arms", "legs", "core"] },
-	jumpingJacks: { amount: 20, unit: "reps", wait: 15, met: 8, rep: 1, muscles: ["calves", "arms"] },
-	calfRaises: { amount: 15, unit: "reps", wait: 15, met: 2.8, rep: 1.5, muscles: ["calves"] },
-	gluteBridges: { amount: 10, unit: "reps", wait: 20, met: 3.8, rep: 2.5, muscles: ["glutes", "core"] },
-	plank: { amount: 20, unit: "seconds", wait: 30, met: 3.8, rep: 1, muscles: ["core", "arms"] },
-	wallSit: { amount: 20, unit: "seconds", wait: 30, met: 3.8, rep: 1, muscles: ["legs"] },
+  pushups: {
+    amount: 10,
+    unit: "reps",
+    wait: 15,
+    met: 8,
+    rep: 2,
+    muscles: ["chest", "arms", "core"],
+  },
+  situps: {
+    amount: 10,
+    unit: "reps",
+    wait: 15,
+    met: 5,
+    rep: 2.5,
+    muscles: ["core"],
+  },
+  squats: {
+    amount: 10,
+    unit: "reps",
+    wait: 15,
+    met: 7,
+    rep: 2.5,
+    muscles: ["legs", "glutes"],
+  },
+  lunges: {
+    amount: 10,
+    unit: "reps",
+    wait: 20,
+    met: 6,
+    rep: 3,
+    muscles: ["legs", "glutes"],
+  },
+  burpees: {
+    amount: 5,
+    unit: "reps",
+    wait: 20,
+    met: 12,
+    rep: 5,
+    muscles: ["chest", "arms", "legs", "core"],
+  },
+  jumpingJacks: {
+    amount: 20,
+    unit: "reps",
+    wait: 15,
+    met: 8,
+    rep: 1,
+    muscles: ["calves", "arms"],
+  },
+  calfRaises: {
+    amount: 15,
+    unit: "reps",
+    wait: 15,
+    met: 2.8,
+    rep: 1.5,
+    muscles: ["calves"],
+  },
+  gluteBridges: {
+    amount: 10,
+    unit: "reps",
+    wait: 20,
+    met: 3.8,
+    rep: 2.5,
+    muscles: ["glutes", "core"],
+  },
+  plank: {
+    amount: 20,
+    unit: "seconds",
+    wait: 30,
+    met: 3.8,
+    rep: 1,
+    muscles: ["core", "arms"],
+  },
+  wallSit: {
+    amount: 20,
+    unit: "seconds",
+    wait: 30,
+    met: 3.8,
+    rep: 1,
+    muscles: ["legs"],
+  },
 } as const satisfies Record<
-	string,
-	{ amount: number; unit: "reps" | "seconds"; wait: number; met: number; rep: number; muscles: readonly Muscle[] }
+  string,
+  {
+    amount: number;
+    unit: "reps" | "seconds";
+    wait: number;
+    met: number;
+    rep: number;
+    muscles: readonly Muscle[];
+  }
 >;
 
-export const MUSCLES = ["chest", "arms", "core", "legs", "glutes", "calves"] as const;
+export const MUSCLES = [
+  "chest",
+  "arms",
+  "core",
+  "legs",
+  "glutes",
+  "calves",
+] as const;
 export type Muscle = (typeof MUSCLES)[number];
 
 /** The body calories are estimated for (Packages > pwi extensions > Workout). */
 export interface WorkoutProfile {
-	sex: "male" | "female";
-	age: number;
-	heightCm: number;
-	weightKg: number;
+  sex: "male" | "female";
+  age: number;
+  heightCm: number;
+  weightKg: number;
 }
 export type WorkoutKind = keyof typeof EXERCISES;
 export const WORKOUT_KINDS = Object.keys(EXERCISES) as WorkoutKind[];
 
 /** One Done in the workout dialog (server/workouts.ts). */
 export interface WorkoutSet {
-	/** ISO time of the Done. */
-	at: string;
-	kind: WorkoutKind;
-	/** Reps, or seconds held: EXERCISES[kind].unit. */
-	amount: number;
+  /** ISO time of the Done. */
+  at: string;
+  kind: WorkoutKind;
+  /** Reps, or seconds held: EXERCISES[kind].unit. */
+  amount: number;
 }
 
 /** SoL-Pi's four mechanisms and their knobs, as `sol-pi.json` holds them. */
 export interface SolPiConfig {
-	actionFusion: boolean;
-	observationPack: boolean;
-	evidencePreservingReducer: boolean;
-	onlineContextCompact: boolean;
-	/** Omitted means SoL-Pi's default, 12.5. */
-	cacheWriteReadRatio?: number;
-	/** Omitted means SoL-Pi's built-in reducer route. */
-	evidencePreservingReducerProvider?: string;
-	evidencePreservingReducerModel?: string;
+  actionFusion: boolean;
+  observationPack: boolean;
+  evidencePreservingReducer: boolean;
+  onlineContextCompact: boolean;
+  /** Omitted means SoL-Pi's default, 12.5. */
+  cacheWriteReadRatio?: number;
+  /** Omitted means SoL-Pi's built-in reducer route. */
+  evidencePreservingReducerProvider?: string;
+  evidencePreservingReducerModel?: string;
 }
 
 /** What GET/PUT /api/packages/sol-pi answer with. */
 export interface SolPiSettings {
-	/** `<pi agent dir>/sol-pi.json`, the file these settings edit. */
-	path: string;
-	exists: boolean;
-	config: SolPiConfig;
-	/** The open project's `.pi/sol-pi.json`, which replaces this file when the project is trusted. */
-	projectFile: string | null;
+  /** `<pi agent dir>/sol-pi.json`, the file these settings edit. */
+  path: string;
+  exists: boolean;
+  config: SolPiConfig;
+  /** The open project's `.pi/sol-pi.json`, which replaces this file when the project is trusted. */
+  projectFile: string | null;
 }
 
 /** One reading of a provider's limits; older samples without a provider are Anthropic. */
 export interface UsageSample {
-	provider?: string;
-	at: number;
-	limits: { kind: string; model: string | null; percent: number; resets_at: string | null }[];
+  provider?: string;
+  at: number;
+  limits: {
+    kind: string;
+    model: string | null;
+    percent: number;
+    resets_at: string | null;
+  }[];
 }
 
 /**
@@ -405,30 +512,30 @@ export type FleetPwi = "running" | "dev" | "stopped" | "unserved";
 
 /** One machine on the tailnet, for the Fleet page. */
 export interface FleetMachine {
-	/** The MagicDNS label, e.g. `orangepi`. */
-	name: string;
-	/** Full MagicDNS name, without the trailing dot. */
-	dns: string;
-	ip: string;
-	os: string;
-	online: boolean;
-	/** The machine this pwi runs on. */
-	self: boolean;
-	/** Last seen, ISO; only for an offline machine. */
-	lastSeen?: string;
-	/** What `ssh` is given: the matching ~/.ssh/config alias, else the MagicDNS name. */
-	ssh: string;
-	/** `http://<dns>:8890/`. */
-	url: string;
-	/** Only probed while online. */
-	pwi?: FleetPwi;
+  /** The MagicDNS label, e.g. `orangepi`. */
+  name: string;
+  /** Full MagicDNS name, without the trailing dot. */
+  dns: string;
+  ip: string;
+  os: string;
+  online: boolean;
+  /** The machine this pwi runs on. */
+  self: boolean;
+  /** Last seen, ISO; only for an offline machine. */
+  lastSeen?: string;
+  /** What `ssh` is given: the matching ~/.ssh/config alias, else the MagicDNS name. */
+  ssh: string;
+  /** `http://<dns>:8890/`. */
+  url: string;
+  /** Only probed while online. */
+  pwi?: FleetPwi;
 }
 
 /** A partially-streamed assistant message, assembled server-side. */
 export interface PiPartial {
-	text: string;
-	thinking: string;
-	tools: PiTool[];
+  text: string;
+  thinking: string;
+  tools: PiTool[];
 }
 
 /**
@@ -437,17 +544,17 @@ export interface PiPartial {
  * and by tool (`tool:<name>`, `count` calls). pi's chars/4 estimates.
  */
 export interface ContextPart {
-	key: "system" | "tools" | "rules" | "skills" | "personality" | "conversation";
-	tokens: number;
-	items?: ContextItem[];
+  key: "system" | "tools" | "rules" | "skills" | "personality" | "conversation";
+  tokens: number;
+  items?: ContextItem[];
 }
 
 export interface ContextItem {
-	name: string;
-	tokens: number;
-	count?: number;
-	/** A tool's calls by program (bash) or file (read, edit, write). */
-	items?: ContextItem[];
+  name: string;
+  tokens: number;
+  count?: number;
+  /** A tool's calls by program (bash) or file (read, edit, write). */
+  items?: ContextItem[];
 }
 
 /**
@@ -457,116 +564,116 @@ export interface ContextItem {
  * together share one wait, split evenly.
  */
 export interface ToolCost {
-	calls: number;
-	tokens: number;
-	ms: number;
-	/** Of `ms`, what other extensions' result hooks took (pi-lens), in measured calls. */
-	hookMs: number;
-	measured: number;
-	/** Codemode's actual nested calls; detail only, not added to wrapper totals. */
-	children?: Record<string, ToolCost>;
+  calls: number;
+  tokens: number;
+  ms: number;
+  /** Of `ms`, what other extensions' result hooks took (pi-lens), in measured calls. */
+  hookMs: number;
+  measured: number;
+  /** Codemode's actual nested calls; detail only, not added to wrapper totals. */
+  children?: Record<string, ToolCost>;
 }
 
 export interface ToolOutlier {
-	/** As in `StatsTurn.costs`. */
-	key: string;
-	preview: string;
-	tokens: number;
-	ms: number;
+  /** As in `StatsTurn.costs`. */
+  key: string;
+  preview: string;
+  tokens: number;
+  ms: number;
 }
 
 export type ContextBreakdown = ContextPart[];
 
 export interface Snapshot {
-	id: string;
-	file: string | undefined;
-	/**
-	 * The directory the session's agent actually runs in — for a resumed
-	 * session that is its own header's cwd, not whichever project the browser
-	 * had selected. The git button acts on it, so it comes from the session
-	 * rather than from the client's idea of the current project.
-	 */
-	cwd: string;
-	/** "provider/id", or undefined if the session has no model selected yet. */
-	model: string | undefined;
-	messages: PiMessage[];
-	partial: PiPartial | null;
-	/** Measured turn timelines; absent on older servers and for unobserved history. */
-	activity?: TurnActivity[];
-	isStreaming: boolean;
-	error: string | null;
-	/**
-	 * Output of local slash commands, plus maintenance warnings, newest last.
-	 * Part of the snapshot and not only an event, so a reload or a dropped
-	 * EventSource does not lose the answer to the last command. Cleared when
-	 * the next prompt is accepted.
-	 */
-	notices: PiNotice[];
-	/**
-	 * The question pi is blocked on, or null. In the snapshot and not only an
-	 * event because the agent stays blocked across a reload: a question that
-	 * lived only in an event would leave the session waiting forever on a
-	 * dialog no page can show any more.
-	 */
-	ask: PiAsk | null;
-	/**
-	 * Changes this session's agent made to files, oldest first.
-	 *
-	 * ALREADY ON DISK. pi's edit tool writes during execution and this server
-	 * installs no `tool_call` gate, so a diff tab shows what happened
-	 * rather than what is proposed: accepting is a no-op that records a
-	 * decision, and rejecting is what writes the old text back.
-	 *
-	 * In the snapshot rather than only on an event because a decision outlives
-	 * the turn that produced it — a reload mid-review would otherwise lose
-	 * every pending change with nothing on screen to say they happened.
-	 */
-	hunks: Hunk[];
-	/**
-	 * Slash commands this session accepts, for the composer's picker. Per
-	 * session and not global: the set depends on the project's extensions,
-	 * skills and prompt templates under `.pi/`, so a catalog shared across
-	 * sessions would offer commands one of them does not have.
-	 */
-	commands: PiCommand[];
-	/**
-	 * Whether the CURRENT model accepts image input. Server-authoritative and
-	 * part of the snapshot rather than inferred client-side, so switching to a
-	 * text-only model immediately disables pasting instead of letting the user
-	 * attach a screenshot that the provider would reject with a 400.
-	 */
-	supportsImages: boolean;
-	/**
-	 * Reasoning effort as pi reports it, and the levels this model accepts
-	 * (`get_available_thinking_levels`). Both come from the session rather
-	 * than a catalog: the set is per-model, and pi ACCEPTS an unknown level
-	 * and then reports no level at all — so the list is what makes a picker
-	 * safe to offer. Empty when the model offers no real choice.
-	 */
-	thinkingLevel: string | undefined;
-	thinkingLevels: string[];
-	/** The current model's provider effort mapping; absent on older servers. */
-	thinkingLevelMap?: Record<string, string | null>;
-	/** Requested Codex Fast tier; undefined when the child lacks the extension. */
-	fastMode?: boolean;
-	/**
-	 * Context occupancy against the model's window, as pi itself accounts for
-	 * it (`get_session_stats.contextUsage`): cache reads, system prompt and
-	 * tools included, and it DROPS after a compaction. Read from the session
-	 * rather than from the transcript's newest `usage.totalTokens`, because
-	 * that number still describes the pre-compaction prefix and would leave
-	 * the meter reading full until the next turn. `contextWindow` is 0 for a
-	 * model that does not declare one.
-	 */
-	contextTokens: number;
-	contextWindow: number;
-	/**
-	 * This session's pi child started before the newest package install, so
-	 * it does not have the newly installed extensions, skills or prompt
-	 * templates — pi reads those once, at startup. The UI offers a restart;
-	 * the server never restarts a session on its own.
-	 */
-	stale: boolean;
+  id: string;
+  file: string | undefined;
+  /**
+   * The directory the session's agent actually runs in — for a resumed
+   * session that is its own header's cwd, not whichever project the browser
+   * had selected. The git button acts on it, so it comes from the session
+   * rather than from the client's idea of the current project.
+   */
+  cwd: string;
+  /** "provider/id", or undefined if the session has no model selected yet. */
+  model: string | undefined;
+  messages: PiMessage[];
+  partial: PiPartial | null;
+  /** Measured turn timelines; absent on older servers and for unobserved history. */
+  activity?: TurnActivity[];
+  isStreaming: boolean;
+  error: string | null;
+  /**
+   * Output of local slash commands, plus maintenance warnings, newest last.
+   * Part of the snapshot and not only an event, so a reload or a dropped
+   * EventSource does not lose the answer to the last command. Cleared when
+   * the next prompt is accepted.
+   */
+  notices: PiNotice[];
+  /**
+   * The question pi is blocked on, or null. In the snapshot and not only an
+   * event because the agent stays blocked across a reload: a question that
+   * lived only in an event would leave the session waiting forever on a
+   * dialog no page can show any more.
+   */
+  ask: PiAsk | null;
+  /**
+   * Changes this session's agent made to files, oldest first.
+   *
+   * ALREADY ON DISK. pi's edit tool writes during execution and this server
+   * installs no `tool_call` gate, so a diff tab shows what happened
+   * rather than what is proposed: accepting is a no-op that records a
+   * decision, and rejecting is what writes the old text back.
+   *
+   * In the snapshot rather than only on an event because a decision outlives
+   * the turn that produced it — a reload mid-review would otherwise lose
+   * every pending change with nothing on screen to say they happened.
+   */
+  hunks: Hunk[];
+  /**
+   * Slash commands this session accepts, for the composer's picker. Per
+   * session and not global: the set depends on the project's extensions,
+   * skills and prompt templates under `.pi/`, so a catalog shared across
+   * sessions would offer commands one of them does not have.
+   */
+  commands: PiCommand[];
+  /**
+   * Whether the CURRENT model accepts image input. Server-authoritative and
+   * part of the snapshot rather than inferred client-side, so switching to a
+   * text-only model immediately disables pasting instead of letting the user
+   * attach a screenshot that the provider would reject with a 400.
+   */
+  supportsImages: boolean;
+  /**
+   * Reasoning effort as pi reports it, and the levels this model accepts
+   * (`get_available_thinking_levels`). Both come from the session rather
+   * than a catalog: the set is per-model, and pi ACCEPTS an unknown level
+   * and then reports no level at all — so the list is what makes a picker
+   * safe to offer. Empty when the model offers no real choice.
+   */
+  thinkingLevel: string | undefined;
+  thinkingLevels: string[];
+  /** The current model's provider effort mapping; absent on older servers. */
+  thinkingLevelMap?: Record<string, string | null>;
+  /** Requested Codex Fast tier; undefined when the child lacks the extension. */
+  fastMode?: boolean;
+  /**
+   * Context occupancy against the model's window, as pi itself accounts for
+   * it (`get_session_stats.contextUsage`): cache reads, system prompt and
+   * tools included, and it DROPS after a compaction. Read from the session
+   * rather than from the transcript's newest `usage.totalTokens`, because
+   * that number still describes the pre-compaction prefix and would leave
+   * the meter reading full until the next turn. `contextWindow` is 0 for a
+   * model that does not declare one.
+   */
+  contextTokens: number;
+  contextWindow: number;
+  /**
+   * This session's pi child started before the newest package install, so
+   * it does not have the newly installed extensions, skills or prompt
+   * templates — pi reads those once, at startup. The UI offers a restart;
+   * the server never restarts a session on its own.
+   */
+  stale: boolean;
 }
 
 /**
@@ -577,62 +684,67 @@ export interface Snapshot {
  * spellings of one package the same row.
  */
 export interface PiwPackage {
-	/** Exactly as written in settings.json. */
-	source: string;
-	kind: "npm" | "git" | "local";
-	identity: string;
-	/** The version or ref the source pins, or null for an unpinned source. */
-	pinned: string | null;
-	/** What is on disk: a package.json version, or a short git HEAD. */
-	installed: string | null;
-	/** Written in object form with resource filters: it loads only part of itself. */
-	filtered: boolean;
-	/** `autoload: false` — installed, but not loaded unless a project asks for it. */
-	autoload: boolean;
+  /** Exactly as written in settings.json. */
+  source: string;
+  kind: "npm" | "git" | "local";
+  identity: string;
+  /** The version or ref the source pins, or null for an unpinned source. */
+  pinned: string | null;
+  /** What is on disk: a package.json version, or a short git HEAD. */
+  installed: string | null;
+  /** Written in object form with resource filters: it loads only part of itself. */
+  filtered: boolean;
+  /** `autoload: false` — installed, but not loaded unless a project asks for it. */
+  autoload: boolean;
 }
 
 /** `GET /api/packages` on one machine. */
 export interface PiwPackagesView {
-	packages: PiwPackage[];
-	/** Bumped on every successful mutation; a session started under an older one is stale. */
-	epoch: number;
-	/** A mutation is running here. The next request will wait rather than fail. */
-	busy: boolean;
-	piVersion: string | null;
+  packages: PiwPackage[];
+  /** Bumped on every successful mutation; a session started under an older one is stale. */
+  epoch: number;
+  /** A mutation is running here. The next request will wait rather than fail. */
+  busy: boolean;
+  piVersion: string | null;
 }
 
 /** What a package mutation did, as the screen reports it. */
 export interface PiwMutation {
-	ok: boolean;
-	/** The tail of pi's combined output: what npm or git said, verbatim. */
-	log: string;
-	/** One line, when it failed. */
-	reason?: string;
+  ok: boolean;
+  /** The tail of pi's combined output: what npm or git said, verbatim. */
+  log: string;
+  /** One line, when it failed. */
+  reason?: string;
 }
 
 /** One npm gallery hit: a package carrying the `pi-package` keyword. */
 export interface PiwSearchHit {
-	name: string;
-	version: string;
-	description?: string;
-	publisher?: string;
-	published?: string;
-	repository?: string;
+  name: string;
+  version: string;
+  description?: string;
+  publisher?: string;
+  published?: string;
+  repository?: string;
 }
 
 /** One package in detail, as the install dialog shows it. */
 export interface PiwPackageInfo {
-	name: string;
-	/** The newest published version — what an install would pin to. */
-	latest: string;
-	description?: string;
-	publisher?: string;
-	published?: string;
-	repository?: string;
-	contains: { extensions: number; skills: number; prompts: number; themes: number };
-	image?: string;
-	video?: string;
-	weeklyDownloads?: number;
+  name: string;
+  /** The newest published version — what an install would pin to. */
+  latest: string;
+  description?: string;
+  publisher?: string;
+  published?: string;
+  repository?: string;
+  contains: {
+    extensions: number;
+    skills: number;
+    prompts: number;
+    themes: number;
+  };
+  image?: string;
+  video?: string;
+  weeklyDownloads?: number;
 }
 
 /**
@@ -643,13 +755,13 @@ export interface PiwPackageInfo {
  * to present a row.
  */
 export interface PiwDirEntry {
-	name: string;
-	/** Absolute, so the client never joins paths itself. */
-	path: string;
-	/** Contains a `.git`. A project is usually a checkout, so it is worth marking. */
-	repo: boolean;
-	/** A dotted name. Sorted last rather than dropped — ~/.config stays reachable. */
-	hidden: boolean;
+  name: string;
+  /** Absolute, so the client never joins paths itself. */
+  path: string;
+  /** Contains a `.git`. A project is usually a checkout, so it is worth marking. */
+  repo: boolean;
+  /** A dotted name. Sorted last rather than dropped — ~/.config stays reachable. */
+  hidden: boolean;
 }
 
 /**
@@ -661,21 +773,21 @@ export interface PiwDirEntry {
  * clicking a row opens a buffer or expands a level.
  */
 export interface PiwFileEntry {
-	name: string;
-	/** Absolute, so the client never joins paths itself. */
-	path: string;
-	dir: boolean;
-	/** A dotted name. Sorted last rather than dropped — .gitignore stays reachable. */
-	hidden: boolean;
+  name: string;
+  /** Absolute, so the client never joins paths itself. */
+  path: string;
+  dir: boolean;
+  /** A dotted name. Sorted last rather than dropped — .gitignore stays reachable. */
+  hidden: boolean;
 }
 
 /** One directory's children, as `GET /api/browse` answers. */
 export interface PiwDirListing {
-	/** The path actually listed: absolute, with `~` and symlinks in the name resolved. */
-	path: string;
-	/** null at the filesystem root, where "up" has nowhere to go. */
-	parent: string | null;
-	/** The server's home directory, for the picker's one fixed shortcut. */
-	home: string;
-	entries: PiwDirEntry[];
+  /** The path actually listed: absolute, with `~` and symlinks in the name resolved. */
+  path: string;
+  /** null at the filesystem root, where "up" has nowhere to go. */
+  parent: string | null;
+  /** The server's home directory, for the picker's one fixed shortcut. */
+  home: string;
+  entries: PiwDirEntry[];
 }

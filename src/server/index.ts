@@ -39,23 +39,28 @@ const MODEL = process.env.PWI_MODEL;
  */
 let pkg: unknown;
 try {
-	pkg = JSON.parse(readFileSync(resolve(ROOT, "package.json"), "utf8"));
+  pkg = JSON.parse(readFileSync(resolve(ROOT, "package.json"), "utf8"));
 } catch {
-	pkg = undefined;
+  pkg = undefined;
 }
 const PWI_VERSION =
-	pkg && typeof pkg === "object" && "version" in pkg && typeof pkg.version === "string"
-		? pkg.version
-		: "unknown";
+  pkg &&
+  typeof pkg === "object" &&
+  "version" in pkg &&
+  typeof pkg.version === "string"
+    ? pkg.version
+    : "unknown";
 
 // Once, at startup: the binary does not change under a running server, and
 // `pi update --self` is exactly the case this exists to flag — a restarted
 // server spawns the new pi, a running one keeps spawning the old. A missing
 // pi is reported as no version rather than as a failed start, since
 // /api/models already names the ENOENT with the fix.
-const PI_VERSION = await promisify(execFile)(PI_BIN, ["--version"], { timeout: 10_000 })
-	.then(({ stdout }) => stdout.trim() || undefined)
-	.catch(() => undefined);
+const PI_VERSION = await promisify(execFile)(PI_BIN, ["--version"], {
+  timeout: 10_000,
+})
+  .then(({ stdout }) => stdout.trim() || undefined)
+  .catch(() => undefined);
 
 // ---------------------------------------------------------------------------
 // Crash policy.
@@ -83,19 +88,22 @@ const SUPERVISED = Boolean(process.env.INVOCATION_ID);
 let degraded = false;
 
 process.on("unhandledRejection", (reason) => {
-	console.error("[pwi] unhandledRejection (surviving):", reason);
+  console.error("[pwi] unhandledRejection (surviving):", reason);
 });
 
 process.on("uncaughtException", (err) => {
-	if (SUPERVISED) {
-		console.error("[pwi] uncaughtException — exiting for the supervisor to restart:", err);
-		process.exit(1);
-	}
-	degraded = true;
-	console.error(
-		"[pwi] uncaughtException — PROCESS IS DEGRADED, restart when convenient:",
-		err,
-	);
+  if (SUPERVISED) {
+    console.error(
+      "[pwi] uncaughtException — exiting for the supervisor to restart:",
+      err,
+    );
+    process.exit(1);
+  }
+  degraded = true;
+  console.error(
+    "[pwi] uncaughtException — PROCESS IS DEGRADED, restart when convenient:",
+    err,
+  );
 });
 
 /**
@@ -112,14 +120,14 @@ const BOOT = randomUUID();
 const registry = new Registry(CWD, MODEL);
 const terminals = new Terminals(`pwi-${PORT}`);
 const app = createApp({
-	cwd: CWD,
-	model: MODEL,
-	registry,
-	terminals,
-	piVersion: PI_VERSION,
-	pwiVersion: PWI_VERSION,
-	boot: BOOT,
-	degraded: () => degraded,
+  cwd: CWD,
+  model: MODEL,
+  registry,
+  terminals,
+  piVersion: PI_VERSION,
+  pwiVersion: PWI_VERSION,
+  boot: BOOT,
+  degraded: () => degraded,
 });
 
 /*
@@ -129,14 +137,17 @@ const app = createApp({
  */
 const dist = resolve(ROOT, "dist");
 if (process.env.PWI_DEV === "1" && PORT !== 8890) {
-	app.get("*", (c) => {
-		// Path and query exactly as sent: everything after the origin.
-		const url = c.req.url;
-		return c.redirect(`http://127.0.0.1:${VITE_PORT}${url.slice(url.indexOf("/", url.indexOf("//") + 2))}`, 302);
-	});
+  app.get("*", (c) => {
+    // Path and query exactly as sent: everything after the origin.
+    const url = c.req.url;
+    return c.redirect(
+      `http://127.0.0.1:${VITE_PORT}${url.slice(url.indexOf("/", url.indexOf("//") + 2))}`,
+      302,
+    );
+  });
 } else if (existsSync(dist)) {
-	app.use("*", serveStatic({ root: dist }));
-	app.get("*", serveStatic({ path: resolve(dist, "index.html") }));
+  app.use("*", serveStatic({ root: dist }));
+  app.get("*", serveStatic({ path: resolve(dist, "index.html") }));
 }
 
 const server = createServer(getRequestListener(app.fetch));
@@ -157,63 +168,73 @@ const server = createServer(getRequestListener(app.fetch));
 const sockets = new WebSocketServer({ noServer: true });
 
 server.on("upgrade", (req, socket, head) => {
-	const url = new URL(req.url ?? "/", "http://127.0.0.1");
-	// A foreign page cannot fetch a terminal id without passing CORS, but a
-	// socket to a guessed one would be a shell; refuse at the same boundary.
-	const header: Header = (name) => {
-		const value = req.headers[name];
-		return typeof value === "string" ? value : undefined;
-	};
-	if (url.pathname !== "/api/terminal/socket" || !hostAllowed(header) || !originAllowed(header)) {
-		socket.destroy();
-		return;
-	}
-	const id = url.searchParams.get("id") ?? "";
-	const cols = Number(url.searchParams.get("cols")) || 80;
-	const rows = Number(url.searchParams.get("rows")) || 24;
+  const url = new URL(req.url ?? "/", "http://127.0.0.1");
+  // A foreign page cannot fetch a terminal id without passing CORS, but a
+  // socket to a guessed one would be a shell; refuse at the same boundary.
+  const header: Header = (name) => {
+    const value = req.headers[name];
+    return typeof value === "string" ? value : undefined;
+  };
+  if (
+    url.pathname !== "/api/terminal/socket" ||
+    !hostAllowed(header) ||
+    !originAllowed(header)
+  ) {
+    socket.destroy();
+    return;
+  }
+  const id = url.searchParams.get("id") ?? "";
+  const cols = Number(url.searchParams.get("cols")) || 80;
+  const rows = Number(url.searchParams.get("rows")) || 24;
 
-	sockets.handleUpgrade(req, socket, head, (ws) => {
-		/*
-		 * Creating is the POST above, never this: a socket that created its own
-		 * terminal would mint a second shell every time a flaky connection
-		 * reconnected, and the client's layout would be pointing at the first
-		 * one. An unknown id is therefore an error, which is exactly the state
-		 * a restored layout hits after the server has been restarted.
-		 */
-		if (!terminals.get(id)) {
-			ws.send(JSON.stringify({ type: "error", message: "no such terminal" }));
-			ws.close();
-			return;
-		}
+  sockets.handleUpgrade(req, socket, head, (ws) => {
+    /*
+     * Creating is the POST above, never this: a socket that created its own
+     * terminal would mint a second shell every time a flaky connection
+     * reconnected, and the client's layout would be pointing at the first
+     * one. An unknown id is therefore an error, which is exactly the state
+     * a restored layout hits after the server has been restarted.
+     */
+    if (!terminals.get(id)) {
+      ws.send(JSON.stringify({ type: "error", message: "no such terminal" }));
+      ws.close();
+      return;
+    }
 
-		terminals.resize(id, cols, rows);
-		const detach = terminals.attach(id, (e) => {
-			if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(e));
-		});
+    terminals.resize(id, cols, rows);
+    const detach = terminals.attach(id, (e) => {
+      if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(e));
+    });
 
-		ws.on("message", (raw) => {
-			let msg: unknown;
-			try {
-				msg = JSON.parse(String(raw));
-			} catch {
-				return;
-			}
-			if (!msg || typeof msg !== "object") return;
-			const m = msg as { type?: unknown; data?: unknown; cols?: unknown; rows?: unknown };
-			if (m.type === "input" && typeof m.data === "string") terminals.write(id, m.data);
-			else if (
-				m.type === "resize" &&
-				typeof m.cols === "number" &&
-				typeof m.rows === "number"
-			)
-				terminals.resize(id, m.cols, m.rows);
-		});
+    ws.on("message", (raw) => {
+      let msg: unknown;
+      try {
+        msg = JSON.parse(String(raw));
+      } catch {
+        return;
+      }
+      if (!msg || typeof msg !== "object") return;
+      const m = msg as {
+        type?: unknown;
+        data?: unknown;
+        cols?: unknown;
+        rows?: unknown;
+      };
+      if (m.type === "input" && typeof m.data === "string")
+        terminals.write(id, m.data);
+      else if (
+        m.type === "resize" &&
+        typeof m.cols === "number" &&
+        typeof m.rows === "number"
+      )
+        terminals.resize(id, m.cols, m.rows);
+    });
 
-		// Detach only. The shell keeps running: closing a tab mid-build must
-		// not kill the build, which is the same promise sessions make.
-		ws.on("close", detach);
-		ws.on("error", detach);
-	});
+    // Detach only. The shell keeps running: closing a tab mid-build must
+    // not kill the build, which is the same promise sessions make.
+    ws.on("close", detach);
+    ws.on("error", detach);
+  });
 });
 
 // Loopback only, and the exposure is worse than credential theft: anyone who
@@ -231,12 +252,12 @@ server.on("upgrade", (req, socket, head) => {
  * units killing each other in a loop.
  */
 if (process.env.PWI_TAKEOVER !== "0") {
-	try {
-		await claimPort(PORT);
-	} catch (err) {
-		console.error(`[pwi] ${err instanceof Error ? err.message : String(err)}`);
-		process.exit(1);
-	}
+  try {
+    await claimPort(PORT);
+  } catch (err) {
+    console.error(`[pwi] ${err instanceof Error ? err.message : String(err)}`);
+    process.exit(1);
+  }
 }
 
 // Adoption waits on children whose watchers and polls are unref'd, and the
@@ -249,55 +270,60 @@ if (adopted) console.log(`[pwi] adopted ${adopted} running pi session(s)`);
 pollUsage();
 
 server.listen(PORT, "127.0.0.1", () => {
-	console.log(`[pwi] http://127.0.0.1:${PORT}  cwd=${CWD}`);
+  console.log(`[pwi] http://127.0.0.1:${PORT}  cwd=${CWD}`);
 });
 
 // Failing to bind is not a session-scoped error, so "survive and degrade" is
 // the wrong policy: it leaves a live process with no listener. Exit loudly.
 server.on("error", (err: NodeJS.ErrnoException) => {
-	console.error(
-		err.code === "EADDRINUSE"
-			? `[pwi] port ${PORT} already in use — kill the other server or set PWI_PORT`
-			: `[pwi] listen failed: ${err.message}`,
-	);
-	process.exit(1);
+  console.error(
+    err.code === "EADDRINUSE"
+      ? `[pwi] port ${PORT} already in use — kill the other server or set PWI_PORT`
+      : `[pwi] listen failed: ${err.message}`,
+  );
+  process.exit(1);
 });
 
 for (const sig of ["SIGINT", "SIGTERM"] as const) {
-	process.on(sig, () => {
-		// Mid-turn sessions are detached, not killed: the next server adopts them.
-		registry.shutdown();
-		// Shells in tmux are detached for the next server to adopt; without
-		// tmux each gets SIGHUP, so none is orphaned holding the project's ports.
-		const stopped = terminals.disposeAll().then(() => 0, (err: unknown) => {
-			console.error("[pwi] terminal cleanup failed:", err);
-			return 1;
-		});
-		server.close(() => { void stopped.then((code) => process.exit(code)); });
-		/*
-		 * closeAllConnections is not belt-and-braces here, it is the only thing
-		 * that makes shutdown terminate. server.close() stops accepting new
-		 * sockets and then waits for the open ones to end — and an SSE stream
-		 * never ends on its own, so a single attached browser tab kept the
-		 * process alive indefinitely (measured: still running 20s after SIGTERM).
-		 * Under `Restart=always` that turns every restart into a TimeoutStopSec
-		 * wait followed by SIGKILL.
-		 */
-		server.closeAllConnections();
-		/*
-		 * An upgraded socket is no longer one of the server's HTTP
-		 * connections, so closeAllConnections does not touch it while
-		 * server.close() still waits for it: one attached terminal tab was
-		 * enough to leave this process alive with its listener already closed
-		 * — a state systemd reads as "running", so Restart=always never fires
-		 * and the port stays dead until somebody kills the pid by hand.
-		 */
-		for (const ws of sockets.clients) ws.terminate();
-		/*
-		 * And a backstop for any handle nobody anticipated. unref'd, so it
-		 * cannot delay a shutdown that completes on its own; it only bounds
-		 * one that does not.
-		 */
-		setTimeout(() => process.exit(0), 3_000).unref();
-	});
+  process.on(sig, () => {
+    // Mid-turn sessions are detached, not killed: the next server adopts them.
+    registry.shutdown();
+    // Shells in tmux are detached for the next server to adopt; without
+    // tmux each gets SIGHUP, so none is orphaned holding the project's ports.
+    const stopped = terminals.disposeAll().then(
+      () => 0,
+      (err: unknown) => {
+        console.error("[pwi] terminal cleanup failed:", err);
+        return 1;
+      },
+    );
+    server.close(() => {
+      void stopped.then((code) => process.exit(code));
+    });
+    /*
+     * closeAllConnections is not belt-and-braces here, it is the only thing
+     * that makes shutdown terminate. server.close() stops accepting new
+     * sockets and then waits for the open ones to end — and an SSE stream
+     * never ends on its own, so a single attached browser tab kept the
+     * process alive indefinitely (measured: still running 20s after SIGTERM).
+     * Under `Restart=always` that turns every restart into a TimeoutStopSec
+     * wait followed by SIGKILL.
+     */
+    server.closeAllConnections();
+    /*
+     * An upgraded socket is no longer one of the server's HTTP
+     * connections, so closeAllConnections does not touch it while
+     * server.close() still waits for it: one attached terminal tab was
+     * enough to leave this process alive with its listener already closed
+     * — a state systemd reads as "running", so Restart=always never fires
+     * and the port stays dead until somebody kills the pid by hand.
+     */
+    for (const ws of sockets.clients) ws.terminate();
+    /*
+     * And a backstop for any handle nobody anticipated. unref'd, so it
+     * cannot delay a shutdown that completes on its own; it only bounds
+     * one that does not.
+     */
+    setTimeout(() => process.exit(0), 3_000).unref();
+  });
 }

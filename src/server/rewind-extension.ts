@@ -13,23 +13,25 @@
 
 /** The minimum of pi's ExtensionAPI this file uses; pi is not a dependency here. */
 interface Pi {
-	registerCommand(
-		name: string,
-		options: {
-			description?: string;
-			handler: (
-				args: string,
-				ctx: { navigateTree(targetId: string): Promise<{ cancelled: boolean }> },
-			) => Promise<void>;
-		},
-	): void;
+  registerCommand(
+    name: string,
+    options: {
+      description?: string;
+      handler: (
+        args: string,
+        ctx: {
+          navigateTree(targetId: string): Promise<{ cancelled: boolean }>;
+        },
+      ) => Promise<void>;
+    },
+  ): void;
 }
 
 export default function rewind(pi: Pi) {
-	pi.registerCommand("pwi-rewind", {
-		description: "pwi internal: rewind to before a user message",
-		handler: async (args, ctx) => {
-			await ctx.navigateTree(args.trim());
-		},
-	});
+  pi.registerCommand("pwi-rewind", {
+    description: "pwi internal: rewind to before a user message",
+    handler: async (args, ctx) => {
+      await ctx.navigateTree(args.trim());
+    },
+  });
 }

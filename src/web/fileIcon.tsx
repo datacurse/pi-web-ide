@@ -28,130 +28,136 @@ const LANGS: Record<string, string> = seti.languageIds;
  * the default glyph but has a Seti icon in LANGS.
  */
 const LANG_BY_EXT: Record<string, string> = {
-	ts: "typescript",
-	mts: "typescript",
-	cts: "typescript",
-	tsx: "typescriptreact",
-	js: "javascript",
-	mjs: "javascript",
-	cjs: "javascript",
-	jsx: "javascriptreact",
-	json: "json",
-	jsonc: "jsonc",
-	jsonl: "jsonl",
-	css: "css",
-	pcss: "postcss",
-	scss: "scss",
-	less: "less",
-	html: "html",
-	htm: "html",
-	xml: "xml",
-	md: "markdown",
-	markdown: "markdown",
-	py: "python",
-	pyi: "python",
-	pyw: "python",
-	yml: "yaml",
-	yaml: "yaml",
-	sh: "shellscript",
-	bash: "shellscript",
-	zsh: "shellscript",
-	fish: "shellscript",
-	bat: "bat",
-	cmd: "bat",
-	ps1: "powershell",
-	psm1: "powershell",
-	psd1: "powershell",
-	c: "c",
-	i: "c",
-	cpp: "cpp",
-	cc: "cpp",
-	cxx: "cpp",
-	cu: "cuda-cpp",
-	m: "objective-c",
-	mm: "objective-cpp",
-	cs: "csharp",
-	fs: "fsharp",
-	go: "go",
-	rs: "rust",
-	rb: "ruby",
-	php: "php",
-	java: "java",
-	groovy: "groovy",
-	swift: "swift",
-	dart: "dart",
-	lua: "lua",
-	pl: "perl",
-	pm: "perl",
-	jl: "julia",
-	clj: "clojure",
-	cljs: "clojure",
-	coffee: "coffeescript",
-	sql: "sql",
-	tex: "latex",
-	sty: "tex",
-	hbs: "handlebars",
-	pug: "jade",
-	cshtml: "razor",
-	properties: "properties",
-	env: "dotenv",
-	gitignore: "ignore",
-	gitkeep: "ignore",
-	dockerfile: "dockerfile",
-	mk: "makefile",
-	diff: "diff",
+  ts: "typescript",
+  mts: "typescript",
+  cts: "typescript",
+  tsx: "typescriptreact",
+  js: "javascript",
+  mjs: "javascript",
+  cjs: "javascript",
+  jsx: "javascriptreact",
+  json: "json",
+  jsonc: "jsonc",
+  jsonl: "jsonl",
+  css: "css",
+  pcss: "postcss",
+  scss: "scss",
+  less: "less",
+  html: "html",
+  htm: "html",
+  xml: "xml",
+  md: "markdown",
+  markdown: "markdown",
+  py: "python",
+  pyi: "python",
+  pyw: "python",
+  yml: "yaml",
+  yaml: "yaml",
+  sh: "shellscript",
+  bash: "shellscript",
+  zsh: "shellscript",
+  fish: "shellscript",
+  bat: "bat",
+  cmd: "bat",
+  ps1: "powershell",
+  psm1: "powershell",
+  psd1: "powershell",
+  c: "c",
+  i: "c",
+  cpp: "cpp",
+  cc: "cpp",
+  cxx: "cpp",
+  cu: "cuda-cpp",
+  m: "objective-c",
+  mm: "objective-cpp",
+  cs: "csharp",
+  fs: "fsharp",
+  go: "go",
+  rs: "rust",
+  rb: "ruby",
+  php: "php",
+  java: "java",
+  groovy: "groovy",
+  swift: "swift",
+  dart: "dart",
+  lua: "lua",
+  pl: "perl",
+  pm: "perl",
+  jl: "julia",
+  clj: "clojure",
+  cljs: "clojure",
+  coffee: "coffeescript",
+  sql: "sql",
+  tex: "latex",
+  sty: "tex",
+  hbs: "handlebars",
+  pug: "jade",
+  cshtml: "razor",
+  properties: "properties",
+  env: "dotenv",
+  gitignore: "ignore",
+  gitkeep: "ignore",
+  dockerfile: "dockerfile",
+  mk: "makefile",
+  diff: "diff",
 };
 
 /** Whole filenames that carry a language id with no extension to hang it on. */
 const LANG_BY_NAME: Record<string, string> = {
-	dockerfile: "dockerfile",
-	containerfile: "dockerfile",
-	makefile: "makefile",
-	gnumakefile: "makefile",
-	"docker-compose.yml": "dockercompose",
-	"docker-compose.yaml": "dockercompose",
-	"compose.yml": "dockercompose",
-	"compose.yaml": "dockercompose",
-	".env": "dotenv",
+  dockerfile: "dockerfile",
+  containerfile: "dockerfile",
+  makefile: "makefile",
+  gnumakefile: "makefile",
+  "docker-compose.yml": "dockercompose",
+  "docker-compose.yaml": "dockercompose",
+  "compose.yml": "dockercompose",
+  "compose.yaml": "dockercompose",
+  ".env": "dotenv",
 };
 
 /** The Seti icon id for a filename. */
 export function iconIdFor(name: string): string {
-	const lower = name.toLowerCase();
-	if (NAMES[lower]) return NAMES[lower];
-	// Every suffix after a dot, longest first. A dotfile's leading dot counts,
-	// the way VS Code reads `.gitattributes` as extension `gitattributes`.
-	const exts: string[] = [];
-	for (let i = lower.indexOf("."); i !== -1; i = lower.indexOf(".", i + 1))
-		exts.push(lower.slice(i + 1));
-	for (const ext of exts) if (EXTS[ext]) return EXTS[ext];
-	const lang = LANG_BY_NAME[lower] ?? LANG_BY_EXT[exts.at(-1) ?? ""];
-	return (lang && LANGS[lang]) || seti.file;
+  const lower = name.toLowerCase();
+  if (NAMES[lower]) return NAMES[lower];
+  // Every suffix after a dot, longest first. A dotfile's leading dot counts,
+  // the way VS Code reads `.gitattributes` as extension `gitattributes`.
+  const exts: string[] = [];
+  for (let i = lower.indexOf("."); i !== -1; i = lower.indexOf(".", i + 1))
+    exts.push(lower.slice(i + 1));
+  for (const ext of exts) if (EXTS[ext]) return EXTS[ext];
+  const lang = LANG_BY_NAME[lower] ?? LANG_BY_EXT[exts.at(-1) ?? ""];
+  return (lang && LANGS[lang]) || seti.file;
 }
 
 /**
  * A file's icon: one glyph of the Seti font, colored per theme through CSS
  * variables (`.seti-icon` in index.css picks dark or light).
  */
-export function FileGlyph({ name, size = 16 }: { name: string; size?: number }) {
-	const [code, dark, light] = ICONS[iconIdFor(name)] ?? ICONS[seti.file];
-	return (
-		<span
-			// The filename sits right beside it; announcing the glyph is noise.
-			aria-hidden
-			className="seti-icon shrink-0"
-			style={
-				{
-					width: size,
-					height: size,
-					// VS Code draws the glyph at 150% of a 13px label in a 16px box.
-					fontSize: size * 1.22,
-					"--seti-dark": dark,
-					"--seti-light": light,
-				} as React.CSSProperties
-			}
-		>
-			{String.fromCodePoint(code)}
-		</span>
-	);
+export function FileGlyph({
+  name,
+  size = 16,
+}: {
+  name: string;
+  size?: number;
+}) {
+  const [code, dark, light] = ICONS[iconIdFor(name)] ?? ICONS[seti.file];
+  return (
+    <span
+      // The filename sits right beside it; announcing the glyph is noise.
+      aria-hidden
+      className="seti-icon shrink-0"
+      style={
+        {
+          width: size,
+          height: size,
+          // VS Code draws the glyph at 150% of a 13px label in a 16px box.
+          fontSize: size * 1.22,
+          "--seti-dark": dark,
+          "--seti-light": light,
+        } as React.CSSProperties
+      }
+    >
+      {String.fromCodePoint(code)}
+    </span>
+  );
 }

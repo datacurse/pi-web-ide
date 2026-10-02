@@ -36,12 +36,12 @@
  * Trusting it as an address is the offset bug with extra steps.
  */
 export interface HunkAnchor {
-	/** 0-based line where the change started when the agent made it. A hint. */
-	line: number;
-	/** Up to 3 lines immediately before the changed text, for relocation. */
-	before: string;
-	/** Up to 3 lines immediately after it. */
-	after: string;
+  /** 0-based line where the change started when the agent made it. A hint. */
+  line: number;
+  /** Up to 3 lines immediately before the changed text, for relocation. */
+  before: string;
+  /** Up to 3 lines immediately after it. */
+  after: string;
 }
 
 /**
@@ -56,44 +56,44 @@ export type HunkState = "pending" | "accepted" | "rejected";
 
 /** One reviewable change: exactly one `oldText`→`newText` pair the agent made. */
 export interface Hunk {
-	/**
-	 * Stable for the life of the change. `<toolCallId>:<index>` — pi's own tool
-	 * call id plus the position in its `edits` array, so the id is derivable
-	 * from the event and identical when the same event is replayed from the
-	 * session file after a reload. A random id would leave a reloaded
-	 * transcript unable to find the decision it stored.
-	 */
-	id: string;
-	/** Absolute, as pi's tool args carry it. */
-	path: string;
-	/**
-	 * Hash of the file as it was BEFORE the agent wrote, or null when the agent
-	 * created the file. This is what makes a revert SAFE to refuse: if the file
-	 * no longer contains what this hunk expects, something else has edited it
-	 * since and putting `oldText` back would clobber that. Null for a creation
-	 * because "did not exist" and "existed empty" revert differently.
-	 */
-	baseHash: string | null;
-	/** What was there before. Empty for an insertion or a new file. */
-	oldText: string;
-	/** What the agent put there. Empty for a deletion. */
-	newText: string;
-	anchor: HunkAnchor;
-	state: HunkState;
+  /**
+   * Stable for the life of the change. `<toolCallId>:<index>` — pi's own tool
+   * call id plus the position in its `edits` array, so the id is derivable
+   * from the event and identical when the same event is replayed from the
+   * session file after a reload. A random id would leave a reloaded
+   * transcript unable to find the decision it stored.
+   */
+  id: string;
+  /** Absolute, as pi's tool args carry it. */
+  path: string;
+  /**
+   * Hash of the file as it was BEFORE the agent wrote, or null when the agent
+   * created the file. This is what makes a revert SAFE to refuse: if the file
+   * no longer contains what this hunk expects, something else has edited it
+   * since and putting `oldText` back would clobber that. Null for a creation
+   * because "did not exist" and "existed empty" revert differently.
+   */
+  baseHash: string | null;
+  /** What was there before. Empty for an insertion or a new file. */
+  oldText: string;
+  /** What the agent put there. Empty for a deletion. */
+  newText: string;
+  anchor: HunkAnchor;
+  state: HunkState;
 }
 
 /** How a hunk relates to the file as it is RIGHT NOW. */
 export type HunkFit =
-	/** `newText` occurs exactly once: safe to revert. */
-	| { fit: "unique"; from: number; to: number }
-	/**
-	 * `newText` occurs more than once. The anchor's line hint picks the nearest,
-	 * but the ambiguity is REPORTED rather than silently resolved — "reverted
-	 * the wrong one of three identical blocks" is not a failure a user can see.
-	 */
-	| { fit: "ambiguous"; from: number; to: number; count: number }
-	/** Gone — already reverted, or overwritten. Nothing to do; never guess. */
-	| { fit: "missing" };
+  /** `newText` occurs exactly once: safe to revert. */
+  | { fit: "unique"; from: number; to: number }
+  /**
+   * `newText` occurs more than once. The anchor's line hint picks the nearest,
+   * but the ambiguity is REPORTED rather than silently resolved — "reverted
+   * the wrong one of three identical blocks" is not a failure a user can see.
+   */
+  | { fit: "ambiguous"; from: number; to: number; count: number }
+  /** Gone — already reverted, or overwritten. Nothing to do; never guess. */
+  | { fit: "missing" };
 
 /**
  * FNV-1a, 32-bit, hex. Deliberately not a crypto hash: this answers "did this
@@ -105,26 +105,26 @@ export type HunkFit =
  * apart"; move to SHA-256 if hashes are ever compared across machines.
  */
 export function hashContent(text: string): string {
-	let h = 0x811c9dc5;
-	for (let i = 0; i < text.length; i++) {
-		h ^= text.charCodeAt(i);
-		// Math.imul, because `h * 16777619` exceeds 2^53 and silently loses bits.
-		h = Math.imul(h, 0x01000193);
-	}
-	return (h >>> 0).toString(16).padStart(8, "0");
+  let h = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i);
+    // Math.imul, because `h * 16777619` exceeds 2^53 and silently loses bits.
+    h = Math.imul(h, 0x01000193);
+  }
+  return (h >>> 0).toString(16).padStart(8, "0");
 }
 
 const CONTEXT_LINES = 3;
 
 function anchorAt(content: string, at: number, text: string): HunkAnchor {
-	const lines = content.split("\n");
-	const line = content.slice(0, at).split("\n").length - 1;
-	const endLine = line + text.split("\n").length - 1;
-	return {
-		line,
-		before: lines.slice(Math.max(0, line - CONTEXT_LINES), line).join("\n"),
-		after: lines.slice(endLine + 1, endLine + 1 + CONTEXT_LINES).join("\n"),
-	};
+  const lines = content.split("\n");
+  const line = content.slice(0, at).split("\n").length - 1;
+  const endLine = line + text.split("\n").length - 1;
+  return {
+    line,
+    before: lines.slice(Math.max(0, line - CONTEXT_LINES), line).join("\n"),
+    after: lines.slice(endLine + 1, endLine + 1 + CONTEXT_LINES).join("\n"),
+  };
 }
 
 /**
@@ -136,27 +136,27 @@ function anchorAt(content: string, at: number, text: string): HunkAnchor {
  * because a hunk that cannot be placed is a hunk that must never be reverted.
  */
 export function hunksFromEdit(
-	toolCallId: string,
-	path: string,
-	before: string,
-	edits: Array<{ oldText: string; newText: string }>,
+  toolCallId: string,
+  path: string,
+  before: string,
+  edits: Array<{ oldText: string; newText: string }>,
 ): Hunk[] {
-	const baseHash = hashContent(before);
-	const out: Hunk[] = [];
-	for (const [i, edit] of edits.entries()) {
-		const at = before.indexOf(edit.oldText);
-		if (at === -1) continue;
-		out.push({
-			id: `${toolCallId}:${i}`,
-			path,
-			baseHash,
-			oldText: edit.oldText,
-			newText: edit.newText,
-			anchor: anchorAt(before, at, edit.oldText),
-			state: "pending",
-		});
-	}
-	return out;
+  const baseHash = hashContent(before);
+  const out: Hunk[] = [];
+  for (const [i, edit] of edits.entries()) {
+    const at = before.indexOf(edit.oldText);
+    if (at === -1) continue;
+    out.push({
+      id: `${toolCallId}:${i}`,
+      path,
+      baseHash,
+      oldText: edit.oldText,
+      newText: edit.newText,
+      anchor: anchorAt(before, at, edit.oldText),
+      state: "pending",
+    });
+  }
+  return out;
 }
 
 /**
@@ -167,20 +167,20 @@ export function hunksFromEdit(
  * reverting the second means truncating, and the pane must not confuse them.
  */
 export function hunkFromWrite(
-	toolCallId: string,
-	path: string,
-	before: string | null,
-	content: string,
+  toolCallId: string,
+  path: string,
+  before: string | null,
+  content: string,
 ): Hunk {
-	return {
-		id: `${toolCallId}:0`,
-		path,
-		baseHash: before === null ? null : hashContent(before),
-		oldText: before ?? "",
-		newText: content,
-		anchor: { line: 0, before: "", after: "" },
-		state: "pending",
-	};
+  return {
+    id: `${toolCallId}:0`,
+    path,
+    baseHash: before === null ? null : hashContent(before),
+    oldText: before ?? "",
+    newText: content,
+    anchor: { line: 0, before: "", after: "" },
+    state: "pending",
+  };
 }
 
 /**
@@ -191,42 +191,50 @@ export function hunkFromWrite(
  * offset-based so it survives the user editing above a pending hunk.
  */
 export function fitHunk(hunk: Hunk, current: string): HunkFit {
-	/*
-	 * A pure deletion left NO text behind, so there is nothing to search for
-	 * and nothing to replace: its anchor's `before` is the only thing locating
-	 * it, and the fit is an INSERTION POINT — a zero-width span — not a span
-	 * covering the anchor. Returning the anchor's own span here would make a
-	 * revert overwrite the three context lines with `oldText` and destroy them.
-	 */
-	const insertion = hunk.newText === "";
-	const needle = insertion ? hunk.anchor.before : hunk.newText;
-	// Nothing to anchor to: the change was at the very start of the file.
-	if (needle === "") return { fit: "unique", from: 0, to: insertion ? 0 : current.length };
+  /*
+   * A pure deletion left NO text behind, so there is nothing to search for
+   * and nothing to replace: its anchor's `before` is the only thing locating
+   * it, and the fit is an INSERTION POINT — a zero-width span — not a span
+   * covering the anchor. Returning the anchor's own span here would make a
+   * revert overwrite the three context lines with `oldText` and destroy them.
+   */
+  const insertion = hunk.newText === "";
+  const needle = insertion ? hunk.anchor.before : hunk.newText;
+  // Nothing to anchor to: the change was at the very start of the file.
+  if (needle === "")
+    return { fit: "unique", from: 0, to: insertion ? 0 : current.length };
 
-	const found: number[] = [];
-	for (let at = current.indexOf(needle); at !== -1; at = current.indexOf(needle, at + 1)) {
-		found.push(at);
-	}
-	if (found.length === 0) return { fit: "missing" };
+  const found: number[] = [];
+  for (
+    let at = current.indexOf(needle);
+    at !== -1;
+    at = current.indexOf(needle, at + 1)
+  ) {
+    found.push(at);
+  }
+  if (found.length === 0) return { fit: "missing" };
 
-	const span = (at: number) => {
-		const end = at + needle.length;
-		if (!insertion) return { from: at, to: end };
-		// `before` is a join of whole lines, so the deleted text began after the
-		// newline that follows it. Landing on the newline itself would reinsert
-		// the line before its own break.
-		const point = current[end] === "\n" ? end + 1 : end;
-		return { from: point, to: point };
-	};
-	if (found.length === 1) return { fit: "unique", ...span(found[0]) };
+  const span = (at: number) => {
+    const end = at + needle.length;
+    if (!insertion) return { from: at, to: end };
+    // `before` is a join of whole lines, so the deleted text began after the
+    // newline that follows it. Landing on the newline itself would reinsert
+    // the line before its own break.
+    const point = current[end] === "\n" ? end + 1 : end;
+    return { from: point, to: point };
+  };
+  if (found.length === 1) return { fit: "unique", ...span(found[0]) };
 
-	// Nearest to the remembered line wins. Compared as lines, not offsets:
-	// offsets are exactly what has moved.
-	const lineOf = (at: number) => current.slice(0, at).split("\n").length - 1;
-	const best = found.reduce((a, b) =>
-		Math.abs(lineOf(a) - hunk.anchor.line) <= Math.abs(lineOf(b) - hunk.anchor.line) ? a : b,
-	);
-	return { fit: "ambiguous", ...span(best), count: found.length };
+  // Nearest to the remembered line wins. Compared as lines, not offsets:
+  // offsets are exactly what has moved.
+  const lineOf = (at: number) => current.slice(0, at).split("\n").length - 1;
+  const best = found.reduce((a, b) =>
+    Math.abs(lineOf(a) - hunk.anchor.line) <=
+    Math.abs(lineOf(b) - hunk.anchor.line)
+      ? a
+      : b,
+  );
+  return { fit: "ambiguous", ...span(best), count: found.length };
 }
 
 /**
@@ -239,16 +247,16 @@ export function fitHunk(hunk: Hunk, current: string): HunkFit {
  * worse than a change left standing.
  */
 export function revertHunks(current: string, hunks: Hunk[]): string {
-	const spans: Array<{ from: number; to: number; text: string }> = [];
-	for (const h of hunks) {
-		const fit = fitHunk(h, current);
-		if (fit.fit === "missing") continue;
-		spans.push({ from: fit.from, to: fit.to, text: h.oldText });
-	}
-	spans.sort((a, b) => b.from - a.from);
-	let out = current;
-	for (const s of spans) out = out.slice(0, s.from) + s.text + out.slice(s.to);
-	return out;
+  const spans: Array<{ from: number; to: number; text: string }> = [];
+  for (const h of hunks) {
+    const fit = fitHunk(h, current);
+    if (fit.fit === "missing") continue;
+    spans.push({ from: fit.from, to: fit.to, text: h.oldText });
+  }
+  spans.sort((a, b) => b.from - a.from);
+  let out = current;
+  for (const s of spans) out = out.slice(0, s.from) + s.text + out.slice(s.to);
+  return out;
 }
 
 /**
@@ -260,8 +268,8 @@ export function revertHunks(current: string, hunks: Hunk[]): string {
  * agent's write and the user's click is preserved instead of overwritten.
  */
 export function resolve(current: string, hunks: Hunk[]): string {
-	return revertHunks(
-		current,
-		hunks.filter((h) => h.state === "rejected"),
-	);
+  return revertHunks(
+    current,
+    hunks.filter((h) => h.state === "rejected"),
+  );
 }

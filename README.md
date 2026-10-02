@@ -22,6 +22,13 @@ pnpm typecheck               # must pass; includes scripts/check-ui.sh
 pnpm deadcode                # unused files/exports/dependencies, including a production-only pass
 ```
 
+## Code formatting
+
+Prettier is the source of truth for formatting, with two spaces per indentation
+level (no tabs). Run `pnpm format` after editing code, including AI-generated
+code, and `pnpm check` before committing. To format on save in an editor, enable
+its Prettier integration; it will use `.prettierrc.json`.
+
 `pnpm dev` builds `dist/`, then starts a backend on :8890 serving that built
 UI, plus Vite on :5480 for hot reload. Both UIs use the same backend. No
 systemd service or separate `pnpm start` is needed.

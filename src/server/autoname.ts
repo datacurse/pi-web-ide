@@ -60,14 +60,14 @@ const SESSION_INPUT_MAX = 2_000;
  * The automatic-action settings choose the model independently of the chat.
  */
 const ONESHOT = [
-	"-p",
-	"--no-session",
-	"--no-tools",
-	"--no-skills",
-	"--no-prompt-templates",
-	"--no-context-files",
-	"--thinking",
-	"off",
+  "-p",
+  "--no-session",
+  "--no-tools",
+  "--no-skills",
+  "--no-prompt-templates",
+  "--no-context-files",
+  "--thinking",
+  "off",
 ];
 
 /**
@@ -104,15 +104,16 @@ Rules:
  * same text as the placeholder would look like it did nothing.
  */
 export async function nameCommit(cwd: string): Promise<string> {
-	const summary = await changeSummary(cwd);
-	if (!summary) throw new Error("nothing to describe: the working tree is clean");
+  const summary = await changeSummary(cwd);
+  if (!summary)
+    throw new Error("nothing to describe: the working tree is clean");
 
-	const args = [...ONESHOT, "--model", automaticModel("commitNaming")];
-	args.push(`${COMMIT_PROMPT}\n\n${summary}`);
+  const args = [...ONESHOT, "--model", automaticModel("commitNaming")];
+  args.push(`${COMMIT_PROMPT}\n\n${summary}`);
 
-	const message = subjectAndBody(await runPi(cwd, args));
-	if (!message) throw new Error("the model returned nothing");
-	return message;
+  const message = subjectAndBody(await runPi(cwd, args));
+  if (!message) throw new Error("the model returned nothing");
+  return message;
 }
 
 /**
@@ -125,19 +126,19 @@ export async function nameCommit(cwd: string): Promise<string> {
  * textarea is where a human edits it anyway.
  */
 export function subjectAndBody(stdout: string): string {
-	const lines = stdout.split("\n");
-	const start = lines.findIndex((line) => line.trim());
-	if (start < 0) return "";
+  const lines = stdout.split("\n");
+  const start = lines.findIndex((line) => line.trim());
+  if (start < 0) return "";
 
-	const subject = firstLine(lines[start] ?? "", MAX_SUBJECT_CHARS);
-	const body = lines
-		.slice(start + 1)
-		.join("\n")
-		.trim()
-		.slice(0, MAX_BODY_CHARS)
-		.trim();
-	if (!subject) return "";
-	return body ? `${subject}\n\n${body}` : subject;
+  const subject = firstLine(lines[start] ?? "", MAX_SUBJECT_CHARS);
+  const body = lines
+    .slice(start + 1)
+    .join("\n")
+    .trim()
+    .slice(0, MAX_BODY_CHARS)
+    .trim();
+  if (!subject) return "";
+  return body ? `${subject}\n\n${body}` : subject;
 }
 
 /**
@@ -149,16 +150,20 @@ export function subjectAndBody(stdout: string): string {
  * what the session is ABOUT, and feeding a whole transcript to name it would
  * cost more than the session's next turn.
  */
-export async function nameSession(cwd: string, opening: string): Promise<string> {
-	const text = opening.trim();
-	if (!text) throw new Error("nothing to name: this session has no messages yet");
+export async function nameSession(
+  cwd: string,
+  opening: string,
+): Promise<string> {
+  const text = opening.trim();
+  if (!text)
+    throw new Error("nothing to name: this session has no messages yet");
 
-	const args = [...ONESHOT, "--model", automaticModel("sessionNaming")];
-	args.push(`${SESSION_PROMPT}\n\n${text.slice(0, SESSION_INPUT_MAX)}`);
+  const args = [...ONESHOT, "--model", automaticModel("sessionNaming")];
+  args.push(`${SESSION_PROMPT}\n\n${text.slice(0, SESSION_INPUT_MAX)}`);
 
-	const name = firstLine(await runPi(cwd, args), MAX_NAME_CHARS);
-	if (!name) throw new Error("the model returned nothing");
-	return name;
+  const name = firstLine(await runPi(cwd, args), MAX_NAME_CHARS);
+  if (!name) throw new Error("the model returned nothing");
+  return name;
 }
 
 /**
@@ -166,12 +171,12 @@ export async function nameSession(cwd: string, opening: string): Promise<string>
  * string in about one time in five.
  */
 function firstLine(stdout: string, max: number): string {
-	return (stdout.split("\n").find((line) => line.trim()) ?? "")
-		.trim()
-		.replace(/^["'`]+|["'`]+$/g, "")
-		.replace(/\s+/g, " ")
-		.slice(0, max)
-		.trim();
+  return (stdout.split("\n").find((line) => line.trim()) ?? "")
+    .trim()
+    .replace(/^["'`]+|["'`]+$/g, "")
+    .replace(/\s+/g, " ")
+    .slice(0, max)
+    .trim();
 }
 
 /**
@@ -182,41 +187,41 @@ function firstLine(stdout: string, max: number): string {
  * it will never write to waits for the timeout and answers nothing.
  */
 function runPi(cwd: string, args: string[]): Promise<string> {
-	const { promise, resolve, reject } = Promise.withResolvers<string>();
-	const child = spawn(PI_BIN, args, { cwd, stdio: ["ignore", "pipe", "pipe"] });
+  const { promise, resolve, reject } = Promise.withResolvers<string>();
+  const child = spawn(PI_BIN, args, { cwd, stdio: ["ignore", "pipe", "pipe"] });
 
-	let stdout = "";
-	let stderr = "";
-	let settled = false;
-	const finish = (err: Error | null, value = "") => {
-		if (settled) return;
-		settled = true;
-		clearTimeout(timer);
-		if (err) reject(err);
-		else resolve(value);
-	};
+  let stdout = "";
+  let stderr = "";
+  let settled = false;
+  const finish = (err: Error | null, value = "") => {
+    if (settled) return;
+    settled = true;
+    clearTimeout(timer);
+    if (err) reject(err);
+    else resolve(value);
+  };
 
-	const timer = setTimeout(() => {
-		child.kill("SIGKILL");
-		finish(new Error("naming this commit took too long"));
-	}, TIMEOUT_MS);
+  const timer = setTimeout(() => {
+    child.kill("SIGKILL");
+    finish(new Error("naming this commit took too long"));
+  }, TIMEOUT_MS);
 
-	child.stdout.on("data", (chunk: Buffer) => {
-		if (stdout.length < MAX_OUTPUT_BYTES) stdout += chunk.toString();
-	});
-	child.stderr.on("data", (chunk: Buffer) => {
-		if (stderr.length < MAX_OUTPUT_BYTES) stderr += chunk.toString();
-	});
-	// `spawn pi ENOENT` is the deployment mistake this reports most often;
-	// see PI_BIN in agent.ts for the PATH it is usually missing from.
-	child.on("error", (err) => finish(err));
-	child.on("close", (code) => {
-		if (code === 0) return finish(null, stdout);
-		// The last line of stderr is pi's own complaint (a missing key, an
-		// unknown model); the rest is startup chatter nobody needs in a pill.
-		const last = stderr.trim().split("\n").filter(Boolean).at(-1);
-		finish(new Error(last || `pi exited with ${code}`));
-	});
+  child.stdout.on("data", (chunk: Buffer) => {
+    if (stdout.length < MAX_OUTPUT_BYTES) stdout += chunk.toString();
+  });
+  child.stderr.on("data", (chunk: Buffer) => {
+    if (stderr.length < MAX_OUTPUT_BYTES) stderr += chunk.toString();
+  });
+  // `spawn pi ENOENT` is the deployment mistake this reports most often;
+  // see PI_BIN in agent.ts for the PATH it is usually missing from.
+  child.on("error", (err) => finish(err));
+  child.on("close", (code) => {
+    if (code === 0) return finish(null, stdout);
+    // The last line of stderr is pi's own complaint (a missing key, an
+    // unknown model); the rest is startup chatter nobody needs in a pill.
+    const last = stderr.trim().split("\n").filter(Boolean).at(-1);
+    finish(new Error(last || `pi exited with ${code}`));
+  });
 
-	return promise;
+  return promise;
 }

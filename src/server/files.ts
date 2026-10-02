@@ -12,18 +12,27 @@
  */
 
 import {
-	cpSync,
-	lstatSync,
-	mkdirSync,
-	readdirSync,
-	readFileSync,
-	renameSync,
-	rmSync,
-	statSync,
-	writeFileSync,
+  cpSync,
+  lstatSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  statSync,
+  writeFileSync,
 } from "node:fs";
 import { homedir } from "node:os";
-import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import {
+  basename,
+  dirname,
+  extname,
+  isAbsolute,
+  join,
+  relative,
+  resolve,
+  sep,
+} from "node:path";
 import { listProjects } from "./projects.js";
 import type { PiwFileEntry } from "../shared/types.js";
 
@@ -45,12 +54,20 @@ const MAX_BYTES = 4 * 1024 * 1024;
  * a six-figure number of entries, and expanding it once would stall the pane
  * for seconds to build a list nobody scrolls.
  */
-const SKIP_DIRS = new Set(["node_modules", ".git", "dist", "build", ".next", ".cache", "coverage"]);
+const SKIP_DIRS = new Set([
+  "node_modules",
+  ".git",
+  "dist",
+  "build",
+  ".next",
+  ".cache",
+  "coverage",
+]);
 
 /** `~` arrives from hand-typed and pasted paths the same way it does in projects.ts. */
 function expand(path: string): string {
-	const raw = path.trim();
-	return resolve(raw.startsWith("~") ? join(homedir(), raw.slice(1)) : raw);
+  const raw = path.trim();
+  return resolve(raw.startsWith("~") ? join(homedir(), raw.slice(1)) : raw);
 }
 
 /**
@@ -65,8 +82,11 @@ function expand(path: string): string {
  * absolute path, which contains no `..` and would otherwise read as contained.
  */
 function within(root: string, path: string): boolean {
-	const rel = relative(root, path);
-	return rel === "" || (!rel.startsWith(`..${sep}`) && rel !== ".." && !isAbsolute(rel));
+  const rel = relative(root, path);
+  return (
+    rel === "" ||
+    (!rel.startsWith(`..${sep}`) && rel !== ".." && !isAbsolute(rel))
+  );
 }
 
 /**
@@ -80,31 +100,33 @@ function within(root: string, path: string): boolean {
  * `seed` is the server's startup cwd, which `listProjects` always includes.
  */
 export function safePath(seed: string, path: string): string {
-	if (typeof path !== "string" || path.trim() === "") throw new Error("path required");
-	// Resolve FIRST, then check: `/home/me/proj/../../etc/passwd` is only
-	// visible as an escape once it is normalised.
-	const full = expand(path);
-	const roots = listProjects(seed).map(expand);
-	if (!roots.some((root) => within(root, full))) {
-		throw new Error(`path is outside every known project: ${full}`);
-	}
-	return full;
+  if (typeof path !== "string" || path.trim() === "")
+    throw new Error("path required");
+  // Resolve FIRST, then check: `/home/me/proj/../../etc/passwd` is only
+  // visible as an escape once it is normalised.
+  const full = expand(path);
+  const roots = listProjects(seed).map(expand);
+  if (!roots.some((root) => within(root, full))) {
+    throw new Error(`path is outside every known project: ${full}`);
+  }
+  return full;
 }
 
 /** A file's current contents, or null when it does not exist. */
 export function readFile(seed: string, path: string): string | null {
-	const full = safePath(seed, path);
-	let st;
-	try {
-		st = statSync(full);
-	} catch {
-		// Absent is a normal answer here: the agent may have created a file the
-		// user then deleted, and the pane has to render that rather than 500.
-		return null;
-	}
-	if (!st.isFile()) throw new Error(`not a file: ${full}`);
-	if (st.size > MAX_BYTES) throw new Error(`file too large to review: ${full} (${st.size} bytes)`);
-	return readFileSync(full, "utf8");
+  const full = safePath(seed, path);
+  let st;
+  try {
+    st = statSync(full);
+  } catch {
+    // Absent is a normal answer here: the agent may have created a file the
+    // user then deleted, and the pane has to render that rather than 500.
+    return null;
+  }
+  if (!st.isFile()) throw new Error(`not a file: ${full}`);
+  if (st.size > MAX_BYTES)
+    throw new Error(`file too large to review: ${full} (${st.size} bytes)`);
+  return readFileSync(full, "utf8");
 }
 
 /**
@@ -116,41 +138,41 @@ export function readFile(seed: string, path: string): string | null {
  * and would also read an entire repo to render a sidebar showing twelve rows.
  */
 export function listDir(seed: string, path: string): PiwFileEntry[] {
-	const dir = safePath(seed, path);
-	if (!statSync(dir).isDirectory()) throw new Error(`not a directory: ${dir}`);
+  const dir = safePath(seed, path);
+  if (!statSync(dir).isDirectory()) throw new Error(`not a directory: ${dir}`);
 
-	const out: PiwFileEntry[] = [];
-	for (const child of readdirSync(dir, { withFileTypes: true })) {
-		if (SKIP_DIRS.has(child.name)) continue;
-		// withFileTypes avoids a stat per child. A symlink is the one dirent whose
-		// kind readdir cannot answer, and its target may be missing or unreadable.
-		let isDir = child.isDirectory();
-		if (child.isSymbolicLink()) {
-			try {
-				isDir = statSync(join(dir, child.name)).isDirectory();
-			} catch {
-				continue;
-			}
-		} else if (!isDir && !child.isFile()) {
-			// Sockets, FIFOs and devices are neither editable nor browsable.
-			continue;
-		}
-		out.push({
-			name: child.name,
-			path: join(dir, child.name),
-			dir: isDir,
-			hidden: child.name.startsWith("."),
-		});
-	}
-	// Directories first, dotted names last within each group: a plain sort would
-	// put .env and .gitignore above every file you came here to open.
-	out.sort(
-		(a, b) =>
-			Number(b.dir) - Number(a.dir) ||
-			Number(a.hidden) - Number(b.hidden) ||
-			a.name.localeCompare(b.name, undefined, { numeric: true }),
-	);
-	return out;
+  const out: PiwFileEntry[] = [];
+  for (const child of readdirSync(dir, { withFileTypes: true })) {
+    if (SKIP_DIRS.has(child.name)) continue;
+    // withFileTypes avoids a stat per child. A symlink is the one dirent whose
+    // kind readdir cannot answer, and its target may be missing or unreadable.
+    let isDir = child.isDirectory();
+    if (child.isSymbolicLink()) {
+      try {
+        isDir = statSync(join(dir, child.name)).isDirectory();
+      } catch {
+        continue;
+      }
+    } else if (!isDir && !child.isFile()) {
+      // Sockets, FIFOs and devices are neither editable nor browsable.
+      continue;
+    }
+    out.push({
+      name: child.name,
+      path: join(dir, child.name),
+      dir: isDir,
+      hidden: child.name.startsWith("."),
+    });
+  }
+  // Directories first, dotted names last within each group: a plain sort would
+  // put .env and .gitignore above every file you came here to open.
+  out.sort(
+    (a, b) =>
+      Number(b.dir) - Number(a.dir) ||
+      Number(a.hidden) - Number(b.hidden) ||
+      a.name.localeCompare(b.name, undefined, { numeric: true }),
+  );
+  return out;
 }
 
 /**
@@ -166,13 +188,19 @@ export function listDir(seed: string, path: string): PiwFileEntry[] {
  * Content comparison, not mtime/inode. Costs a read per save, which
  * is nothing next to the round trip; revisit if saves ever get chatty.
  */
-export function writeFile(seed: string, path: string, expect: string, next: string): void {
-	const full = safePath(seed, path);
-	const current = readFile(seed, full);
-	// A new file is expected to be absent, which `expect: ""` says.
-	if ((current ?? "") !== expect) throw new Error(`file changed on disk since it was opened: ${full}`);
-	if (next === current) return;
-	writeFileSync(full, next, "utf8");
+export function writeFile(
+  seed: string,
+  path: string,
+  expect: string,
+  next: string,
+): void {
+  const full = safePath(seed, path);
+  const current = readFile(seed, full);
+  // A new file is expected to be absent, which `expect: ""` says.
+  if ((current ?? "") !== expect)
+    throw new Error(`file changed on disk since it was opened: ${full}`);
+  if (next === current) return;
+  writeFileSync(full, next, "utf8");
 }
 
 /**
@@ -185,12 +213,18 @@ export function writeFile(seed: string, path: string, expect: string, next: stri
  * own editor. Without it, resolving a hunk would silently discard whatever
  * landed in between.
  */
-export function writeReviewed(seed: string, path: string, expect: string, next: string): void {
-	const full = safePath(seed, path);
-	const current = readFile(seed, full) ?? "";
-	if (current !== expect) throw new Error(`file changed on disk since it was read: ${full}`);
-	if (next === current) return;
-	writeFileSync(full, next, "utf8");
+export function writeReviewed(
+  seed: string,
+  path: string,
+  expect: string,
+  next: string,
+): void {
+  const full = safePath(seed, path);
+  const current = readFile(seed, full) ?? "";
+  if (current !== expect)
+    throw new Error(`file changed on disk since it was read: ${full}`);
+  if (next === current) return;
+  writeFileSync(full, next, "utf8");
 }
 
 /*
@@ -202,12 +236,12 @@ export function writeReviewed(seed: string, path: string, expect: string, next: 
 
 /** Exists, including a dangling symlink, which `existsSync` reports as absent. */
 function taken(path: string): boolean {
-	try {
-		lstatSync(path);
-		return true;
-	} catch {
-		return false;
-	}
+  try {
+    lstatSync(path);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -215,43 +249,52 @@ function taken(path: string): boolean {
  * not a project root itself, whose removal would take the project with it.
  */
 function movable(seed: string, path: string): string {
-	const full = safePath(seed, path);
-	if (listProjects(seed).map(expand).includes(full)) throw new Error(`cannot change a project root: ${full}`);
-	if (!taken(full)) throw new Error(`no such file: ${full}`);
-	return full;
+  const full = safePath(seed, path);
+  if (listProjects(seed).map(expand).includes(full))
+    throw new Error(`cannot change a project root: ${full}`);
+  if (!taken(full)) throw new Error(`no such file: ${full}`);
+  return full;
 }
 
 /** `rename`, falling back to copy-then-delete across filesystems. */
 function moveAcross(from: string, to: string): void {
-	try {
-		renameSync(from, to);
-	} catch (err) {
-		if ((err as NodeJS.ErrnoException).code !== "EXDEV") throw err;
-		cpSync(from, to, { recursive: true, errorOnExist: true, force: false, verbatimSymlinks: true });
-		rmSync(from, { recursive: true, force: true });
-	}
+  try {
+    renameSync(from, to);
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== "EXDEV") throw err;
+    cpSync(from, to, {
+      recursive: true,
+      errorOnExist: true,
+      force: false,
+      verbatimSymlinks: true,
+    });
+    rmSync(from, { recursive: true, force: true });
+  }
 }
 
 /** `name`, or `name copy`, `name copy 2`… — the first that is free in `dir`. */
 function freeName(dir: string, name: string, suffix: string): string {
-	if (!taken(join(dir, name))) return join(dir, name);
-	const ext = extname(name);
-	const stem = ext && ext !== name ? name.slice(0, -ext.length) : name;
-	const tail = ext && ext !== name ? ext : "";
-	for (let n = 1; ; n++) {
-		const candidate = join(dir, `${stem} ${suffix}${n > 1 ? ` ${n}` : ""}${tail}`);
-		if (!taken(candidate)) return candidate;
-	}
+  if (!taken(join(dir, name))) return join(dir, name);
+  const ext = extname(name);
+  const stem = ext && ext !== name ? name.slice(0, -ext.length) : name;
+  const tail = ext && ext !== name ? ext : "";
+  for (let n = 1; ; n++) {
+    const candidate = join(
+      dir,
+      `${stem} ${suffix}${n > 1 ? ` ${n}` : ""}${tail}`,
+    );
+    if (!taken(candidate)) return candidate;
+  }
 }
 
 /** A new empty file or directory. Missing parents are created; the target is not replaced. */
 export function createEntry(seed: string, path: string, dir: boolean): string {
-	const full = safePath(seed, path);
-	if (taken(full)) throw new Error(`already exists: ${full}`);
-	mkdirSync(dirname(full), { recursive: true });
-	if (dir) mkdirSync(full);
-	else writeFileSync(full, "", { flag: "wx" });
-	return full;
+  const full = safePath(seed, path);
+  if (taken(full)) throw new Error(`already exists: ${full}`);
+  mkdirSync(dirname(full), { recursive: true });
+  if (dir) mkdirSync(full);
+  else writeFileSync(full, "", { flag: "wx" });
+  return full;
 }
 
 /**
@@ -260,36 +303,45 @@ export function createEntry(seed: string, path: string, dir: boolean): string {
  * `dir`, and an existing file is refused; the caller writes with `wx`.
  */
 export function uploadPath(seed: string, dir: string, rel: string): string {
-	const base = safePath(seed, dir);
-	if (!statSync(base).isDirectory()) throw new Error(`not a directory: ${base}`);
-	const full = safePath(seed, join(base, rel));
-	if (full === base || !within(base, full)) throw new Error(`bad name: ${rel}`);
-	if (taken(full)) throw new Error(`already exists: ${full}`);
-	mkdirSync(dirname(full), { recursive: true });
-	return full;
+  const base = safePath(seed, dir);
+  if (!statSync(base).isDirectory())
+    throw new Error(`not a directory: ${base}`);
+  const full = safePath(seed, join(base, rel));
+  if (full === base || !within(base, full)) throw new Error(`bad name: ${rel}`);
+  if (taken(full)) throw new Error(`already exists: ${full}`);
+  mkdirSync(dirname(full), { recursive: true });
+  return full;
 }
 
 /** Rename or move. Refuses an existing target and a move into its own subtree. */
 export function moveEntry(seed: string, from: string, to: string): string {
-	const src = movable(seed, from);
-	const dst = safePath(seed, to);
-	if (dst === src) return dst;
-	if (within(src, dst)) throw new Error(`cannot move a folder into itself: ${dst}`);
-	if (taken(dst)) throw new Error(`already exists: ${dst}`);
-	if (!statSync(dirname(dst)).isDirectory()) throw new Error(`not a directory: ${dirname(dst)}`);
-	moveAcross(src, dst);
-	return dst;
+  const src = movable(seed, from);
+  const dst = safePath(seed, to);
+  if (dst === src) return dst;
+  if (within(src, dst))
+    throw new Error(`cannot move a folder into itself: ${dst}`);
+  if (taken(dst)) throw new Error(`already exists: ${dst}`);
+  if (!statSync(dirname(dst)).isDirectory())
+    throw new Error(`not a directory: ${dirname(dst)}`);
+  moveAcross(src, dst);
+  return dst;
 }
 
 /** Copy into `toDir`, named like the source or `… copy` when that is taken. */
 export function copyEntry(seed: string, from: string, toDir: string): string {
-	const src = movable(seed, from);
-	const dir = safePath(seed, toDir);
-	if (!statSync(dir).isDirectory()) throw new Error(`not a directory: ${dir}`);
-	if (within(src, dir)) throw new Error(`cannot copy a folder into itself: ${dir}`);
-	const dst = freeName(dir, basename(src), "copy");
-	cpSync(src, dst, { recursive: true, errorOnExist: true, force: false, verbatimSymlinks: true });
-	return dst;
+  const src = movable(seed, from);
+  const dir = safePath(seed, toDir);
+  if (!statSync(dir).isDirectory()) throw new Error(`not a directory: ${dir}`);
+  if (within(src, dir))
+    throw new Error(`cannot copy a folder into itself: ${dir}`);
+  const dst = freeName(dir, basename(src), "copy");
+  cpSync(src, dst, {
+    recursive: true,
+    errorOnExist: true,
+    force: false,
+    verbatimSymlinks: true,
+  });
+  return dst;
 }
 
 /**
@@ -298,20 +350,27 @@ export function copyEntry(seed: string, from: string, toDir: string): string {
  * the project: a trash folder there would show up in git and in the tree.
  */
 export function trashEntry(seed: string, path: string): void {
-	const full = movable(seed, path);
-	const trash = join(process.env.XDG_DATA_HOME || join(homedir(), ".local", "share"), "Trash");
-	mkdirSync(join(trash, "files"), { recursive: true });
-	mkdirSync(join(trash, "info"), { recursive: true });
-	// The info file is written first: it claims the name, and a trashed item
-	// without one is invisible to the file manager that would restore it.
-	const dst = freeName(join(trash, "files"), basename(full), "trashed");
-	const info = join(trash, "info", `${basename(dst)}.trashinfo`);
-	const stamp = new Date().toISOString().slice(0, 19);
-	writeFileSync(info, `[Trash Info]\nPath=${encodeURI(full)}\nDeletionDate=${stamp}\n`, { flag: "wx" });
-	try {
-		moveAcross(full, dst);
-	} catch (err) {
-		rmSync(info, { force: true });
-		throw err;
-	}
+  const full = movable(seed, path);
+  const trash = join(
+    process.env.XDG_DATA_HOME || join(homedir(), ".local", "share"),
+    "Trash",
+  );
+  mkdirSync(join(trash, "files"), { recursive: true });
+  mkdirSync(join(trash, "info"), { recursive: true });
+  // The info file is written first: it claims the name, and a trashed item
+  // without one is invisible to the file manager that would restore it.
+  const dst = freeName(join(trash, "files"), basename(full), "trashed");
+  const info = join(trash, "info", `${basename(dst)}.trashinfo`);
+  const stamp = new Date().toISOString().slice(0, 19);
+  writeFileSync(
+    info,
+    `[Trash Info]\nPath=${encodeURI(full)}\nDeletionDate=${stamp}\n`,
+    { flag: "wx" },
+  );
+  try {
+    moveAcross(full, dst);
+  } catch (err) {
+    rmSync(info, { force: true });
+    throw err;
+  }
 }

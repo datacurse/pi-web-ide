@@ -9,24 +9,29 @@
  */
 
 import { EMPTY_LAYOUT, parseLayout, type TermLayout } from "./termLayout.js";
-import { EDITOR_KEYS, PALETTE_KEYS, SYNTAX_ROLES, type ConvertedTheme } from "./vscodeTheme.js";
+import {
+  EDITOR_KEYS,
+  PALETTE_KEYS,
+  SYNTAX_ROLES,
+  type ConvertedTheme,
+} from "./vscodeTheme.js";
 import vscodeThemes from "./vscodeThemes.json";
 
 export function readStored(key: string): string | null {
-	try {
-		return localStorage.getItem(key);
-	} catch {
-		// Private mode / disabled storage must not break the app.
-		return null;
-	}
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    // Private mode / disabled storage must not break the app.
+    return null;
+  }
 }
 
 export function writeStored(key: string, value: string): void {
-	try {
-		localStorage.setItem(key, value);
-	} catch {
-		/* ignore */
-	}
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    /* ignore */
+  }
 }
 
 /**
@@ -49,30 +54,31 @@ export function writeStored(key: string, value: string): void {
 export const VSCODE_THEMES: Record<string, ConvertedTheme> = vscodeThemes;
 
 const BUILTIN_THEMES = [
-	{ id: "mocha", label: "Catppuccin Mocha", light: false },
-	{ id: "macchiato", label: "Catppuccin Macchiato", light: false },
-	{ id: "frappe", label: "Catppuccin Frappé", light: false },
-	{ id: "claude", label: "Claude", light: false },
-	{ id: "latte", label: "Catppuccin Latte", light: true },
-	{ id: "claude-light", label: "Claude Light", light: true },
+  { id: "mocha", label: "Catppuccin Mocha", light: false },
+  { id: "macchiato", label: "Catppuccin Macchiato", light: false },
+  { id: "frappe", label: "Catppuccin Frappé", light: false },
+  { id: "claude", label: "Claude", light: false },
+  { id: "latte", label: "Catppuccin Latte", light: true },
+  { id: "claude-light", label: "Claude Light", light: true },
 ];
 
 const vscodeList = (skip: (id: string) => boolean) =>
-	Object.entries(VSCODE_THEMES)
-		.filter(([id]) => !skip(id))
-		.map(([id, th]) => ({ id, label: th.label, light: th.light }))
-		.sort((a, b) => a.label.localeCompare(b.label));
+  Object.entries(VSCODE_THEMES)
+    .filter(([id]) => !skip(id))
+    .map(([id, th]) => ({ id, label: th.label, light: th.light }))
+    .sort((a, b) => a.label.localeCompare(b.label));
 
 /** Dark first, then light; built-ins lead each group. */
 const darkThenLight = <T extends { light: boolean }>(list: T[]) => [
-	...list.filter((th) => !th.light),
-	...list.filter((th) => th.light),
+  ...list.filter((th) => !th.light),
+  ...list.filter((th) => th.light),
 ];
 
-export const THEMES: { id: string; label: string; light: boolean }[] = darkThenLight([
-	...BUILTIN_THEMES,
-	...vscodeList((id) => id.startsWith("catppuccin-")),
-]);
+export const THEMES: { id: string; label: string; light: boolean }[] =
+  darkThenLight([
+    ...BUILTIN_THEMES,
+    ...vscodeList((id) => id.startsWith("catppuccin-")),
+  ]);
 
 export type ThemeId = string;
 
@@ -84,36 +90,44 @@ export const MATCH_APP = "app";
 
 /** The VS Code theme whose syntax colors go with an app theme. */
 export function syntaxThemeOf(app: ThemeId): string {
-	if (VSCODE_THEMES[app]) return app;
-	if (app === "claude") return "dark-plus";
-	if (app === "claude-light") return "light-plus";
-	return `catppuccin-${app}`;
+  if (VSCODE_THEMES[app]) return app;
+  if (app === "claude") return "dark-plus";
+  if (app === "claude-light") return "light-plus";
+  return `catppuccin-${app}`;
 }
 
 /** The theme the editor actually wears. */
 export function editorThemeOf(app: ThemeId, editor: string): string {
-	return editor === MATCH_APP ? syntaxThemeOf(app) : editor;
+  return editor === MATCH_APP ? syntaxThemeOf(app) : editor;
 }
 
 /** A VS Code theme's `--ct-*` palette, for <html> or a settings swatch. */
 export function paletteVars(id: ThemeId): Record<string, string> | undefined {
-	const th = VSCODE_THEMES[id];
-	return th && Object.fromEntries(PALETTE_KEYS.map((k, i) => [`--ct-${k}`, th.palette[i]]));
+  const th = VSCODE_THEMES[id];
+  return (
+    th &&
+    Object.fromEntries(PALETTE_KEYS.map((k, i) => [`--ct-${k}`, th.palette[i]]))
+  );
 }
 
 /** `--<prefix>-<role>` color plus `-fs`/`-fw`/`-td` for the syntax roles codemirror.ts styles. */
 function syntaxVars(prefix: string, th: ConvertedTheme): [string, string][] {
-	return SYNTAX_ROLES.flatMap((role, i) => {
-		const [color, f] = th.syntax[i].split("|");
-		const name = `--${prefix}-${role}`;
-		const deco = [f.includes("u") && "underline", f.includes("s") && "line-through"].filter(Boolean).join(" ");
-		return [
-			color && [name, color],
-			f.includes("i") && [`${name}-fs`, "italic"],
-			f.includes("b") && [`${name}-fw`, "bold"],
-			deco && [`${name}-td`, deco],
-		].filter((v): v is [string, string] => !!v);
-	});
+  return SYNTAX_ROLES.flatMap((role, i) => {
+    const [color, f] = th.syntax[i].split("|");
+    const name = `--${prefix}-${role}`;
+    const deco = [
+      f.includes("u") && "underline",
+      f.includes("s") && "line-through",
+    ]
+      .filter(Boolean)
+      .join(" ");
+    return [
+      color && [name, color],
+      f.includes("i") && [`${name}-fs`, "italic"],
+      f.includes("b") && [`${name}-fw`, "bold"],
+      deco && [`${name}-td`, deco],
+    ].filter((v): v is [string, string] => !!v);
+  });
 }
 
 /**
@@ -132,15 +146,17 @@ const GIT_AUTONAME_KEY = "pwi:gitAutoName";
 const GIT_NESTED_KEY = "pwi:gitNested";
 
 export function readTheme(): ThemeId {
-	const stored = readStored(THEME_KEY);
-	// An unknown palette degrades to the default instead of leaving the app
-	// unstyled.
-	return THEMES.some((t) => t.id === stored) ? (stored as ThemeId) : DEFAULT_THEME;
+  const stored = readStored(THEME_KEY);
+  // An unknown palette degrades to the default instead of leaving the app
+  // unstyled.
+  return THEMES.some((t) => t.id === stored)
+    ? (stored as ThemeId)
+    : DEFAULT_THEME;
 }
 
 export function readEditorTheme(): string {
-	const stored = readStored(EDITOR_THEME_KEY);
-	return stored && VSCODE_THEMES[stored] ? stored : MATCH_APP;
+  const stored = readStored(EDITOR_THEME_KEY);
+  return stored && VSCODE_THEMES[stored] ? stored : MATCH_APP;
 }
 
 /**
@@ -150,22 +166,33 @@ export function readEditorTheme(): string {
  * blocks, diffs), and the editor's `--etk-*` syntax and `--ed-*` chrome.
  */
 export function applyTheme(id: ThemeId, editor: string): void {
-	const root = document.documentElement;
-	const ed = VSCODE_THEMES[editorThemeOf(id, editor)] ?? VSCODE_THEMES["dark-plus"];
-	const vars: [string, string][] = [
-		...Object.entries(paletteVars(id) ?? {}),
-		...syntaxVars("tk", VSCODE_THEMES[syntaxThemeOf(id)] ?? VSCODE_THEMES["dark-plus"]),
-		...syntaxVars("etk", ed),
-		...EDITOR_KEYS.map((k, i): [string, string] => [`--ed-${k}`, ed.editor[i]]),
-	];
-	for (const name of [...root.style]) if (/^--(ct|tk|etk|ed)-/.test(name)) root.style.removeProperty(name);
-	for (const [name, value] of vars) root.style.setProperty(name, value);
-	const light = THEMES.find((th) => th.id === id)?.light ?? false;
-	root.dataset.theme = id;
-	root.toggleAttribute("data-light", light);
-	writeStored(THEME_KEY, id);
-	writeStored(EDITOR_THEME_KEY, editor);
-	writeStored(THEME_BOOT_KEY, JSON.stringify({ light, style: vars.map(([n, v]) => `${n}:${v}`).join(";") }));
+  const root = document.documentElement;
+  const ed =
+    VSCODE_THEMES[editorThemeOf(id, editor)] ?? VSCODE_THEMES["dark-plus"];
+  const vars: [string, string][] = [
+    ...Object.entries(paletteVars(id) ?? {}),
+    ...syntaxVars(
+      "tk",
+      VSCODE_THEMES[syntaxThemeOf(id)] ?? VSCODE_THEMES["dark-plus"],
+    ),
+    ...syntaxVars("etk", ed),
+    ...EDITOR_KEYS.map((k, i): [string, string] => [`--ed-${k}`, ed.editor[i]]),
+  ];
+  for (const name of [...root.style])
+    if (/^--(ct|tk|etk|ed)-/.test(name)) root.style.removeProperty(name);
+  for (const [name, value] of vars) root.style.setProperty(name, value);
+  const light = THEMES.find((th) => th.id === id)?.light ?? false;
+  root.dataset.theme = id;
+  root.toggleAttribute("data-light", light);
+  writeStored(THEME_KEY, id);
+  writeStored(EDITOR_THEME_KEY, editor);
+  writeStored(
+    THEME_BOOT_KEY,
+    JSON.stringify({
+      light,
+      style: vars.map(([n, v]) => `${n}:${v}`).join(";"),
+    }),
+  );
 }
 
 /**
@@ -173,22 +200,22 @@ export function applyTheme(id: ThemeId, editor: string): void {
  * first. A name pi holds always wins.
  */
 export function readLatestPrompt(): boolean {
-	return readStored(LATEST_PROMPT_KEY) !== "0";
+  return readStored(LATEST_PROMPT_KEY) !== "0";
 }
 
 export function writeLatestPrompt(on: boolean): void {
-	writeStored(LATEST_PROMPT_KEY, on ? "1" : "0");
+  writeStored(LATEST_PROMPT_KEY, on ? "1" : "0");
 }
 
 /** Hidden scrollbars: panes still scroll by wheel, touch and keyboard. Read before first paint by index.html. */
 export function readHideScrollbars(): boolean {
-	return readStored(HIDE_SCROLLBARS_KEY) === "1";
+  return readStored(HIDE_SCROLLBARS_KEY) === "1";
 }
 
 export function applyHideScrollbars(on: boolean): void {
-	if (on) document.documentElement.dataset.scrollbars = "hidden";
-	else delete document.documentElement.dataset.scrollbars;
-	writeStored(HIDE_SCROLLBARS_KEY, on ? "1" : "0");
+  if (on) document.documentElement.dataset.scrollbars = "hidden";
+  else delete document.documentElement.dataset.scrollbars;
+  writeStored(HIDE_SCROLLBARS_KEY, on ? "1" : "0");
 }
 
 /**
@@ -196,51 +223,64 @@ export function applyHideScrollbars(on: boolean): void {
  * `floor + (1 - floor)(1 - t^easeIn)^drop` over `length` rem, ending at the box's top
  * edge, which overlaps the transcript by 0.75rem (Chat.tsx `-mt-3`).
  */
-export type ChatFade = { length: number; floor: number; easeIn: number; drop: number };
+export type ChatFade = {
+  length: number;
+  floor: number;
+  easeIn: number;
+  drop: number;
+};
 
-export const DEFAULT_CHAT_FADE: ChatFade = { length: 2.75, floor: 0.2, easeIn: 1.5, drop: 3 };
+export const DEFAULT_CHAT_FADE: ChatFade = {
+  length: 2.75,
+  floor: 0.2,
+  easeIn: 1.5,
+  drop: 3,
+};
 
 /** min, max, step per field. */
-export const CHAT_FADE_RANGES: Record<keyof ChatFade, [number, number, number]> = {
-	length: [0.5, 8, 0.25],
-	floor: [0, 1, 0.05],
-	easeIn: [1, 4, 0.1],
-	drop: [1, 6, 0.1],
+export const CHAT_FADE_RANGES: Record<
+  keyof ChatFade,
+  [number, number, number]
+> = {
+  length: [0.5, 8, 0.25],
+  floor: [0, 1, 0.05],
+  easeIn: [1, 4, 0.1],
+  drop: [1, 6, 0.1],
 };
 
 const CHAT_FADE_KEY = "pwi:chatFade";
 
 export function readChatFade(): ChatFade {
-	let stored: Partial<Record<keyof ChatFade, unknown>> = {};
-	try {
-		stored = JSON.parse(readStored(CHAT_FADE_KEY) ?? "{}") ?? {};
-	} catch {
-		/* default */
-	}
-	const fade = { ...DEFAULT_CHAT_FADE };
-	for (const key of Object.keys(fade) as (keyof ChatFade)[]) {
-		const v = stored[key];
-		const [min, max] = CHAT_FADE_RANGES[key];
-		if (typeof v === "number" && v >= min && v <= max) fade[key] = v;
-	}
-	return fade;
+  let stored: Partial<Record<keyof ChatFade, unknown>> = {};
+  try {
+    stored = JSON.parse(readStored(CHAT_FADE_KEY) ?? "{}") ?? {};
+  } catch {
+    /* default */
+  }
+  const fade = { ...DEFAULT_CHAT_FADE };
+  for (const key of Object.keys(fade) as (keyof ChatFade)[]) {
+    const v = stored[key];
+    const [min, max] = CHAT_FADE_RANGES[key];
+    if (typeof v === "number" && v >= min && v <= max) fade[key] = v;
+  }
+  return fade;
 }
 
 /** Opacity at `u` (0 = where the fade starts, 1 = the box's top edge). */
 export function chatFadeOpacity(fade: ChatFade, u: number): number {
-	return fade.floor + (1 - fade.floor) * (1 - u ** fade.easeIn) ** fade.drop;
+  return fade.floor + (1 - fade.floor) * (1 - u ** fade.easeIn) ** fade.drop;
 }
 
 const CHAT_FADE_ON_KEY = "pwi:chatFadeOn";
 
 /** On by default; off, the transcript has no mask at all. */
 export function readChatFadeOn(): boolean {
-	return readStored(CHAT_FADE_ON_KEY) !== "0";
+  return readStored(CHAT_FADE_ON_KEY) !== "0";
 }
 
 export function writeChatFadeOn(on: boolean): void {
-	writeStored(CHAT_FADE_ON_KEY, on ? "1" : "0");
-	applyChatFade(readChatFade());
+  writeStored(CHAT_FADE_ON_KEY, on ? "1" : "0");
+  applyChatFade(readChatFade());
 }
 
 const SCROLL_PAST_ON_KEY = "pwi:scrollPastOn";
@@ -252,53 +292,65 @@ export const DEFAULT_SCROLL_PAST = 25;
 
 /** On by default, like Cursor. */
 export function readScrollPastOn(): boolean {
-	return readStored(SCROLL_PAST_ON_KEY) !== "0";
+  return readStored(SCROLL_PAST_ON_KEY) !== "0";
 }
 
 export function readScrollPast(): number {
-	const v = Number(readStored(SCROLL_PAST_KEY) ?? DEFAULT_SCROLL_PAST);
-	const [min, max] = SCROLL_PAST_RANGE;
-	return Number.isFinite(v) && v >= min && v <= max ? v : DEFAULT_SCROLL_PAST;
+  const v = Number(readStored(SCROLL_PAST_KEY) ?? DEFAULT_SCROLL_PAST);
+  const [min, max] = SCROLL_PAST_RANGE;
+  return Number.isFinite(v) && v >= min && v <= max ? v : DEFAULT_SCROLL_PAST;
 }
 
 /** Stores both and sets `--chat-scroll-past`, the transcript's extra bottom padding (Chat.tsx). */
 export function applyScrollPast(on: boolean, amount: number): void {
-	writeStored(SCROLL_PAST_ON_KEY, on ? "1" : "0");
-	writeStored(SCROLL_PAST_KEY, String(amount));
-	document.documentElement.style.setProperty("--chat-scroll-past", on ? `${amount}vh` : "0px");
+  writeStored(SCROLL_PAST_ON_KEY, on ? "1" : "0");
+  writeStored(SCROLL_PAST_KEY, String(amount));
+  document.documentElement.style.setProperty(
+    "--chat-scroll-past",
+    on ? `${amount}vh` : "0px",
+  );
 }
 
 const SETTINGS_EXPANDED_KEY = "pwi:settingsExpanded";
 
 /** Whether settings with a details panel (Chat fade) start expanded. On by default. */
 export function readSettingsExpanded(): boolean {
-	return readStored(SETTINGS_EXPANDED_KEY) !== "0";
+  return readStored(SETTINGS_EXPANDED_KEY) !== "0";
 }
 
 export function writeSettingsExpanded(on: boolean): void {
-	writeStored(SETTINGS_EXPANDED_KEY, on ? "1" : "0");
+  writeStored(SETTINGS_EXPANDED_KEY, on ? "1" : "0");
 }
 
 export function applyChatFade(fade: ChatFade): void {
-	writeStored(CHAT_FADE_KEY, JSON.stringify(fade));
-	if (!readChatFadeOn()) {
-		document.documentElement.style.removeProperty("--chat-fade");
-		return;
-	}
-	const stops = ["#000 calc(100% - " + (0.75 + fade.length) + "rem)"];
-	for (let i = 1; i <= 24; i++) {
-		const u = i / 24;
-		const a = chatFadeOpacity(fade, u);
-		stops.push(`rgb(0 0 0 / ${a.toFixed(3)}) calc(100% - ${(0.75 + (1 - u) * fade.length).toFixed(3)}rem)`);
-	}
-	document.documentElement.style.setProperty("--chat-fade", `linear-gradient(to bottom, ${stops.join(", ")})`);
+  writeStored(CHAT_FADE_KEY, JSON.stringify(fade));
+  if (!readChatFadeOn()) {
+    document.documentElement.style.removeProperty("--chat-fade");
+    return;
+  }
+  const stops = ["#000 calc(100% - " + (0.75 + fade.length) + "rem)"];
+  for (let i = 1; i <= 24; i++) {
+    const u = i / 24;
+    const a = chatFadeOpacity(fade, u);
+    stops.push(
+      `rgb(0 0 0 / ${a.toFixed(3)}) calc(100% - ${(0.75 + (1 - u) * fade.length).toFixed(3)}rem)`,
+    );
+  }
+  document.documentElement.style.setProperty(
+    "--chat-fade",
+    `linear-gradient(to bottom, ${stops.join(", ")})`,
+  );
 }
 
 /** How your own long messages show in the transcript. */
 export const USER_MODES = [
-	{ id: "clamped", label: "Collapsed", hint: "Long messages show 3 lines, with Show more." },
-	{ id: "expanded", label: "Expanded", hint: "Shown in full, with Show less." },
-	{ id: "full", label: "Always full", hint: "Shown in full, no button." },
+  {
+    id: "clamped",
+    label: "Collapsed",
+    hint: "Long messages show 3 lines, with Show more.",
+  },
+  { id: "expanded", label: "Expanded", hint: "Shown in full, with Show less." },
+  { id: "full", label: "Always full", hint: "Shown in full, no button." },
 ] as const;
 
 export type UserMode = (typeof USER_MODES)[number]["id"];
@@ -306,19 +358,33 @@ export type UserMode = (typeof USER_MODES)[number]["id"];
 const USER_KEY = "pwi:userMessages";
 
 export function readUserMode(): UserMode {
-	const stored = readStored(USER_KEY);
-	return USER_MODES.some((m) => m.id === stored) ? (stored as UserMode) : "clamped";
+  const stored = readStored(USER_KEY);
+  return USER_MODES.some((m) => m.id === stored)
+    ? (stored as UserMode)
+    : "clamped";
 }
 
 export function writeUserMode(mode: UserMode): void {
-	writeStored(USER_KEY, mode);
+  writeStored(USER_KEY, mode);
 }
 
 /** Where the row under each message puts its buttons and its time. */
 export const FOOTER_LAYOUTS = [
-	{ id: "together", label: "Together", hint: "Buttons, then the time, on the left." },
-	{ id: "time-right", label: "Time on the right", hint: "Buttons on the left, the time at the far right." },
-	{ id: "buttons-right", label: "Buttons on the right", hint: "The time on the left, buttons at the far right." },
+  {
+    id: "together",
+    label: "Together",
+    hint: "Buttons, then the time, on the left.",
+  },
+  {
+    id: "time-right",
+    label: "Time on the right",
+    hint: "Buttons on the left, the time at the far right.",
+  },
+  {
+    id: "buttons-right",
+    label: "Buttons on the right",
+    hint: "The time on the left, buttons at the far right.",
+  },
 ] as const;
 
 export type FooterLayout = (typeof FOOTER_LAYOUTS)[number]["id"];
@@ -326,23 +392,25 @@ export type FooterLayout = (typeof FOOTER_LAYOUTS)[number]["id"];
 const FOOTER_KEY = "pwi:messageFooter";
 
 export function readFooterLayout(): FooterLayout {
-	const stored = readStored(FOOTER_KEY);
-	return FOOTER_LAYOUTS.some((m) => m.id === stored) ? (stored as FooterLayout) : "together";
+  const stored = readStored(FOOTER_KEY);
+  return FOOTER_LAYOUTS.some((m) => m.id === stored)
+    ? (stored as FooterLayout)
+    : "together";
 }
 
 /** A `data-footer` attribute on <html>; index.css moves the time. */
 export function applyFooterLayout(layout: FooterLayout): void {
-	if (layout === "together") delete document.documentElement.dataset.footer;
-	else document.documentElement.dataset.footer = layout;
-	writeStored(FOOTER_KEY, layout);
+  if (layout === "together") delete document.documentElement.dataset.footer;
+  else document.documentElement.dataset.footer = layout;
+  writeStored(FOOTER_KEY, layout);
 }
 
 /** How many lines a session list title may wrap to. */
 export const SESSION_LINES = [
-	{ id: "1", label: "1" },
-	{ id: "2", label: "2" },
-	{ id: "3", label: "3" },
-	{ id: "all", label: "All" },
+  { id: "1", label: "1" },
+  { id: "2", label: "2" },
+  { id: "3", label: "3" },
+  { id: "all", label: "All" },
 ] as const;
 
 export type SessionLines = (typeof SESSION_LINES)[number]["id"];
@@ -350,31 +418,41 @@ export type SessionLines = (typeof SESSION_LINES)[number]["id"];
 const SESSION_ATTACHMENTS_KEY = "pwi:sessionAttachments";
 
 export function readSessionAttachments(): boolean {
-	return readStored(SESSION_ATTACHMENTS_KEY) !== "0";
+  return readStored(SESSION_ATTACHMENTS_KEY) !== "0";
 }
 
 export function writeSessionAttachments(show: boolean): void {
-	writeStored(SESSION_ATTACHMENTS_KEY, show ? "1" : "0");
+  writeStored(SESSION_ATTACHMENTS_KEY, show ? "1" : "0");
 }
 
 const SESSION_LINES_KEY = "pwi:sessionLines";
 
 export function readSessionLines(): SessionLines {
-	const stored = readStored(SESSION_LINES_KEY);
-	return SESSION_LINES.some((m) => m.id === stored) ? (stored as SessionLines) : "1";
+  const stored = readStored(SESSION_LINES_KEY);
+  return SESSION_LINES.some((m) => m.id === stored)
+    ? (stored as SessionLines)
+    : "1";
 }
 
 /** A `data-session-lines` attribute on <html>; index.css wraps `.session-title`. */
 export function applySessionLines(lines: SessionLines): void {
-	if (lines === "1") delete document.documentElement.dataset.sessionLines;
-	else document.documentElement.dataset.sessionLines = lines;
-	writeStored(SESSION_LINES_KEY, lines);
+  if (lines === "1") delete document.documentElement.dataset.sessionLines;
+  else document.documentElement.dataset.sessionLines = lines;
+  writeStored(SESSION_LINES_KEY, lines);
 }
 
 /** Whether the composer's Ask only button stays on after a send. */
 export const ASK_MODES = [
-	{ id: "toggle", label: "Toggle", hint: "Stays on until you switch it off or change session." },
-	{ id: "once", label: "One shot", hint: "Switches off after you send a question." },
+  {
+    id: "toggle",
+    label: "Toggle",
+    hint: "Stays on until you switch it off or change session.",
+  },
+  {
+    id: "once",
+    label: "One shot",
+    hint: "Switches off after you send a question.",
+  },
 ] as const;
 
 export type AskMode = (typeof ASK_MODES)[number]["id"];
@@ -382,11 +460,11 @@ export type AskMode = (typeof ASK_MODES)[number]["id"];
 const ASK_KEY = "pwi:askMode";
 
 export function readAskMode(): AskMode {
-	return readStored(ASK_KEY) === "once" ? "once" : "toggle";
+  return readStored(ASK_KEY) === "once" ? "once" : "toggle";
 }
 
 export function writeAskMode(mode: AskMode): void {
-	writeStored(ASK_KEY, mode);
+  writeStored(ASK_KEY, mode);
 }
 
 /**
@@ -398,11 +476,11 @@ export function writeAskMode(mode: AskMode): void {
  * the browser, because the click is the user gesture the prompt needs.
  */
 export function readNotify(): boolean {
-	return readStored(NOTIFY_KEY) === "1";
+  return readStored(NOTIFY_KEY) === "1";
 }
 
 export function writeNotify(on: boolean): void {
-	writeStored(NOTIFY_KEY, on ? "1" : "0");
+  writeStored(NOTIFY_KEY, on ? "1" : "0");
 }
 
 /**
@@ -418,20 +496,20 @@ export function writeNotify(on: boolean): void {
  * in the app.
  */
 export function readGitAutoName(): boolean {
-	return readStored(GIT_AUTONAME_KEY) === "1";
+  return readStored(GIT_AUTONAME_KEY) === "1";
 }
 
 export function writeGitAutoName(on: boolean): void {
-	writeStored(GIT_AUTONAME_KEY, on ? "1" : "0");
+  writeStored(GIT_AUTONAME_KEY, on ? "1" : "0");
 }
 
 /** Whether Source Control looks one folder down when the project is not a repository. */
 export function readGitNested(): boolean {
-	return readStored(GIT_NESTED_KEY) === "1";
+  return readStored(GIT_NESTED_KEY) === "1";
 }
 
 export function writeGitNested(on: boolean): void {
-	writeStored(GIT_NESTED_KEY, on ? "1" : "0");
+  writeStored(GIT_NESTED_KEY, on ? "1" : "0");
 }
 
 /**
@@ -445,9 +523,9 @@ export function writeGitNested(on: boolean): void {
  * rename appends, move the mtime without the conversation having moved.
  */
 export const SESSION_SORTS = [
-	{ id: "created", label: "Created" },
-	{ id: "active", label: "Last active" },
-	{ id: "asked", label: "Last asked" },
+  { id: "created", label: "Created" },
+  { id: "active", label: "Last active" },
+  { id: "asked", label: "Last asked" },
 ] as const;
 
 export type SessionSort = (typeof SESSION_SORTS)[number]["id"];
@@ -455,45 +533,49 @@ export type SessionSort = (typeof SESSION_SORTS)[number]["id"];
 const SORT_KEY = "pwi:sessionSort";
 
 export function readSessionSort(): SessionSort {
-	const stored = readStored(SORT_KEY);
-	return SESSION_SORTS.some((s) => s.id === stored) ? (stored as SessionSort) : "created";
+  const stored = readStored(SORT_KEY);
+  return SESSION_SORTS.some((s) => s.id === stored)
+    ? (stored as SessionSort)
+    : "created";
 }
 
 export function writeSessionSort(sort: SessionSort): void {
-	writeStored(SORT_KEY, sort);
+  writeStored(SORT_KEY, sort);
 }
 
 const PINNED_SESSIONS_KEY = "pwi:pinnedSessions";
 
 /** Session file paths pinned to the top of the list, in either sort. */
 export function readPinnedSessions(): string[] {
-	return readPathList(PINNED_SESSIONS_KEY);
+  return readPathList(PINNED_SESSIONS_KEY);
 }
 
 function readPathList(key: string): string[] {
-	const raw = readStored(key);
-	if (!raw) return [];
-	try {
-		const parsed: unknown = JSON.parse(raw);
-		return Array.isArray(parsed) ? parsed.filter((p): p is string => typeof p === "string") : [];
-	} catch {
-		return [];
-	}
+  const raw = readStored(key);
+  if (!raw) return [];
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed)
+      ? parsed.filter((p): p is string => typeof p === "string")
+      : [];
+  } catch {
+    return [];
+  }
 }
 
 export function writePinnedSessions(paths: string[]): void {
-	writeStored(PINNED_SESSIONS_KEY, JSON.stringify(paths));
+  writeStored(PINNED_SESSIONS_KEY, JSON.stringify(paths));
 }
 
 const HIDDEN_SESSIONS_KEY = "pwi:hiddenSessions";
 
 /** Session file paths left out of the session list unless it shows hidden ones. */
 export function readHiddenSessions(): string[] {
-	return readPathList(HIDDEN_SESSIONS_KEY);
+  return readPathList(HIDDEN_SESSIONS_KEY);
 }
 
 export function writeHiddenSessions(paths: string[]): void {
-	writeStored(HIDDEN_SESSIONS_KEY, JSON.stringify(paths));
+  writeStored(HIDDEN_SESSIONS_KEY, JSON.stringify(paths));
 }
 
 const SEEN_SESSIONS_KEY = "pwi:seenSessions";
@@ -505,30 +587,39 @@ const SEEN_SESSIONS_KEY = "pwi:seenSessions";
  * session as a new reply.
  */
 export interface SeenSessions {
-	baseline: string;
-	seen: Record<string, string>;
+  baseline: string;
+  seen: Record<string, string>;
 }
 
 export function readSeenSessions(): SeenSessions {
-	const raw = readStored(SEEN_SESSIONS_KEY);
-	try {
-		const parsed: unknown = raw ? JSON.parse(raw) : null;
-		if (parsed && typeof parsed === "object" && "baseline" in parsed && typeof parsed.baseline === "string") {
-			const seen: Record<string, string> = {};
-			const stored = "seen" in parsed && parsed.seen && typeof parsed.seen === "object" ? parsed.seen : {};
-			for (const [k, v] of Object.entries(stored)) if (typeof v === "string") seen[k] = v;
-			return { baseline: parsed.baseline, seen };
-		}
-	} catch {
-		/* fall through to a fresh baseline */
-	}
-	const fresh = { baseline: new Date().toISOString(), seen: {} };
-	writeSeenSessions(fresh);
-	return fresh;
+  const raw = readStored(SEEN_SESSIONS_KEY);
+  try {
+    const parsed: unknown = raw ? JSON.parse(raw) : null;
+    if (
+      parsed &&
+      typeof parsed === "object" &&
+      "baseline" in parsed &&
+      typeof parsed.baseline === "string"
+    ) {
+      const seen: Record<string, string> = {};
+      const stored =
+        "seen" in parsed && parsed.seen && typeof parsed.seen === "object"
+          ? parsed.seen
+          : {};
+      for (const [k, v] of Object.entries(stored))
+        if (typeof v === "string") seen[k] = v;
+      return { baseline: parsed.baseline, seen };
+    }
+  } catch {
+    /* fall through to a fresh baseline */
+  }
+  const fresh = { baseline: new Date().toISOString(), seen: {} };
+  writeSeenSessions(fresh);
+  return fresh;
 }
 
 export function writeSeenSessions(value: SeenSessions): void {
-	writeStored(SEEN_SESSIONS_KEY, JSON.stringify(value));
+  writeStored(SEEN_SESSIONS_KEY, JSON.stringify(value));
 }
 
 /**
@@ -553,24 +644,26 @@ const PANEL_KEY = "pwi:panel";
  * one you were using if it only remembers one of them.
  */
 export function readPanel(): Panel {
-	const stored = readStored(PANEL_KEY);
-	return stored !== null && PANELS.includes(stored) ? (stored as Panel) : null;
+  const stored = readStored(PANEL_KEY);
+  return stored !== null && PANELS.includes(stored) ? (stored as Panel) : null;
 }
 
 export function writePanel(panel: Panel): void {
-	writeStored(PANEL_KEY, panel ?? "");
+  writeStored(PANEL_KEY, panel ?? "");
 }
 
 const DOCK_OPEN_KEY = "pwi:dockOpen";
 
 /** Whether the terminal dock is open. Unset: open if the terminal was the side panel. */
 export function readDockOpen(): boolean {
-	const stored = readStored(DOCK_OPEN_KEY);
-	return stored === null ? readStored(PANEL_KEY) === "terminal" : stored === "1";
+  const stored = readStored(DOCK_OPEN_KEY);
+  return stored === null
+    ? readStored(PANEL_KEY) === "terminal"
+    : stored === "1";
 }
 
 export function writeDockOpen(open: boolean): void {
-	writeStored(DOCK_OPEN_KEY, open ? "1" : "0");
+  writeStored(DOCK_OPEN_KEY, open ? "1" : "0");
 }
 
 const DOCK_HEIGHT_KEY = "pwi:dockHeight";
@@ -578,14 +671,14 @@ const DEFAULT_DOCK_PERCENT = 35;
 
 /** The dock's share of the editor area's height, clamped like the panel width. */
 export function readDockHeight(): number {
-	const raw = readStored(DOCK_HEIGHT_KEY);
-	const stored = raw === null ? NaN : Number(raw);
-	if (!Number.isFinite(stored)) return DEFAULT_DOCK_PERCENT;
-	return Math.min(TERMINAL_MAX_PERCENT, Math.max(TERMINAL_MIN_PERCENT, stored));
+  const raw = readStored(DOCK_HEIGHT_KEY);
+  const stored = raw === null ? NaN : Number(raw);
+  if (!Number.isFinite(stored)) return DEFAULT_DOCK_PERCENT;
+  return Math.min(TERMINAL_MAX_PERCENT, Math.max(TERMINAL_MIN_PERCENT, stored));
 }
 
 export function writeDockHeight(percent: number): void {
-	writeStored(DOCK_HEIGHT_KEY, String(Math.round(percent)));
+  writeStored(DOCK_HEIGHT_KEY, String(Math.round(percent)));
 }
 
 /**
@@ -613,17 +706,17 @@ export const PANEL_MIN_PERCENT = 5;
 const DEFAULT_TERMINAL_PERCENT = 40;
 
 export function readTerminalWidth(): number {
-	const raw = readStored(TERM_WIDTH_KEY);
-	// Number(null) is 0, not NaN, so an absent value has to be rejected before
-	// the parse — otherwise the clamp turns "no preference" into the minimum.
-	if (raw === null) return DEFAULT_TERMINAL_PERCENT;
-	const stored = Number(raw);
-	if (!Number.isFinite(stored)) return DEFAULT_TERMINAL_PERCENT;
-	return Math.min(TERMINAL_MAX_PERCENT, Math.max(PANEL_MIN_PERCENT, stored));
+  const raw = readStored(TERM_WIDTH_KEY);
+  // Number(null) is 0, not NaN, so an absent value has to be rejected before
+  // the parse — otherwise the clamp turns "no preference" into the minimum.
+  if (raw === null) return DEFAULT_TERMINAL_PERCENT;
+  const stored = Number(raw);
+  if (!Number.isFinite(stored)) return DEFAULT_TERMINAL_PERCENT;
+  return Math.min(TERMINAL_MAX_PERCENT, Math.max(PANEL_MIN_PERCENT, stored));
 }
 
 export function writeTerminalWidth(percent: number): void {
-	writeStored(TERM_WIDTH_KEY, String(Math.round(percent)));
+  writeStored(TERM_WIDTH_KEY, String(Math.round(percent)));
 }
 
 /**
@@ -636,17 +729,18 @@ export const LIST_MIN_PX = 180;
 export const LIST_MAX_PX = 640;
 const DEFAULT_LIST_PX = 288;
 
-export const clampListWidth = (px: number): number => Math.min(LIST_MAX_PX, Math.max(LIST_MIN_PX, px));
+export const clampListWidth = (px: number): number =>
+  Math.min(LIST_MAX_PX, Math.max(LIST_MIN_PX, px));
 
 export function readListWidth(): number {
-	const raw = readStored(LIST_WIDTH_KEY);
-	if (raw === null) return DEFAULT_LIST_PX;
-	const stored = Number(raw);
-	return Number.isFinite(stored) ? clampListWidth(stored) : DEFAULT_LIST_PX;
+  const raw = readStored(LIST_WIDTH_KEY);
+  if (raw === null) return DEFAULT_LIST_PX;
+  const stored = Number(raw);
+  return Number.isFinite(stored) ? clampListWidth(stored) : DEFAULT_LIST_PX;
 }
 
 export function writeListWidth(px: number): void {
-	writeStored(LIST_WIDTH_KEY, String(Math.round(px)));
+  writeStored(LIST_WIDTH_KEY, String(Math.round(px)));
 }
 
 const TERM_TABS_SIDE_KEY = "pwi:termTabsSide";
@@ -655,11 +749,11 @@ const TERM_TABS_SIDE_KEY = "pwi:termTabsSide";
 export type TermTabsSide = "left" | "right";
 
 export function readTermTabsSide(): TermTabsSide {
-	return readStored(TERM_TABS_SIDE_KEY) === "left" ? "left" : "right";
+  return readStored(TERM_TABS_SIDE_KEY) === "left" ? "left" : "right";
 }
 
 export function writeTermTabsSide(side: TermTabsSide): void {
-	writeStored(TERM_TABS_SIDE_KEY, side);
+  writeStored(TERM_TABS_SIDE_KEY, side);
 }
 
 /**
@@ -672,20 +766,20 @@ export function writeTermTabsSide(side: TermTabsSide): void {
  * agree with the shells that still exist.
  */
 export function readTerminalLayout(cwd: string): TermLayout {
-	const raw = readStored(`pwi:termLayout:${cwd}`);
-	if (!raw) return EMPTY_LAYOUT;
-	// Parsed AND validated here, so a caller cannot forget the second half:
-	// stored JSON is user-writable, and `parseLayout` is what turns whatever
-	// is on disk into a layout that is safe to render.
-	try {
-		return parseLayout(JSON.parse(raw));
-	} catch {
-		return EMPTY_LAYOUT;
-	}
+  const raw = readStored(`pwi:termLayout:${cwd}`);
+  if (!raw) return EMPTY_LAYOUT;
+  // Parsed AND validated here, so a caller cannot forget the second half:
+  // stored JSON is user-writable, and `parseLayout` is what turns whatever
+  // is on disk into a layout that is safe to render.
+  try {
+    return parseLayout(JSON.parse(raw));
+  } catch {
+    return EMPTY_LAYOUT;
+  }
 }
 
 export function writeTerminalLayout(cwd: string, layout: TermLayout): void {
-	writeStored(`pwi:termLayout:${cwd}`, JSON.stringify(layout));
+  writeStored(`pwi:termLayout:${cwd}`, JSON.stringify(layout));
 }
 
 /**
@@ -704,17 +798,19 @@ export function writeTerminalLayout(cwd: string, layout: TermLayout): void {
  * working in.
  */
 export function readExplorerOpen(cwd: string): string[] {
-	const raw = readStored(`pwi:explorer:${cwd}`);
-	if (!raw) return [];
-	try {
-		const parsed: unknown = JSON.parse(raw);
-		// Storage is user-writable, so this validates rather than casts.
-		return Array.isArray(parsed) ? parsed.filter((p): p is string => typeof p === "string") : [];
-	} catch {
-		return [];
-	}
+  const raw = readStored(`pwi:explorer:${cwd}`);
+  if (!raw) return [];
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    // Storage is user-writable, so this validates rather than casts.
+    return Array.isArray(parsed)
+      ? parsed.filter((p): p is string => typeof p === "string")
+      : [];
+  } catch {
+    return [];
+  }
 }
 
 export function writeExplorerOpen(cwd: string, open: string[]): void {
-	writeStored(`pwi:explorer:${cwd}`, JSON.stringify(open));
+  writeStored(`pwi:explorer:${cwd}`, JSON.stringify(open));
 }

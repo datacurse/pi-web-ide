@@ -34,23 +34,22 @@ import { isPageTab } from "./tabs.js";
 const PROJECT_KEY = "pwi:project";
 export const LAST_PROJECT_KEY = "pwi:lastProject";
 
-
 function readStored(key: string): string | undefined {
-	try {
-		return localStorage.getItem(key) ?? undefined;
-	} catch {
-		// Private mode / disabled storage must not break the app.
-		return undefined;
-	}
+  try {
+    return localStorage.getItem(key) ?? undefined;
+  } catch {
+    // Private mode / disabled storage must not break the app.
+    return undefined;
+  }
 }
 
 export function writeStored(key: string, value: string | undefined): void {
-	try {
-		if (value) localStorage.setItem(key, value);
-		else localStorage.removeItem(key);
-	} catch {
-		/* ignore */
-	}
+  try {
+    if (value) localStorage.setItem(key, value);
+    else localStorage.removeItem(key);
+  } catch {
+    /* ignore */
+  }
 }
 
 /**
@@ -61,22 +60,22 @@ export function writeStored(key: string, value: string | undefined): void {
  * not a selection.
  */
 export function readWindowProject(): string | undefined {
-	try {
-		return sessionStorage.getItem(PROJECT_KEY) ?? readStored(LAST_PROJECT_KEY);
-	} catch {
-		// Private mode / disabled storage: the shared key may still be readable,
-		// and a window with no scope of its own is the pre-fix behaviour, which
-		// is correct for a single window.
-		return readStored(LAST_PROJECT_KEY);
-	}
+  try {
+    return sessionStorage.getItem(PROJECT_KEY) ?? readStored(LAST_PROJECT_KEY);
+  } catch {
+    // Private mode / disabled storage: the shared key may still be readable,
+    // and a window with no scope of its own is the pre-fix behaviour, which
+    // is correct for a single window.
+    return readStored(LAST_PROJECT_KEY);
+  }
 }
 
 export function pinWindowProject(cwd: string): void {
-	try {
-		sessionStorage.setItem(PROJECT_KEY, cwd);
-	} catch {
-		/* ignore */
-	}
+  try {
+    sessionStorage.setItem(PROJECT_KEY, cwd);
+  } catch {
+    /* ignore */
+  }
 }
 
 /**
@@ -94,39 +93,49 @@ export function pinWindowProject(cwd: string): void {
  * is dropped on restore like any other session that is not on disk.
  */
 export interface Tabs {
-	/** The selection's storage scope (scopeOf), not a bare cwd. */
-	project: string;
-	files: string[];
-	active?: string;
-	/**
-	 * The SECOND editor column, when the strip has been split.
-	 *
-	 * Holds files and sessions alike; each column has its own session hook.
-	 *
-	 * Undefined means unsplit, which is distinct from split-and-empty: the
-	 * latter cannot occur, because emptying the column closes it.
-	 */
-	right?: TabGroup;
+  /** The selection's storage scope (scopeOf), not a bare cwd. */
+  project: string;
+  files: string[];
+  active?: string;
+  /**
+   * The SECOND editor column, when the strip has been split.
+   *
+   * Holds files and sessions alike; each column has its own session hook.
+   *
+   * Undefined means unsplit, which is distinct from split-and-empty: the
+   * latter cannot occur, because emptying the column closes it.
+   */
+  right?: TabGroup;
 }
 
 export function readTabs(project: string): Tabs {
-	const raw = readStored(`pwi:tabs:${project}`);
-	if (!raw) return { project, files: [] };
-	try {
-		const parsed = JSON.parse(raw) as { files?: unknown; active?: unknown; right?: unknown };
-		// Storage is user-writable and outlives any format change, so anything
-		// unexpected degrades to "no tabs" instead of throwing during render.
-		const files = Array.isArray(parsed.files)
-			? [...new Set(parsed.files.filter((f): f is string => typeof f === "string" && !isPageTab(f)))]
-			: [];
-		const active =
-			typeof parsed.active === "string" && files.includes(parsed.active)
-				? parsed.active
-				: files[0];
-		return { project, files, active, right: parseGroup(parsed.right, files) };
-	} catch {
-		return { project, files: [] };
-	}
+  const raw = readStored(`pwi:tabs:${project}`);
+  if (!raw) return { project, files: [] };
+  try {
+    const parsed = JSON.parse(raw) as {
+      files?: unknown;
+      active?: unknown;
+      right?: unknown;
+    };
+    // Storage is user-writable and outlives any format change, so anything
+    // unexpected degrades to "no tabs" instead of throwing during render.
+    const files = Array.isArray(parsed.files)
+      ? [
+          ...new Set(
+            parsed.files.filter(
+              (f): f is string => typeof f === "string" && !isPageTab(f),
+            ),
+          ),
+        ]
+      : [];
+    const active =
+      typeof parsed.active === "string" && files.includes(parsed.active)
+        ? parsed.active
+        : files[0];
+    return { project, files, active, right: parseGroup(parsed.right, files) };
+  } catch {
+    return { project, files: [] };
+  }
 }
 
 /**
@@ -138,21 +147,23 @@ export function readTabs(project: string): Tabs {
  * a cast — the same rule every other read in prefs.ts follows.
  */
 function parseGroup(raw: unknown, taken: string[]): TabGroup | undefined {
-	if (!raw || typeof raw !== "object") return undefined;
-	const { files, active } = raw as { files?: unknown; active?: unknown };
-	if (!Array.isArray(files)) return undefined;
-	const kept = [
-		...new Set(
-			files.filter(
-				(f): f is string => typeof f === "string" && !taken.includes(f) && !isPageTab(f),
-			),
-		),
-	];
-	// An empty second column is no second column: restoring one would show a
-	// divider and a blank pane with no way to tell what it was for.
-	if (kept.length === 0) return undefined;
-	return {
-		files: kept,
-		active: typeof active === "string" && kept.includes(active) ? active : kept[0],
-	};
+  if (!raw || typeof raw !== "object") return undefined;
+  const { files, active } = raw as { files?: unknown; active?: unknown };
+  if (!Array.isArray(files)) return undefined;
+  const kept = [
+    ...new Set(
+      files.filter(
+        (f): f is string =>
+          typeof f === "string" && !taken.includes(f) && !isPageTab(f),
+      ),
+    ),
+  ];
+  // An empty second column is no second column: restoring one would show a
+  // divider and a blank pane with no way to tell what it was for.
+  if (kept.length === 0) return undefined;
+  return {
+    files: kept,
+    active:
+      typeof active === "string" && kept.includes(active) ? active : kept[0],
+  };
 }

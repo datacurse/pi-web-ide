@@ -28,74 +28,99 @@ const MAX_BYTES = 256 * 1024;
 
 /** The file agent.ts passes to `--append-system-prompt`. */
 export function personalityPath(): string {
-	return statePath("personality.md");
+  return statePath("personality.md");
 }
 
 export interface Personality {
-	/** Absolute path, shown in the UI so the field names the file it edits. */
-	path: string;
-	content: string;
-	/** False when no file has been written yet, so nothing is appended. */
-	exists: boolean;
-	/** Also repeat the text before every reply (remind-extension.ts). */
-	remind: boolean;
-	/** Disable both prompt additions without deleting the saved text. */
-	enabled: boolean;
+  /** Absolute path, shown in the UI so the field names the file it edits. */
+  path: string;
+  content: string;
+  /** False when no file has been written yet, so nothing is appended. */
+  exists: boolean;
+  /** Also repeat the text before every reply (remind-extension.ts). */
+  remind: boolean;
+  /** Disable both prompt additions without deleting the saved text. */
+  enabled: boolean;
 }
 
 function remindPath(): string {
-	return statePath("personality-remind.json");
+  return statePath("personality-remind.json");
 }
 
 export function readRemind(): boolean {
-	try {
-		return JSON.parse(readStateFile(remindPath()) ?? "{}").remind === true;
-	} catch {
-		return false;
-	}
+  try {
+    return JSON.parse(readStateFile(remindPath()) ?? "{}").remind === true;
+  } catch {
+    return false;
+  }
 }
 
 export function writeRemind(remind: boolean): Personality {
-	writeStateFile(remindPath(), `${JSON.stringify({ remind })}\n`);
-	return readPersonality();
+  writeStateFile(remindPath(), `${JSON.stringify({ remind })}\n`);
+  return readPersonality();
 }
 
 /** Existing installations stay enabled until explicitly switched off. */
 export function readPersonalityEnabled(): boolean {
-	try {
-		return JSON.parse(readStateFile(statePath("personality-enabled.json")) ?? "{}").enabled !== false;
-	} catch {
-		return true;
-	}
+  try {
+    return (
+      JSON.parse(readStateFile(statePath("personality-enabled.json")) ?? "{}")
+        .enabled !== false
+    );
+  } catch {
+    return true;
+  }
 }
 
 export function writePersonalityEnabled(enabled: boolean): Personality {
-	writeStateFile(statePath("personality-enabled.json"), `${JSON.stringify({ enabled })}\n`);
-	return readPersonality();
+  writeStateFile(
+    statePath("personality-enabled.json"),
+    `${JSON.stringify({ enabled })}\n`,
+  );
+  return readPersonality();
 }
 
 export function readPersonality(): Personality {
-	const path = personalityPath();
-	try {
-		return { path, content: readFileSync(path, "utf8"), exists: true, remind: readRemind(), enabled: readPersonalityEnabled() };
-	} catch {
-		// Absent is the normal state of a machine that never set one, so it is
-		// reported rather than thrown: the field opens empty and saving creates
-		// the file.
-		return { path, content: "", exists: false, remind: readRemind(), enabled: readPersonalityEnabled() };
-	}
+  const path = personalityPath();
+  try {
+    return {
+      path,
+      content: readFileSync(path, "utf8"),
+      exists: true,
+      remind: readRemind(),
+      enabled: readPersonalityEnabled(),
+    };
+  } catch {
+    // Absent is the normal state of a machine that never set one, so it is
+    // reported rather than thrown: the field opens empty and saving creates
+    // the file.
+    return {
+      path,
+      content: "",
+      exists: false,
+      remind: readRemind(),
+      enabled: readPersonalityEnabled(),
+    };
+  }
 }
 
 /** Replace the file with `content`, verbatim apart from a trailing newline. */
 export function writePersonality(content: string): Personality {
-	if (typeof content !== "string") throw new Error("content must be a string");
-	const text = content.length && !content.endsWith("\n") ? `${content}\n` : content;
-	const bytes = Buffer.byteLength(text, "utf8");
-	if (bytes > MAX_BYTES) {
-		throw new Error(`too large: ${bytes} bytes (max ${MAX_BYTES})`);
-	}
+  if (typeof content !== "string") throw new Error("content must be a string");
+  const text =
+    content.length && !content.endsWith("\n") ? `${content}\n` : content;
+  const bytes = Buffer.byteLength(text, "utf8");
+  if (bytes > MAX_BYTES) {
+    throw new Error(`too large: ${bytes} bytes (max ${MAX_BYTES})`);
+  }
 
-	const path = personalityPath();
-	writeStateFile(path, text);
-	return { path, content: text, exists: true, remind: readRemind(), enabled: readPersonalityEnabled() };
+  const path = personalityPath();
+  writeStateFile(path, text);
+  return {
+    path,
+    content: text,
+    exists: true,
+    remind: readRemind(),
+    enabled: readPersonalityEnabled(),
+  };
 }

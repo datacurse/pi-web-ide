@@ -24,190 +24,253 @@ import { supportsFastMode } from "../shared/fastMode.js";
  * effect on the next turn, so there is nothing in flight for it to disturb.
  */
 export function ModelSelector({
-	model,
-	disabled,
-	error,
-	onChange,
-	thinkingLevel,
-	thinkingLevels,
-	thinkingLevelMap,
-	onThinkingChange,
-	fastMode,
-	onFastChange,
+  model,
+  disabled,
+  error,
+  onChange,
+  thinkingLevel,
+  thinkingLevels,
+  thinkingLevelMap,
+  onThinkingChange,
+  fastMode,
+  onFastChange,
 }: {
-	model: string | undefined;
-	disabled: boolean;
-	/** Surfaced from the last failed switch attempt, if any. */
-	error?: string | null;
-	onChange: (model: string) => void;
-	/** Empty when the model has no reasoning levels; the control then hides. */
-	thinkingLevel: string | undefined;
-	thinkingLevels: string[];
-	thinkingLevelMap?: Record<string, string | null>;
-	onThinkingChange: (level: string) => void;
-	fastMode?: boolean;
-	onFastChange?: (enabled: boolean) => Promise<void>;
+  model: string | undefined;
+  disabled: boolean;
+  /** Surfaced from the last failed switch attempt, if any. */
+  error?: string | null;
+  onChange: (model: string) => void;
+  /** Empty when the model has no reasoning levels; the control then hides. */
+  thinkingLevel: string | undefined;
+  thinkingLevels: string[];
+  thinkingLevelMap?: Record<string, string | null>;
+  onThinkingChange: (level: string) => void;
+  fastMode?: boolean;
+  onFastChange?: (enabled: boolean) => Promise<void>;
 }) {
-	const [models, setModels] = useState<string[]>([]);
-	const [catalogError, setCatalogError] = useState<string | null>(null);
-	const [loading, setLoading] = useState(true);
-	const [attempt, setAttempt] = useState(0);
-	/** pi's saved startup model, so the star shows the truth after a reload or a switch. */
-	const [defaultModel, setDefaultModel] = useState<string | null>(null);
-	const [defaultThinking, setDefaultThinking] = useState<string | null>(null);
-	const [fastPending, setFastPending] = useState(false);
+  const [models, setModels] = useState<string[]>([]);
+  const [catalogError, setCatalogError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [attempt, setAttempt] = useState(0);
+  /** pi's saved startup model, so the star shows the truth after a reload or a switch. */
+  const [defaultModel, setDefaultModel] = useState<string | null>(null);
+  const [defaultThinking, setDefaultThinking] = useState<string | null>(null);
+  const [fastPending, setFastPending] = useState(false);
 
-	useEffect(() => {
-		let cancelled = false;
-		const controller = new AbortController();
-		const timeout = window.setTimeout(() => controller.abort(), 15_000);
-		setLoading(true);
-		setCatalogError(null);
-		void (async () => {
-			try {
-				const r = await api.models.$get({}, { init: { signal: controller.signal } });
-				const d = await r.json();
-				if (!r.ok || "error" in d) {
-					throw new Error("error" in d ? d.error : String(r.status));
-				}
-				if (cancelled) return;
-				if (!d.models?.length) throw new Error(t("No authenticated models available"));
-				setModels(d.models);
-				setDefaultModel(d.default ?? null);
-				setDefaultThinking(d.defaultThinking ?? null);
-			} catch (err) {
-				if (!cancelled) setCatalogError(controller.signal.aborted
-					? t("Model list timed out. Close other app browser tabs and retry.")
-					: t("Could not load models: {error}", { error: err instanceof Error ? err.message : String(err) }));
-			} finally {
-				window.clearTimeout(timeout);
-				if (!cancelled) setLoading(false);
-			}
-		})();
-		return () => {
-			cancelled = true;
-			controller.abort();
-			window.clearTimeout(timeout);
-		};
-	}, [attempt]);
+  useEffect(() => {
+    let cancelled = false;
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 15_000);
+    setLoading(true);
+    setCatalogError(null);
+    void (async () => {
+      try {
+        const r = await api.models.$get(
+          {},
+          { init: { signal: controller.signal } },
+        );
+        const d = await r.json();
+        if (!r.ok || "error" in d) {
+          throw new Error("error" in d ? d.error : String(r.status));
+        }
+        if (cancelled) return;
+        if (!d.models?.length)
+          throw new Error(t("No authenticated models available"));
+        setModels(d.models);
+        setDefaultModel(d.default ?? null);
+        setDefaultThinking(d.defaultThinking ?? null);
+      } catch (err) {
+        if (!cancelled)
+          setCatalogError(
+            controller.signal.aborted
+              ? t(
+                  "Model list timed out. Close other app browser tabs and retry.",
+                )
+              : t("Could not load models: {error}", {
+                  error: err instanceof Error ? err.message : String(err),
+                }),
+          );
+      } finally {
+        window.clearTimeout(timeout);
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+      controller.abort();
+      window.clearTimeout(timeout);
+    };
+  }, [attempt]);
 
-	const providers = useMemo(() => [...new Set(models.map((m) => m.split("/")[0]))].sort(), [models]);
-	const thinking = thinkingChoices(thinkingLevels, thinkingLevelMap);
-	const selectedThinking = thinking.resolve(thinkingLevel) ?? undefined;
-	const savedThinking = thinking.resolve(defaultThinking);
+  const providers = useMemo(
+    () => [...new Set(models.map((m) => m.split("/")[0]))].sort(),
+    [models],
+  );
+  const thinking = thinkingChoices(thinkingLevels, thinkingLevelMap);
+  const selectedThinking = thinking.resolve(thinkingLevel) ?? undefined;
+  const savedThinking = thinking.resolve(defaultThinking);
 
-	/** Star toggles: save the current value as pi's startup default, or clear it if it already is. */
-	const toggleDefault = async (
-		save: (next: string | null) => Promise<{ ok: boolean; status: number; json(): Promise<unknown> }>,
-		current: string | null,
-		value: string,
-		set: (v: string | null) => void,
-	) => {
-		const next = current === value ? null : value;
-		const r = await save(next);
-		if (r.ok) set(next);
-		else
-			alert(
-				t("Could not save default: {error}", {
-					error: ((await r.json().catch(() => ({}))) as { error?: string }).error ?? r.status,
-				}),
-			);
-	};
+  /** Star toggles: save the current value as pi's startup default, or clear it if it already is. */
+  const toggleDefault = async (
+    save: (
+      next: string | null,
+    ) => Promise<{ ok: boolean; status: number; json(): Promise<unknown> }>,
+    current: string | null,
+    value: string,
+    set: (v: string | null) => void,
+  ) => {
+    const next = current === value ? null : value;
+    const r = await save(next);
+    if (r.ok) set(next);
+    else
+      alert(
+        t("Could not save default: {error}", {
+          error:
+            ((await r.json().catch(() => ({}))) as { error?: string }).error ??
+            r.status,
+        }),
+      );
+  };
 
-	// Pills, not boxed inputs: these live INSIDE the composer, where a
-	// bordered field inside a bordered field is two edges for one control.
-	// Sans, like the rest of the composer.
-	const cls = "pill-select field-sizing-content max-w-44 truncate rounded-full bg-transparent px-2 py-1 text-meta";
-	const tone = disabled ? "cursor-not-allowed text-neutral-600" : "text-neutral-300 hover:bg-neutral-800";
+  // Pills, not boxed inputs: these live INSIDE the composer, where a
+  // bordered field inside a bordered field is two edges for one control.
+  // Sans, like the rest of the composer.
+  const cls =
+    "pill-select field-sizing-content max-w-44 truncate rounded-full bg-transparent px-2 py-1 text-meta";
+  const tone = disabled
+    ? "cursor-not-allowed text-neutral-600"
+    : "text-neutral-300 hover:bg-neutral-800";
 
-	return (
-		<div className="relative flex items-center gap-0.5">
-			<select
-				data-custom="composer pill"
-				value={model ?? ""}
-				disabled={disabled || models.length === 0}
-				title={disabled ? t("Cannot switch models while streaming") : loading ? t("Loading models…") : (catalogError ?? model ?? t("Switch model"))}
-				onChange={(e) => onChange(e.target.value)}
-				className={`${cls} ${tone}`}
-			>
-				{/* The session's model may be missing from the list (not fetched
+  return (
+    <div className="relative flex items-center gap-0.5">
+      <select
+        data-custom="composer pill"
+        value={model ?? ""}
+        disabled={disabled || models.length === 0}
+        title={
+          disabled
+            ? t("Cannot switch models while streaming")
+            : loading
+              ? t("Loading models…")
+              : (catalogError ?? model ?? t("Switch model"))
+        }
+        onChange={(e) => onChange(e.target.value)}
+        className={`${cls} ${tone}`}
+      >
+        {/* The session's model may be missing from the list (not fetched
 				    yet, or auth changed); show it rather than a wrong one. */}
-				{(!model || !models.includes(model)) && <option value={model ?? ""}>{model?.split("/").pop() ?? t("(no model)")}</option>}
-				{providers.map((p) => (
-					<optgroup key={p} label={p}>
-						{models
-							.filter((m) => m.startsWith(`${p}/`))
-							.map((m) => (
-								<option key={m} value={m}>
-									<DefaultStar
-										what="model"
-										saved={m === defaultModel}
-										onToggle={() => toggleDefault((model) => api["default-model"].$post({ json: { model } }), defaultModel, m, setDefaultModel)}
-									/>
-									{m.slice(p.length + 1)}
-								</option>
-							))}
-					</optgroup>
-				))}
-			</select>
+        {(!model || !models.includes(model)) && (
+          <option value={model ?? ""}>
+            {model?.split("/").pop() ?? t("(no model)")}
+          </option>
+        )}
+        {providers.map((p) => (
+          <optgroup key={p} label={p}>
+            {models
+              .filter((m) => m.startsWith(`${p}/`))
+              .map((m) => (
+                <option key={m} value={m}>
+                  <DefaultStar
+                    what="model"
+                    saved={m === defaultModel}
+                    onToggle={() =>
+                      toggleDefault(
+                        (model) =>
+                          api["default-model"].$post({ json: { model } }),
+                        defaultModel,
+                        m,
+                        setDefaultModel,
+                      )
+                    }
+                  />
+                  {m.slice(p.length + 1)}
+                </option>
+              ))}
+          </optgroup>
+        ))}
+      </select>
 
-			{thinking.levels.length > 0 && (
-				<select
-					data-custom="composer pill"
-					value={selectedThinking ?? ""}
-					title={t("Reasoning effort — applies from the next turn")}
-					onChange={(e) => onThinkingChange(e.target.value)}
-					className={`${cls} text-neutral-300 hover:bg-neutral-800`}
-				>
-					{/* pi can report a level outside the model's own list (a
+      {thinking.levels.length > 0 && (
+        <select
+          data-custom="composer pill"
+          value={selectedThinking ?? ""}
+          title={t("Reasoning effort — applies from the next turn")}
+          onChange={(e) => onThinkingChange(e.target.value)}
+          className={`${cls} text-neutral-300 hover:bg-neutral-800`}
+        >
+          {/* pi can report a level outside the model's own list (a
 					    session resumed under a different model). Show it rather
 					    than silently displaying the wrong one. */}
-					{selectedThinking !== undefined && !thinking.levels.includes(selectedThinking) && (
-						<option value={selectedThinking}>{selectedThinking}</option>
-					)}
-					{thinking.levels.map((l) => (
-						<option key={l} value={l}>
-							<DefaultStar
-								what="reasoning level"
-								saved={l === savedThinking}
-								onToggle={() => toggleDefault((level) => api["default-thinking"].$post({ json: { level } }), savedThinking ?? null, l, setDefaultThinking)}
-							/>
-							{l}
-						</option>
-					))}
-				</select>
-			)}
+          {selectedThinking !== undefined &&
+            !thinking.levels.includes(selectedThinking) && (
+              <option value={selectedThinking}>{selectedThinking}</option>
+            )}
+          {thinking.levels.map((l) => (
+            <option key={l} value={l}>
+              <DefaultStar
+                what="reasoning level"
+                saved={l === savedThinking}
+                onToggle={() =>
+                  toggleDefault(
+                    (level) =>
+                      api["default-thinking"].$post({ json: { level } }),
+                    savedThinking ?? null,
+                    l,
+                    setDefaultThinking,
+                  )
+                }
+              />
+              {l}
+            </option>
+          ))}
+        </select>
+      )}
 
-			{supportsFastMode(model) && onFastChange && (
-				<Button
-					size="sm"
-					variant={fastMode ? "warning" : "ghost"}
-					aria-pressed={fastMode === true}
-					disabled={disabled || fastPending || fastMode === undefined}
-					title={fastMode === undefined
-						? t("Restart this session to use Fast mode")
-						: t("Fast mode — uses 2.5× subscription allowance; availability depends on your account")}
-					onClick={async () => {
-						setFastPending(true);
-						try { await onFastChange(!fastMode); } finally { setFastPending(false); }
-					}}
-				>
-					{t("Fast · 2.5× usage")}
-				</Button>
-			)}
+      {supportsFastMode(model) && onFastChange && (
+        <Button
+          size="sm"
+          variant={fastMode ? "warning" : "ghost"}
+          aria-pressed={fastMode === true}
+          disabled={disabled || fastPending || fastMode === undefined}
+          title={
+            fastMode === undefined
+              ? t("Restart this session to use Fast mode")
+              : t(
+                  "Fast mode — uses 2.5× subscription allowance; availability depends on your account",
+                )
+          }
+          onClick={async () => {
+            setFastPending(true);
+            try {
+              await onFastChange(!fastMode);
+            } finally {
+              setFastPending(false);
+            }
+          }}
+        >
+          {t("Fast · 2.5× usage")}
+        </Button>
+      )}
 
-			{catalogError && (
-				<Button size="sm" variant="ghost" onClick={() => setAttempt((n) => n + 1)}>
-					{t("Retry")}
-				</Button>
-			)}
-			{(error || catalogError) && (
-				<div role="alert" className="absolute bottom-full right-0 mb-1 w-80 rounded-sm border border-red-900 bg-red-950/80 px-2 py-1 text-meta text-red-300">
-					{error || catalogError}
-				</div>
-			)}
-		</div>
-	);
+      {catalogError && (
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => setAttempt((n) => n + 1)}
+        >
+          {t("Retry")}
+        </Button>
+      )}
+      {(error || catalogError) && (
+        <div
+          role="alert"
+          className="absolute bottom-full right-0 mb-1 w-80 rounded-sm border border-red-900 bg-red-950/80 px-2 py-1 text-meta text-red-300"
+        >
+          {error || catalogError}
+        </div>
+      )}
+    </div>
+  );
 }
 
 /**
@@ -219,38 +282,38 @@ export function ModelSelector({
  * as plain text, so there the star simply does not appear.
  */
 function DefaultStar({
-	what,
-	saved,
-	onToggle,
+  what,
+  saved,
+  onToggle,
 }: {
-	what: "model" | "reasoning level";
-	saved: boolean;
-	onToggle: () => void;
+  what: "model" | "reasoning level";
+  saved: boolean;
+  onToggle: () => void;
 }) {
-	const stop = (e: SyntheticEvent) => {
-		e.preventDefault();
-		e.stopPropagation();
-	};
-	return (
-		<span
-			title={
-				what === "model"
-					? saved
-						? t("Startup default model \u2014 click to clear")
-						: t("Make this the startup default model")
-					: saved
-						? t("Startup default reasoning level \u2014 click to clear")
-						: t("Make this the startup default reasoning level")
-			}
-			onPointerDown={stop}
-			onPointerUp={stop}
-			onClick={(e) => {
-				stop(e);
-				onToggle();
-			}}
-			className={`mr-2 inline-flex align-middle ${saved ? "text-amber-400" : "text-neutral-600 hover:text-neutral-300"}`}
-		>
-			<Star size={13} weight={saved ? "fill" : "regular"} />
-		</span>
-	);
+  const stop = (e: SyntheticEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+  return (
+    <span
+      title={
+        what === "model"
+          ? saved
+            ? t("Startup default model \u2014 click to clear")
+            : t("Make this the startup default model")
+          : saved
+            ? t("Startup default reasoning level \u2014 click to clear")
+            : t("Make this the startup default reasoning level")
+      }
+      onPointerDown={stop}
+      onPointerUp={stop}
+      onClick={(e) => {
+        stop(e);
+        onToggle();
+      }}
+      className={`mr-2 inline-flex align-middle ${saved ? "text-amber-400" : "text-neutral-600 hover:text-neutral-300"}`}
+    >
+      <Star size={13} weight={saved ? "fill" : "regular"} />
+    </span>
+  );
 }

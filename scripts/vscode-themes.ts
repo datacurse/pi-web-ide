@@ -14,8 +14,8 @@ import { convertTheme, type VsTheme } from "../src/web/vscodeTheme.ts";
 
 const out: Record<string, ReturnType<typeof convertTheme>> = {};
 for (const id of themeNames) {
-	const theme: VsTheme = (await import(`@shikijs/themes/${id}`)).default;
-	out[id] = convertTheme(theme);
+  const theme: VsTheme = (await import(`@shikijs/themes/${id}`)).default;
+  out[id] = convertTheme(theme);
 }
 const file = new URL("../src/web/vscodeThemes.json", import.meta.url);
 await writeFile(file, `${JSON.stringify(out, null, "\t")}\n`);

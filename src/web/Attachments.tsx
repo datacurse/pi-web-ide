@@ -6,10 +6,10 @@ import { t } from "./i18n.js";
 
 /** Mirrors the server's allowlist; see SUPPORTED_IMAGE_MIME in agent.ts. */
 export const SUPPORTED_IMAGE_MIME = [
-	"image/png",
-	"image/jpeg",
-	"image/gif",
-	"image/webp",
+  "image/png",
+  "image/jpeg",
+  "image/gif",
+  "image/webp",
 ];
 
 /**
@@ -20,17 +20,22 @@ export const SUPPORTED_IMAGE_MIME = [
  * stripped once, here, at the boundary where it appears.
  */
 export function readImage(file: File): Promise<PiImage> {
-	return new Promise((resolve, reject) => {
-		const reader = new FileReader();
-		reader.onerror = () => reject(new Error(t("could not read {name}", { name: file.name || t("image") })));
-		reader.onload = () => {
-			const result = String(reader.result ?? "");
-			const comma = result.indexOf(",");
-			if (comma < 0) return reject(new Error(t("unreadable image data")));
-			resolve({ data: result.slice(comma + 1), mimeType: file.type });
-		};
-		reader.readAsDataURL(file);
-	});
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () =>
+      reject(
+        new Error(
+          t("could not read {name}", { name: file.name || t("image") }),
+        ),
+      );
+    reader.onload = () => {
+      const result = String(reader.result ?? "");
+      const comma = result.indexOf(",");
+      if (comma < 0) return reject(new Error(t("unreadable image data")));
+      resolve({ data: result.slice(comma + 1), mimeType: file.type });
+    };
+    reader.readAsDataURL(file);
+  });
 }
 
 /**
@@ -39,26 +44,28 @@ export function readImage(file: File): Promise<PiImage> {
  * XHR rather than fetch because only XHR reports upload progress, to `onProgress` in bytes.
  */
 export function uploadFile(
-	file: File,
-	into?: { dir: string; name: string },
-	onProgress?: (sent: number) => void,
+  file: File,
+  into?: { dir: string; name: string },
+  onProgress?: (sent: number) => void,
 ): Promise<string> {
-	const q = new URLSearchParams(into ?? { name: file.name || "file" });
-	const failed = () => new Error(t("could not upload {name}", { name: file.name }));
-	return new Promise((resolve, reject) => {
-		const xhr = new XMLHttpRequest();
-		xhr.open("POST", `/api/upload?${q}`);
-		xhr.setRequestHeader("Content-Type", "application/octet-stream");
-		xhr.responseType = "json";
-		if (onProgress) xhr.upload.onprogress = (e) => onProgress(e.loaded);
-		xhr.onerror = () => reject(failed());
-		xhr.onload = () => {
-			const body = (xhr.response ?? {}) as { path?: unknown; error?: unknown };
-			if (xhr.status === 200 && typeof body.path === "string") return resolve(body.path);
-			reject(typeof body.error === "string" ? new Error(body.error) : failed());
-		};
-		xhr.send(file);
-	});
+  const q = new URLSearchParams(into ?? { name: file.name || "file" });
+  const failed = () =>
+    new Error(t("could not upload {name}", { name: file.name }));
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", `/api/upload?${q}`);
+    xhr.setRequestHeader("Content-Type", "application/octet-stream");
+    xhr.responseType = "json";
+    if (onProgress) xhr.upload.onprogress = (e) => onProgress(e.loaded);
+    xhr.onerror = () => reject(failed());
+    xhr.onload = () => {
+      const body = (xhr.response ?? {}) as { path?: unknown; error?: unknown };
+      if (xhr.status === 200 && typeof body.path === "string")
+        return resolve(body.path);
+      reject(typeof body.error === "string" ? new Error(body.error) : failed());
+    };
+    xhr.send(file);
+  });
 }
 
 /**
@@ -83,59 +90,59 @@ export const ZoomContext = createContext<(src: string) => void>(() => {});
  * click is what shows the whole thing.
  */
 export function Thumb({
-	image,
-	label,
-	onRemove,
+  image,
+  label,
+  onRemove,
 }: {
-	image: PiImage;
-	label: string;
-	onRemove?: () => void;
+  image: PiImage;
+  label: string;
+  onRemove?: () => void;
 }) {
-	const zoom = useContext(ZoomContext);
-	const src = `data:${image.mimeType};base64,${image.data}`;
-	return (
-		<div className="group relative">
-			<button
-				data-custom="image thumbnail"
-				onClick={() => zoom(src)}
-				title={t("Click to expand")}
-				className="block size-14 overflow-hidden rounded-md border border-neutral-700 transition-colors duration-150 ease-out hover:border-neutral-500 motion-reduce:transition-none"
-			>
-				<img src={src} alt={label} className="size-full object-cover" />
-			</button>
-			{onRemove && (
-				<button
-					data-custom="thumbnail remove badge"
-					onClick={onRemove}
-					aria-label={t("Remove {name}", { name: label })}
-					className="absolute -top-1.5 -right-1.5 flex size-5 items-center justify-center rounded-full border border-neutral-700 bg-neutral-900 text-meta text-neutral-400 opacity-0 transition-opacity duration-150 ease-out group-hover:opacity-100 hover:text-neutral-100 focus:opacity-100 motion-reduce:transition-none"
-				>
-					<X size={13} />
-				</button>
-			)}
-		</div>
-	);
+  const zoom = useContext(ZoomContext);
+  const src = `data:${image.mimeType};base64,${image.data}`;
+  return (
+    <div className="group relative">
+      <button
+        data-custom="image thumbnail"
+        onClick={() => zoom(src)}
+        title={t("Click to expand")}
+        className="block size-14 overflow-hidden rounded-md border border-neutral-700 transition-colors duration-150 ease-out hover:border-neutral-500 motion-reduce:transition-none"
+      >
+        <img src={src} alt={label} className="size-full object-cover" />
+      </button>
+      {onRemove && (
+        <button
+          data-custom="thumbnail remove badge"
+          onClick={onRemove}
+          aria-label={t("Remove {name}", { name: label })}
+          className="absolute -top-1.5 -right-1.5 flex size-5 items-center justify-center rounded-full border border-neutral-700 bg-neutral-900 text-meta text-neutral-400 opacity-0 transition-opacity duration-150 ease-out group-hover:opacity-100 hover:text-neutral-100 focus:opacity-100 motion-reduce:transition-none"
+        >
+          <X size={13} />
+        </button>
+      )}
+    </div>
+  );
 }
 
 /** Staged attachments, above the composer until they are sent. */
 export function Attachments({
-	images,
-	onRemove,
+  images,
+  onRemove,
 }: {
-	images: PiImage[];
-	onRemove: (index: number) => void;
+  images: PiImage[];
+  onRemove: (index: number) => void;
 }) {
-	if (images.length === 0) return null;
-	return (
-		<div className="mb-2 flex flex-wrap gap-2">
-			{images.map((img, i) => (
-				<Thumb
-					key={i}
-					image={img}
-					label={t("attachment {n}", { n: i + 1 })}
-					onRemove={() => onRemove(i)}
-				/>
-			))}
-		</div>
-	);
+  if (images.length === 0) return null;
+  return (
+    <div className="mb-2 flex flex-wrap gap-2">
+      {images.map((img, i) => (
+        <Thumb
+          key={i}
+          image={img}
+          label={t("attachment {n}", { n: i + 1 })}
+          onRemove={() => onRemove(i)}
+        />
+      ))}
+    </div>
+  );
 }

@@ -27,44 +27,55 @@ type Message = { role: string; content?: string | Part[] };
 
 /** The minimum of pi's ExtensionAPI this file uses; pi is not a dependency here. */
 interface Pi {
-	registerFlag(name: string, options: { type: "string"; description?: string }): void;
-	getFlag(name: string): boolean | string | undefined;
-	on(
-		event: "context",
-		handler: (event: { messages: Message[] }) => Promise<{ messages: Message[] } | undefined>,
-	): void;
+  registerFlag(
+    name: string,
+    options: { type: "string"; description?: string },
+  ): void;
+  getFlag(name: string): boolean | string | undefined;
+  on(
+    event: "context",
+    handler: (event: {
+      messages: Message[];
+    }) => Promise<{ messages: Message[] } | undefined>,
+  ): void;
 }
 
 /** Messages with `text` appended to every user message. Exported for the test. */
 export function withReminder(messages: Message[], text: string): Message[] {
-	if (!text) return messages;
-	const extra: Part = { type: "text", text: `<system-reminder>\n${text}\n</system-reminder>` };
-	return messages.map((m) =>
-		m.role !== "user"
-			? m
-			: {
-					...m,
-					content:
-						typeof m.content === "string"
-							? [{ type: "text", text: m.content }, extra]
-							: [...(m.content ?? []), extra],
-				},
-	);
+  if (!text) return messages;
+  const extra: Part = {
+    type: "text",
+    text: `<system-reminder>\n${text}\n</system-reminder>`,
+  };
+  return messages.map((m) =>
+    m.role !== "user"
+      ? m
+      : {
+          ...m,
+          content:
+            typeof m.content === "string"
+              ? [{ type: "text", text: m.content }, extra]
+              : [...(m.content ?? []), extra],
+        },
+  );
 }
 
 export default function remind(pi: Pi) {
-	pi.registerFlag("pwi-remind", { type: "string", description: "File to repeat before every reply" });
-	let text: string | undefined; // snapshot for this session; see the header
-	pi.on("context", async (event) => {
-		const path = pi.getFlag("pwi-remind");
-		if (typeof path !== "string") return undefined;
-		if (text === undefined) {
-			try {
-				text = readFileSync(path, "utf8").trim();
-			} catch {
-				text = ""; // Deleted since spawn: nothing to repeat.
-			}
-		}
-		return { messages: withReminder(event.messages, text) };
-	});
+  pi.registerFlag("pwi-remind", {
+    type: "string",
+    description: "File to repeat before every reply",
+  });
+  let text: string | undefined; // snapshot for this session; see the header
+  pi.on("context", async (event) => {
+    const path = pi.getFlag("pwi-remind");
+    if (typeof path !== "string") return undefined;
+    if (text === undefined) {
+      try {
+        text = readFileSync(path, "utf8").trim();
+      } catch {
+        text = ""; // Deleted since spawn: nothing to repeat.
+      }
+    }
+    return { messages: withReminder(event.messages, text) };
+  });
 }
