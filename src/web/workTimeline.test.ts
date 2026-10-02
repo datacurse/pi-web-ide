@@ -93,3 +93,16 @@ test("live thinking is not duplicated; tool groups remain active through interve
 	const done = renderToStaticMarkup(createElement(WorkTimeline, { blocks: reasoning, activity: trace }));
 	assert.doesNotMatch(done, /role="status"/);
 });
+
+test("empty thinking placeholders never become empty expandable disclosures", () => {
+	const empty: PiBlock[] = [{ kind: "thinking", text: " \n\t" }];
+	const untimed = renderToStaticMarkup(createElement(WorkTimeline, { blocks: empty }));
+	assert.equal(untimed, "");
+	const measured = { ...trace, steps: [trace.steps[0]] };
+	const timed = renderToStaticMarkup(createElement(WorkTimeline, { blocks: empty, activity: measured }));
+	assert.match(timed, /Thought 2s/);
+	assert.doesNotMatch(timed, /details|summary|svg/);
+	const live = renderToStaticMarkup(createElement(WorkTimeline, { blocks: empty, running: true }));
+	assert.match(live, /Thinking/);
+	assert.doesNotMatch(live, /details|summary|svg/);
+});

@@ -20,6 +20,11 @@ function Thought({ item, expanded }: { item: ThoughtItem; expanded?: boolean }) 
 		const seconds = Math.floor(Math.max(0, item.durationMs) / 1000);
 		label = seconds === 0 ? "Thought briefly" : `Thought ${seconds}s`;
 	}
+	// Providers can retain empty thinking placeholders/signatures without readable text.
+	if (!item.block.text.trim()) {
+		if (!item.active && item.durationMs === undefined) return null;
+		return <div className="my-3 chat-prose text-neutral-500">{label}</div>;
+	}
 	return <Disclosure label={label} expanded={expanded}><RawBlocks blocks={[item.block]} streaming={item.active} /></Disclosure>;
 }
 
