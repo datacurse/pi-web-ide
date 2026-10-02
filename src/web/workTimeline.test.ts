@@ -69,10 +69,11 @@ test("counts distinguish exploration from commands and do not double-count wrapp
 
 test("rendering starts with planning, shows measured thoughts, and leaves prose visible", () => {
 	const planning = renderToStaticMarkup(createElement(WorkTimeline, { blocks: [], running: true }));
-	assert.match(planning, /role="status"[^>]*>Planning next moves/);
+	assert.match(planning, /role="status"[^>]*><span class="work-shimmer">Planning next moves<\/span>/);
 	const html = renderToStaticMarkup(createElement(WorkTimeline, { blocks, activity: trace }));
 	assert.match(html, /Thought 2s/);
 	assert.match(html, /Explored 1 file, 1 search/);
+	assert.doesNotMatch(html, /work-shimmer/);
 	assert.match(html, /Thought 1s/);
 	assert.ok(html.indexOf("Thought 2s") < html.indexOf("I’ll inspect"));
 	assert.ok(html.indexOf("I’ll inspect") < html.indexOf("Explored"));
@@ -86,6 +87,9 @@ test("live thinking is not duplicated; tool groups remain active through interve
 	const live = { ...trace, end: undefined, steps: [{ kind: "thinking" as const, label: "", start: 1000 }] };
 	const html = renderToStaticMarkup(createElement(WorkTimeline, { blocks: reasoning, activity: live, running: true }));
 	assert.equal((html.match(/>Thinking</g) ?? []).length, 1);
+	assert.match(html, /class="work-shimmer">Thinking<\/span>/);
+	const exploring = renderToStaticMarkup(createElement(WorkTimeline, { blocks: blocks.slice(0, -1), activity: live, running: true }));
+	assert.match(exploring, /class="work-shimmer">Exploring/);
 	assert.doesNotMatch(html, /Thought 2s/);
 	const items = workTimeline(blocks.slice(0, -1), live, true);
 	const last = items.at(-1);
@@ -104,5 +108,6 @@ test("empty thinking placeholders never become empty expandable disclosures", ()
 	assert.doesNotMatch(timed, /details|summary|svg/);
 	const live = renderToStaticMarkup(createElement(WorkTimeline, { blocks: empty, running: true }));
 	assert.match(live, /Thinking/);
+	assert.match(live, /class="work-shimmer">Thinking<\/span>/);
 	assert.doesNotMatch(live, /details|summary|svg/);
 });

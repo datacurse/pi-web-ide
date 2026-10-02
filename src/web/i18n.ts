@@ -14,6 +14,13 @@ export function t(en: string, vars?: Record<string, string | number>): string {
 	return fill(en, vars);
 }
 
+/** Format elapsed work in minutes and seconds, omitting zero minutes. */
+export function formatDuration(ms: number): string {
+	const seconds = Math.floor(Math.max(0, ms) / 1000);
+	return seconds < 60 ? t("{s}s", { s: seconds })
+		: t("{m}m {s}s", { m: Math.floor(seconds / 60), s: seconds % 60 });
+}
+
 /** Choose the singular or plural English count phrase and fill its placeholders. */
 export function plural(n: number, one: string, other: string, vars?: Record<string, string | number>): string {
 	return fill(n === 1 ? one : other, { n, ...vars });

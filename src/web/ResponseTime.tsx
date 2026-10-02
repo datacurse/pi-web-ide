@@ -1,13 +1,13 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { locale, t } from "./i18n.js";
+import { formatDuration, locale, t } from "./i18n.js";
 import { timeAgo } from "./SessionList.js";
 
 export function responseTimeDetails(at: number, durationMs?: number): { date: string; worked?: string } {
 	const date = new Date(at).toLocaleString(locale(), {
 		year: "numeric", month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
 	});
-	const worked = durationMs === undefined ? undefined : t("Worked for {s}s", { s: Math.floor(Math.max(0, durationMs) / 1000) });
+	const worked = durationMs === undefined ? undefined : t("Worked for {duration}", { duration: formatDuration(durationMs) });
 	return { date, worked };
 }
 

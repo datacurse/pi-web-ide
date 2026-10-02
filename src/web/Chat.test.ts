@@ -262,11 +262,11 @@ test("settled answer actions use the assistant timestamp and are absent while st
 	assert.equal(rowNodes().some((node) => node.type === transcript.AnswerActions), false);
 });
 
-test("work disclosure shows elapsed seconds and keeps its label when expanded", () => {
+test("work disclosure shows minutes and seconds and keeps its label when expanded", () => {
 	const env = harness();
 	env.props.snapshot!.messages = [
 		{ role: "user", timestamp: 1000, blocks: [] },
-		{ role: "assistant", timestamp: 2000, endedAt: 13500, blocks: [{ kind: "thinking", text: "work" }, { kind: "text", text: "answer" }] },
+		{ role: "assistant", timestamp: 2000, endedAt: 198500, blocks: [{ kind: "thinking", text: "work" }, { kind: "text", text: "answer" }] },
 	];
 	const renderRow = () => {
 		const list = env.render().find((node) => node.type === Virtuoso)!;
@@ -275,12 +275,12 @@ test("work disclosure shows elapsed seconds and keeps its label when expanded", 
 	};
 	const first = renderRow();
 	const toggle = first.nodes.find((node) => node.type === "button" && node.props["aria-expanded"] === false)!;
-	assert.equal(toggle.props.children[0], "Worked for 12s");
+	assert.equal(toggle.props.children[0], "Worked for 3m 17s");
 	assert.ok(toggle.props.className.includes("group/work"));
 	assert.equal(toggle.props.children[1].props.className, "transition-opacity opacity-0 group-hover/work:opacity-100 group-focus-visible/work:opacity-100");
 	toggle.props.onClick();
 	const opened = renderRow().nodes.find((node) => node.type === "button" && node.props["aria-expanded"] === true)!;
-	assert.equal(opened.props.children[0], "Worked for 12s");
+	assert.equal(opened.props.children[0], "Worked for 3m 17s");
 	assert.equal(opened.props.children[1].props.className, "transition-opacity rotate-90 opacity-100");
 	env.props.busy = true;
 	const live = renderRow().row;

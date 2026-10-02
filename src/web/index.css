@@ -956,6 +956,29 @@ input[type="number"]::-webkit-outer-spin-button {
 	margin-block: 0;
 }
 
+/* A moving highlight on live work labels; completed phases stay quiet. */
+.work-shimmer {
+	display: inline-block;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+	@supports (background-clip: text) or (-webkit-background-clip: text) {
+		.work-shimmer {
+			background-image: linear-gradient(110deg, var(--color-neutral-400) 35%, var(--color-neutral-100) 50%, var(--color-neutral-400) 65%);
+			background-size: 250% 100%;
+			background-clip: text;
+			-webkit-background-clip: text;
+			color: transparent;
+			animation: work-shimmer 2.4s linear infinite;
+		}
+	}
+}
+
+@keyframes work-shimmer {
+	from { background-position: 150% 0; }
+	to { background-position: -50% 0; }
+}
+
 
 /*
  * The streaming dot pulses to mean "live". Under reduced motion the amber dot

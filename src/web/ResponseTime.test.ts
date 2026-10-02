@@ -22,6 +22,18 @@ test("response age uses completion time and exposes exact date plus measured wor
 	assert.equal(responseTimeDetails(at, -10).worked, "Worked for 0s");
 });
 
+test("work durations show minutes and remaining seconds", () => {
+	const at = 1000;
+	for (const [ms, expected] of [
+		[59_999, "59s"],
+		[60_000, "1m 0s"],
+		[197_900, "3m 17s"],
+		[3_661_000, "61m 1s"],
+	] as const) {
+		assert.equal(responseTimeDetails(at, ms).worked, `Worked for ${expected}`);
+	}
+});
+
 type Node = React.ReactElement<Record<string, any>>;
 function nodes(value: unknown): Node[] {
 	if (Array.isArray(value)) return value.flatMap(nodes);

@@ -30,7 +30,7 @@ import {
 } from "./Attachments.js";
 import type { ImageWorkspace } from "./imageAnnotations.js";
 import { AnswerActions, CommandRow, ContextMeter, ContextPanel, UserMessage, Notices } from "./Transcript.js";
-import { t } from "./i18n.js";
+import { formatDuration, t } from "./i18n.js";
 import { PiMark } from "./piMark.js";
 import { PastedTexts } from "./PastedTexts.js";
 import { addPastedText, isLargePaste, joinPastedText, splitPastedText } from "./pastedText.js";
@@ -120,9 +120,9 @@ const HistoryRow = memo(function HistoryRow({ row, expanded, onToggle, userMode,
 	onFork: (at: number) => Promise<void>;
 }) {
 	if (row.role === "user") return <UserMessage blocks={row.blocks} at={row.at} userMode={userMode} onEdit={onEdit} />;
-	const seconds = row.workStartedAt !== undefined && row.workEndedAt !== undefined
-		? Math.floor(Math.max(0, row.workEndedAt - row.workStartedAt) / 1000) : undefined;
-	const workLabel = seconds === undefined ? t("Worked") : t("Worked for {s}s", { s: seconds });
+	const durationMs = row.workStartedAt !== undefined && row.workEndedAt !== undefined
+		? row.workEndedAt - row.workStartedAt : undefined;
+	const workLabel = durationMs === undefined ? t("Worked") : t("Worked for {duration}", { duration: formatDuration(durationMs) });
 	return <div className="chat-gutter my-3"><div className="chat-measure">
 		{row.role !== "assistant" && <div className="font-mono text-meta text-neutral-500">{row.role}</div>}
 		{(!!row.work?.length || row.running) && <>
