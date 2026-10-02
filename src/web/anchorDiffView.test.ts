@@ -51,12 +51,26 @@ test("captured file locations use actual file numbers, including the replacement
 	assert.ok(html.includes("mr-2 w-8"));
 });
 
-test("recovered current locations never pretend to be original file line numbers", () => {
+test("recovered current locations supply gutter numbers with a quiet current label", () => {
 	const html = renderToStaticMarkup(createElement(AnchorDiff, { diff: {
-		from: "AAAA", to: "AAAA", path: "/project/src/app.py", currentLine: 88,
-		removed: ["old()"], added: ["new()"],
+		from: "AAAA", to: "AAAA", path: "/project/src/app.py", currentLine: 118,
+		removed: ["old()"], added: ["new()", "next()"],
 	} }));
-	assert.ok(html.includes("current L88 (original line unavailable)"));
-	assert.ok(html.includes('aria-label="Removed snippet line 1"'));
-	assert.ok(!html.includes("file line 88"));
+	assert.ok(html.includes("L118 (current)"));
+	assert.ok(html.includes('aria-label="Removed current file line 118"'));
+	assert.ok(html.includes('aria-label="Replacement current file line 118"'));
+	assert.ok(html.includes('aria-label="Replacement current file line 119"'));
+	assert.ok(!html.includes("original line unavailable"));
+	assert.ok(!html.includes("at time of edit"));
+	assert.ok(html.includes("mr-2 w-8"));
+});
+
+test("captured edit-time positions take priority over later current lookups", () => {
+	const html = renderToStaticMarkup(createElement(AnchorDiff, { diff: {
+		from: "AAAA", to: "AAAA", path: "app.ts", line: 42, currentLine: 118,
+		removed: ["old();"], added: ["new();"],
+	} }));
+	assert.ok(html.includes("L42 at edit"));
+	assert.ok(html.includes('aria-label="Replacement file line 42"'));
+	assert.ok(!html.includes("L118"));
 });

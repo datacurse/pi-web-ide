@@ -101,3 +101,20 @@ test("saved codemode results supply the exact old range for their nested replace
 	assert.ok(!diff.includes("first old line"));
 	assert.ok(!diff.includes("Remove line RNMT"));
 });
+
+test("nested recovered edits infer the same real line number on both diff sides", () => {
+	const html = renderToStaticMarkup(RawBlocks({ blocks: [{
+		kind: "tool", id: "batch", name: "codemode", args: {},
+		result: '-RNMT│\tassert.equal(last?.kind === "tools" && last.active, true);\n+NEXT│\tassert.equal(last?.kind === "tools" && last.active, false);',
+		children: [{
+			id: "edit", name: "replace", outputUnavailable: true,
+			args: { remove_from: "RNMT", remove_to: "RNMT", replacement_lines: ['\tassert.equal(last?.kind === "tools" && last.active, false);'] },
+			source: { path: "/project/src/web/workTimeline.test.ts", currentLine: 111 },
+		}],
+	}] }));
+	const diff = html.split('data-custom="anchor replacement diff"')[1];
+	assert.ok(diff.includes('aria-label="Removed current file line 111"'));
+	assert.ok(diff.includes('aria-label="Replacement current file line 111"'));
+	assert.equal((diff.match(/>111<\/span>/g) ?? []).length, 2);
+	assert.ok(!diff.includes(">1</span>"));
+});
