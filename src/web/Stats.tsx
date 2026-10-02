@@ -1375,14 +1375,21 @@ function ToolCosts({ turns }: { turns: StatsTurn[] }) {
 	const [by, setBy] = useState<Metric>("tokens");
 	const costs = useMemo(() => {
 		const m = new Map<string, ToolCost>();
+		const merge = (a: ToolCost, c: ToolCost) => {
+			a.calls += c.calls;
+			a.tokens += c.tokens;
+			a.ms += c.ms;
+			a.hookMs += c.hookMs;
+			a.measured += c.measured;
+			for (const [key, child] of Object.entries(c.children ?? {})) {
+				const children = (a.children ??= {});
+				merge(children[key] ??= { calls: 0, tokens: 0, ms: 0, hookMs: 0, measured: 0 }, child);
+			}
+		};
 		for (const turn of turns)
 			for (const [k, c] of Object.entries(turn.costs)) {
 				const a = m.get(k) ?? { calls: 0, tokens: 0, ms: 0, hookMs: 0, measured: 0 };
-				a.calls += c.calls;
-				a.tokens += c.tokens;
-				a.ms += c.ms;
-				a.hookMs += c.hookMs;
-				a.measured += c.measured;
+				merge(a, c);
 				m.set(k, a);
 			}
 		return m;
@@ -1390,8 +1397,13 @@ function ToolCosts({ turns }: { turns: StatsTurn[] }) {
 	const all = [...costs.values()];
 	const calls = all.reduce((n, c) => n + c.calls, 0);
 	const measured = calls ? Math.round((all.reduce((n, c) => n + c.measured, 0) / calls) * 100) : 0;
-	const rows = [...costs].sort((a, b) => b[1][by] - a[1][by]).slice(0, TOOL_ROWS);
-	const max = Math.max(1, ...rows.map(([, c]) => c[by]));
+	const rows = [...costs].sort((a, b) => b[1][by] - a[1][by]).slice(0, TOOL_ROWS).flatMap(([key, c]) => [
+		{ id: key, key, c, nested: false },
+		...Object.entries(c.children ?? {}).sort((a, b) => b[1][by] - a[1][by]).map(([child, cost]) => ({
+			id: `${key}/${child}`, key: child, c: cost, nested: true,
+		})),
+	]);
+	const max = Math.max(1, ...rows.map(({ c }) => c[by]));
 	const cell = (m: Metric | "avg") =>
 		`w-14 shrink-0 text-right tabular-nums ${m === by ? "text-neutral-200" : "text-neutral-500"}`;
 	return (
@@ -1424,10 +1436,10 @@ function ToolCosts({ turns }: { turns: StatsTurn[] }) {
 						<span className="w-14 shrink-0 text-right">{t("Per call")}</span>
 						<span className="w-14 shrink-0 text-right">{t("Hooks")}</span>
 					</div>
-					{rows.map(([key, c]) => (
-						<div key={key} className="flex items-center gap-2">
-							<span className="w-48 shrink-0 fade-end font-mono text-neutral-300" title={key}>
-								{key}
+					{rows.map(({ id, key, c, nested }) => (
+						<div key={id} className="flex items-center gap-2">
+							<span className={`w-48 shrink-0 fade-end font-mono ${nested ? "pl-4 text-neutral-500" : "text-neutral-300"}`} title={nested ? `codemode → ${key}` : key}>
+								{nested ? `↳ ${key}` : key}
 							</span>
 							<div className="h-2 min-w-0 flex-1">
 								<div
@@ -1450,6 +1462,11 @@ function ToolCosts({ turns }: { turns: StatsTurn[] }) {
 					{ pct: measured },
 				)}
 			</p>
+			{rows.some((row) => row.nested) && (
+				<p className="mt-1 text-meta text-neutral-500">
+					{t("Indented rows are actual calls inside codemode, not extra wrapper costs. Their tokens estimate arguments only; their time is recorded nested duration (parallel calls can overlap).")}
+				</p>
+			)}
 		</div>
 	);
 }

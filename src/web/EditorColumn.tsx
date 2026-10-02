@@ -7,6 +7,7 @@ import { SessionTabs, tabDomId } from "./SessionTabs.js";
 import { Terminal } from "./Terminal.js";
 import { DiffView } from "./DiffView.js";
 import { FileEditor } from "./FileEditor.js";
+import type { FileLocation } from "./fileNavigation.js";
 import { diffParts, isDiffTab, isFileTab, isTermTab, termId, tabPath } from "./tabs.js";
 import type { Side, TabGroup } from "./tabs.js";
 import { SplitZone } from "./SplitZone.js";
@@ -33,6 +34,7 @@ export function EditorColumn({
 	latestPrompt,
 	pinned,
 	dirtyFiles,
+	fileReveal,
 	onSelect,
 	onClose,
 	onReorder,
@@ -63,6 +65,7 @@ export function EditorColumn({
 	latestPrompt: boolean;
 	pinned: string[];
 	dirtyFiles: Record<string, boolean>;
+	fileReveal?: FileLocation;
 	onSelect: (entry: string) => void;
 	onClose: (entry: string) => void;
 	onReorder: (from: number, to: number) => void;
@@ -183,6 +186,7 @@ export function EditorColumn({
 							// than reuse one holding another file's undo history.
 							key={active}
 							path={tabPath(active)}
+							reveal={fileReveal?.path === tabPath(active) ? fileReveal : undefined}
 							cwd={cwd}
 							onDirty={onDirty}
 						/>

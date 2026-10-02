@@ -4,6 +4,7 @@ import { useSession } from "./useSession.js";
 import { startPointerDrag } from "./pointerDrag.js";
 import { sessionPrompts } from "./sessionName.js";
 import { EditorColumn } from "./EditorColumn.js";
+import { FileNavigationContext, fileLocation, type FileLocation } from "./fileNavigation.js";
 import {
 	LAST_PROJECT_KEY,
 	pinWindowProject,
@@ -1087,8 +1088,10 @@ export default function App() {
 		[commitTabs],
 	);
 
+	const [fileReveal, setFileReveal] = useState<FileLocation>();
+
 	/**
-	 * Open a file from the explorer into a tab, or focus the tab it already has.
+	 * Open a file from the explorer or transcript, or focus its existing tab.
 	 *
 	 * A file already open in the SECOND column is focused there rather than
 	 * opened a second time on the left: two tabs for one file would be two
@@ -1096,12 +1099,12 @@ export default function App() {
 	 * idea of what is saved.
 	 */
 	const openFile = useCallback(
-		(path: string) => {
+		(path: string, line?: number, preferredSide: Side = "left") => {
+			setFileReveal((previous) => fileLocation(previous, path, line));
 			const entry = fileTab(path);
-			// Already open in the second column: focus it there rather than opening
-			// a second editor over the same document, each with its own undo
-			// history and its own idea of what is saved.
-			if (sideOfTab(tabsRef.current, entry) === "right") {
+			// Transcript links prefer their own column, but never duplicate an existing editor.
+			// Explorer clicks retain their default of opening new file tabs on the left.
+			if ((sideOfTab(tabsRef.current, entry) ?? preferredSide) === "right" && tabsRef.current.right) {
 				selectRight(entry);
 				return;
 			}
@@ -1660,31 +1663,33 @@ export default function App() {
 
 	/** One column's chat, wired to that column's session. */
 	const chatFor = (s: ReturnType<typeof useSession>, side: Side) => (
-		<Chat
-			snapshot={s.snapshot}
-			draftRev={inserted.side === side ? inserted.n : 0}
-			focus={sessionFocus.side === side ? sessionFocus : undefined}
-			partial={s.partial}
-			busy={s.busy}
-			opening={s.opening}
-			userMode={userMode}
-			askMode={askMode}
-			onAskMode={changeAskMode}
-			command={s.command}
-			modelError={s.modelError}
-			onSend={s.send}
-			onAnswerAsk={s.answerAsk}
-			onAbort={s.abort}
-			onModelChange={s.changeModel}
-			onThinkingChange={s.changeThinking}
-			onFastChange={s.changeFast}
-			onCommandMenu={s.refreshCommands}
-			onCompact={s.compact}
-			compacting={s.compacting}
-			onFork={s.fork}
-			onEdit={s.edit}
-			onRestart={s.restart}
-		/>
+		<FileNavigationContext.Provider value={(path, line) => openFile(path, line, side)}>
+			<Chat
+				snapshot={s.snapshot}
+				draftRev={inserted.side === side ? inserted.n : 0}
+				focus={sessionFocus.side === side ? sessionFocus : undefined}
+				partial={s.partial}
+				busy={s.busy}
+				opening={s.opening}
+				userMode={userMode}
+				askMode={askMode}
+				onAskMode={changeAskMode}
+				command={s.command}
+				modelError={s.modelError}
+				onSend={s.send}
+				onAnswerAsk={s.answerAsk}
+				onAbort={s.abort}
+				onModelChange={s.changeModel}
+				onThinkingChange={s.changeThinking}
+				onFastChange={s.changeFast}
+				onCommandMenu={s.refreshCommands}
+				onCompact={s.compact}
+				compacting={s.compacting}
+				onFork={s.fork}
+				onEdit={s.edit}
+				onRestart={s.restart}
+			/>
+		</FileNavigationContext.Provider>
 	);
 
 	return (
@@ -1838,6 +1843,7 @@ export default function App() {
 					latestPrompt={latestPrompt}
 					pinned={pinned}
 					dirtyFiles={dirtyFiles}
+					fileReveal={fileReveal}
 					onSelect={selectTab}
 					onClose={closeByUser("left")}
 					onNewSession={() => void newSession("left")}
@@ -1873,6 +1879,7 @@ export default function App() {
 						latestPrompt={latestPrompt}
 						pinned={pinned}
 						dirtyFiles={dirtyFiles}
+						fileReveal={fileReveal}
 						onSelect={selectRight}
 						onClose={closeByUser("right")}
 						onNewSession={() => void newSession("right")}

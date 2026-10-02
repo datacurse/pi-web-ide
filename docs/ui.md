@@ -75,6 +75,8 @@ fits none of the existing ones, and record it here.
   completed anchor-based `replace` calls, with red/green backgrounds and borders,
   syntax colors and a centered line-number gutter; omit context and redundant
   anchor arguments. Show the file path and captured file line when available.
+  Clicking its header opens/focuses an editor tab at that line, centered and
+  focused; repeated clicks reveal it again without resetting edits or undo history.
   Persist execution-time source metadata in the server session sidecar; an exact
   historical-text lookup in referenced files is labelled as a current location,
   never as the original edit line. Unknown positions remain explicitly unknown.

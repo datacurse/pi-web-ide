@@ -28,6 +28,7 @@ import { languageFor, loadCodeMirror, syntaxStyle, wrapIndent } from "./codemirr
 import { Button, PanelHeader } from "./ui.js";
 import { api, unwrap } from "./api.js";
 import { t } from "./i18n.js";
+import { revealFileLine, type FileLocation } from "./fileNavigation.js";
 
 /** `/home/me/proj/src/App.tsx` → `src/App.tsx` when it is under `cwd`. */
 function shortPath(path: string, cwd: string): string {
@@ -38,9 +39,11 @@ export function FileEditor({
 	path,
 	cwd,
 	onDirty,
+	reveal,
 }: {
 	path: string;
 	cwd: string;
+	reveal?: FileLocation;
 	/**
 	 * Report unsaved state upward, so the tab can show a dot.
 	 *
@@ -58,6 +61,8 @@ export function FileEditor({
 
 	const host = useRef<HTMLDivElement | null>(null);
 	const view = useRef<EditorView | null>(null);
+	const revealRef = useRef(reveal);
+	revealRef.current = reveal;
 	/*
 	 * The saved baseline, read from inside callbacks that were created before
 	 * the latest save. The listener and the save handler both need the CURRENT
@@ -139,6 +144,8 @@ export function FileEditor({
 						}),
 					],
 				});
+				const target = revealRef.current;
+				if (target?.path === path) revealFileLine(view.current, cm, target.line);
 			} catch (err) {
 				// A failed read or a chunk that will not load otherwise leaves an
 				// empty pane and no clue why — the failure mode of a lazily loaded
@@ -153,6 +160,16 @@ export function FileEditor({
 			view.current = null;
 		};
 	}, [path]);
+
+	// Reveal subsequent links without rebuilding the editor or losing unsaved text/undo history.
+	useEffect(() => {
+		if (!reveal || reveal.path !== path || !view.current) return;
+		let live = true;
+		void loadCodeMirror().then((cm) => {
+			if (live && view.current && revealRef.current === reveal) revealFileLine(view.current, cm, reveal.line);
+		});
+		return () => { live = false; };
+	}, [path, reveal]);
 
 	const save = useCallback(async () => {
 		const view_ = view.current;

@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useContext, useEffect, useState } from "react";
 import { highlightLines, type Token } from "./codeHighlight.js";
 import type { AnchorDiff as Diff } from "./anchorDiff.js";
 import { dedentBlocks } from "./codeIndent.js";
+import { FileNavigationContext } from "./fileNavigation.js";
 
 /** The chat code view's syntax parser and theme, over a quiet red/green diff surface. */
 function SourceLines({ lines, location, removed, gutterWidth }: { lines: string[]; location: Pick<Diff, "path" | "line" | "currentLine">; removed?: boolean; gutterWidth: string }) {
@@ -33,16 +34,23 @@ function SourceLines({ lines, location, removed, gutterWidth }: { lines: string[
 }
 
 export function AnchorDiff({ diff }: { diff: Diff }) {
+	const openFile = useContext(FileNavigationContext);
+	const path = diff.path;
 	const [removed, added] = dedentBlocks([diff.removed ?? [], diff.added]);
 	const startLine = diff.line ?? diff.currentLine;
 	const current = diff.line === undefined && diff.currentLine !== undefined;
 	const lastLine = (startLine ?? 1) + Math.max(removed.length, added.length, 1) - 1;
 	const gutterWidth = lastLine >= 100 ? "w-8" : lastLine >= 10 ? "w-6" : "w-4";
 	return <div data-custom="anchor replacement diff" className="my-3 overflow-hidden rounded-sm border border-neutral-800 font-mono chat-code">
-		<div data-custom="replacement file location" className="border-b border-neutral-800 px-2 py-1 text-meta text-neutral-500 break-all">
+		{path && openFile ? <button type="button" data-custom="replacement file navigation"
+			onClick={() => openFile(path, diff.currentLine ?? diff.line)}
+			title={`Open ${path}${startLine !== undefined ? ` at line ${diff.currentLine ?? startLine}` : ""}`}
+			className="block w-full cursor-pointer border-b border-neutral-800 px-2 py-1 text-left font-mono text-meta text-neutral-500 break-all hover:text-neutral-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-neutral-500">
+			{diff.path}{startLine !== undefined ? ` · L${startLine}${current ? " (current)" : " at edit"}` : " · line unavailable"}
+		</button> : <div data-custom="replacement file location" className="border-b border-neutral-800 px-2 py-1 text-meta text-neutral-500 break-all">
 			{diff.path ?? "File unavailable"}
 			{startLine !== undefined ? ` · L${startLine}${current ? " (current)" : " at edit"}` : " · line unavailable"}
-		</div>
+		</div>}
 		{diff.removed ? <SourceLines lines={removed} location={diff} gutterWidth={gutterWidth} removed />
 			: <div aria-label="Removed range" className="border-l-2 border-red-400 bg-red-400/10 px-3 py-2 text-red-300">
 				{diff.from === diff.to ? `Remove line ${diff.from}` : `Remove lines ${diff.from} → ${diff.to} (inclusive)`}

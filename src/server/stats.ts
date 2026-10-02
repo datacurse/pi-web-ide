@@ -158,6 +158,7 @@ export async function parseLines(
 		batch: number;
 		hookMs: number;
 		measured: boolean;
+		parent?: string;
 		steps?: Step[];
 		jobs?: ToolMetric[];
 	})[] = [];
@@ -165,8 +166,9 @@ export async function parseLines(
 	const close = () => {
 		if (turn && end > turn.start && turn.outcome) {
 			const costs = turn.costs;
-			const add = (key: string, calls: number, tokens: number, ms: number, hookMs: number, measured: number) => {
-				const cost = (costs[key] ??= { calls: 0, tokens: 0, ms: 0, hookMs: 0, measured: 0 });
+			const add = (key: string, calls: number, tokens: number, ms: number, hookMs: number, measured: number, parent?: string) => {
+				const target = parent ? ((costs[parent] ??= { calls: 0, tokens: 0, ms: 0, hookMs: 0, measured: 0 }).children ??= {}) : costs;
+				const cost = (target[key] ??= { calls: 0, tokens: 0, ms: 0, hookMs: 0, measured: 0 });
 				cost.calls += calls;
 				cost.tokens += tokens;
 				cost.ms += ms;
@@ -178,7 +180,7 @@ export async function parseLines(
 			for (const c of calls) {
 				c.tokens = Math.ceil(c.tokens / 4);
 				if (!c.steps?.length) {
-					add(c.key, 1, c.tokens, c.ms, c.hookMs, c.measured ? 1 : 0);
+					add(c.key, 1, c.tokens, c.ms, c.hookMs, c.measured ? 1 : 0, c.parent);
 					units.push(c);
 					continue;
 				}
@@ -309,6 +311,7 @@ export async function parseLines(
 					const sub = child.name === "bash" ? subKey(child.name, child.arguments) : undefined;
 					calls.push({
 						key: sub ? `bash: ${sub}` : child.name,
+						parent: c.key,
 						preview: preview(child.name, child.arguments),
 						tokens: child.name.length + args.length,
 						ms: typeof child.durationMs === "number" && Number.isFinite(child.durationMs) && child.durationMs >= 0 ? child.durationMs : 0,

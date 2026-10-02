@@ -463,6 +463,8 @@ export interface ToolCost {
 	/** Of `ms`, what other extensions' result hooks took (pi-lens), in measured calls. */
 	hookMs: number;
 	measured: number;
+	/** Codemode's actual nested calls; detail only, not added to wrapper totals. */
+	children?: Record<string, ToolCost>;
 }
 
 export interface ToolOutlier {
