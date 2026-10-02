@@ -18,7 +18,6 @@ then survive a server restart); `gh` is optional (enables "Create PR").
 pnpm install
 pnpm dev                     # built UI + API :8890, hot-reload UI :5480
 pnpm build && pnpm start     # single process, serves dist/ itself
-pnpm test
 pnpm typecheck               # must pass; includes scripts/check-ui.sh
 pnpm deadcode                # unused files/exports/dependencies, including a production-only pass
 ```

@@ -157,8 +157,7 @@ npm progress output goes to **stderr**, not stdout, so it does not corrupt the R
 
 ## 0.7 Message shape
 
-Full frame transcript of a `read` + `bash` turn is committed at
-`src/server/fixtures/pi-turn.jsonl` (44 frames).
+Observed a `read` + `bash` turn with 44 frames.
 
 Frame order for that turn:
 

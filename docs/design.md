@@ -213,8 +213,7 @@ picker opens only while the WHOLE composer is one unfinished command, so
 `and/or` is prose, a slash on a second line belongs to the sentence above it,
 and `/compact soft focus on X` is arguments being written rather than a name
 to complete. Matching is prefix-first and then substring, which is what makes
-a long skill name findable from its distinctive middle. `commands.test.ts`
-pins those rules.
+a long skill name findable from its distinctive middle.
 
 The exception: Enter **sends** when the highlighted row would only add the
 trailing space you are missing. `/compact` + Enter runs `/compact` instead of
@@ -469,7 +468,7 @@ An *unnamed* session is titled by its whole first prompt, or by its latest
 prompt when Settings > Sessions > Session titles is `Latest prompt`.
 
 The rules, all of which exist because a real prompt broke the previous
-version (`src/web/sessionName.test.ts` pins them):
+version:
 
 - **First sentence**, not first N characters. A prompt says what it is about
   and then qualifies it for three more lines.
@@ -519,8 +518,7 @@ Three things this is careful about:
 
 Sending clears both entries. A cap of 16 drafts prunes the oldest, since
 nothing else ever reclaims a screenshot staged in a conversation nobody
-returns to. `src/web/drafts.test.ts` covers the quota, validation and pruning
-paths with a fake `localStorage` that has a settable ceiling.
+returns to.
 
 ## Projects
 
@@ -1409,9 +1407,7 @@ child on every tab switch (`0cc82ba`). `lastMessageAt` reads
 
 Timestamps are the one quantity both sides agree on, and the comparison
 **converges**: after reopening, our newest *is* the file's newest, so it goes
-quiet until someone writes again. `registry.test.ts` asserts that property
-directly — five reads, one reopen — with a `restart` that advances the
-timestamp the way a real reopen does.
+quiet until someone writes again.
 
 **The habit worth stealing.** Every wrong fix was verified against the
 mechanism ("my code does what I intended") instead of the symptom ("the

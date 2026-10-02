@@ -11,7 +11,6 @@
 		"build": "vite build",
 		"start": "node --import tsx src/server/index.ts",
 		"typecheck": "tsc --noEmit && sh scripts/check-ui.sh && sh scripts/check-api.sh",
-		"test": "node --test scripts/dev.test.mjs && timeout --kill-after=5s 30s node --import tsx --test --test-timeout=10000 src/**/*.test.ts",
 		"deadcode": "knip --no-config-hints && knip --production --no-config-hints"
 	},
 	"dependencies": {

@@ -166,8 +166,7 @@ const IMAGE_ONLY_PROMPT = "(see attached image)";
 // ---------------------------------------------------------------------------
 // Conversion helpers
 //
-// Verified against a live `read` + `bash` turn, committed as
-// fixtures/pi-turn.jsonl and replayed by agent.test.ts.
+// Verified against a live `read` + `bash` turn.
 // ---------------------------------------------------------------------------
 
 function textOf(content: unknown): string {
@@ -1451,8 +1450,7 @@ async function wrap(child: RpcChild, cwd: string): Promise<PiSession> {
 	/*
 	 * Frames drive two separate things, and they are kept separate: `toEvents`
 	 * turns a frame into what the browser sees, and this switch does what the
-	 * SERVER has to remember. Only the second half needs a live session, which
-	 * is what lets a recorded transcript exercise the first (agent.test.ts).
+	 * SERVER has to remember. Only the second half needs a live session.
 	 */
 	const unsubscribe = child.onFrame((frame) => {
 		if (!replaying || streaming) activity.record(frame);
