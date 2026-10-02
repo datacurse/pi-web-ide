@@ -82,7 +82,14 @@ export function workTimeline(blocks: PiBlock[], activity: TurnActivity | undefin
 		}
 	}
 	for (const item of items) {
-		if (item.kind === "tools") item.active = running && (item === items.at(-1) || toolLeaves(item.blocks).some((tool) => tool.running === true));
+		if (item.kind !== "tools") continue;
+		const tools = [...item.blocks, ...toolLeaves(item.blocks)];
+		const executing = tools.some((tool) => tool.running === true);
+		// Legacy tool blocks may omit running flags; use the current tools phase,
+		// never merely the fact that this is the last group in an unfinished turn.
+		const legacyToolsPhase = tools.every((tool) => tool.running === undefined)
+			&& activity?.steps.at(-1)?.kind === "tools" && item === items.at(-1);
+		item.active = running && (executing || legacyToolsPhase);
 	}
 	return items;
 }

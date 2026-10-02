@@ -82,14 +82,15 @@ test("rendering starts with planning, shows measured thoughts, and leaves prose 
 	assert.match(html, /\[\[open\]&gt;summary&gt;&amp;\]:opacity-100/);
 });
 
-test("live thinking is not duplicated; tool groups remain active through intervening thoughts", () => {
+test("only executing exploration is active while thinking and planning follow sequentially", () => {
 	const reasoning: PiBlock[] = [{ kind: "thinking", text: "Reasoning" }];
 	const live = { ...trace, end: undefined, steps: [{ kind: "thinking" as const, label: "", start: 1000 }] };
 	const html = renderToStaticMarkup(createElement(WorkTimeline, { blocks: reasoning, activity: live, running: true }));
 	assert.equal((html.match(/>Thinking</g) ?? []).length, 1);
 	assert.match(html, /class="work-shimmer"[^>]*>Thinking<\/span>/);
 	const exploring = renderToStaticMarkup(createElement(WorkTimeline, { blocks: blocks.slice(0, -1), activity: live, running: true }));
-	assert.match(exploring, /<span>Exploring/);
+	assert.match(exploring, /<span>Explored/);
+	assert.doesNotMatch(exploring, /Exploring/);
 	assert.match(exploring, /class="work-shimmer"[^>]*>Thinking<\/span>/);
 	assert.equal((exploring.match(/class="work-shimmer"/g) ?? []).length, 1);
 	const expanded = renderToStaticMarkup(createElement(WorkTimeline, { blocks: blocks.slice(0, -1), activity: live, running: true, expanded: true }));
@@ -101,13 +102,36 @@ test("live thinking is not duplicated; tool groups remain active through interve
 	const planningPhase = { ...live, steps: [{ kind: "processing" as const, label: "", start: 1000 }] };
 	const planning = renderToStaticMarkup(createElement(WorkTimeline, { blocks, activity: planningPhase, running: true }));
 	assert.match(planning, /class="work-shimmer"[^>]*>Planning next moves/);
+	assert.match(planning, /<span>Explored 1 file, 1 search/);
+	assert.doesNotMatch(planning, /Exploring/);
 	assert.equal((planning.match(/class="work-shimmer"/g) ?? []).length, 1);
 	assert.doesNotMatch(html, /Thought 2s/);
 	const items = workTimeline(blocks.slice(0, -1), live, true);
 	const last = items.at(-1);
-	assert.equal(last?.kind === "tools" && last.active, true);
+	assert.equal(last?.kind === "tools" && last.active, false);
 	const done = renderToStaticMarkup(createElement(WorkTimeline, { blocks: reasoning, activity: trace }));
 	assert.doesNotMatch(done, /role="status"/);
+});
+
+test("exploration follows real running flags, including nested and parallel calls", () => {
+	const phase: TurnActivity = { ...trace, end: undefined, steps: [{ kind: "processing", label: "", start: 1000 }] };
+	const active = (tools: PiBlock[], activity?: TurnActivity, running = true) => {
+		const item = workTimeline(tools, activity, running).find((item) => item.kind === "tools");
+		return item?.kind === "tools" && item.active;
+	};
+	const finished: PiBlock = { kind: "tool", ...tool("done"), running: false };
+	const pending: PiBlock = { kind: "tool", ...tool("live"), running: true };
+	assert.equal(active([finished]), false);
+	assert.equal(active([finished], undefined), false);
+	assert.equal(active([pending]), true);
+	assert.equal(active([pending], undefined), true);
+	assert.equal(active([pending], phase, false), false);
+	assert.equal(active([pending, { kind: "text", text: "Other work" }]), true);
+	const toolsPhase = { ...phase, steps: [{ kind: "tools" as const, label: "", start: 1000 }] };
+	assert.equal(active([finished], toolsPhase), false);
+	assert.equal(active([{ kind: "tool", ...tool("legacy") }], toolsPhase), true);
+	assert.equal(active([{ kind: "tool", ...tool("batch", "codemode"), running: true, children: [tool("done")] }]), true);
+	assert.equal(active([{ kind: "tool", ...tool("batch", "codemode"), children: [{ ...tool("child"), running: true }] }]), true);
 });
 
 test("empty thinking placeholders never become empty expandable disclosures", () => {
