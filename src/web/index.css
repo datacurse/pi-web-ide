@@ -964,19 +964,24 @@ input[type="number"]::-webkit-outer-spin-button {
 @media (prefers-reduced-motion: no-preference) {
 	@supports (background-clip: text) or (-webkit-background-clip: text) {
 		.work-shimmer {
-			background-image: linear-gradient(110deg, var(--color-neutral-400) 35%, var(--color-neutral-100) 50%, var(--color-neutral-400) 65%);
-			background-size: 250% 100%;
+			background-image: linear-gradient(105deg,
+				var(--color-neutral-500) 38%,
+				var(--color-amber-400) 46%,
+				var(--color-neutral-50) 50%,
+				var(--color-amber-400) 54%,
+				var(--color-neutral-500) 62%);
+			background-size: 200% 100%;
 			background-clip: text;
 			-webkit-background-clip: text;
 			color: transparent;
-			animation: work-shimmer 2.4s linear infinite;
+			animation: work-shimmer 1.5s linear infinite;
 		}
 	}
 }
 
 @keyframes work-shimmer {
-	from { background-position: 150% 0; }
-	to { background-position: -50% 0; }
+	from { background-position: 100% 0; }
+	to { background-position: 0% 0; }
 }
 
 
