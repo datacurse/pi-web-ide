@@ -52,6 +52,13 @@ export async function agentInstructions(cwd: string) {
 export function switchAgentInstructions(cwd: string, scope: "global" | "local", version: string | null, expected: string | null) {
 	if (scope !== "global" && scope !== "local") throw new Error("invalid instruction scope");
 	if (version !== null && (typeof version !== "string" || !VERSION.test(version))) throw new Error("invalid instruction version");
+	const content = version === null ? "" : readFileSync(join(backlogDir(instructionPath(cwd, scope)), version), "utf8");
+	saveAgentInstructions(cwd, scope, content, expected);
+}
+
+export function saveAgentInstructions(cwd: string, scope: "global" | "local", content: string, expected: string | null) {
+	if (scope !== "global" && scope !== "local") throw new Error("invalid instruction scope");
+	if (typeof content !== "string") throw new Error("instruction contents required");
 	if (expected !== null && typeof expected !== "string") throw new Error("expected contents required");
 	const path = instructionPath(cwd, scope);
 	let current: string | null = null;
@@ -64,8 +71,7 @@ export function switchAgentInstructions(cwd: string, scope: "global" | "local", 
 	} catch (err) {
 		if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
 	}
-	if (current !== expected) throw new Error("AGENTS.md changed on disk. Reopen Settings before switching.");
-	const content = version === null ? "" : readFileSync(join(backlogDir(path), version), "utf8");
+	if (current !== expected) throw new Error("AGENTS.md changed on disk. Reopen Settings before saving or switching.");
 	if (current !== null) {
 		mkdirSync(backlogDir(path), { recursive: true, mode: 0o700 });
 		writeFileSync(join(backlogDir(path), `${Date.now()}-${randomUUID()}.md`), current, { flag: "wx", mode: 0o600 });

@@ -3,7 +3,7 @@ import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promis
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { agentInstructions, switchAgentInstructions } from "./agentInstructions.js";
+import { agentInstructions, saveAgentInstructions, switchAgentInstructions } from "./agentInstructions.js";
 
 test("reads global and project instructions independently, including missing and unreadable files", async () => {
 	const root = await mkdtemp(join(tmpdir(), "pwi-instructions-"));
@@ -81,6 +81,42 @@ test("switches independently, preserves outgoing versions, and refuses stale or 
 		await rm(localPath);
 		switchAgentInstructions(project, "local", null, null);
 		assert.equal(await readFile(localPath, "utf8"), "");
+	} finally {
+		if (previous === undefined) delete process.env.PI_CODING_AGENT_DIR;
+		else process.env.PI_CODING_AGENT_DIR = previous;
+		await rm(root, { recursive: true, force: true });
+	}
+});
+
+test("saves edits and missing files, archives previous contents, and rejects stale or invalid edits", async () => {
+	const root = await mkdtemp(join(tmpdir(), "pwi-instruction-edit-"));
+	const previous = process.env.PI_CODING_AGENT_DIR;
+	try {
+		process.env.PI_CODING_AGENT_DIR = join(root, "agent");
+		const project = join(root, "project");
+		await mkdir(project);
+		saveAgentInstructions(project, "global", "# Global\nUse pnpm.\n", null);
+		saveAgentInstructions(project, "local", "original", null);
+		saveAgentInstructions(project, "local", "# Edited\nProject rules.\n", "original");
+		let result = await agentInstructions(project);
+		assert.equal(result.local.content, "# Edited\nProject rules.\n");
+		assert.equal(result.global.content, "# Global\nUse pnpm.\n");
+		assert.deepEqual(result.backlog.local.map((v) => v.content), ["original"]);
+		assert.equal(result.backlog.global.length, 0);
+		assert.throws(() => saveAgentInstructions(project, "local", "stale", "original"), /changed on disk/);
+		assert.throws(() => saveAgentInstructions(project, "local", null as unknown as string, result.local.content), /contents required/);
+		assert.throws(() => saveAgentInstructions(project, "local", "bad", undefined as unknown as null), /expected contents required/);
+		assert.throws(() => saveAgentInstructions(project, "other" as "local", "bad", null), /invalid instruction scope/);
+		const localPath = join(project, "AGENTS.md");
+		await rm(localPath);
+		await symlink(join(root, "agent", "AGENTS.md"), localPath);
+		assert.throws(() => saveAgentInstructions(project, "local", "unsafe", result.global.content), /regular file/);
+		await rm(localPath);
+		saveAgentInstructions(project, "local", "", null);
+		result = await agentInstructions(project);
+		assert.equal(result.local.content, "");
+		assert.equal(result.global.content, "# Global\nUse pnpm.\n");
+		assert.equal(result.backlog.local.length, 1);
 	} finally {
 		if (previous === undefined) delete process.env.PI_CODING_AGENT_DIR;
 		else process.env.PI_CODING_AGENT_DIR = previous;

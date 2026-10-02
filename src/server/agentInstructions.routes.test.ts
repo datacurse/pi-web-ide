@@ -63,6 +63,33 @@ test("instruction API validates writes and invalidates prewarmed sessions on suc
 		assert.equal(restored.status, 200);
 		assert.equal(await readFile(join(project, "AGENTS.md"), "utf8"), "rules");
 		assert.equal(discarded, 2);
+		for (const body of [
+			{},
+			{ scope: "local", content: 42, expected: "rules" },
+			{ scope: "local", content: "edited" },
+			{ scope: "other", content: "edited", expected: "rules" },
+			{ scope: "local", content: "edited", expected: "" },
+		]) {
+			const response = await app.request("/api/agent-instructions", {
+				method: "PUT", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify(body),
+			});
+			assert.equal(response.status, 400);
+		}
+		const outsideEdit = await api["agent-instructions"].$put({
+			query: { cwd: join(root, "outside") }, json: { scope: "local", content: "edited", expected: null },
+		});
+		assert.equal(outsideEdit.status, 400);
+		assert.equal(discarded, 2);
+		const edited = await api["agent-instructions"].$put({
+			query: { cwd: project }, json: { scope: "local", content: "# Edited\nNew rules.\n", expected: "rules" },
+		});
+		assert.equal(edited.status, 200);
+		if (edited.status !== 200) throw new Error("save failed");
+		const saved = await edited.json();
+		assert.equal(saved.local.content, "# Edited\nNew rules.\n");
+		assert.ok(saved.backlog.local.some((v) => v.content === "rules"));
+		assert.equal(await readFile(join(project, "AGENTS.md"), "utf8"), "# Edited\nNew rules.\n");
+		assert.equal(discarded, 3);
 	} finally {
 		if (previousAgent === undefined) delete process.env.PI_CODING_AGENT_DIR;
 		else process.env.PI_CODING_AGENT_DIR = previousAgent;
