@@ -849,13 +849,48 @@ export function useSession({
     [runSession, attach],
   );
 
+  const [restartState, setRestartState] = useState<{
+    id: string;
+    running: boolean;
+    error: string | null;
+  } | null>(null);
+  const restartingIds = useRef(new Set<string>());
+  const restarting = Boolean(
+    restartState && restartState.id === snapshot?.id && restartState.running,
+  );
+  const restartError =
+    restartState?.id === snapshot?.id ? restartState?.error : null;
   const restart = useCallback(
     () =>
-      runSession(async ({ id, update }) => {
-        const fresh = toSnapshot(
-          await unwrap(api.sessions[":id"].restart.$post({ param: { id } })),
-        );
-        update(() => fresh);
+      runSession(async ({ id, active, update }) => {
+        if (restartingIds.current.has(id)) return;
+        restartingIds.current.add(id);
+        setRestartState({ id, running: true, error: null });
+        try {
+          const fresh = toSnapshot(
+            await unwrap(api.sessions[":id"].restart.$post({ param: { id } })),
+          );
+          update(() => fresh);
+          if (active()) {
+            seenErrorRef.current = null;
+            setPartial(emptyPartial());
+            setBusy(fresh.isStreaming);
+            setCommand(null);
+            commandsFetchedAt.current = null;
+          }
+        } catch (err) {
+          if (active())
+            setRestartState({
+              id,
+              running: false,
+              error: err instanceof Error ? err.message : String(err),
+            });
+        } finally {
+          restartingIds.current.delete(id);
+          setRestartState((state) =>
+            state?.id === id ? { ...state, running: false } : state,
+          );
+        }
       }),
     [runSession],
   );
@@ -961,6 +996,8 @@ export function useSession({
     fork,
     edit,
     restart,
+    restarting,
+    restartError,
     reloadSnapshot,
     refreshCommands,
     answerAsk,

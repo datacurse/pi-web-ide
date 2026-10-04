@@ -439,6 +439,15 @@ export class Registry {
 
     const fresh = await this.acquire(undefined, file);
     for (const s of subscribers) fresh.subscribers.add(s);
+    // Existing event streams survive the replacement, but their snapshots
+    // (and stale-package flags) must also be refreshed in every open view.
+    for (const s of subscribers) {
+      try {
+        s({ type: "idle" });
+      } catch {
+        // A disconnected view must not make the restart fail.
+      }
+    }
     return fresh;
   }
 

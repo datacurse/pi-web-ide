@@ -1934,6 +1934,8 @@ export default function App() {
         onFork={s.fork}
         onEdit={s.edit}
         onRestart={s.restart}
+        restarting={s.restarting}
+        restartError={s.restartError}
       />
     </FileNavigationContext.Provider>
   );

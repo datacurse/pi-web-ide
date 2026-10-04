@@ -817,6 +817,35 @@ const NOTICE_STYLE: Record<PiNotice["level"], string> = {
  * whole visible result of running one: without it a command looks like it did
  * nothing at all. Ephemeral by design — the next prompt clears it.
  */
+export function NoticeText({ text }: { text: string }) {
+  if (!/^(Project|Session) notebook checkpoint failed:/.test(text))
+    return <>{text}</>;
+  return (
+    <>
+      <div className="font-medium">{t("Agent memory could not be saved")}</div>
+      <div className="mt-1 text-body">
+        {t(
+          "This affects saved working memory, not files already edited. The agent may need to rebuild that memory after a restart.",
+        )}
+      </div>
+      <details
+        data-custom="notebook warning technical details"
+        className="mt-2 text-meta"
+      >
+        <summary
+          data-custom="notebook warning disclosure"
+          className="cursor-pointer"
+        >
+          {t("Technical details")}
+        </summary>
+        <div className="mt-2 font-mono whitespace-pre-wrap break-words">
+          {text}
+        </div>
+      </details>
+    </>
+  );
+}
+
 export function Notices({ notices }: { notices: PiNotice[] }) {
   if (notices.length === 0) return null;
   return (
@@ -824,9 +853,9 @@ export function Notices({ notices }: { notices: PiNotice[] }) {
       {notices.map((n, i) => (
         <div
           key={i}
-          className={`chat-measure rounded-sm border px-3 py-2 text-body whitespace-pre-wrap ${NOTICE_STYLE[n.level]}`}
+          className={`chat-measure rounded-sm border px-3 py-2 text-body whitespace-pre-wrap break-words ${NOTICE_STYLE[n.level]}`}
         >
-          {n.text}
+          <NoticeText text={n.text} />
         </div>
       ))}
     </div>

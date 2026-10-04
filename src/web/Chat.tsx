@@ -53,6 +53,7 @@ import {
   ContextPanel,
   UserMessage,
   Notices,
+  NoticeText,
 } from "./Transcript.js";
 import { formatDuration, t } from "./i18n.js";
 import { PiMark } from "./piMark.js";
@@ -268,6 +269,8 @@ export function Chat({
   onCompact,
   compacting,
   onRestart,
+  restarting,
+  restartError,
   draftRev = 0,
   focus,
 }: {
@@ -310,6 +313,8 @@ export function Chat({
   onEdit: (at: number, text: string, images: PiImage[]) => void;
   /** Replace this session's pi child so it sees newly installed packages. */
   onRestart: () => void;
+  restarting: boolean;
+  restartError?: string | null;
   /**
    * Bumped when App wrote this session's draft (Explorer's "Add to Chat"):
    * re-read it and put the caret at its end.
@@ -743,21 +748,23 @@ export function Chat({
                   itemContent={(_i, row) => {
                     const key = `${snapshot.id}:${row.role}:${row.at}`;
                     return (
-                      <HistoryRow
-                        row={row}
-                        userMode={userMode}
-                        onEdit={busy ? undefined : onEdit}
-                        onFork={onFork}
-                        expanded={expandedWork.has(key)}
-                        onToggle={() =>
-                          setExpandedWork((previous) => {
-                            const next = new Set(previous);
-                            if (next.has(key)) next.delete(key);
-                            else next.add(key);
-                            return next;
-                          })
-                        }
-                      />
+                      <div className="flow-root">
+                        <HistoryRow
+                          row={row}
+                          userMode={userMode}
+                          onEdit={busy ? undefined : onEdit}
+                          onFork={onFork}
+                          expanded={expandedWork.has(key)}
+                          onToggle={() =>
+                            setExpandedWork((previous) => {
+                              const next = new Set(previous);
+                              if (next.has(key)) next.delete(key);
+                              else next.add(key);
+                              return next;
+                            })
+                          }
+                        />
+                      </div>
                     );
                   }}
                 />
@@ -786,43 +793,7 @@ export function Chat({
               {snapshot.error && (
                 <div className="chat-gutter my-3">
                   <div className="chat-measure rounded-sm border border-red-900 bg-red-950/40 px-3 py-2 text-body text-red-300">
-                    {snapshot.error}
-                  </div>
-                </div>
-              )}
-
-              {/*
-               * A package was installed after this child started. pi reads
-               * extensions, skills and prompt templates once, at startup, so
-               * this session cannot see it until the process is replaced —
-               * which is offered, never done automatically, because a restart
-               * mid-turn would lose the turn.
-               */}
-              {snapshot.stale && (
-                <div className="chat-gutter my-3">
-                  <div className="chat-measure flex items-center gap-3 rounded-sm border border-amber-900 bg-amber-950/30 px-3 py-2 text-body text-amber-300">
-                    <span className="min-w-0 flex-1">
-                      {t(
-                        "Packages changed since this session started. Its commands and skills are the old set until it restarts.",
-                      )}
-                    </span>
-                    <Button
-                      variant="warning"
-                      size="sm"
-                      onClick={onRestart}
-                      disabled={busy}
-                      title={
-                        busy
-                          ? t(
-                              "Finish the turn first — a restart mid-turn loses it",
-                            )
-                          : t(
-                              "Replace this session's pi process; the conversation is kept",
-                            )
-                      }
-                    >
-                      {t("Restart session")}
-                    </Button>
+                    <NoticeText text={snapshot.error} />
                   </div>
                 </div>
               )}
@@ -841,6 +812,37 @@ export function Chat({
           {/* Same column as the prose above it, so the box's edges line up
 					    with the text you are replying to. */}
           <div className="chat-measure relative">
+            {/* Outside the virtual transcript: never overlaps a measured row. */}
+            {snapshot.stale && (
+              <div className="mb-3 rounded-sm border border-neutral-800 bg-neutral-900 px-3 py-3">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                  <div className="min-w-0 flex-1 basis-48">
+                    <div className="text-ui text-neutral-200">
+                      {t("Package updates available")}
+                    </div>
+                    <div className="mt-1 text-meta text-neutral-500">
+                      {busy
+                        ? t("Finish the current turn before restarting.")
+                        : t(
+                            "Restart to load updated commands and skills. Your conversation is kept.",
+                          )}
+                    </div>
+                  </div>
+                  <Button
+                    size="sm"
+                    onClick={onRestart}
+                    disabled={busy || compacting || restarting}
+                  >
+                    {restarting ? t("Restarting…") : t("Restart session")}
+                  </Button>
+                </div>
+                {restartError && (
+                  <div role="alert" className="mt-2 text-meta text-red-400">
+                    {restartError}
+                  </div>
+                )}
+              </div>
+            )}
             {/*
              * Git on the right of the status line and ABOVE the composer,
              * which is where it belongs in the flow: you finish reading the

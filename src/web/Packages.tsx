@@ -9,7 +9,14 @@
  */
 
 import { Fragment, useCallback, useEffect, useState } from "react";
-import { X } from "@phosphor-icons/react";
+import {
+  ArrowClockwise,
+  Cube,
+  Info,
+  Plus,
+  Trash,
+  X,
+} from "@phosphor-icons/react";
 import { stripAnsi } from "fancy-ansi";
 import type {
   PiwMutation,
@@ -181,7 +188,19 @@ export function Packages({
       className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-neutral-950 text-neutral-100"
     >
       <PanelHeader title={t("Packages")} onClose={onClose}>
-        <div className="flex gap-1">
+        <span
+          className="ml-auto font-mono text-caption text-neutral-500"
+          title={t("pi on this machine")}
+        >
+          pi {view?.piVersion ?? "?"}
+        </span>
+        <IconButton label={t("Refresh")} onClick={() => void refresh()}>
+          <ArrowClockwise size={16} />
+        </IconButton>
+      </PanelHeader>
+
+      <div className="flex flex-wrap items-center gap-2 border-b border-neutral-800 px-3 py-2">
+        <div className="flex flex-wrap gap-1">
           {(["installed", "pwi", "search"] as const).map((id) => (
             <Button
               key={id}
@@ -198,20 +217,17 @@ export function Packages({
             </Button>
           ))}
         </div>
-        <Button variant="ghost" size="sm" onClick={() => void refresh()}>
-          {t("Refresh")}
-        </Button>
-        <span className="ml-auto flex min-w-0 items-center gap-2 font-mono text-caption text-neutral-500">
-          <span className="fade-end" title={t("pi on this machine")}>
-            pi {view?.piVersion ?? "?"}
+        {working && (
+          <span
+            role="status"
+            className="fade-end ml-auto text-meta text-amber-400"
+          >
+            {working}…
           </span>
-          {working && (
-            <span className="fade-end text-amber-400">{working}…</span>
-          )}
-        </span>
-      </PanelHeader>
+        )}
+      </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto p-3">
+      <div className="min-h-0 flex-1 overflow-y-auto p-4">
         <div className={tab === "installed" ? "" : "hidden"}>
           <Installed
             cwd={cwd}
@@ -313,20 +329,36 @@ function Installed({
 }) {
   const [settingsOf, setSettingsOf] = useState<string | null>(null);
   return (
-    <>
-      <div className="mb-3 flex items-center gap-2">
-        <Button size="sm" onClick={onAdd}>
+    <div className="mx-auto w-full max-w-5xl">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="flex size-10 shrink-0 items-center justify-center rounded-md border border-amber-500/20 bg-amber-500/10 text-amber-400">
+            <Cube size={22} />
+          </div>
+          <div>
+            <h2 className="text-title font-medium">{t("pi packages")}</h2>
+            <p className="mt-1 text-meta text-neutral-500">
+              {t("{count} installed", { count: packages.length })}
+              <span className="mx-2 text-neutral-700">/</span>
+              {t("{count} disabled", {
+                count: packages.filter((p) => p.disabled).length,
+              })}
+            </p>
+          </div>
+        </div>
+        <Button variant="primary" size="sm" onClick={onAdd} disabled={busy}>
+          <Plus size={14} />
           {t("Add by source")}
         </Button>
-        <span className="text-meta text-neutral-500">
-          {t("npm:name@version, git:host/user/repo@ref, or an https/ssh URL")}
-        </span>
       </div>
-      <p className="mb-3 text-meta text-neutral-500">
-        {t(
-          "Disable keeps a package installed. Restart existing sessions to apply changes. Project package declarations can override personal settings.",
-        )}
-      </p>
+      <div className="mb-4 flex items-start gap-2 rounded-md border border-neutral-800 bg-neutral-900/40 p-3 text-meta text-neutral-400">
+        <Info size={16} className="shrink-0 text-neutral-500" />
+        <p>
+          {t(
+            "Disable keeps a package installed. Restart existing sessions to apply changes. Project package declarations can override personal settings.",
+          )}
+        </p>
+      </div>
 
       {error && (
         <div className="mb-3 rounded-sm border border-amber-900 bg-amber-950/30 px-3 py-2 text-meta text-amber-300">
@@ -334,152 +366,180 @@ function Installed({
         </div>
       )}
 
-      <table className="w-full border-collapse text-ui">
-        <thead>
-          <tr
-            className={`border-b border-neutral-800 text-left ${sectionLabel}`}
-          >
-            <th className="py-1 pr-3 font-normal">{t("Package")}</th>
-            <th className="py-1 pr-3 font-normal">{t("Installed")}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {packages.map((p) => (
-            <Fragment key={p.identity}>
-              <tr className="group border-b border-neutral-800 align-top">
-                <td className="py-1.5 pr-3">
-                  <span className="font-mono text-neutral-100">
-                    {p.identity}
-                  </span>
-                  <span className="ml-2 text-caption text-neutral-600">
-                    {p.kind}
-                  </span>
-                  {hasSettings(p.identity) && (
-                    <Button
-                      size="sm"
-                      variant={settingsOf === p.identity ? "subtle" : "ghost"}
-                      className="ml-2"
-                      aria-expanded={settingsOf === p.identity}
-                      onClick={() =>
-                        setSettingsOf(
-                          settingsOf === p.identity ? null : p.identity,
-                        )
-                      }
-                    >
-                      {t("settings")}
-                    </Button>
-                  )}
-                </td>
-                <td className="py-1.5 pr-3">
-                  <span className="font-mono text-meta text-neutral-300">
-                    {p.installed ?? t("not on disk")}
-                  </span>
-                  {p.pinned && (
-                    <span
-                      className="ml-1 rounded-sm bg-neutral-800 px-1 text-caption text-neutral-400"
-                      title={t("pinned to {version}; package updates skip it", {
-                        version: p.pinned,
-                      })}
-                    >
-                      {t("pinned")}
+      <div className="overflow-x-auto rounded-md border border-neutral-800">
+        <table className="w-full border-collapse text-ui">
+          <thead>
+            <tr
+              className={`border-b border-neutral-800 bg-neutral-900/60 text-left ${sectionLabel}`}
+            >
+              <th className="px-4 py-2 font-normal">{t("Package")}</th>
+              <th className="px-4 py-2 font-normal">{t("Installed")}</th>
+              <th className="px-4 py-2 text-right font-normal">
+                {t("Actions")}
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {packages.map((p) => (
+              <Fragment key={p.identity}>
+                <tr className="border-b border-neutral-800/70 align-middle transition-colors last:border-b-0 hover:bg-neutral-900/50">
+                  <td className="px-4 py-4">
+                    <span className="font-mono break-all text-neutral-100">
+                      {p.identity}
                     </span>
-                  )}
-                  {p.filtered && !p.disabled && (
-                    <span
-                      className="ml-1 text-caption text-neutral-500"
-                      title={t("loads only part of itself")}
-                    >
-                      {t("filtered")}
-                    </span>
-                  )}
-                  {!p.autoload && !p.disabled && (
-                    <span
-                      className="ml-1 text-caption text-neutral-500"
-                      title={t(
-                        "installed, but not loaded unless a project asks for it",
-                      )}
-                    >
-                      {t("off")}
-                    </span>
-                  )}
-                  {p.disabled && (
-                    <span className="ml-1 text-caption text-amber-400">
-                      {t("disabled")}
-                    </span>
-                  )}
-                  <Button
-                    size="sm"
-                    className="ml-2"
-                    disabled={busy}
-                    onClick={() => onEnabled(p.source, p.disabled)}
-                    title={t(
-                      p.disabled
-                        ? "Restore this package’s previous configuration"
-                        : "Keep installed, but stop loading its resources",
-                    )}
-                  >
-                    {p.disabled ? t("enable") : t("disable")}
-                  </Button>
-                  {p.kind !== "local" && (
-                    <span className="ml-2 inline-flex gap-1 opacity-0 transition-opacity duration-150 ease-out group-hover:opacity-100 motion-reduce:transition-none">
-                      <Button
-                        size="sm"
-                        onClick={() => onUpdate(p.source)}
-                        title={
-                          p.pinned
-                            ? t(
-                                "Pinned: an update will not move it. Install the new version to move the pin.",
-                              )
-                            : t("Update this package")
+                    <span className="mt-1 flex items-center gap-2 text-caption text-neutral-500">
+                      {p.kind}
+                      <span
+                        className={
+                          p.disabled ? "text-amber-400" : "text-neutral-400"
                         }
                       >
-                        {t("update")}
-                      </Button>
+                        ·{" "}
+                        {p.disabled
+                          ? t("disabled")
+                          : p.autoload
+                            ? t("enabled")
+                            : t("off")}
+                      </span>
+                    </span>
+                    {hasSettings(p.identity) && (
                       <Button
                         size="sm"
-                        onClick={() => onRemove(p.source)}
-                        title={t("Remove this package")}
+                        variant={settingsOf === p.identity ? "subtle" : "ghost"}
+                        className="ml-2"
+                        aria-expanded={settingsOf === p.identity}
+                        onClick={() =>
+                          setSettingsOf(
+                            settingsOf === p.identity ? null : p.identity,
+                          )
+                        }
                       >
-                        {t("remove")}
+                        {t("settings")}
                       </Button>
+                    )}
+                  </td>
+                  <td className="px-4 py-4 whitespace-nowrap">
+                    <span className="font-mono text-meta text-neutral-300">
+                      {p.installed ?? t("not on disk")}
                     </span>
-                  )}
-                </td>
-              </tr>
-              {settingsOf === p.identity && (
-                <tr className="border-b border-neutral-800">
-                  <td colSpan={2} className="pt-1">
-                    <SolPiSettings cwd={cwd} />
+                    {p.pinned && (
+                      <span
+                        className="ml-1 rounded-sm bg-neutral-800 px-1 text-caption text-neutral-400"
+                        title={t(
+                          "pinned to {version}; package updates skip it",
+                          {
+                            version: p.pinned,
+                          },
+                        )}
+                      >
+                        {t("pinned")}
+                      </span>
+                    )}
+                    {p.filtered && !p.disabled && (
+                      <span
+                        className="ml-1 text-caption text-neutral-500"
+                        title={t("loads only part of itself")}
+                      >
+                        {t("filtered")}
+                      </span>
+                    )}
+                    {!p.autoload && !p.disabled && (
+                      <span
+                        className="ml-1 text-caption text-neutral-500"
+                        title={t(
+                          "installed, but not loaded unless a project asks for it",
+                        )}
+                      >
+                        {t("off")}
+                      </span>
+                    )}
+                  </td>
+                  <td className="w-px px-4 py-4">
+                    <div className="flex items-center justify-end gap-1">
+                      <Button
+                        size="sm"
+                        variant={p.disabled ? "secondary" : "subtle"}
+                        className="mr-2 w-16"
+                        disabled={busy}
+                        onClick={() => onEnabled(p.source, p.disabled)}
+                        title={t(
+                          p.disabled
+                            ? "Restore this package’s previous configuration"
+                            : "Keep installed, but stop loading its resources",
+                        )}
+                      >
+                        {p.disabled ? t("enable") : t("disable")}
+                      </Button>
+                      {p.kind !== "local" && (
+                        <>
+                          <IconButton
+                            size="sm"
+                            disabled={busy}
+                            onClick={() => onUpdate(p.source)}
+                            label={
+                              p.pinned
+                                ? t(
+                                    "Pinned: an update will not move it. Install the new version to move the pin.",
+                                  )
+                                : t("Update this package")
+                            }
+                          >
+                            <ArrowClockwise size={16} />
+                          </IconButton>
+                          <IconButton
+                            size="sm"
+                            disabled={busy}
+                            onClick={() => onRemove(p.source)}
+                            label={t("Remove this package")}
+                          >
+                            <Trash size={16} />
+                          </IconButton>
+                        </>
+                      )}
+                    </div>
                   </td>
                 </tr>
-              )}
-            </Fragment>
-          ))}
-          {packages.length === 0 && (
-            <tr>
-              <td
-                colSpan={2}
-                className="py-6 text-center text-meta text-neutral-500"
-              >
-                {t("No packages installed yet.")}
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
+                {settingsOf === p.identity && (
+                  <tr className="border-b border-neutral-800">
+                    <td colSpan={3} className="pt-1">
+                      <SolPiSettings cwd={cwd} />
+                    </td>
+                  </tr>
+                )}
+              </Fragment>
+            ))}
+            {packages.length === 0 && (
+              <tr>
+                <td
+                  colSpan={3}
+                  className="py-6 text-center text-meta text-neutral-500"
+                >
+                  {t("No packages installed yet.")}
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
 
-      <div className="mt-6 border-t border-neutral-800 pt-3">
-        <h3 className={sectionLabel}>{t("pi itself")}</h3>
-        <p className="mt-1 max-w-prose text-meta text-neutral-500">
-          {t(
-            "Extensions declare pi's own packages as peer dependencies, so a machine on a different pi is how a package works on one box and throws on another. Updating is never automatic.",
-          )}
-        </p>
-        <div className="mt-2">
-          <Button size="sm" onClick={onUpdatePi}>
-            <span className="font-mono">
-              pi {piVersion ?? "?"} → {t("update")}
+      <div className="mt-4 flex flex-wrap items-start justify-between gap-4 rounded-md border border-neutral-800 bg-neutral-900/40 p-4">
+        <div className="min-w-0 flex-1">
+          <h3 className="flex flex-wrap items-center gap-2 font-medium">
+            {t("pi itself")}
+            <span className="rounded-sm border border-neutral-700 px-1.5 py-0.5 font-mono text-caption text-neutral-400">
+              {piVersion ?? "?"}
             </span>
+          </h3>
+          <p className="mt-2 max-w-prose text-meta leading-relaxed text-neutral-500">
+            {t(
+              "Extensions declare pi's own packages as peer dependencies, so a machine on a different pi is how a package works on one box and throws on another. Updating is never automatic.",
+            )}
+          </p>
+        </div>
+        <div>
+          <Button size="sm" onClick={onUpdatePi} disabled={busy}>
+            <ArrowClockwise size={14} />
+            {t("Update pi")}
           </Button>
         </div>
       </div>
@@ -515,7 +575,7 @@ function Installed({
           </ul>
         </div>
       )}
-    </>
+    </div>
   );
 }
 
