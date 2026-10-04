@@ -1,4 +1,12 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { Virtuoso } from "react-virtuoso";
 import {
   ArrowDown,
@@ -22,6 +30,12 @@ import { ModelSelector } from "./ModelSelector.js";
 import { GitActions } from "./GitActions.js";
 import { RawBlocks } from "./RawOutput.js";
 import { WorkTimeline } from "./WorkTimeline.js";
+import { TimedWork } from "./TimedWork.js";
+import {
+  readWorkDisplay,
+  subscribeWorkDisplay,
+  type WorkDisplay,
+} from "./prefs.js";
 import { rawRows, type RawRow } from "./rawTurns.js";
 import { ASK_MODES, type AskMode, type UserMode } from "./prefs.js";
 import {
@@ -160,12 +174,14 @@ const HistoryRow = memo(function HistoryRow({
   userMode,
   onEdit,
   onFork,
+  workDisplay,
 }: {
   row: RawRow;
   first: boolean;
   expanded: boolean;
   onToggle: () => void;
   userMode: UserMode;
+  workDisplay: WorkDisplay;
   onEdit?: (at: number, text: string, images: PiImage[]) => void;
   onFork: (at: number) => Promise<void>;
 }) {
@@ -198,33 +214,37 @@ const HistoryRow = memo(function HistoryRow({
         {row.role !== "assistant" && (
           <div className="font-mono text-meta text-neutral-500">{row.role}</div>
         )}
-        {(!!row.work?.length || row.running) && (
-          <>
-            {!row.running && (
-              <button
-                type="button"
-                data-custom="work disclosure: muted status text without button chrome"
-                aria-expanded={expanded}
-                onClick={onToggle}
-                className="group/work chat-prose inline-flex items-center gap-1.5 py-1 text-neutral-500 transition-colors hover:text-neutral-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-neutral-500"
-              >
-                {workLabel}
-                <CaretRight
-                  size={12}
-                  aria-hidden
-                  className={`transition-opacity ${expanded ? "rotate-90 opacity-100" : "opacity-0 group-hover/work:opacity-100 group-focus-visible/work:opacity-100"}`}
+        {workDisplay === "timeline" && row.activity?.steps.length ? (
+          <TimedWork row={row} />
+        ) : (
+          (!!row.work?.length || row.running) && (
+            <>
+              {!row.running && (
+                <button
+                  type="button"
+                  data-custom="work disclosure: muted status text without button chrome"
+                  aria-expanded={expanded}
+                  onClick={onToggle}
+                  className="group/work chat-prose inline-flex items-center gap-1.5 py-1 text-neutral-500 transition-colors hover:text-neutral-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-neutral-500"
+                >
+                  {workLabel}
+                  <CaretRight
+                    size={12}
+                    aria-hidden
+                    className={`transition-opacity ${expanded ? "rotate-90 opacity-100" : "opacity-0 group-hover/work:opacity-100 group-focus-visible/work:opacity-100"}`}
+                  />
+                </button>
+              )}
+              {(row.running || expanded) && (
+                <WorkTimeline
+                  blocks={row.work ?? []}
+                  activity={row.activity}
+                  running={row.running}
+                  expanded={expanded}
                 />
-              </button>
-            )}
-            {(row.running || expanded) && (
-              <WorkTimeline
-                blocks={row.work ?? []}
-                activity={row.activity}
-                running={row.running}
-                expanded={expanded}
-              />
-            )}
-          </>
+              )}
+            </>
+          )
         )}
         <RawBlocks blocks={row.blocks} />
         {row.answerAt !== undefined && (
@@ -534,6 +554,10 @@ export function Chat({
     return mergeLiveTools(settled, partial.tools);
   }, [snapshot?.messages, partial.tools]);
 
+  const workDisplay = useSyncExternalStore(
+    subscribeWorkDisplay,
+    readWorkDisplay,
+  );
   const [expandedWork, setExpandedWork] = useState<Set<string>>(
     () => new Set(),
   );
@@ -756,6 +780,7 @@ export function Chat({
                           row={row}
                           first={i === 0}
                           userMode={userMode}
+                          workDisplay={workDisplay}
                           onEdit={busy ? undefined : onEdit}
                           onFork={onFork}
                           expanded={expandedWork.has(key)}

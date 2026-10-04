@@ -186,8 +186,13 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
   escaped text inside their own native `details` disclosures, initially collapsed.
   Nested calls stay under their parent; there is no tool-mode selector.
 - User prompts retain their pill, image thumbnails, long-message folding and inline editing.
-- Recorded activity still persists server-side. It is not drawn as timing bars or model rounds.
-  Snapshot refreshes must preserve newer live telemetry received while the request was in flight.
+- Settings → Transcript → Work display selects **Cursor** (the default quiet disclosures
+  described above) or **Timeline** (Requesting, Thinking, Receiving and Doing timers,
+  total elapsed time and expandable numbered model rounds). The choice persists per browser
+  and updates both panes immediately. Timeline uses the same Markdown/tool renderer and
+  keeps the final answer outside the rounds; turns without recorded activity fall back to Cursor.
+- Recorded activity persists server-side. Snapshot refreshes must preserve newer live
+  telemetry received while the request was in flight.
 - History is virtualized; expanding work must not mount the whole transcript.
 
 ## Composer

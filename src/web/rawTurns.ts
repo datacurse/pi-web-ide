@@ -13,6 +13,8 @@ export type RawRow = {
   /** One model roundtrip per assistant message, including the final answer. */
   roundtrips?: number;
   activity?: TurnActivity;
+  workMessages?: PiMessage[];
+  workPartial?: PiPartial;
 };
 
 /** Keep only a settled final answer outside the work disclosure. */
@@ -75,6 +77,8 @@ export function rawRows(
       work: blocks,
       running: live,
       activity: trace,
+      workMessages: work,
+      workPartial: live ? partial : undefined,
       roundtrips: turn.filter((message) => message.role === "assistant").length,
       workStartedAt: trace?.start ?? turnAt ?? turn[0]?.timestamp,
       // Never use the next prompt or the current clock as a historical end time.

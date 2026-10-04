@@ -42,6 +42,9 @@ import {
   SCROLLBAR_TONES,
   type ScrollbarTone,
   readMessageSeparators,
+  readWorkDisplay,
+  writeWorkDisplay,
+  WORK_DISPLAYS,
   writeMessageSeparators,
   applyFooterLayout,
   applyScrollPast,
@@ -519,6 +522,7 @@ export function Settings({
   const [category, setCategory] = useState<Category>("appearance");
   const [expandDetails, setExpandDetails] = useState(readSettingsExpanded);
   const [footer, setFooter] = useState(readFooterLayout);
+  const [workDisplay, setWorkDisplay] = useState(readWorkDisplay);
   const [messageSeparators, setMessageSeparators] = useState(
     readMessageSeparators,
   );
@@ -778,6 +782,36 @@ export function Settings({
             </span>
           </span>
         </OptionRow>
+      ),
+    },
+    {
+      category: "transcript",
+      label: t("Work display"),
+      text: "cursor timeline working visualization phases timing rounds",
+      node: (
+        <div role="radiogroup" aria-label={t("Work display")}>
+          <div className="px-2 py-1 text-ui">{t("Work display")}</div>
+          {WORK_DISPLAYS.map((mode) => (
+            <OptionRow key={mode.id} selected={workDisplay === mode.id}>
+              <input
+                type="radio"
+                name="workDisplay"
+                checked={workDisplay === mode.id}
+                onChange={() => {
+                  setWorkDisplay(mode.id);
+                  writeWorkDisplay(mode.id);
+                }}
+                className="size-3.5 shrink-0 accent-amber-400"
+              />
+              <span className="flex-1">
+                {t(mode.label)}
+                <span className="block text-meta text-neutral-500">
+                  {t(mode.hint)}
+                </span>
+              </span>
+            </OptionRow>
+          ))}
+        </div>
       ),
     },
     {

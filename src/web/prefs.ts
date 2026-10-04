@@ -34,6 +34,38 @@ export function writeStored(key: string, value: string): void {
   }
 }
 
+export type WorkDisplay = "cursor" | "timeline";
+export const WORK_DISPLAYS = [
+  {
+    id: "cursor",
+    label: "Cursor",
+    hint: "Quiet thinking and tool disclosures.",
+  },
+  {
+    id: "timeline",
+    label: "Timeline",
+    hint: "Four timed phases and model rounds.",
+  },
+] as const;
+
+export function readWorkDisplay(): WorkDisplay {
+  return readStored("pwi:workDisplay") === "timeline" ? "timeline" : "cursor";
+}
+
+export function writeWorkDisplay(mode: WorkDisplay): void {
+  writeStored("pwi:workDisplay", mode);
+  window.dispatchEvent(new Event("pwi:workDisplay"));
+}
+
+export function subscribeWorkDisplay(onChange: () => void): () => void {
+  window.addEventListener("pwi:workDisplay", onChange);
+  window.addEventListener("storage", onChange);
+  return () => {
+    window.removeEventListener("pwi:workDisplay", onChange);
+    window.removeEventListener("storage", onChange);
+  };
+}
+
 /**
  * Which palette the UI is painted in: the four Catppuccin flavors, plus
  * Claude's own dark and light interfaces.
