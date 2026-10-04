@@ -25,7 +25,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { PI_BIN } from "./agent.js";
 import { isRecord } from "./guards.js";
-import { readSettings } from "./models.js";
+import { readSettings, writeSettings } from "./models.js";
 import type { PiwPackage, PiwPackagesView } from "../shared/types.js";
 
 /** One `pi install` can clone a repo and run `npm install`; a minute is not enough. */
@@ -161,6 +161,7 @@ export function parseSource(source: string): PiwPackage | null {
       installed: null,
       filtered: false,
       autoload: true,
+      disabled: false,
     };
   }
 
@@ -187,6 +188,7 @@ export function parseSource(source: string): PiwPackage | null {
       installed: null,
       filtered: false,
       autoload: true,
+      disabled: false,
     };
   }
 
@@ -199,6 +201,7 @@ export function parseSource(source: string): PiwPackage | null {
       installed: null,
       filtered: false,
       autoload: true,
+      disabled: false,
     };
   }
 
@@ -309,6 +312,7 @@ export async function list(): Promise<PiwPackage[]> {
         (k) => k in entry,
       );
       parsed.autoload = entry.autoload !== false;
+      parsed.disabled = isRecord(entry.pwiDisabled);
     }
     parsed.installed =
       parsed.kind === "npm"
@@ -356,6 +360,7 @@ export function listProject(cwd: string): PiwPackage[] {
         (k) => k in entry,
       );
       parsed.autoload = entry.autoload !== false;
+      parsed.disabled = isRecord(entry.pwiDisabled);
     }
     out.push(parsed);
   }
@@ -446,6 +451,79 @@ export async function install(source: string): Promise<MutationResult> {
 
 export async function remove(source: string): Promise<MutationResult> {
   return mutate(["remove", validate(source).source]);
+}
+
+/** Keep the declaration (and installation), but load none of its resources.
+ * The backup lives in the same entry, not a second package inventory. Pi ignores
+ * this pwi-only field. Project declarations can still override personal ones.
+ */
+export async function setEnabled(
+  source: string,
+  enabled: boolean,
+): Promise<MutationResult> {
+  const target = parseSource(source);
+  if (!target) throw new Error("not a package source");
+  return serialize(async () => {
+    const settings = readSettings();
+    const entries = settings.packages;
+    if (!Array.isArray(entries)) throw new Error("package is not configured");
+    let found = false;
+    let changed = false;
+    settings.packages = entries.map((entry: unknown) => {
+      const spec =
+        typeof entry === "string"
+          ? entry
+          : isRecord(entry)
+            ? entry.source
+            : undefined;
+      if (typeof spec !== "string" || spec.trim() !== target.source)
+        return entry;
+      found = true;
+      const backup =
+        isRecord(entry) && isRecord(entry.pwiDisabled)
+          ? entry.pwiDisabled
+          : null;
+      if (enabled) {
+        if (!backup) return entry;
+        const original = backup.original;
+        if (typeof original !== "string" && !isRecord(original))
+          throw new Error(
+            "cannot restore package: invalid disabled declaration",
+          );
+        changed = true;
+        return typeof original === "string"
+          ? spec
+          : { ...original, source: spec };
+      }
+      if (backup) return entry;
+      changed = true;
+      return {
+        ...(isRecord(entry) ? entry : { source: spec }),
+        extensions: [],
+        skills: [],
+        prompts: [],
+        themes: [],
+        pwiDisabled: { original: entry },
+      };
+    });
+    if (!found) throw new Error("package is not configured");
+    if (changed) {
+      try {
+        writeSettings(settings);
+      } catch (err) {
+        return {
+          ok: false,
+          log: "",
+          reason: err instanceof Error ? err.message : String(err),
+        };
+      }
+      epoch++;
+    }
+    return {
+      ok: true,
+      log: `${target.source}: ${enabled ? "enabled" : "disabled"}. Restart existing sessions to apply. Project package declarations may override this personal setting.`,
+    };
+  });
 }
 
 /**

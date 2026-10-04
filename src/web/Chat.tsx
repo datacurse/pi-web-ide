@@ -315,7 +315,7 @@ export function Chat({
    * re-read it and put the caret at its end.
    */
   draftRev?: number;
-  /** Bumped when the session list picked `entry`: focus the composer once it shows. */
+  /** Bumped when a session is selected: focus the composer once it shows. */
   focus?: { entry: string; n: number };
 }) {
   const [text, setText] = useState("");
@@ -422,7 +422,7 @@ export function Chat({
     if (document.activeElement === document.body) composer.current.focus();
   }, [draftKey]);
 
-  const seenFocus = useRef(focus?.n);
+  const seenFocus = useRef<number | undefined>(undefined);
   useEffect(() => {
     if (!focus || !snapshot || focus.n === seenFocus.current) return;
     if (focus.entry !== snapshot.file && focus.entry !== snapshot.id) return;

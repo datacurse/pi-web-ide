@@ -230,6 +230,13 @@ export function Packages({
                 api.packages.$delete({ json: { source } }),
               )
             }
+            onEnabled={(source, enabled) =>
+              void mutate(
+                t(enabled ? "enable {source}" : "disable {source}", { source }),
+                () => api.packages.enabled.$put({ json: { source, enabled } }),
+              )
+            }
+            busy={!!working || !!view?.busy}
             onUpdatePi={() =>
               void mutate(t("update pi"), () =>
                 api.packages["update-pi"].$post(),
@@ -288,6 +295,8 @@ function Installed({
   onAdd,
   onUpdate,
   onRemove,
+  onEnabled,
+  busy,
   onUpdatePi,
 }: {
   cwd: string;
@@ -298,6 +307,8 @@ function Installed({
   onAdd: () => void;
   onUpdate: (source: string) => void;
   onRemove: (source: string) => void;
+  onEnabled: (source: string, enabled: boolean) => void;
+  busy: boolean;
   onUpdatePi: () => void;
 }) {
   const [settingsOf, setSettingsOf] = useState<string | null>(null);
@@ -311,6 +322,11 @@ function Installed({
           {t("npm:name@version, git:host/user/repo@ref, or an https/ssh URL")}
         </span>
       </div>
+      <p className="mb-3 text-meta text-neutral-500">
+        {t(
+          "Disable keeps a package installed. Restart existing sessions to apply changes. Project package declarations can override personal settings.",
+        )}
+      </p>
 
       {error && (
         <div className="mb-3 rounded-sm border border-amber-900 bg-amber-950/30 px-3 py-2 text-meta text-amber-300">
@@ -368,7 +384,7 @@ function Installed({
                       {t("pinned")}
                     </span>
                   )}
-                  {p.filtered && (
+                  {p.filtered && !p.disabled && (
                     <span
                       className="ml-1 text-caption text-neutral-500"
                       title={t("loads only part of itself")}
@@ -376,7 +392,7 @@ function Installed({
                       {t("filtered")}
                     </span>
                   )}
-                  {!p.autoload && (
+                  {!p.autoload && !p.disabled && (
                     <span
                       className="ml-1 text-caption text-neutral-500"
                       title={t(
@@ -386,6 +402,24 @@ function Installed({
                       {t("off")}
                     </span>
                   )}
+                  {p.disabled && (
+                    <span className="ml-1 text-caption text-amber-400">
+                      {t("disabled")}
+                    </span>
+                  )}
+                  <Button
+                    size="sm"
+                    className="ml-2"
+                    disabled={busy}
+                    onClick={() => onEnabled(p.source, p.disabled)}
+                    title={t(
+                      p.disabled
+                        ? "Restore this package’s previous configuration"
+                        : "Keep installed, but stop loading its resources",
+                    )}
+                  >
+                    {p.disabled ? t("enable") : t("disable")}
+                  </Button>
                   {p.kind !== "local" && (
                     <span className="ml-2 inline-flex gap-1 opacity-0 transition-opacity duration-150 ease-out group-hover:opacity-100 motion-reduce:transition-none">
                       <Button

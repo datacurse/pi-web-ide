@@ -1053,6 +1053,13 @@ export default function App() {
       if (gone(file)) closeRight(file);
   }, [sessions, listedProject, tabs, closeTab, closeRight]);
 
+  /** The latest request to focus a column's chat composer. */
+  const [sessionFocus, setSessionFocus] = useState({
+    side: "left" as Side,
+    entry: "",
+    n: 0,
+  });
+
   /**
    * Switch tabs: a chat session, or a file.
    *
@@ -1064,6 +1071,8 @@ export default function App() {
   const selectTab = useCallback(
     (file: string) => {
       const current = tabsRef.current;
+      if (isSessionTab(file))
+        setSessionFocus((f) => ({ side: "left", entry: file, n: f.n + 1 }));
       if (current.active === file) return;
       commitTabs({
         ...current,
@@ -1192,6 +1201,8 @@ export default function App() {
   const selectRight = useCallback(
     (file: string) => {
       const current = tabsRef.current;
+      if (current.right && isSessionTab(file))
+        setSessionFocus((f) => ({ side: "right", entry: file, n: f.n + 1 }));
       if (!current.right || current.right.active === file) return;
       commitTabs({ ...current, right: withTab(current.right, file) });
     },
@@ -1648,13 +1659,6 @@ export default function App() {
     document.title = title;
   }, [title]);
   useEffect(() => setFavicon(working, badge), [working, badge]);
-
-  /** Which column's composer the last `focusSession` should focus, and for which session. */
-  const [sessionFocus, setSessionFocus] = useState({
-    side: "left" as Side,
-    entry: "",
-    n: 0,
-  });
 
   /** Focus a session where it is open, or open it on the left, and focus its composer. */
   const focusSession = useCallback(

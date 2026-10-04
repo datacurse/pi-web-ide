@@ -79,6 +79,28 @@ export function packagesRoutes({
         return mutation(c, () => packages.remove(source));
       })
 
+      .put(
+        "/packages/enabled",
+        json<{ source: string; enabled: boolean }>(),
+        async (c) => {
+          const b = c.req.valid("json");
+          if (
+            typeof b.source !== "string" ||
+            !b.source.trim() ||
+            typeof b.enabled !== "boolean"
+          )
+            return c.json(
+              {
+                ok: false,
+                log: "",
+                reason: "source and enabled boolean required",
+              },
+              400,
+            );
+          return mutation(c, () => packages.setEnabled(b.source, b.enabled));
+        },
+      )
+
       .post("/packages/update", json<{ source?: string }>(), async (c) => {
         const b = c.req.valid("json");
         const source = typeof b.source === "string" ? b.source : undefined;

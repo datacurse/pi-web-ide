@@ -14,8 +14,8 @@ import {
 function LiveShinyText({ text }: { text: string }) {
   const progress = useMotionValue(0);
   useAnimationFrame((time) => {
-    // Two-second leftward sweep. Text updates do not restart the animation.
-    progress.set((time % 2000) / 2000);
+    // One-second leftward sweep. Text updates do not restart the animation.
+    progress.set((time % 1000) / 1000);
   });
   const backgroundPosition = useTransform(
     progress,

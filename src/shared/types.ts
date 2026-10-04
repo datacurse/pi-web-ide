@@ -701,6 +701,8 @@ export interface PiwPackage {
   filtered: boolean;
   /** `autoload: false` — installed, but not loaded unless a project asks for it. */
   autoload: boolean;
+  /** Disabled in pwi; the previous declaration is kept for re-enabling. */
+  disabled: boolean;
 }
 
 /** `GET /api/packages` on one machine. */
