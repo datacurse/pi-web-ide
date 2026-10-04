@@ -34,6 +34,7 @@ import { Button, PanelHeader } from "./ui.js";
 import { api, unwrap } from "./api.js";
 import { t } from "./i18n.js";
 import { revealFileLine, type FileLocation } from "./fileNavigation.js";
+import { MarkdownEditor } from "./MarkdownEditor.js";
 
 /** `/home/me/proj/src/App.tsx` → `src/App.tsx` when it is under `cwd`. */
 function shortPath(path: string, cwd: string): string {
@@ -63,6 +64,10 @@ export function FileEditor({
   const [dirty, setDirty] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [formatted, setFormatted] = useState(false);
+  const [preview, setPreview] = useState("");
+  const [previewVersion, setPreviewVersion] = useState(0);
+  const isMarkdown = /\.(md|markdown|mdown|mkd)$/i.test(path);
 
   const host = useRef<HTMLDivElement | null>(null);
   const view = useRef<EditorView | null>(null);
@@ -75,6 +80,14 @@ export function FileEditor({
    */
   const baseRef = useRef<string | null>(null);
   baseRef.current = base;
+
+  const editFormatted = useCallback((text: string) => {
+    const editor = view.current;
+    if (!editor || editor.state.doc.toString() === text) return;
+    editor.dispatch({
+      changes: { from: 0, to: editor.state.doc.length, insert: text },
+    });
+  }, []);
 
   // Report upward whenever it changes, and report clean on unmount so a
   // closed tab cannot leave a dot behind in App's map.
@@ -93,6 +106,8 @@ export function FileEditor({
     setBase(null);
     setDirty(false);
     setError(null);
+    setFormatted(false);
+    setPreview("");
 
     void (async () => {
       try {
@@ -172,6 +187,7 @@ export function FileEditor({
   // Reveal subsequent links without rebuilding the editor or losing unsaved text/undo history.
   useEffect(() => {
     if (!reveal || reveal.path !== path || !view.current) return;
+    setFormatted(false);
     let live = true;
     void loadCodeMirror().then((cm) => {
       if (live && view.current && revealRef.current === reveal)
@@ -181,6 +197,11 @@ export function FileEditor({
       live = false;
     };
   }, [path, reveal]);
+
+  // Keep the same editor alive across views, preserving selection and undo.
+  useEffect(() => {
+    if (!formatted) view.current?.requestMeasure();
+  }, [formatted]);
 
   const save = useCallback(async () => {
     const view_ = view.current;
@@ -223,6 +244,8 @@ export function FileEditor({
     try {
       const r = await unwrap(api.file.$get({ query: { path } }));
       const text = r.content ?? "";
+      setPreview(text);
+      setPreviewVersion((version) => version + 1);
       setBase(text);
       baseRef.current = text;
       setDirty(false);
@@ -260,10 +283,39 @@ export function FileEditor({
         >
           {shortPath(path, cwd)}
         </span>
+        {isMarkdown && (
+          <div
+            className="ml-auto flex gap-1"
+            role="group"
+            aria-label={t("Markdown view")}
+          >
+            <Button
+              variant={!formatted ? "subtle" : "ghost"}
+              size="sm"
+              aria-pressed={!formatted}
+              onClick={() => setFormatted(false)}
+            >
+              {t("Raw")}
+            </Button>
+            <Button
+              variant={formatted ? "subtle" : "ghost"}
+              size="sm"
+              aria-pressed={formatted}
+              disabled={base === null}
+              onClick={() => {
+                if (formatted) return;
+                setPreview(view.current?.state.doc.toString() ?? "");
+                setFormatted(true);
+              }}
+            >
+              {t("Formatted")}
+            </Button>
+          </div>
+        )}
         <Button
           variant="ghost"
           size="sm"
-          className="ml-auto"
+          className={isMarkdown ? undefined : "ml-auto"}
           onClick={() => void save()}
           disabled={!dirty || saving}
           title={t("Save (Ctrl+S)")}
@@ -290,8 +342,15 @@ export function FileEditor({
 
       <div
         ref={host}
-        className="cm-editor-host min-h-0 flex-1 overflow-auto text-body"
+        className={`cm-editor-host min-h-0 flex-1 overflow-auto text-body${formatted ? " hidden" : ""}`}
       />
+      {formatted && (
+        <MarkdownEditor
+          key={previewVersion}
+          text={preview}
+          onChange={editFormatted}
+        />
+      )}
     </div>
   );
 }

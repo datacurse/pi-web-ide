@@ -1375,10 +1375,12 @@ function personalityFile(): string | undefined {
  *
  * Never done by the open session's own child: pi's `fork` MOVES a child to
  * the new file, aborting its running turn on the way, and the open tab would
- * silently become the fork. So a second child starts on a throwaway full copy
- * (`--fork`, which only reads the source), cuts it with `fork` before the next
- * user message (or `clone` when nothing follows the answer), and the copy is
- * deleted. That child is then the fork's own.
+ * silently become the fork. An extension-free helper starts on a throwaway
+ * full copy (`--fork`, which only reads the source), cuts it with `fork` before
+ * the next user message (or `clone` when nothing follows the answer), then
+ * exits. Open the result normally, loading extensions only once: RPC fork
+ * rebuilds the runtime, and extension background work from the old runtime
+ * can otherwise race initialization of the new one.
  */
 export async function forkSession(
   file: string,
@@ -1387,15 +1389,12 @@ export async function forkSession(
 ): Promise<PiSession> {
   if (!existsSync(file)) throw new Error(`session file not found: ${file}`);
   const child = await RpcChild.start(
-    spawnArgs({
-      fork: file,
-      personality: personalityFile(),
-      remind: readRemind(),
-      toolMetrics: readToolMetrics(),
-    }),
+    ["--mode", "rpc", "--no-extensions", "--fork", file],
     cwd,
+    false,
   );
   let copy: string | undefined;
+  let forkedFile: string | undefined;
   try {
     copy = (await fetchState(child)).sessionFile;
     const branch = activeBranch(await child.send<unknown>("get_entries"));
@@ -1414,14 +1413,15 @@ export async function forkSession(
       : await child.send<unknown>("clone");
     if (isRecord(result) && result.cancelled === true)
       throw new Error("an extension cancelled the fork");
-  } catch (err) {
-    child.close();
-    throw err;
+    forkedFile = (await fetchState(child)).sessionFile;
+    if (!forkedFile || forkedFile === copy || forkedFile === file)
+      throw new Error("pi did not create a new session file for the fork");
   } finally {
+    child.close();
     // Never the source: that is somebody's conversation.
     if (copy && copy !== file) rmSync(copy, { force: true });
   }
-  return wrap(child, cwd);
+  return openSession({ file: forkedFile, cwd });
 }
 
 /** A `get_entries` answer's active branch, root first: the file also holds abandoned ones. */
