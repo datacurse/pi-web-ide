@@ -1,4 +1,11 @@
-import { Fragment, memo, useEffect, useMemo, useState } from "react";
+import {
+  Fragment,
+  memo,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { CaretDown, CaretRight } from "@phosphor-icons/react";
 import Markdown, { RuleType, type MarkdownToJSX } from "markdown-to-jsx";
 
@@ -8,7 +15,50 @@ import { Button, ContextMenu, MenuItem } from "./ui.js";
 import { t } from "./i18n.js";
 import { highlightLines, type Token } from "./codeHighlight.js";
 import { dedentBlocks } from "./codeIndent.js";
+import { FileNavigationContext } from "./fileNavigation.js";
 export { CodeBox };
+
+/** Local markdown links navigate the editor; web links remain browser links. */
+function ResponseLink({
+  children,
+  href,
+  ...props
+}: React.AnchorHTMLAttributes<HTMLAnchorElement>) {
+  const openFile = useContext(FileNavigationContext);
+  let location: { path: string; line?: number } | undefined;
+  if (href && !/^(?:[a-z][a-z\d+.-]*:|\/\/|#|\?)/i.test(href)) {
+    const [rawPath, fragment] = href.split("#", 2);
+    try {
+      const path = decodeURIComponent(rawPath);
+      const match = path.match(/:(\d+)(?::\d+)?$/);
+      const line = match?.[1] ?? fragment?.match(/^L?(\d+)(?:-L?\d+)?$/)?.[1];
+      if (path)
+        location = {
+          path: match ? path.slice(0, match.index) : path,
+          line: line ? Number(line) : undefined,
+        };
+    } catch {
+      // Malformed URLs retain normal browser behavior.
+    }
+  }
+  return (
+    <a
+      {...props}
+      href={href}
+      target={location && openFile ? undefined : "_blank"}
+      rel="noopener noreferrer"
+      className="text-blue-400 underline hover:text-blue-300"
+      onClick={(event) => {
+        if (location && openFile) {
+          event.preventDefault();
+          openFile(location.path, location.line);
+        }
+      }}
+    >
+      {children}
+    </a>
+  );
+}
 
 /** Leading whitespace in columns, tabs at 2, for the wrapped rows' hanging indent. */
 function indentCols(line: string) {
@@ -305,21 +355,7 @@ const options: MarkdownToJSX.Options = {
   // around it, so their `my-3` margins collapse into one gap.
   wrapper: Fragment,
   overrides: {
-    a: {
-      component: ({
-        children,
-        ...props
-      }: React.AnchorHTMLAttributes<HTMLAnchorElement>) => (
-        <a
-          {...props}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-blue-400 underline hover:text-blue-300"
-        >
-          {children}
-        </a>
-      ),
-    },
+    a: { component: ResponseLink },
     ul: { props: { className: "chat-measure my-3 list-disc pl-5" } },
     ol: { props: { className: "chat-measure my-3 list-decimal pl-5" } },
     blockquote: {

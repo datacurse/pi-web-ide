@@ -1223,7 +1223,7 @@ export default function App() {
     (path: string, line?: number, preferredSide: Side = "left") => {
       setFileReveal((previous) => fileLocation(previous, path, line));
       const entry = fileTab(path);
-      // Transcript links prefer their own column, but never duplicate an existing editor.
+      // Explorer clicks never duplicate an existing editor.
       // Explorer clicks retain their default of opening new file tabs on the left.
       if (
         (sideOfTab(tabsRef.current, entry) ?? preferredSide) === "right" &&
@@ -1654,7 +1654,9 @@ export default function App() {
     : states.includes("ready")
       ? "ready"
       : null;
-  const title = attentionTitle(states);
+  const titleCwd = snapshot?.cwd || project;
+  const titleName = titleCwd?.replace(/\/+$/, "").split("/").pop();
+  const title = attentionTitle(states, titleName || titleCwd || "pwi");
   useEffect(() => {
     document.title = title;
   }, [title]);
@@ -1886,7 +1888,27 @@ export default function App() {
   /** One column's chat, wired to that column's session. */
   const chatFor = (s: ReturnType<typeof useSession>, side: Side) => (
     <FileNavigationContext.Provider
-      value={(path, line) => openFile(path, line, side)}
+      value={(path, line) => {
+        const cwd = s.snapshot?.cwd || project || "";
+        const fullPath =
+          path.startsWith("/") || path.startsWith("~")
+            ? path
+            : `${cwd}/${path}`;
+        setFileReveal((previous) => fileLocation(previous, fullPath, line));
+        const target = side === "left" ? "right" : "left";
+        const entry = fileTab(fullPath);
+        const current = tabsRef.current;
+        markSide(target);
+        if (sideOfTab(current, entry) === side) moveToGroup(entry, target);
+        else
+          commitTabs(
+            withGroup(
+              current,
+              target,
+              withTab(groupOf(current, target), entry),
+            ),
+          );
+      }}
     >
       <Chat
         snapshot={s.snapshot}

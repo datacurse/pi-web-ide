@@ -49,10 +49,10 @@ export function attentionRank(a: Attention): number {
 }
 
 /** The window title: waiting count, then `●` while anything works. */
-export function attentionTitle(states: Attention[]): string {
+export function attentionTitle(states: Attention[], name: string): string {
   const waiting = states.filter((a) => a === "needs" || a === "ready").length;
   const working = states.includes("working");
-  return `${waiting ? `${waiting} ` : ""}${working ? "\u25cf " : ""}pwi`;
+  return `${waiting ? `${waiting} ` : ""}${working ? "\u25cf " : ""}${name}`;
 }
 
 /**
