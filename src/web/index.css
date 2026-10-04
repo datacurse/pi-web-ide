@@ -487,6 +487,13 @@
     border-radius: var(--radius-md);
     background: var(--color-neutral-900);
     box-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.5);
+    /* The picker is a pseudo-element, so the global scrollbar selectors do
+     * not reach it. Use the standard properties on its own scroll container. */
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-neutral-700) transparent;
+  }
+  :root[data-scrollbars="hidden"] .pill-select::picker(select) {
+    scrollbar-width: none;
   }
   .pill-select optgroup {
     padding-top: 4px;

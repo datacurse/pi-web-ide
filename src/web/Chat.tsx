@@ -154,6 +154,7 @@ function CommandPicker({
 
 const HistoryRow = memo(function HistoryRow({
   row,
+  first,
   expanded,
   onToggle,
   userMode,
@@ -161,6 +162,7 @@ const HistoryRow = memo(function HistoryRow({
   onFork,
 }: {
   row: RawRow;
+  first: boolean;
   expanded: boolean;
   onToggle: () => void;
   userMode: UserMode;
@@ -171,6 +173,7 @@ const HistoryRow = memo(function HistoryRow({
     return (
       <UserMessage
         blocks={row.blocks}
+        first={first}
         at={row.at}
         userMode={userMode}
         onEdit={onEdit}
@@ -745,12 +748,13 @@ export function Chat({
                   initialTopMostItemIndex={rows.length - 1}
                   increaseViewportBy={200}
                   computeItemKey={(i, row) => `${row.role}:${row.at}:${i}`}
-                  itemContent={(_i, row) => {
+                  itemContent={(i, row) => {
                     const key = `${snapshot.id}:${row.role}:${row.at}`;
                     return (
                       <div className="flow-root">
                         <HistoryRow
                           row={row}
+                          first={i === 0}
                           userMode={userMode}
                           onEdit={busy ? undefined : onEdit}
                           onFork={onFork}
@@ -773,7 +777,11 @@ export function Chat({
               {/* Below the transcript: a local command answers after the last
 				    message, and before the next prompt clears it. */}
               {command && (
-                <CommandRow command={command.text} running={command.running} />
+                <CommandRow
+                  command={command.text}
+                  running={command.running}
+                  first={rows.length === 0}
+                />
               )}
 
               <Notices notices={snapshot.notices} />

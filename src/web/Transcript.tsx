@@ -695,11 +695,11 @@ function UserFooter({
  * pane (outside the gutter). Kept but invisible above the first prompt, so its
  * spacing stays.
  */
-function TurnSeparator() {
+function TurnSeparator({ first }: { first: boolean }) {
   return (
     <hr
       aria-hidden
-      className="my-6 border-neutral-800 group-first/turn:hidden"
+      className={`my-6 border-neutral-800 ${first ? "hidden" : ""}`}
     />
   );
 }
@@ -712,11 +712,13 @@ function TurnSeparator() {
 function EditMessage({
   text,
   attached,
+  first,
   onCancel,
   onSend,
 }: {
   text: string;
   attached: PiImage[];
+  first: boolean;
   onCancel: () => void;
   onSend: (text: string, images: PiImage[]) => void;
 }) {
@@ -725,8 +727,8 @@ function EditMessage({
   const [images, setImages] = useState(attached);
   const canSend = draft.trim() !== "" || images.length > 0;
   return (
-    <div className="group/turn first:pt-6">
-      <TurnSeparator />
+    <div className={first ? "pt-6" : undefined}>
+      <TurnSeparator first={first} />
       <div className="chat-gutter">
         <div className="chat-measure">
           <div className="-mx-3 rounded-lg bg-neutral-900 p-3 ring-1 ring-neutral-700 ring-inset">
@@ -874,13 +876,15 @@ export function Notices({ notices }: { notices: PiNotice[] }) {
 export function CommandRow({
   command,
   running,
+  first,
 }: {
   command: string;
   running: boolean;
+  first: boolean;
 }) {
   const spinner = useSpinner(running);
   return (
-    <UserRow>
+    <UserRow first={first}>
       <div className="flex items-center gap-2">
         <span className="font-mono text-body">{command}</span>
         {running && (
@@ -898,13 +902,15 @@ export function CommandRow({
 function UserRow({
   children,
   below,
+  first,
 }: {
   children: ReactNode;
   below?: ReactNode;
+  first: boolean;
 }) {
   return (
-    <div className="group/turn first:pt-6">
-      <TurnSeparator />
+    <div className={first ? "pt-6" : undefined}>
+      <TurnSeparator first={first} />
       <div className="chat-gutter">
         <div className="chat-measure">
           <div className="-mx-3 chat-prose rounded-lg bg-neutral-900 p-3 ring-1 ring-neutral-700 ring-inset">
@@ -920,11 +926,13 @@ function UserRow({
 export function UserMessage({
   blocks,
   userMode,
+  first,
   at,
   onEdit,
 }: {
   blocks: PiBlock[];
   userMode: UserMode;
+  first: boolean;
   at?: number;
   onEdit?: (at: number, text: string, images: PiImage[]) => void;
 }) {
@@ -937,6 +945,7 @@ export function UserMessage({
     return (
       <EditMessage
         text={text}
+        first={first}
         attached={images.map(({ data, mimeType }) => ({ data, mimeType }))}
         onCancel={() => setEditing(false)}
         onSend={(next, kept) => {
@@ -947,6 +956,7 @@ export function UserMessage({
     );
   return (
     <UserRow
+      first={first}
       below={
         <UserFooter
           text={text}
