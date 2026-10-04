@@ -47,11 +47,12 @@ export function packagesRoutes({ cwd: CWD, registry }: Deps) {
        */
       .get("/packages", async (c) => {
         try {
-          const [piVersion, view] = await Promise.all([
+          const [piVersion, piLatestVersion, view] = await Promise.all([
             packages.piVersion(),
+            packages.piLatestVersion(),
             packages.view(),
           ]);
-          return c.json({ piVersion, ...view }, 200);
+          return c.json({ piVersion, piLatestVersion, ...view }, 200);
         } catch (err) {
           return c.json(
             { error: err instanceof Error ? err.message : String(err) },

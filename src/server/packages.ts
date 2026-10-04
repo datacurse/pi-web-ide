@@ -30,6 +30,7 @@ import {
 import { homedir } from "node:os";
 import { delimiter, dirname, isAbsolute, join, resolve } from "node:path";
 import { PI_BIN } from "./agent.js";
+import { latestVersion } from "./gallery.js";
 import { isRecord } from "./guards.js";
 import { readSettings, writeSettings } from "./models.js";
 import type { PiwPackage, PiwPackagesView } from "../shared/types.js";
@@ -53,7 +54,10 @@ const GIT_ENV = {
 export type { PiwPackage };
 
 /** `GET /api/packages` minus the pi version, which index.ts adds. */
-export type PackagesView = Omit<PiwPackagesView, "piVersion">;
+export type PackagesView = Omit<
+  PiwPackagesView,
+  "piVersion" | "piLatestVersion"
+>;
 
 /**
  * Bumped on every successful mutation.
@@ -392,6 +396,17 @@ export async function piVersion(): Promise<string | null> {
   }
 }
 
+/** Registry outages must not prevent listing or updating installed packages. */
+export async function piLatestVersion(): Promise<string | null> {
+  try {
+    return await latestVersion(
+      pnpmGlobalPi()?.name ?? "@earendil-works/pi-coding-agent",
+    );
+  } catch {
+    return null;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Mutations
 // ---------------------------------------------------------------------------
@@ -441,11 +456,22 @@ async function mutate(
   args: string[],
   bin = PI_BIN,
   env = process.env,
+  expectedVersion?: string,
 ): Promise<MutationResult> {
   return serialize(async () => {
     try {
       const { stdout, stderr } = await run(bin, args, TIMEOUT_MS, env);
       epoch++;
+      if (expectedVersion) {
+        const installed = await piVersion();
+        if (installed !== expectedVersion) {
+          return {
+            ok: false,
+            log: tail(stdout, stderr),
+            reason: `Requested pi ${expectedVersion}, but the configured executable reports ${installed ?? "an unknown version"}. The update was not applied to this executable. Check the package manager output and its release-age policy.`,
+          };
+        }
+      }
       return { ok: true, log: tail(stdout, stderr) };
     } catch (err) {
       const e = err as NodeJS.ErrnoException & {
@@ -629,8 +655,20 @@ function pnpmGlobalPi(): {
 export async function updateSelf(): Promise<MutationResult> {
   const pnpm = pnpmGlobalPi();
   if (pnpm) {
+    let target: string;
+    try {
+      // Resolve a concrete target: pnpm's age policy can choose an older
+      // eligible release for @latest. Do not bypass that policy silently.
+      target = await latestVersion(pnpm.name, true);
+    } catch (err) {
+      return {
+        ok: false,
+        log: "",
+        reason: `Cannot check the latest pi version: ${err instanceof Error ? err.message : String(err)}`,
+      };
+    }
     const result = await mutate(
-      ["add", "--global", `${pnpm.name}@latest`],
+      ["add", "--global", `${pnpm.name}@${target}`],
       pnpm.bin,
       {
         ...process.env,
@@ -639,10 +677,10 @@ export async function updateSelf(): Promise<MutationResult> {
         PNPM_CONFIG_GLOBAL_BIN_DIR: pnpm.binDir,
         PATH: `${pnpm.binDir}${delimiter}${process.env.PATH ?? ""}`,
       },
+      target,
     );
     if (result.ok)
-      result.log +=
-        "\nPi updated. Restart existing sessions to use the new version.";
+      result.log += `\nPi ${target} is installed. Restart existing sessions to use this version.`;
     return result;
   }
   return mutate(["update", "--self"]);

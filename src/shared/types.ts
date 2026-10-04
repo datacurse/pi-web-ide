@@ -713,6 +713,8 @@ export interface PiwPackagesView {
   /** A mutation is running here. The next request will wait rather than fail. */
   busy: boolean;
   piVersion: string | null;
+  /** npm's latest published CLI version, or null when the registry is unavailable. */
+  piLatestVersion: string | null;
 }
 
 /** What a package mutation did, as the screen reports it. */

@@ -48,7 +48,7 @@ import {
 } from "../shared/types.js";
 import { setKcal } from "../shared/calories.js";
 import { parseResponse } from "hono/client";
-import { api } from "./api.js";
+import { api, unwrap } from "./api.js";
 import { t, locale, perLocale } from "./i18n.js";
 
 /** `2026-09-14T20:53:55.440Z` → `14 Sep 2026`. A publish date is a month, not a minute. */
@@ -112,11 +112,22 @@ export function Packages({
   >(null);
 
   const refresh = useCallback(async () => {
-    try {
-      setView(await parseResponse(api.packages.$get()));
-      setError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+    // A dev-server reload can briefly interrupt the post-update GET. Retry
+    // only this read, never a mutation, and still report persistent failures.
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        setView(await unwrap(api.packages.$get()));
+        setError(null);
+        return;
+      } catch (err) {
+        if (attempt === 2) {
+          setError(err instanceof Error ? err.message : String(err));
+          return;
+        }
+        await new Promise((resolve) =>
+          setTimeout(resolve, 500 * (attempt + 1)),
+        );
+      }
     }
   }, []);
 
@@ -234,6 +245,7 @@ export function Packages({
             cwd={cwd}
             packages={packages}
             piVersion={view?.piVersion}
+            piLatestVersion={view?.piLatestVersion}
             error={error}
             project={project}
             onAdd={() => setAdding({ source: "" })}
@@ -307,6 +319,7 @@ function Installed({
   cwd,
   packages,
   piVersion,
+  piLatestVersion,
   error,
   project,
   onAdd,
@@ -319,6 +332,7 @@ function Installed({
   cwd: string;
   packages: PiwPackage[];
   piVersion: string | null | undefined;
+  piLatestVersion: string | null | undefined;
   error: string | null;
   project: { cwd: string; packages: PiwPackage[] } | null;
   onAdd: () => void;
@@ -526,9 +540,22 @@ function Installed({
           <h3 className="flex flex-wrap items-center gap-2 font-medium">
             {t("pi itself")}
             <span className="rounded-sm border border-neutral-700 px-1.5 py-0.5 font-mono text-caption text-neutral-400">
-              {piVersion ?? "?"}
+              {t("Installed")} {piVersion ?? "?"}
             </span>
           </h3>
+          <p className="mt-2 flex flex-wrap items-center gap-2 text-meta text-neutral-400">
+            <span>
+              {t("Latest")}{" "}
+              <span className="font-mono">
+                {piLatestVersion === undefined
+                  ? t("Checking…")
+                  : (piLatestVersion ?? t("Unavailable"))}
+              </span>
+            </span>
+            {piLatestVersion && piLatestVersion === piVersion && (
+              <span className="text-neutral-500">{t("Up to date")}</span>
+            )}
+          </p>
           <p className="mt-2 max-w-prose text-meta leading-relaxed text-neutral-500">
             {t(
               "Extensions declare pi's own packages as peer dependencies, so a machine on a different pi is how a package works on one box and throws on another. Updating is never automatic.",
@@ -536,7 +563,13 @@ function Installed({
           </p>
         </div>
         <div>
-          <Button size="sm" onClick={onUpdatePi} disabled={busy}>
+          <Button
+            size="sm"
+            onClick={onUpdatePi}
+            disabled={
+              busy || (!!piLatestVersion && piLatestVersion === piVersion)
+            }
+          >
             <ArrowClockwise size={14} />
             {t("Update pi")}
           </Button>

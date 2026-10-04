@@ -64,6 +64,7 @@ interface Entry<T> {
 }
 const searchCache = new Map<string, Entry<SearchHit[]>>();
 const infoCache = new Map<string, Entry<PackageInfo>>();
+const versionCache = new Map<string, Entry<string>>();
 
 function fresh<T>(cache: Map<string, Entry<T>>, key: string): T | undefined {
   const hit = cache.get(key);
@@ -143,6 +144,23 @@ export async function search(
   }
   searchCache.set(q, { at: Date.now(), value: results });
   return { results };
+}
+
+/** Only the registry version; no preview or download-count requests. */
+export async function latestVersion(
+  name: string,
+  refresh = false,
+): Promise<string> {
+  const cached = refresh ? undefined : fresh(versionCache, name);
+  if (cached) return cached;
+  const data = await getJson(
+    `https://registry.npmjs.org/${encodeURIComponent(name)}/latest`,
+  );
+  if (!isRecord(data) || typeof data.version !== "string") {
+    throw new Error(`no published version: ${name}`);
+  }
+  versionCache.set(name, { at: Date.now(), value: data.version });
+  return data.version;
 }
 
 /**
