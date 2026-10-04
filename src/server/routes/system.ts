@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { browseAction, type BrowseAction } from "../browseActions.js";
 import {
   listModels,
   readSettings,
@@ -376,13 +377,21 @@ export function systemRoutes({
         }
       })
 
-      /**
-       * Favourites: directories pinned in the picker, as one-click starting points.
-       *
-       * Server-side state rather than a browser preference, because these are paths
-       * on the machine pwi runs on — a per-origin copy would follow the browser to
-       * a machine where the paths mean nothing.
-       */
+      /** Explicit file-manager operations, separate from project-scoped editing. */
+      .post("/browse/action", json<BrowseAction>(), async (c) => {
+        try {
+          return c.json(
+            { ok: true, path: browseAction(CWD, c.req.valid("json")) ?? null },
+            200,
+          );
+        } catch (err) {
+          return c.json(
+            { error: err instanceof Error ? err.message : String(err) },
+            400,
+          );
+        }
+      })
+      /** Server-side pinned folders, shared across browser windows. */
       .get("/favorites", (c) => {
         return c.json({ favorites: listFavorites() }, 200);
       })

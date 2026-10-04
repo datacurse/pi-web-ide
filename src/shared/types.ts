@@ -763,6 +763,7 @@ export interface PiwPackageInfo {
  */
 export interface PiwDirEntry {
   name: string;
+  dir: boolean;
   /** Absolute, so the client never joins paths itself. */
   path: string;
   /** Contains a `.git`. A project is usually a checkout, so it is worth marking. */

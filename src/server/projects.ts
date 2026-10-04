@@ -111,8 +111,8 @@ export function removeFavorite(path: string): string[] {
  * and typing an absolute path from memory is the worst part of adding a
  * project. It is deliberately not sandboxed to any root: pwi binds loopback
  * only and its agents already run tools against this machine, so a directory
- * listing grants nothing that is not already on offer. Directories only —
- * files cannot be projects.
+ * listing grants nothing that is not already on offer. Files are also shown
+ * so the picker can manage entries, but only directories can be projects.
  */
 export function browse(path: string): PiwDirListing {
   const dir = expand(path.trim() || homedir());
@@ -124,18 +124,21 @@ export function browse(path: string): PiwDirListing {
     // withFileTypes to avoid a stat per child. A symlink is the one dirent
     // whose kind readdir cannot answer, so only those are stat'd — and its
     // target may be missing or unreadable, which is not a directory either.
-    if (!child.isDirectory()) {
-      if (!child.isSymbolicLink()) continue;
+    let isDir = child.isDirectory();
+    if (child.isSymbolicLink()) {
       try {
-        if (!statSync(full).isDirectory()) continue;
+        const st = statSync(full);
+        isDir = st.isDirectory();
+        if (!isDir && !st.isFile()) continue;
       } catch {
         continue;
       }
-    }
+    } else if (!isDir && !child.isFile()) continue;
     entries.push({
       name: child.name,
+      dir: isDir,
       path: full,
-      repo: existsSync(join(full, ".git")),
+      repo: isDir && existsSync(join(full, ".git")),
       hidden: child.name.startsWith("."),
     });
   }
@@ -143,6 +146,7 @@ export function browse(path: string): PiwDirListing {
   // ~/.cache above every directory you actually came here to click.
   entries.sort(
     (a, b) =>
+      Number(b.dir) - Number(a.dir) ||
       Number(a.hidden) - Number(b.hidden) ||
       a.name.localeCompare(b.name, undefined, { numeric: true }),
   );

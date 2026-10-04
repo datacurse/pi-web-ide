@@ -9,6 +9,8 @@ pwi does not link an agent SDK: it spawns `pi --mode rpc` per session and
 speaks JSONL over stdio, so pi is a binary dependency, not an npm one.
 Conversation state stays in pi's own session files under `~/.pi/agent/sessions`.
 
+Looking for other Pi browser clients? See the [Pi web UI index](docs/pi-webuis.md).
+
 ## Quick start
 
 Requires Node ≥ 22.19, pnpm, and `pi` on `PATH`. `tmux` is optional (terminals
@@ -41,19 +43,19 @@ being signalled. Stop an existing dev runner before starting another one.
 
 ## Configuration
 
-| variable | meaning | default |
-| --- | --- | --- |
-| `PWI_CWD` | starting project (or pass it as the first argument) | process cwd |
-| `PWI_PORT` | server port | `8890` |
-| `PWI_VITE_PORT` | dev server port | `5480` |
-| `PWI_MODEL` | startup model, `provider/id` | pi's default |
-| `PWI_PI_BIN` | path to the pi binary | `pi` on `PATH` |
-| `PWI_NAMING_MODEL` | fallback for commit/session naming unless selected in Settings | `openai-codex/gpt-6.1-sol` |
-| `PWI_STATE_DIR` | pwi's own state (projects, favorites, personality) | `~/.config/pi-web-ide` |
-| `PWI_PREWARM` | `0` disables the pre-spawned session behind `+ New` | on |
-| `PWI_TAKEOVER` | `0` fails instead of taking over the port | on |
-| `PWI_PACKAGES_TIMEOUT_MS` | limit for one `pi install/remove/update` | `300000` |
-| `PWI_SEARCH_CACHE_MS` | npm package gallery cache lifetime | `600000` |
+| variable                  | meaning                                                        | default                    |
+| ------------------------- | -------------------------------------------------------------- | -------------------------- |
+| `PWI_CWD`                 | starting project (or pass it as the first argument)            | process cwd                |
+| `PWI_PORT`                | server port                                                    | `8890`                     |
+| `PWI_VITE_PORT`           | dev server port                                                | `5480`                     |
+| `PWI_MODEL`               | startup model, `provider/id`                                   | pi's default               |
+| `PWI_PI_BIN`              | path to the pi binary                                          | `pi` on `PATH`             |
+| `PWI_NAMING_MODEL`        | fallback for commit/session naming unless selected in Settings | `openai-codex/gpt-6.1-sol` |
+| `PWI_STATE_DIR`           | pwi's own state (projects, favorites, personality)             | `~/.config/pi-web-ide`     |
+| `PWI_PREWARM`             | `0` disables the pre-spawned session behind `+ New`            | on                         |
+| `PWI_TAKEOVER`            | `0` fails instead of taking over the port                      | on                         |
+| `PWI_PACKAGES_TIMEOUT_MS` | limit for one `pi install/remove/update`                       | `300000`                   |
+| `PWI_SEARCH_CACHE_MS`     | npm package gallery cache lifetime                             | `600000`                   |
 
 Settings > Automatic actions selects separate models for commit naming, session naming,
 compaction and SoL-Pi log reduction. All default to `openai-codex/gpt-6.1-sol`,

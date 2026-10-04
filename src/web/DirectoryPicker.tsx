@@ -1,8 +1,22 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Star, X } from "@phosphor-icons/react";
-import type { PiwDirListing } from "../shared/types.js";
-import { Button, IconButton, ListRow, inputClass } from "./ui.js";
-import { api } from "./api.js";
+import {
+  DotsThree,
+  FilePlus,
+  FolderPlus,
+  Star,
+  X,
+} from "@phosphor-icons/react";
+import type { PiwDirEntry, PiwDirListing } from "../shared/types.js";
+import {
+  Button,
+  ContextMenu,
+  IconButton,
+  ListRow,
+  MenuItem,
+  inputClass,
+} from "./ui.js";
+import { api, unwrap } from "./api.js";
+import { FileGlyph } from "./fileIcon.js";
 import { t } from "./i18n.js";
 import { ScrollPane } from "./OverlayScrollbar.js";
 
@@ -53,6 +67,17 @@ export function DirectoryPicker({
   const [draft, setDraft] = useState("");
   /** Pinned directories, from the server: these are ITS filesystem's paths. */
   const [favorites, setFavorites] = useState<string[]>([]);
+  const [working, setWorking] = useState(false);
+  const [menu, setMenu] = useState<{
+    entry: PiwDirEntry;
+    x: number;
+    y: number;
+  } | null>(null);
+  const [edit, setEdit] = useState<{
+    action: "file" | "folder" | "rename" | "move" | "copy";
+    name: string;
+  } | null>(null);
+  const [value, setValue] = useState("");
 
   /*
    * Only the newest navigation may write state. Clicking three folders
@@ -62,6 +87,8 @@ export function DirectoryPicker({
   const seq = useRef(0);
 
   const go = useCallback(async (path: string) => {
+    setMenu(null);
+    setEdit(null);
     const ticket = ++seq.current;
     setBusy(true);
     const r = await api.browse.$get({ query: { path } }).catch(() => null);
@@ -147,6 +174,44 @@ export function DirectoryPicker({
   }
 
   const current = listing?.path ?? "";
+  const manage = async (
+    action: "file" | "folder" | "rename" | "move" | "copy" | "trash",
+    name: string,
+    target?: string,
+  ) => {
+    if (working || !current) return;
+    const ticket = seq.current;
+    setWorking(true);
+    setMenu(null);
+    setError(null);
+    try {
+      await unwrap(
+        api.browse.action.$post({
+          json: { root: current, action, name, target },
+        }),
+      );
+      if (ticket === seq.current) await go(current);
+    } catch (err) {
+      if (ticket === seq.current)
+        setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setWorking(false);
+    }
+  };
+  const begin = (
+    action: "file" | "folder" | "rename" | "move" | "copy",
+    name = "",
+  ) => {
+    setMenu(null);
+    setEdit({ action, name });
+    setValue(
+      action === "rename"
+        ? name
+        : action === "move" || action === "copy"
+          ? current
+          : "",
+    );
+  };
   const already = current !== "" && projects.includes(current);
   const pinned = current !== "" && favorites.includes(current);
 
@@ -178,7 +243,10 @@ export function DirectoryPicker({
    * partial name, which is the one thing the filter exists to make cheap.
    */
   const submitTarget = fragment
-    ? (entries.find((e) => e.name === fragment) ?? entries[0])?.path
+    ? (
+        entries.find((e) => e.dir && e.name === fragment) ??
+        entries.find((e) => e.dir)
+      )?.path
     : undefined;
 
   return (
@@ -186,6 +254,13 @@ export function DirectoryPicker({
       ref={ref}
       aria-labelledby="picker-title"
       onClose={onClose}
+      onCancel={(e) => {
+        if (menu || edit) {
+          e.preventDefault();
+          setMenu(null);
+          setEdit(null);
+        }
+      }}
       // Clicking the backdrop targets the dialog itself; a click anywhere
       // on its contents targets a descendant.
       onClick={(e) => {
@@ -336,6 +411,85 @@ export function DirectoryPicker({
         </div>
       )}
 
+      <div className="flex items-center gap-2 border-b border-neutral-800 px-2 py-1.5">
+        <Button
+          variant="subtle"
+          size="sm"
+          disabled={!current || busy || working}
+          onClick={() => begin("folder")}
+        >
+          <FolderPlus size={14} /> {t("New folder")}
+        </Button>
+        <Button
+          variant="subtle"
+          size="sm"
+          disabled={!current || busy || working}
+          onClick={() => begin("file")}
+        >
+          <FilePlus size={14} /> {t("New file")}
+        </Button>
+        <Button
+          variant="subtle"
+          size="sm"
+          disabled={!current || busy || working}
+          onClick={() => void go(current)}
+        >
+          {t("Refresh")}
+        </Button>
+      </div>
+      {edit && (
+        <form
+          className="flex flex-wrap items-center gap-2 border-b border-neutral-800 px-2 py-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void manage(
+              edit.action,
+              edit.action === "file" || edit.action === "folder"
+                ? value
+                : edit.name,
+              value,
+            );
+          }}
+        >
+          <label
+            className="text-meta text-neutral-400"
+            htmlFor="picker-entry-name"
+          >
+            {edit.action === "move" || edit.action === "copy"
+              ? t("Destination folder")
+              : t("Name")}
+            {edit.name && `: ${edit.name}`}
+          </label>
+          <input
+            id="picker-entry-name"
+            key={`${edit.action}:${edit.name}`}
+            autoFocus
+            required
+            value={value}
+            disabled={working}
+            onChange={(e) => setValue(e.target.value)}
+            className={`min-w-0 flex-1 ${inputClass.sm}`}
+          />
+          <Button
+            variant="subtle"
+            size="sm"
+            type="submit"
+            disabled={working || !value.trim()}
+          >
+            {working ? t("Working…") : t("Apply")}
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            type="button"
+            disabled={working}
+            onClick={() => setEdit(null)}
+          >
+            {t("Cancel")}
+          </Button>
+        </form>
+      )}
+
       {/* min-h-0 so this scrolls instead of stretching the dialog past the
 			    viewport and stranding the footer. */}
       <ScrollPane className="min-h-0 flex-1">
@@ -343,46 +497,76 @@ export function DirectoryPicker({
           <p className="px-3 py-4 text-meta text-neutral-400">
             {fragment
               ? t("Nothing here matches “{fragment}”.", { fragment })
-              : t("No subdirectories here. Add this folder, or go up.")}
+              : t(
+                  "This folder is empty. Create a file or folder, or add it as a project.",
+                )}
           </p>
         )}
         {entries.map((e) => (
-          <ListRow
-            key={e.path}
-            onClick={() => void go(e.path)}
-            title={e.path}
-            className="gap-2"
-          >
-            {/* A triangle, not a folder pictograph: U+1F5C1 is absent from
+          <div key={e.path} className="group flex items-center">
+            <ListRow
+              onClick={(event) => {
+                if (e.dir) void go(e.path);
+                else if (!working && !busy) {
+                  const box = event.currentTarget.getBoundingClientRect();
+                  setMenu({ entry: e, x: box.left, y: box.bottom });
+                }
+              }}
+              onContextMenu={(event) => {
+                event.preventDefault();
+                if (!working && !busy) {
+                  const box = event.currentTarget.getBoundingClientRect();
+                  setMenu({
+                    entry: e,
+                    x: event.clientX || box.left,
+                    y: event.clientY || box.bottom,
+                  });
+                }
+              }}
+              title={e.path}
+              className="min-w-0 flex-1 gap-2"
+            >
+              {/* A triangle, not a folder pictograph: U+1F5C1 is absent from
 						    the fonts this chrome actually gets and renders as tofu. It
 						    reads as "opens into", which is what clicking a row does. */}
-            <span
-              aria-hidden
-              className={e.hidden ? "text-neutral-600" : "text-neutral-500"}
-            >
-              {"\u25b8"}
-            </span>
-            <span
-              className={`fade-end ${e.hidden ? "text-neutral-500" : "text-neutral-200"}`}
-            >
-              {e.name}
-            </span>
-            {/* A checkout is what you are almost always looking for, so it
-						    is the one thing a row says beyond its name. */}
-            {e.repo && (
               <span
-                title={t("Git repository")}
-                className="shrink-0 rounded-sm bg-neutral-800 px-1 text-caption text-amber-400/90"
+                aria-hidden
+                className={e.hidden ? "text-neutral-600" : "text-neutral-500"}
               >
-                git
+                {e.dir ? "\u25b8" : <FileGlyph name={e.name} />}
               </span>
-            )}
-            {projects.includes(e.path) && (
-              <span className="ml-auto shrink-0 text-caption text-neutral-500">
-                {t("added")}
+              <span
+                className={`fade-end ${e.hidden ? "text-neutral-500" : "text-neutral-200"}`}
+              >
+                {e.name}
               </span>
-            )}
-          </ListRow>
+              {/* A checkout is what you are almost always looking for, so it
+						    is the one thing a row says beyond its name. */}
+              {e.repo && (
+                <span
+                  title={t("Git repository")}
+                  className="shrink-0 rounded-sm bg-neutral-800 px-1 text-caption text-amber-400/90"
+                >
+                  git
+                </span>
+              )}
+              {projects.includes(e.path) && (
+                <span className="ml-auto shrink-0 text-caption text-neutral-500">
+                  {t("added")}
+                </span>
+              )}
+            </ListRow>
+            <IconButton
+              disabled={working || busy}
+              label={t("Actions for {name}", { name: e.name })}
+              onClick={(event) => {
+                const box = event.currentTarget.getBoundingClientRect();
+                setMenu({ entry: e, x: box.left, y: box.bottom });
+              }}
+            >
+              <DotsThree size={16} />
+            </IconButton>
+          </div>
         ))}
       </ScrollPane>
 
@@ -393,7 +577,7 @@ export function DirectoryPicker({
           onClick={() => current && onPick(current)}
           // Adding an already-listed project is a no-op on the server, so
           // the button says so instead of pretending to work.
-          disabled={!current || already || busy}
+          disabled={!current || already || busy || working}
         >
           {already ? t("Already added") : t("Add this folder")}
         </Button>
@@ -401,6 +585,43 @@ export function DirectoryPicker({
           {error ? <span className="text-red-400">{error}</span> : current}
         </span>
       </div>
+      {menu && (
+        <ContextMenu
+          x={menu.x}
+          y={menu.y}
+          label={t("File actions")}
+          onClose={() => setMenu(null)}
+        >
+          {menu.entry.dir && (
+            <MenuItem onClick={() => void go(menu.entry.path)}>
+              {t("Open folder")}
+            </MenuItem>
+          )}
+          <MenuItem onClick={() => begin("rename", menu.entry.name)}>
+            {t("Rename")}
+          </MenuItem>
+          <MenuItem onClick={() => begin("move", menu.entry.name)}>
+            {t("Move to…")}
+          </MenuItem>
+          <MenuItem onClick={() => begin("copy", menu.entry.name)}>
+            {t("Copy to…")}
+          </MenuItem>
+          <MenuItem
+            onClick={() => {
+              const entry = menu.entry;
+              setMenu(null);
+              if (
+                window.confirm(
+                  t('Move "{name}" to the Trash?', { name: entry.name }),
+                )
+              )
+                void manage("trash", entry.name);
+            }}
+          >
+            {t("Move to Trash")}
+          </MenuItem>
+        </ContextMenu>
+      )}
     </dialog>
   );
 }

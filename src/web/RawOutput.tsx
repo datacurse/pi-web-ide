@@ -1,8 +1,9 @@
 import type { PiBlock, PiTool } from "../shared/types.js";
-import { MarkdownText } from "./Markdown.js";
+import { CodeBox, MarkdownText } from "./Markdown.js";
 import { toolDescription } from "./workTimeline.js";
 import { AnchorDiff } from "./AnchorDiff.js";
 import { anchorDiff, anchorSources, type AnchorSource } from "./anchorDiff.js";
+import { execOutput, isExecTool } from "./execDisplay.js";
 
 function ToolLabel({ tool }: { tool: PiTool }) {
   const description = toolDescription(tool);
@@ -20,12 +21,49 @@ function ToolLabel({ tool }: { tool: PiTool }) {
 function ToolInput({ tool, source }: { tool: PiTool; source?: AnchorSource }) {
   const diff = anchorDiff(tool, source);
   if (diff) return <AnchorDiff diff={diff} />;
+  if (isExecTool(tool.name)) {
+    const args = tool.args;
+    const code =
+      typeof args === "string"
+        ? args
+        : args && typeof args === "object" && "code" in args
+          ? args.code
+          : undefined;
+    if (typeof code === "string")
+      return <CodeBox lang="javascript" text={code} className="my-3" />;
+  }
   return (
     <pre
       data-custom="raw tool input"
       className="my-3 whitespace-pre-wrap break-words font-mono chat-code"
     >
       {JSON.stringify(tool.args, null, 2)}
+    </pre>
+  );
+}
+
+function ToolOutput({ tool }: { tool: PiTool }) {
+  const result = tool.result!;
+  if (isExecTool(tool.name))
+    return (
+      <>
+        {execOutput(result).map((part, i) => (
+          <CodeBox key={i} text={part.text} lang={part.lang} className="my-3" />
+        ))}
+        <details data-custom="original exec output" className="my-3">
+          <summary className="cursor-pointer text-meta text-neutral-500">
+            Raw output
+          </summary>
+          <CodeBox text={result} className="my-3" />
+        </details>
+      </>
+    );
+  return (
+    <pre
+      data-custom="raw tool output"
+      className="my-3 whitespace-pre-wrap break-words font-mono chat-code"
+    >
+      {result}
     </pre>
   );
 }
@@ -64,14 +102,7 @@ export function RawBlocks({
                 <ToolLabel tool={block} />
               </summary>
               <ToolInput tool={block} source={toolSources.get(block.id)} />
-              {block.result !== undefined && (
-                <pre
-                  data-custom="raw tool output"
-                  className="my-3 whitespace-pre-wrap break-words font-mono chat-code"
-                >
-                  {block.result}
-                </pre>
-              )}
+              {block.result !== undefined && <ToolOutput tool={block} />}
               {block.children && (
                 <RawBlocks
                   blocks={block.children.map((child) => ({
