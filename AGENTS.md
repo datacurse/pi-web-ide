@@ -1,4 +1,3 @@
-# Formatting
-
-- Use Prettier (`.prettierrc.json`): two spaces, no tabs.
-- Run `pnpm format` after code changes and `pnpm check` before finishing.
+- Use pnpm and Prettier: two spaces, no tabs.
+- Read docs/ui.md before changing UI styling.
+- After code changes, run pnpm format, then pnpm check before finishing.
