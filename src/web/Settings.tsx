@@ -82,6 +82,7 @@ import { t } from "./i18n.js";
 import { SYNTAX_ROLES } from "./vscodeTheme.js";
 import { AutomaticActions } from "./AutomaticActions.js";
 import { AgentInstructions } from "./AgentInstructions.js";
+import { CodemodeSettings } from "./CodemodeSettings.js";
 
 const CATEGORIES = [
   { id: "appearance", label: "Appearance", icon: <Palette size={16} /> },
@@ -93,6 +94,7 @@ const CATEGORIES = [
     icon: <ListBullets size={16} />,
   },
   { id: "automatic", label: "Automatic actions", icon: <GearSix size={16} /> },
+  { id: "tools", label: "Tools", icon: <GearSix size={16} /> },
   { id: "notifications", label: "Notifications", icon: <Bell size={16} /> },
   { id: "shortcuts", label: "Shortcuts", icon: <Keyboard size={16} /> },
 ] as const;
@@ -587,6 +589,12 @@ export function Settings({
       label: t("Automatic actions"),
       text: `${t("Commit naming")} ${t("Session naming")} ${t("Compaction")} ${t("Automatic compaction")} ${t("Log reduction")} model provider gpt reducer compact rename context automatic summarize`,
       node: <AutomaticActions />,
+    },
+    {
+      category: "tools",
+      label: t("Native codemode"),
+      text: "native codemode code mode codex notebook tools off on only",
+      node: <CodemodeSettings open={open} />,
     },
     {
       category: "appearance",

@@ -58,6 +58,7 @@ import {
   switchAgentInstructions,
 } from "../agentInstructions.js";
 import { safePath } from "../files.js";
+import { nativeCodemode, setNativeCodemode } from "../codemode.js";
 
 /** Machine-level routes: health, models, usage, stats, fleet, projects, favourites, personality. */
 export function systemRoutes({
@@ -218,6 +219,23 @@ export function systemRoutes({
           registry.discardSpares();
           await registry.setAutoCompaction(enabled);
           return c.json({ autoCompaction: autoCompactionEnabled() }, 200);
+        } catch (err) {
+          return c.json(
+            { error: err instanceof Error ? err.message : String(err) },
+            400,
+          );
+        }
+      })
+
+      .get("/native-codemode", (c) => c.json(nativeCodemode(), 200))
+      .put("/native-codemode", json<{ mode: "off" | "on" | "only" }>(), (c) => {
+        const { mode } = c.req.valid("json");
+        if (mode !== "off" && mode !== "on" && mode !== "only")
+          return c.json({ error: "Invalid codemode mode" }, 400);
+        try {
+          setNativeCodemode(mode);
+          registry.discardSpares();
+          return c.json(nativeCodemode(), 200);
         } catch (err) {
           return c.json(
             { error: err instanceof Error ? err.message : String(err) },
