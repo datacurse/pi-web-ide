@@ -159,6 +159,46 @@ export function IconButton({
   );
 }
 
+/** An on/off control with a positional thumb and a visible state label. */
+export function Toggle({
+  checked,
+  onChange,
+  label,
+  stateLabel,
+  disabled = false,
+  title,
+}: {
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  label: string;
+  stateLabel: string;
+  disabled?: boolean;
+  title?: string;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      disabled={disabled}
+      title={title}
+      onClick={() => onChange(!checked)}
+      className={`flex min-h-control-md shrink-0 items-center gap-2 rounded-sm px-1 text-ui text-neutral-300 disabled:cursor-not-allowed disabled:opacity-50 ${EASE}`}
+    >
+      <span
+        aria-hidden
+        className={`flex h-6 w-10 shrink-0 items-center rounded-full p-1 ${checked ? "bg-amber-400" : "bg-neutral-700"}`}
+      >
+        <span
+          className={`size-4 rounded-full transition-transform motion-reduce:transition-none ${checked ? "translate-x-4 bg-neutral-950" : "translate-x-0 bg-neutral-200"}`}
+        />
+      </span>
+      <span className="w-16 text-left">{stateLabel}</span>
+    </button>
+  );
+}
+
 /* A flat square cell the full height of its row, split off by a rule on its left: the tab strip's `+`. */
 export function StripCell({
   label,

@@ -39,6 +39,8 @@ import {
 } from "./shortcuts.js";
 import {
   applyChatFade,
+  SCROLLBAR_TONES,
+  type ScrollbarTone,
   readMessageSeparators,
   writeMessageSeparators,
   applyFooterLayout,
@@ -207,7 +209,7 @@ function ChatFadeControl({ expandByDefault }: { expandByDefault: boolean }) {
           </Button>
         )}
         {on && (
-          // As tall as the checkbox row, square, with the row's own hover and selected fills.
+          // A fixed target that cannot shrink beside the setting's description.
           <button
             type="button"
             data-custom="settings gear"
@@ -215,13 +217,13 @@ function ChatFadeControl({ expandByDefault }: { expandByDefault: boolean }) {
             title={open ? t("Collapse") : t("Expand")}
             aria-expanded={open}
             onClick={() => setOpen((o) => !o)}
-            className={`flex aspect-square items-center justify-center self-stretch rounded-sm transition-colors duration-150 ease-out motion-reduce:transition-none ${
+            className={`flex size-12 shrink-0 items-center justify-center self-center rounded-sm transition-colors duration-150 ease-out motion-reduce:transition-none ${
               open
                 ? "bg-neutral-800 text-neutral-100"
                 : "text-neutral-400 hover:bg-neutral-900 hover:text-neutral-100"
             }`}
           >
-            <GearSix size={20} />
+            <GearSix size={24} />
           </button>
         )}
       </div>
@@ -465,6 +467,10 @@ export function Settings({
   onSessionSort,
   hideScrollbars,
   onHideScrollbars,
+  alwaysShowScrollbars,
+  onAlwaysShowScrollbars,
+  scrollbarTone,
+  onScrollbarTone,
   onClose,
 }: {
   cwd?: string;
@@ -487,6 +493,10 @@ export function Settings({
   onSessionSort: (sort: SessionSort) => void;
   hideScrollbars: boolean;
   onHideScrollbars: (on: boolean) => void;
+  alwaysShowScrollbars: boolean;
+  onAlwaysShowScrollbars: (on: boolean) => void;
+  scrollbarTone: ScrollbarTone;
+  onScrollbarTone: (value: ScrollbarTone) => void;
   onClose: () => void;
 }) {
   /*
@@ -557,6 +567,7 @@ export function Settings({
    */
   const items: {
     category: Category;
+    group?: string;
     label: string;
     text: string;
     node: ReactNode;
@@ -575,6 +586,7 @@ export function Settings({
     },
     {
       category: "appearance",
+      group: t("Themes"),
       label: t("Theme"),
       text: `color colour palette dark light vs code browse ${THEMES.map((th) => th.label).join(" ")}`,
       node: (
@@ -594,6 +606,7 @@ export function Settings({
     },
     {
       category: "appearance",
+      group: t("Themes"),
       label: t("Editor theme"),
       text: "code editor syntax color colour highlighting vs code match",
       node: (
@@ -621,33 +634,100 @@ export function Settings({
     },
     {
       category: "appearance",
-      label: t("Hide scrollbars"),
-      text: `scroll bar ${t("Panes still scroll with the wheel, touch and keyboard.")}`,
+      group: t("Scrollbars"),
+      label: t("Scrollbar visibility"),
+      text: "scroll bar sidebar auto hide always visible hidden wheel touch keyboard",
       node: (
-        <OptionRow>
-          <input
-            type="checkbox"
-            checked={hideScrollbars}
-            onChange={(e) => onHideScrollbars(e.target.checked)}
-            className="size-4 shrink-0 accent-amber-400"
-          />
-          <span className="flex-1">
-            {t("Hide scrollbars")}
-            <span className="block text-meta text-neutral-500">
-              {t("Panes still scroll with the wheel, touch and keyboard.")}
-            </span>
-          </span>
-        </OptionRow>
+        <div role="radiogroup" aria-label={t("Scrollbar visibility")}>
+          {[
+            {
+              id: "auto",
+              label: "Auto-hide",
+              hint: "Show while scrolling, then fade away.",
+            },
+            {
+              id: "always",
+              label: "Always visible",
+              hint: "Keep scrollbars visible whenever a pane can scroll.",
+            },
+            {
+              id: "hidden",
+              label: "Hidden",
+              hint: "Panes still scroll with the wheel, touch and keyboard.",
+            },
+          ].map((mode) => {
+            const selected =
+              (hideScrollbars
+                ? "hidden"
+                : alwaysShowScrollbars
+                  ? "always"
+                  : "auto") === mode.id;
+            return (
+              <OptionRow key={mode.id} selected={selected}>
+                <input
+                  type="radio"
+                  name="scrollbarVisibility"
+                  checked={selected}
+                  onChange={() => {
+                    onHideScrollbars(mode.id === "hidden");
+                    onAlwaysShowScrollbars(mode.id === "always");
+                  }}
+                  className="size-3.5 shrink-0 accent-amber-400"
+                />
+                <span className="flex-1">
+                  {t(mode.label)}
+                  <span className="block text-meta text-neutral-500">
+                    {t(mode.hint)}
+                  </span>
+                </span>
+              </OptionRow>
+            );
+          })}
+        </div>
       ),
     },
     {
       category: "appearance",
+      group: t("Scrollbars"),
+      label: t("Scrollbar tone"),
+      text: "scroll bar sidebar tone dark color colour",
+      node: (
+        <div role="radiogroup" aria-label={t("Scrollbar tone")}>
+          <div className="px-2 py-1 text-ui">{t("Scrollbar tone")}</div>
+          <div className="px-2 pb-1 text-meta text-neutral-500">
+            {t("Pick a tone from the active theme.")}
+          </div>
+          {SCROLLBAR_TONES.map((tone) => (
+            <OptionRow key={tone.id} selected={scrollbarTone === tone.id}>
+              <input
+                type="radio"
+                name="scrollbarTone"
+                checked={scrollbarTone === tone.id}
+                disabled={hideScrollbars}
+                onChange={() => onScrollbarTone(tone.id)}
+                className="size-3.5 shrink-0 accent-amber-400"
+              />
+              <span
+                aria-hidden
+                className="size-4 shrink-0 rounded-sm border border-neutral-600"
+                style={{ background: tone.color }}
+              />
+              <span>{t(tone.label)}</span>
+            </OptionRow>
+          ))}
+        </div>
+      ),
+    },
+    {
+      category: "appearance",
+      group: t("Chat"),
       label: t("Chat fade"),
       text: `gradient mask composer message box ${CHAT_FADE_FIELDS.map((f) => `${t(f.label)} ${t(f.hint)}`).join(" ")}`,
       node: <ChatFadeControl expandByDefault={expandDetails} />,
     },
     {
       category: "appearance",
+      group: t("Settings behavior"),
       label: t("Expand setting details"),
       text: `collapse open default ${t("Settings with details, like Chat fade, start expanded.")}`,
       node: (
@@ -1017,7 +1097,7 @@ export function Settings({
         ? matches(
             query,
             i.label,
-            `${t(CATEGORIES.find((c) => c.id === i.category)?.label ?? "")} ${i.text}`,
+            `${t(CATEGORIES.find((c) => c.id === i.category)?.label ?? "")} ${i.group ?? ""} ${i.text}`,
           )
         : i.category === category && ("none" as const),
     }))
@@ -1099,13 +1179,38 @@ export function Settings({
                 className={n ? "mt-6" : ""}
               >
                 <div className="flex flex-col gap-2">
-                  {shown
-                    .filter((i) => i.category === c.id)
-                    .map((i) => (
-                      <div key={i.label} data-hit={i.hit} data-label={i.label}>
-                        {i.node}
+                  {Array.from(
+                    new Set(
+                      shown
+                        .filter((i) => i.category === c.id)
+                        .map((i) => i.group),
+                    ),
+                  ).map((group) => {
+                    const nodes = shown
+                      .filter((i) => i.category === c.id && i.group === group)
+                      .map((i) => (
+                        <div
+                          key={i.label}
+                          data-hit={i.hit}
+                          data-label={i.label}
+                        >
+                          {i.node}
+                        </div>
+                      ));
+                    return group ? (
+                      <Section
+                        key={group}
+                        title={group}
+                        className="mt-4 border-t border-neutral-800 pt-4"
+                      >
+                        <div className="flex flex-col gap-2">{nodes}</div>
+                      </Section>
+                    ) : (
+                      <div key="ungrouped" className="flex flex-col gap-2">
+                        {nodes}
                       </div>
-                    ))}
+                    );
+                  })}
                 </div>
               </Section>
             ))}

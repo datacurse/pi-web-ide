@@ -157,7 +157,7 @@ export function OverlayScrollbar({
       }}
     >
       <div
-        className="absolute right-0 w-1.5 rounded-sm bg-neutral-700 hover:bg-neutral-600"
+        className="overlay-scrollbar-thumb absolute right-0 w-1.5 rounded-sm"
         style={{ top: thumb.top, height: thumb.height }}
         onPointerDown={(e) => {
           const el = target.current;

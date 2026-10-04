@@ -5,11 +5,7 @@ import { readSolPi, writeSolPi } from "../solPi.js";
 import { query, json, type Deps, type Env } from "../http.js";
 
 /** pi packages on this machine, the npm gallery, and the open project's own packages. */
-export function packagesRoutes({
-  cwd: CWD,
-  registry,
-  piVersion: PI_VERSION,
-}: Deps) {
+export function packagesRoutes({ cwd: CWD, registry }: Deps) {
   /** A mutation answers with its own outcome; the log tail is the interesting part. */
   async function mutation(
     c: Context<Env>,
@@ -51,10 +47,11 @@ export function packagesRoutes({
        */
       .get("/packages", async (c) => {
         try {
-          return c.json(
-            { piVersion: PI_VERSION ?? null, ...(await packages.view()) },
-            200,
-          );
+          const [piVersion, view] = await Promise.all([
+            packages.piVersion(),
+            packages.view(),
+          ]);
+          return c.json({ piVersion, ...view }, 200);
         } catch (err) {
           return c.json(
             { error: err instanceof Error ? err.message : String(err) },

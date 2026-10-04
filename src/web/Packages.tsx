@@ -28,6 +28,7 @@ import type {
 } from "../shared/types.js";
 import {
   Button,
+  Toggle,
   IconButton,
   OptionRow,
   PanelHeader,
@@ -456,20 +457,18 @@ function Installed({
                   </td>
                   <td className="w-px px-4 py-4">
                     <div className="flex items-center justify-end gap-1">
-                      <Button
-                        size="sm"
-                        variant={p.disabled ? "secondary" : "subtle"}
-                        className="mr-2 w-16"
+                      <Toggle
+                        checked={!p.disabled}
+                        label={t("Enable {source}", { source: p.identity })}
+                        stateLabel={p.disabled ? t("Disabled") : t("Enabled")}
                         disabled={busy}
-                        onClick={() => onEnabled(p.source, p.disabled)}
+                        onChange={(enabled) => onEnabled(p.source, enabled)}
                         title={t(
                           p.disabled
                             ? "Restore this package’s previous configuration"
                             : "Keep installed, but stop loading its resources",
                         )}
-                      >
-                        {p.disabled ? t("enable") : t("disable")}
-                      </Button>
+                      />
                       {p.kind !== "local" && (
                         <>
                           <IconButton

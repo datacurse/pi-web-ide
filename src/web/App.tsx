@@ -71,6 +71,9 @@ import {
   readMessageSeparators,
   applyFooterLayout,
   applyHideScrollbars,
+  applyScrollbarAppearance,
+  readAlwaysShowScrollbars,
+  readScrollbarTone,
   applyScrollPast,
   applySessionLines,
   applyTheme,
@@ -260,6 +263,10 @@ export default function App() {
     readSessionAttachments,
   );
   const [hideScrollbars, setHideScrollbars] = useState(readHideScrollbars);
+  const [alwaysShowScrollbars, setAlwaysShowScrollbars] = useState(
+    readAlwaysShowScrollbars,
+  );
+  const [scrollbarTone, setScrollbarTone] = useState(readScrollbarTone);
   /** This pwi's project list: its directories plus the cwd it was launched against. */
   const [projects, setProjects] = useState<Projects>({
     projects: [],
@@ -279,7 +286,10 @@ export default function App() {
    * something no longer recognised.
    */
   useEffect(() => applyTheme(theme, editorTheme), [theme, editorTheme]);
-  useEffect(() => applyHideScrollbars(hideScrollbars), [hideScrollbars]);
+  useEffect(() => {
+    applyHideScrollbars(hideScrollbars);
+    applyScrollbarAppearance(alwaysShowScrollbars, scrollbarTone);
+  }, [hideScrollbars, alwaysShowScrollbars, scrollbarTone]);
   // Settings owns later changes; this paints the stored fade once.
   useEffect(() => applyChatFade(readChatFade()), []);
   useEffect(() => applyMessageSeparators(readMessageSeparators()), []);
@@ -1883,6 +1893,10 @@ export default function App() {
         onSessionSort={changeSessionSort}
         hideScrollbars={hideScrollbars}
         onHideScrollbars={setHideScrollbars}
+        alwaysShowScrollbars={alwaysShowScrollbars}
+        onAlwaysShowScrollbars={setAlwaysShowScrollbars}
+        scrollbarTone={scrollbarTone}
+        onScrollbarTone={setScrollbarTone}
         onClose={onClose}
       />
     );

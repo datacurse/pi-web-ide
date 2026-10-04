@@ -218,6 +218,36 @@ export function applyHideScrollbars(on: boolean): void {
   writeStored(HIDE_SCROLLBARS_KEY, on ? "1" : "0");
 }
 
+export function readAlwaysShowScrollbars(): boolean {
+  return readStored("pwi:alwaysShowScrollbars") === "1";
+}
+
+export const SCROLLBAR_TONES = [
+  { id: "700", label: "Current", color: "var(--color-neutral-700)" },
+  { id: "800", label: "Surface", color: "var(--color-neutral-800)" },
+  { id: "900", label: "Base", color: "var(--color-neutral-900)" },
+] as const;
+export type ScrollbarTone = (typeof SCROLLBAR_TONES)[number]["id"];
+
+export function readScrollbarTone(): ScrollbarTone {
+  const value = readStored("pwi:scrollbarTone");
+  return value === "800" || value === "900" ? value : "700";
+}
+
+export function applyScrollbarAppearance(
+  always: boolean,
+  tone: ScrollbarTone,
+): void {
+  const root = document.documentElement;
+  if (root.dataset.scrollbars !== "hidden") {
+    if (always) root.dataset.scrollbars = "always";
+    else delete root.dataset.scrollbars;
+  }
+  root.dataset.scrollbarTone = tone;
+  writeStored("pwi:alwaysShowScrollbars", always ? "1" : "0");
+  writeStored("pwi:scrollbarTone", tone);
+}
+
 /**
  * How the transcript fades out above the composer: opacity
  * `floor + (1 - floor)(1 - t^easeIn)^drop` over `length` rem, ending at the box's top

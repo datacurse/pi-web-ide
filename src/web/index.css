@@ -30,6 +30,21 @@
 @custom-variant wide (@media (width > 768px));
 
 @layer base {
+  :root {
+    --scrollbar-color: var(--color-neutral-700);
+    --scrollbar-hover-color: var(--color-neutral-600);
+  }
+
+  :root[data-scrollbar-tone="800"] {
+    --scrollbar-color: var(--color-neutral-800);
+    --scrollbar-hover-color: var(--color-neutral-700);
+  }
+
+  :root[data-scrollbar-tone="900"] {
+    --scrollbar-color: var(--color-neutral-900);
+    --scrollbar-hover-color: var(--color-neutral-800);
+  }
+
   :focus-visible {
     outline: none;
   }
@@ -382,8 +397,9 @@
     transition: --scrollbar-thumb 500ms;
   }
 
-  [data-scrolling] {
-    --scrollbar-thumb: var(--color-neutral-700);
+  [data-scrolling],
+  :root[data-scrollbars="always"] * {
+    --scrollbar-thumb: var(--scrollbar-color);
     transition-duration: 100ms;
   }
 }
@@ -422,8 +438,9 @@
 
   /* Hover only brightens a thumb already showing: passing over a hidden one must not pop it up. */
   [data-scrolling]::-webkit-scrollbar-thumb:hover,
+  :root[data-scrollbars="always"] ::-webkit-scrollbar-thumb:hover,
   ::-webkit-scrollbar-thumb:active {
-    background: var(--color-neutral-600);
+    background: var(--scrollbar-hover-color);
   }
 
   ::-webkit-scrollbar-corner {
@@ -443,6 +460,18 @@
   order: -1;
   margin-left: 0;
   margin-right: auto;
+}
+
+:root[data-scrollbars="always"] .overlay-scrollbar {
+  opacity: 1;
+}
+
+.overlay-scrollbar-thumb {
+  background: var(--scrollbar-color);
+}
+
+.overlay-scrollbar-thumb:hover {
+  background: var(--scrollbar-hover-color);
 }
 
 /* Settings > Hide scrollbars. The panes still scroll. */
@@ -490,7 +519,7 @@
     /* The picker is a pseudo-element, so the global scrollbar selectors do
      * not reach it. Use the standard properties on its own scroll container. */
     scrollbar-width: thin;
-    scrollbar-color: var(--color-neutral-700) transparent;
+    scrollbar-color: var(--scrollbar-color) transparent;
   }
   :root[data-scrollbars="hidden"] .pill-select::picker(select) {
     scrollbar-width: none;

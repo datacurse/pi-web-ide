@@ -20,9 +20,15 @@
  */
 
 import { execFile } from "node:child_process";
-import { readFileSync } from "node:fs";
+import {
+  accessSync,
+  constants,
+  readFileSync,
+  realpathSync,
+  statSync,
+} from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { delimiter, dirname, isAbsolute, join, resolve } from "node:path";
 import { PI_BIN } from "./agent.js";
 import { isRecord } from "./guards.js";
 import { readSettings, writeSettings } from "./models.js";
@@ -376,6 +382,16 @@ export function currentEpoch(): number {
   return epoch;
 }
 
+/** Re-read after updates: global package managers can replace the pi shim. */
+export async function piVersion(): Promise<string | null> {
+  try {
+    const { stdout } = await run(PI_BIN, ["--version"], 10_000);
+    return stdout.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Mutations
 // ---------------------------------------------------------------------------
@@ -392,6 +408,7 @@ function run(
   bin: string,
   args: string[],
   timeout: number,
+  env: NodeJS.ProcessEnv = process.env,
 ): Promise<{ stdout: string; stderr: string }> {
   const { promise, resolve, reject } = Promise.withResolvers<{
     stdout: string;
@@ -403,7 +420,7 @@ function run(
     {
       timeout,
       maxBuffer: 8 * 1024 * 1024,
-      env: { ...process.env, ...GIT_ENV },
+      env: { ...env, ...GIT_ENV },
     },
     (err, stdout, stderr) => {
       if (err) reject(Object.assign(err, { stdout, stderr }));
@@ -420,10 +437,14 @@ function tail(stdout: unknown, stderr: unknown): string {
     .trim();
 }
 
-async function mutate(args: string[]): Promise<MutationResult> {
+async function mutate(
+  args: string[],
+  bin = PI_BIN,
+  env = process.env,
+): Promise<MutationResult> {
   return serialize(async () => {
     try {
-      const { stdout, stderr } = await run(PI_BIN, args, TIMEOUT_MS);
+      const { stdout, stderr } = await run(bin, args, TIMEOUT_MS, env);
       epoch++;
       return { ok: true, log: tail(stdout, stderr) };
     } catch (err) {
@@ -435,7 +456,7 @@ async function mutate(args: string[]): Promise<MutationResult> {
       const log = tail(e.stdout, e.stderr);
       const reason =
         e.code === "ENOENT"
-          ? `cannot run "${PI_BIN}": not found on PATH. Set PWI_PI_BIN to its absolute path.`
+          ? `cannot run "${bin}": not found on PATH.${bin === PI_BIN ? " Set PWI_PI_BIN to its absolute path." : ""}`
           : e.killed
             ? `timed out after ${Math.round(TIMEOUT_MS / 1000)}s`
             : // The last non-empty line is the complaint; the rest is npm.
@@ -539,7 +560,90 @@ export async function update(source?: string): Promise<MutationResult> {
   );
 }
 
+/**
+ * pnpm's v11 global installs live in isolated, hashed projects. Pi cannot
+ * self-update those, and updating the project directly would leave its global
+ * shim pointing at the old installation. Use the owning global manager instead.
+ * Inspect only the configured executable; never replace an unrelated pi on PATH.
+ */
+function pnpmGlobalPi(): {
+  bin: string;
+  globalDir: string;
+  binDir: string;
+  name: string;
+} | null {
+  const candidates = PI_BIN.includes("/")
+    ? [resolve(PI_BIN)]
+    : (process.env.PATH ?? "").split(delimiter).map((dir) => join(dir, PI_BIN));
+  for (const candidate of candidates) {
+    let executable: string;
+    try {
+      accessSync(candidate, constants.X_OK);
+      executable = realpathSync(candidate);
+    } catch {
+      continue;
+    }
+    try {
+      // cmd-shim is a regular shell script, not a symlink to the package.
+      const shim =
+        statSync(executable).size <= 65_536
+          ? readFileSync(executable, "utf8")
+          : "";
+      const target = shim.match(/^# cmd-shim-target=(.+)\r?$/m)?.[1].trim();
+      const entry =
+        target && isAbsolute(target) ? realpathSync(target) : executable;
+      const globalDir = entry.match(
+        /^(.*\/node_modules)\/v11\/[^/]+\/node_modules\//,
+      )?.[1];
+      if (!globalDir) return null;
+      let root = dirname(entry);
+      while (root !== dirname(root)) {
+        try {
+          const pkg: unknown = JSON.parse(
+            readFileSync(join(root, "package.json"), "utf8"),
+          );
+          if (
+            isRecord(pkg) &&
+            (pkg.name === "@earendil-works/pi-coding-agent" ||
+              pkg.name === "@mariozechner/pi-coding-agent")
+          ) {
+            const binDir = dirname(executable);
+            const bin = join(binDir, "pnpm");
+            accessSync(bin, constants.X_OK);
+            return { bin, globalDir, binDir, name: pkg.name };
+          }
+        } catch {
+          // The CLI may be nested several directories below package.json.
+        }
+        root = dirname(root);
+      }
+    } catch {
+      // Unknown wrappers remain the CLI's responsibility.
+    }
+    return null;
+  }
+  return null;
+}
+
 /** Update the pi CLI itself on this machine. Never automatic. */
 export async function updateSelf(): Promise<MutationResult> {
+  const pnpm = pnpmGlobalPi();
+  if (pnpm) {
+    const result = await mutate(
+      ["add", "--global", `${pnpm.name}@latest`],
+      pnpm.bin,
+      {
+        ...process.env,
+        // pnpm v12 accepts these through configuration, not add's CLI flags.
+        PNPM_CONFIG_GLOBAL_DIR: pnpm.globalDir,
+        PNPM_CONFIG_GLOBAL_BIN_DIR: pnpm.binDir,
+        PATH: `${pnpm.binDir}${delimiter}${process.env.PATH ?? ""}`,
+      },
+    );
+    if (result.ok)
+      result.log +=
+        "\nPi updated. Restart existing sessions to use the new version.";
+    return result;
+  }
   return mutate(["update", "--self"]);
 }

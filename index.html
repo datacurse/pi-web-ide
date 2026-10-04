@@ -24,10 +24,14 @@
           localStorage.getItem("pwi:theme") || "mocha";
         if (localStorage.getItem("pwi:hideScrollbars") === "1")
           document.documentElement.dataset.scrollbars = "hidden";
+        else if (localStorage.getItem("pwi:alwaysShowScrollbars") === "1")
+          document.documentElement.dataset.scrollbars = "always";
         // The variables applyTheme last wrote: a VS Code theme's palette,
         // the syntax colors, and whether it is light.
         var boot = JSON.parse(localStorage.getItem("pwi:themeBoot") || "{}");
         if (boot.style) document.documentElement.style.cssText = boot.style;
+        document.documentElement.dataset.scrollbarTone =
+          localStorage.getItem("pwi:scrollbarTone") || "700";
         if (boot.light) document.documentElement.dataset.light = "";
       } catch {}
     </script>
