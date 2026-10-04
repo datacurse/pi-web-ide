@@ -273,6 +273,21 @@ export function chatFadeOpacity(fade: ChatFade, u: number): number {
 
 const CHAT_FADE_ON_KEY = "pwi:chatFadeOn";
 
+const MESSAGE_SEPARATORS_KEY = "pwi:messageSeparators";
+
+export function readMessageSeparators(): boolean {
+  return readStored(MESSAGE_SEPARATORS_KEY) !== "0";
+}
+
+export function applyMessageSeparators(on: boolean): void {
+  document.documentElement.dataset.messageSeparators = on ? "on" : "off";
+}
+
+export function writeMessageSeparators(on: boolean): void {
+  writeStored(MESSAGE_SEPARATORS_KEY, on ? "1" : "0");
+  applyMessageSeparators(on);
+}
+
 /** On by default; off, the transcript has no mask at all. */
 export function readChatFadeOn(): boolean {
   return readStored(CHAT_FADE_ON_KEY) !== "0";

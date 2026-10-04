@@ -629,6 +629,11 @@ body {
   padding-inline: 0;
 }
 
+/* Keep turn spacing unchanged when the dividing lines are disabled. */
+:root[data-message-separators="off"] .turn-separator {
+  border-color: transparent;
+}
+
 /* Line height rises with the measure; 1.6 is the figure for ~66 characters. */
 .chat-prose {
   font-size: var(--prose-size);

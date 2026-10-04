@@ -67,6 +67,8 @@ import { Settings } from "./Settings.js";
 import { Packages } from "./Packages.js";
 import {
   applyChatFade,
+  applyMessageSeparators,
+  readMessageSeparators,
   applyFooterLayout,
   applyHideScrollbars,
   applyScrollPast,
@@ -280,6 +282,7 @@ export default function App() {
   useEffect(() => applyHideScrollbars(hideScrollbars), [hideScrollbars]);
   // Settings owns later changes; this paints the stored fade once.
   useEffect(() => applyChatFade(readChatFade()), []);
+  useEffect(() => applyMessageSeparators(readMessageSeparators()), []);
   useEffect(() => applyScrollPast(readScrollPastOn(), readScrollPast()), []);
   useEffect(() => applyFooterLayout(readFooterLayout()), []);
   useEffect(() => applySessionLines(readSessionLines()), []);

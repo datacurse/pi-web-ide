@@ -699,7 +699,7 @@ function TurnSeparator({ first }: { first: boolean }) {
   return (
     <hr
       aria-hidden
-      className={`my-6 border-neutral-800 ${first ? "hidden" : ""}`}
+      className={`turn-separator my-6 border-neutral-800 ${first ? "hidden" : ""}`}
     />
   );
 }

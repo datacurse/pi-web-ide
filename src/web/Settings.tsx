@@ -39,6 +39,8 @@ import {
 } from "./shortcuts.js";
 import {
   applyChatFade,
+  readMessageSeparators,
+  writeMessageSeparators,
   applyFooterLayout,
   applyScrollPast,
   applySessionLines,
@@ -507,6 +509,9 @@ export function Settings({
   const [category, setCategory] = useState<Category>("appearance");
   const [expandDetails, setExpandDetails] = useState(readSettingsExpanded);
   const [footer, setFooter] = useState(readFooterLayout);
+  const [messageSeparators, setMessageSeparators] = useState(
+    readMessageSeparators,
+  );
   const [sessionLines, setSessionLines] = useState(readSessionLines);
   const [bindings, setBindings] = useState(readBindings);
   /** The shortcut whose new keys are being recorded. */
@@ -670,6 +675,30 @@ export function Settings({
       label: t("Scroll past the end"),
       text: `overscroll bottom padding ${t("Let the chat scroll past its last message.")} ${t("Amount")}`,
       node: <ScrollPastControl />,
+    },
+    {
+      category: "transcript",
+      label: t("Message separators"),
+      text: `divider line turn ${t("Show lines between conversation turns.")}`,
+      node: (
+        <OptionRow>
+          <input
+            type="checkbox"
+            checked={messageSeparators}
+            onChange={(e) => {
+              setMessageSeparators(e.target.checked);
+              writeMessageSeparators(e.target.checked);
+            }}
+            className="size-4 shrink-0 accent-amber-400"
+          />
+          <span className="flex-1">
+            {t("Message separators")}
+            <span className="block text-meta text-neutral-500">
+              {t("Show lines between conversation turns.")}
+            </span>
+          </span>
+        </OptionRow>
+      ),
     },
     {
       category: "transcript",
