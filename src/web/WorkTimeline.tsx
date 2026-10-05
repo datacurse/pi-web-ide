@@ -1,4 +1,6 @@
 import { CaretRight, Check, X } from "@phosphor-icons/react";
+import { useSyncExternalStore } from "react";
+import { readCodemodeCollapsed, subscribeCodemodeCollapsed } from "./prefs.js";
 import type { PiBlock, PiTool } from "../shared/types.js";
 import type { TurnActivity } from "../shared/activity.js";
 import { RawBlocks } from "./RawOutput.js";
@@ -82,12 +84,26 @@ export function WorkTool({
   toolSources: Map<string, AnchorSource>;
   nested?: boolean;
 }) {
+  const collapsed = useSyncExternalStore(
+    subscribeCodemodeCollapsed,
+    readCodemodeCollapsed,
+  );
   const content =
     tool.name === "codemode" || tool.name.endsWith(".codemode") ? (
-      <div data-custom="codemode tool list" className="my-3 text-neutral-300">
-        <div className="font-mono chat-code">
+      <details
+        key={String(collapsed)}
+        data-custom="codemode tool list"
+        open={!collapsed}
+        className="my-3 text-neutral-300"
+      >
+        <summary className="group/codemode inline-flex cursor-pointer list-none items-center gap-1.5 font-mono chat-code [&::-webkit-details-marker]:hidden">
           <ToolLabel tool={tool} source={toolSources.get(tool.id)} />
-        </div>
+          <CaretRight
+            size={12}
+            aria-hidden
+            className="opacity-0 transition-opacity group-hover/codemode:opacity-100 group-focus-visible/codemode:opacity-100 [[open]>summary>&]:rotate-90 [[open]>summary>&]:opacity-100"
+          />
+        </summary>
         {!!tool.children?.length && (
           <div className="pl-8 [&>*]:my-0">
             {tool.children.map((child) => (
@@ -100,7 +116,7 @@ export function WorkTool({
             ))}
           </div>
         )}
-      </div>
+      </details>
     ) : (
       <RawBlocks
         blocks={[{ kind: "tool", ...tool }]}

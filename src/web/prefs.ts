@@ -66,6 +66,24 @@ export function subscribeWorkDisplay(onChange: () => void): () => void {
   };
 }
 
+export function readCodemodeCollapsed(): boolean {
+  return readStored("pwi:codemodeCollapsed") === "true";
+}
+
+export function writeCodemodeCollapsed(collapsed: boolean): void {
+  writeStored("pwi:codemodeCollapsed", String(collapsed));
+  window.dispatchEvent(new Event("pwi:codemodeCollapsed"));
+}
+
+export function subscribeCodemodeCollapsed(onChange: () => void): () => void {
+  window.addEventListener("pwi:codemodeCollapsed", onChange);
+  window.addEventListener("storage", onChange);
+  return () => {
+    window.removeEventListener("pwi:codemodeCollapsed", onChange);
+    window.removeEventListener("storage", onChange);
+  };
+}
+
 export type CodemodeToolLabels = "text" | "icon" | "both";
 export const CODEMODE_TOOL_LABELS = [
   { id: "text", label: "Text" },

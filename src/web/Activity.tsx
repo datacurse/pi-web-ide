@@ -133,7 +133,7 @@ function useClock(active: boolean): number {
   const [now, setNow] = useState(Date.now);
   useEffect(() => {
     if (!active) return;
-    const timer = setInterval(() => setNow(Date.now()), 250);
+    const timer = setInterval(() => setNow(Date.now()), 100);
     return () => clearInterval(timer);
   }, [active]);
   return now;

@@ -43,6 +43,8 @@ import {
   type ScrollbarTone,
   readMessageSeparators,
   readWorkDisplay,
+  readCodemodeCollapsed,
+  writeCodemodeCollapsed,
   readCodemodeToolLabels,
   CODEMODE_TOOL_LABELS,
   readRelativeToolPaths,
@@ -608,6 +610,9 @@ export function Settings({
   const [expandDetails, setExpandDetails] = useState(readSettingsExpanded);
   const [footer, setFooter] = useState(readFooterLayout);
   const [workDisplay, setWorkDisplay] = useState(readWorkDisplay);
+  const [codemodeCollapsed, setCodemodeCollapsed] = useState(
+    readCodemodeCollapsed,
+  );
   const [codemodeToolLabels, setCodemodeToolLabels] = useState(
     readCodemodeToolLabels,
   );
@@ -936,6 +941,33 @@ export function Settings({
             </OptionRow>
           ))}
         </div>
+      ),
+    },
+    {
+      category: "transcript",
+      group: t("Agent activity"),
+      label: t("Collapse codemode"),
+      text: "codemode collapsed expanded nested tools hide disclosure",
+      node: (
+        <OptionRow>
+          <input
+            type="checkbox"
+            checked={codemodeCollapsed}
+            onChange={(e) => {
+              setCodemodeCollapsed(e.target.checked);
+              writeCodemodeCollapsed(e.target.checked);
+            }}
+            className="size-4 shrink-0 accent-amber-400"
+          />
+          <span className="flex-1">
+            {t("Collapse codemode")}
+            <span className="block text-meta text-neutral-500">
+              {t(
+                "Start codemode groups collapsed. Click a group to show its nested tool calls.",
+              )}
+            </span>
+          </span>
+        </OptionRow>
       ),
     },
     {

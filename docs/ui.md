@@ -185,6 +185,10 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
 - Model prose and reasoning render Markdown. Tool arguments and output are literal,
   escaped text inside their own native `details` disclosures, initially collapsed.
   Nested calls stay under their parent; there is no tool-mode selector.
+- Settings → Chat → Agent activity → `Collapse codemode` (`pwi:codemodeCollapsed`,
+  per browser, off by default) starts codemode groups closed instead of showing their
+  nested tool tree. Each group remains clickable to expand or collapse; changing the
+  preference updates mounted groups immediately.
 - User prompts retain their pill, image thumbnails, long-message folding and inline editing.
 - Settings → Chat → Agent activity selects **Compact** (the default quiet disclosures
   described above) or **Timeline** (Requesting, Thinking, Receiving and Doing timers,
