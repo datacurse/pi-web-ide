@@ -7,7 +7,6 @@ import {
   Eye,
   EyeSlash,
   FileText,
-  Image,
   MagnifyingGlass,
   PushPin,
   X,
@@ -457,29 +456,34 @@ export function SessionList({
 								*/}
                 {showAttachments && attachments.length > 0 && (
                   <div className="mt-2 flex flex-wrap gap-1.5 pr-3">
-                    {attachments.map((attachment, i) => (
-                      <span
-                        key={i}
-                        className="inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-sm border border-neutral-700 px-2 py-1 text-meta text-neutral-400"
-                      >
-                        {attachment.kind === "text" ? (
+                    {attachments.map((attachment, i) =>
+                      attachment.kind === "image" ? (
+                        <img
+                          key={i}
+                          src={`/api/sessions/image?${new URLSearchParams({
+                            cwd: project,
+                            file: s.path,
+                            latest: latestPrompt ? "1" : "0",
+                            index: String(attachment.index),
+                            version: s.lastAsked ?? s.lastActive,
+                          })}`}
+                          alt={t("Image {n}", { n: attachment.index })}
+                          loading="lazy"
+                          className="size-14 rounded-md border border-neutral-700 object-cover"
+                        />
+                      ) : (
+                        <span
+                          key={i}
+                          className="inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-sm border border-neutral-700 px-2 py-1 text-meta text-neutral-400"
+                        >
                           <FileText
                             size={14}
                             className="shrink-0 text-amber-400"
                           />
-                        ) : (
-                          <Image
-                            size={14}
-                            className="shrink-0 text-amber-400"
-                          />
-                        )}
-                        <span className="fade-end">
-                          {attachment.kind === "text"
-                            ? attachment.name
-                            : t("Image {n}", { n: attachment.index })}
+                          <span className="fade-end">{attachment.name}</span>
                         </span>
-                      </span>
-                    ))}
+                      ),
+                    )}
                   </div>
                 )}
                 <div className="mt-0.5 flex items-center gap-3 pr-3">

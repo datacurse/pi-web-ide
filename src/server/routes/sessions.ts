@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { RESPONSE_ALREADY_SENT } from "@hono/node-server/utils/response";
 import { existsSync, statSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import { listSessions, sameProject } from "../sessions.js";
 import { searchSessions } from "../search.js";
 import { readFile as readReviewFile, writeReviewed } from "../files.js";
@@ -63,6 +64,74 @@ export function sessionsRoutes({ cwd: CWD, registry }: Deps) {
         }
       })
 
+      /** Load list thumbnails lazily instead of embedding image data in each list poll. */
+      .get(
+        "/sessions/image",
+        query<{
+          cwd?: string;
+          file?: string;
+          latest?: string;
+          index?: string;
+          version?: string;
+        }>(),
+        async (c) => {
+          const cwd = c.req.query("cwd") || CWD;
+          const file = c.req.query("file");
+          const index = Number(c.req.query("index")) - 1;
+          if (!file || !Number.isInteger(index) || index < 0)
+            return c.json({ error: "file and image index required" }, 400);
+          try {
+            const sessions = await listSessions(cwd);
+            if (!sessions.some((session) => session.path === file))
+              return c.json({ error: "session not found" }, 404);
+            let images: PiImage[] = [];
+            for (const line of (await readFile(file, "utf8")).split("\n")) {
+              let entry;
+              try {
+                entry = JSON.parse(line);
+              } catch {
+                continue;
+              }
+              const message = entry?.type === "message" ? entry.message : null;
+              if (message?.role !== "user" || !Array.isArray(message.content))
+                continue;
+              const next = message.content.filter(
+                (block: any) =>
+                  block?.type === "image" &&
+                  typeof block.data === "string" &&
+                  [
+                    "image/png",
+                    "image/jpeg",
+                    "image/gif",
+                    "image/webp",
+                  ].includes(block.mimeType),
+              ) as PiImage[];
+              if (
+                !next.length &&
+                !message.content.some(
+                  (block: any) =>
+                    block?.type === "text" &&
+                    typeof block.text === "string" &&
+                    block.text.trim(),
+                )
+              )
+                continue;
+              images = next;
+              if (c.req.query("latest") !== "1") break;
+            }
+            const image = images[index];
+            if (!image) return c.json({ error: "image not found" }, 404);
+            c.header("Content-Type", image.mimeType);
+            c.header("Cache-Control", "private, max-age=60");
+            return c.body(new Uint8Array(Buffer.from(image.data, "base64")));
+          } catch (err) {
+            return c.json(
+              { error: err instanceof Error ? err.message : String(err) },
+              500,
+            );
+          }
+        },
+      )
       /** Full-text search over one project's sessions. Before `/api/sessions/:id`, which would swallow it. */
       .get(
         "/sessions/search",
