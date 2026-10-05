@@ -86,7 +86,7 @@ export function WorkTool({
       <div data-custom="codemode tool list" className="my-3 text-neutral-300">
         <div className="font-mono chat-code">{tool.name}</div>
         {!!tool.children?.length && (
-          <div className="pl-4 [&>*]:my-0">
+          <div className="pl-8 [&>*]:my-0">
             {tool.children.map((child) => (
               <WorkTool
                 key={child.id}
@@ -111,7 +111,7 @@ export function WorkTool({
     (tool.isError !== undefined ||
       (!tool.outputUnavailable && tool.result !== undefined));
   return (
-    <div className="relative [&>*]:my-0">
+    <div className="work-tool-branch relative [&>*]:my-0">
       {completed && (
         <span
           role="img"

@@ -991,6 +991,28 @@ input[type="number"]::-webkit-outer-spin-button {
 .flow-trim > :last-child {
   margin-bottom: 0;
 }
+/* Tree branches sit to the left of tool status marks and span wrapped rows. */
+.work-tool-branch::before,
+.work-tool-branch::after {
+  content: "";
+  position: absolute;
+  left: -2rem;
+  pointer-events: none;
+}
+.work-tool-branch::before {
+  top: 0;
+  bottom: 0;
+  border-left: 1px solid var(--color-neutral-700);
+}
+.work-tool-branch:last-child::before {
+  bottom: auto;
+  height: calc(var(--code-size) * 0.75);
+}
+.work-tool-branch::after {
+  top: calc(var(--code-size) * 0.75);
+  width: 0.75rem;
+  border-top: 1px solid var(--color-neutral-700);
+}
 /* Align round markers with the first content line, not a nested Markdown margin. */
 .chat-round {
   --round-marker-top: calc(var(--prose-size) * 0.8);
