@@ -98,11 +98,11 @@ fits none of the existing ones, and record it here.
   rows have no right padding) and use `.fade-edge`: a fixed 2em fade at that edge,
   so any text reaching it fades whether it overflows or just fits.
 - Session rows and tabs show the name, else the whole first prompt (or the latest,
-  Settings > Sessions > `Session titles`; `sessionLabel`), which runs on to the edge and fades there. Session
+  Settings > Sessions > `Unnamed session titles`; `sessionLabel`), which runs on to the edge and fades there. Session
   rows have no right padding (`pl-3` only), so that fade sits on the panel's edge.
 - Prompt-derived session titles update from the live chat immediately on Send,
   including the first prompt, without waiting for a reply or the disk listing.
-- Session list titles (`.session-title`) wrap to Settings > Sessions > `Title lines`
+- Session list titles (`.session-title`) wrap to Settings > Sessions > `Session title lines`
   (1, 2, 3 or All; `pwi:sessionLines`, `data-session-lines` on `<html>`, default 1).
   The last shown line fades at the edge; the pin and state dot sit inline on the first line.
 - Code (editor and diff tabs) soft-wraps; continuation rows keep the line's own
@@ -186,7 +186,7 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
   escaped text inside their own native `details` disclosures, initially collapsed.
   Nested calls stay under their parent; there is no tool-mode selector.
 - User prompts retain their pill, image thumbnails, long-message folding and inline editing.
-- Settings → Transcript → Work display selects **Cursor** (the default quiet disclosures
+- Settings → Chat → Agent activity selects **Compact** (the default quiet disclosures
   described above) or **Timeline** (Requesting, Thinking, Receiving and Doing timers,
   total elapsed time and expandable numbered model rounds). The choice persists per browser
   and updates both panes immediately. Timeline uses the same Markdown/tool renderer and
@@ -211,8 +211,8 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
   button's disabled `neutral-600` otherwise.
 - The `?` button (directly left of Send, so Stop never shifts it) toggles "Ask only":
   a `QuestionMark`, `aria-pressed`. When on, the icon turns `amber-400` and bold so the
-  state reads at a glance. Right-click it (or Settings > Sessions >
-  `Ask only button`, `pwi:askMode`) to pick `Toggle` (default: stays on until switched
+  state reads at a glance. Right-click it (or Settings > Chat >
+  `Ask only behavior`, `pwi:askMode`) to pick `Toggle` (default: stays on until switched
   off) or `One shot` (switches off after each send). The menu marks the current mode
   with a `Check`.
 - GPT-6.1 Sol on `openai-codex` has an opt-in `Fast · 2.5× usage` button
@@ -245,12 +245,12 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
   the row above the box.
 - That row (jump-to-latest and git) floats over the transcript's bottom edge with no
   band or background of its own; the transcript scrolls under it (`pb-[max(3rem,var(--chat-scroll-past))]` keeps its
-  last line clear). Settings > Transcript > `Scroll past the end` (`pwi:scrollPastOn`, on by
+  last line clear). Settings > Chat > `Scroll past the end` (`pwi:scrollPastOn`, on by
   default, like Cursor) adds room under the last message: `Amount` (`pwi:scrollPast`, 0–90% of
   the window height, default 25) is a `FadeField` shown while on; `applyScrollPast` sets `--chat-scroll-past`. No gap between the transcript and the box: the transcript fades from 8px
   (the buttons' gap to the box) above the top of the git buttons to 0.2 opacity at the box's top edge (`.fade-bottom`), along
   `0.2 + 0.8(1-t^1.5)^3`: it eases in, dims fast, and settles at 0.2, never black.
-  Settings > Appearance > `Chat fade` is a checkbox row (`pwi:chatFadeOn`, on by default;
+  Settings > Chat > `Fade above the message box` is a checkbox row (`pwi:chatFadeOn`, on by default;
   off removes the mask and hides its controls). While on, a `GearSix` (20px) button beside it,
   square and as tall as the row (`self-stretch aspect-square`, the row's hover fill,
   `neutral-800` while open), collapses or expands its controls, with `Reset` shown while expanded; `Expand setting
@@ -378,7 +378,7 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
 - Under the search bar, an `h-bar` row: the count (`sectionLabel`, `pl-3`) left and the sort
   toggle right as a `Button variant="cell" size="bar"` with a 14px `neutral-500` `CaretUpDown`.
   It cycles `Created` → `Last active` → `Last asked` (last user prompt; moves only when you
-  act). The same choice is a radio group in Settings > Sessions > `Session order`.
+  act). The same choice is a radio group in Settings > Sessions > `Sort sessions by`.
 - Alt+J jumps to the next waiting session: needs first, then the longest-waiting reply.
 
 ## Session list
@@ -388,7 +388,7 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
   (`FileText`) and numbered image attachments (`Image`). They follow the same
   First prompt / Latest prompt selection as the title, including named sessions;
   clicking the row opens the chat. Attachment-only prompts are titled `Attachments`.
-- Settings > Sessions > `Show attachments in sessions` (`pwi:sessionAttachments`,
+- Settings > Sessions > `Show attachment previews` (`pwi:sessionAttachments`,
   per browser, on by default) hides or shows both kinds of chip. It never restores
   pasted contents into titles or hides attachments in the chat. List polls carry
   only attachment labels, not pasted text or image pixels.
@@ -458,7 +458,7 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
 
 - Text is clamped to 3 lines (`.fade-clamp`, the last line fades). When it overflows, a ghost
   `Button size="sm"` below it toggles `Show more` / `Show less` with a 12px caret.
-  Settings → Transcript → `Your messages` picks Collapsed (default), Expanded (starts
+  Settings → Chat → `Long user messages` picks Collapsed (default), Expanded (starts
   open, `Show less` still shown) or Always full (no clamp, no button); `pwi:userMessages`.
 - `Edit` swaps the pill for a copy of the composer box: same ring, field, placeholder and
   removable `Attachments`, then a bottom row with `Cancel` (`Button sm`) and the round
@@ -485,7 +485,7 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
   a compact date/time and `Worked for {s}s` card; omit duration for unobserved history.
   The card is a viewport-clamped portal so transcript clipping/fading cannot hide it.
   Escape, blur, scrolling or resizing dismiss it; moving onto the card keeps it open.
-- Settings → Transcript → `Message footer` (`pwi:messageFooter`, `data-footer` on `<html>`)
+- Settings → Chat → `Message action layout` (`pwi:messageFooter`, `data-footer` on `<html>`)
   places the user prompt’s timestamp beside or opposite its copy/edit controls.
 - Copy swaps to `Check` for 1.2s. Fork is disabled with the label `Forking…` while
   the new session spawns, then opens it as a tab in the same column.
@@ -601,7 +601,7 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
   click to `~/.pi/agent/sol-pi.json`), and the file path as status under them. A
   mechanism's own settings sit under its checkbox, lined up with its text, only while it
   is on: the reducer model as one `<select>` of pi's models grouped by provider, saved on
-  pick (default `openai-codex/gpt-6.1-sol`, shared with Settings > Automatic actions), and the compact's cost ratio as a `w-24` input with `Save`. Tool metrics is an `OptionRow` checkbox (on by default) with
+  pick (default `openai-codex/gpt-6.1-sol`, shared with Settings > Automation), and the compact's cost ratio as a `w-24` input with `Save`. Tool metrics is an `OptionRow` checkbox (on by default) with
   a `text-meta` line saying what it does. Workout (off by default, applies at once) is one too. It is not tied to
   prompts (tried first: a set after each send made prompting feel like a cost). A set is due `Every, min`
   after the last one done or skipped, only between `From, h` and `To, h` (`workoutSchedule`, default 30 min,
@@ -635,9 +635,15 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
   It is re-read each time the page is shown unless there are unsaved edits, and the
   pwi extensions tab stays mounted (hidden) on the other tabs so an unsaved edit survives. Changes
   apply to sessions started afterwards. pwi's own plumbing (rewind, context) is not listed.
-- Settings has a `w-48` category nav on the left (`NavItem`s: Appearance, Transcript,
-  Sessions, Agent instructions, Automatic actions, Notifications, Shortcuts), like Obsidian; the right side shows only the
+- Settings has a `w-48` category nav on the left (`NavItem`s: Appearance, Chat,
+  Sessions, Agent instructions, Automation, Tools, Notifications, Keyboard shortcuts, General); the right side shows only the
   chosen category, `max-w-xl p-6`. Opens on Appearance.
+  Each category explains its scope (browser-local display preferences versus machine-wide agent settings).
+  Chat groups Messages, Agent activity, Scrolling, and Message box, in that order;
+  fade controls live in Scrolling and Ask only behavior in Message box.
+  Sessions contains sidebar preferences only, ordered by sorting, title source, title lines, then attachments.
+  General holds `Expand advanced controls by default`; Appearance contains themes and scrollbars.
+  Automation explains each model's job and when it applies; choosing a model does not enable SoL-Pi mechanisms.
 - Agent instructions shows global and selected-project `AGENTS.md` files side by side
   (`md:grid-cols-2`, stacked on narrow screens), using the full Settings content width.
   Each has its full path, a Current preview and a `New empty` button that archives the
@@ -648,19 +654,19 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
   files are distinguished. Files reload when Settings opens or the project changes.
   A hint says to start a fresh session after switching; prewarmed sessions are discarded,
   but existing sessions keep their loaded context. Concurrent disk changes are refused.
-- Automatic actions has provider-grouped model selects for Commit naming, Session naming,
+- Automation has provider-grouped model selects for Commit message model, Session title model,
   Compaction (manual, automatic and SoL-Pi online compaction), and Log reduction (SoL-Pi's
   reducer), all defaulting to `openai-codex/gpt-6.1-sol`. Each saves on pick, independently
   of the chat model, machine-wide. Naming settings override `PWI_NAMING_MODEL`;
   compaction settings are re-read for each operation in sessions started with the pwi
-  compaction extension. `Automatic compaction` is an `OptionRow` checkbox above the
+  compaction extension. `Summarize when context is full` is an `OptionRow` checkbox above the
   model selects, off by default and persisted per machine. It controls pi's threshold
   and overflow compaction for open, resumed, adopted and new sessions; manual compaction
   remains available. Changing it updates live children without restarting their turns.
   SoL-Pi online compaction remains a separate opt-in in Packages.
   Reducer changes apply to new sessions and trusted project
   SoL-Pi config can override them. Failed model loads show an error and Retry.
-- Shortcuts lists every app-wide shortcut (`SHORTCUTS` in `shortcuts.ts`), one row each,
+- Keyboard shortcuts lists every app-wide shortcut (`SHORTCUTS` in `shortcuts.ts`), one row each,
   like Obsidian's Hotkeys: the name, the keys as a `kbd` chip (`rounded-sm bg-neutral-800
   px-1.5 py-0.5 font-mono text-meta`, `Blank` in `neutral-500` when unset), then `sm`
   `IconButton`s: restore default (only when changed), remove, change. Change records the

@@ -7,6 +7,7 @@ import { isExecTool } from "./execDisplay.js";
 import { ExecBlock } from "./ExecBlock.js";
 import { SourceRead, isSourceRead } from "./SourceRead.js";
 import { ShellRun, isShellRun } from "./ShellRun.js";
+import { SearchResults, isSearchTool } from "./SearchResults.js";
 
 function ToolInput({ tool, source }: { tool: PiTool; source?: AnchorSource }) {
   const diff = anchorDiff(tool, source);
@@ -89,6 +90,8 @@ export function RawBlocks({
               </summary>
               {isSourceRead(block) && !block.isError ? (
                 <SourceRead tool={block} />
+              ) : isSearchTool(block) ? (
+                <SearchResults tool={block} />
               ) : isShellRun(block) ? (
                 <ShellRun tool={block} />
               ) : (

@@ -8,17 +8,17 @@ const MODES: { mode: Mode; label: string; hint: string }[] = [
   {
     mode: "off",
     label: "Off",
-    hint: "Recommended with the Pi Codex extension.",
+    hint: "Do not expose pi’s native codemode tool. Recommended when using the Pi Codex extension.",
   },
   {
     mode: "on",
-    label: "On",
-    hint: "Expose native codemode alongside ordinary tools.",
+    label: "Codemode and individual tools",
+    hint: "Let the agent run JavaScript to call several tools, or call individual tools directly.",
   },
   {
     mode: "only",
-    label: "Only",
-    hint: "Use native codemode as the tool entry point.",
+    label: "Codemode only",
+    hint: "Require the agent to call tools through JavaScript in native codemode.",
   },
 ];
 
@@ -66,7 +66,7 @@ export function CodemodeSettings({ open }: { open: boolean }) {
     <div role="radiogroup" aria-label={t("Native codemode")}>
       <p className="px-2 pb-2 text-meta text-neutral-500">
         {t(
-          "Pi's native codemode, separate from the Codex extension's Code/Notebook modes. Machine-wide default; project settings may override it. Applies to new sessions; restart existing sessions to apply.",
+          "Codemode lets the agent call tools from JavaScript, including batching calls. This is pi’s built-in tool, not the Pi Codex extension’s Code/Notebook modes. Saved on this machine; project settings may override it. Applies to new sessions; restart existing sessions to apply.",
         )}
       </p>
       {MODES.map((option) => (

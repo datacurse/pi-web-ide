@@ -38,13 +38,13 @@ export type WorkDisplay = "cursor" | "timeline";
 export const WORK_DISPLAYS = [
   {
     id: "cursor",
-    label: "Cursor",
-    hint: "Quiet thinking and tool disclosures.",
+    label: "Compact",
+    hint: "Compact status text with expandable thinking and tool calls.",
   },
   {
     id: "timeline",
     label: "Timeline",
-    hint: "Four timed phases and model rounds.",
+    hint: "Timed requesting, thinking, receiving, and tool phases, with expandable model rounds.",
   },
 ] as const;
 

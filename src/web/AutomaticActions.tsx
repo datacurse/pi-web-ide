@@ -10,10 +10,19 @@ import { Button, inputClass, OptionRow } from "./ui.js";
 import { t } from "./i18n.js";
 
 const LABELS: Record<AutomaticAction, string> = {
-  commitNaming: "Commit naming",
-  sessionNaming: "Session naming",
-  compaction: "Compaction",
-  reducer: "Log reduction",
+  commitNaming: "Commit message model",
+  sessionNaming: "Session title model",
+  compaction: "Conversation summary model",
+  reducer: "Tool log reduction model",
+};
+
+const HINTS: Record<AutomaticAction, string> = {
+  commitNaming: "Generates commit messages for the commit action.",
+  sessionNaming: "Generates session names when you request an AI title.",
+  compaction:
+    "Summarizes conversation history to free context space. Used for manual, automatic, and SoL-Pi online compaction in sessions started with the compaction extension.",
+  reducer:
+    "Shortens tool logs through SoL-Pi. Applies to new sessions; trusted projects can override this model. Enable log reduction in Packages → SoL-Pi.",
 };
 
 export function AutomaticActions() {
@@ -87,17 +96,17 @@ export function AutomaticActions() {
           className="size-4 shrink-0 accent-amber-400"
         />
         <span className="flex-1">
-          {t("Automatic compaction")}
+          {t("Summarize when context is full")}
           <span className="block text-meta text-neutral-500">
             {t(
-              "Off by default. Allow pi to summarize the conversation automatically when context fills up. Applies to open and new sessions; manual compaction is always available.",
+              "Automatically summarize older messages when the conversation reaches its context limit. Off by default. Applies to open and new sessions; you can still compact manually when this is off.",
             )}
           </span>
         </span>
       </OptionRow>
       <p className="text-meta text-neutral-500">
         {t(
-          "Models for background actions, independent of the chat model. Default: {model}.",
+          "Each model selection saves immediately and does not change the chat model. Default for all actions: {model}.",
           { model: DEFAULT_AUTOMATIC_MODEL },
         )}
       </p>
@@ -106,6 +115,9 @@ export function AutomaticActions() {
         return (
           <label key={action} className="block text-ui">
             {t(LABELS[action])}
+            <span className="mt-1 block text-meta text-neutral-500">
+              {t(HINTS[action])}
+            </span>
             <select
               value={value}
               disabled={!selected || busy}
@@ -134,7 +146,7 @@ export function AutomaticActions() {
       })}
       <p className="text-meta text-neutral-500">
         {t(
-          "Compaction applies to sessions started from now on. Log reduction uses SoL-Pi settings; trusted projects can override it.",
+          "Selecting a model does not enable an action. SoL-Pi online compaction and log reduction are enabled separately in Packages.",
         )}
       </p>
       {error && (

@@ -62,6 +62,7 @@ import { nestTools } from "../shared/toolTree.js";
 import type { PiTool } from "../shared/types.js";
 import { ActivityTracker } from "./activity.js";
 import { ToolSourceTracker } from "./toolSources.js";
+import { ToolOutputTracker } from "./toolOutputs.js";
 import type { TurnActivity } from "../shared/activity.js";
 import { FAST_COMMAND, supportsFastMode } from "../shared/fastMode.js";
 import { hunkFromWrite, hunksFromEdit, type Hunk } from "../shared/hunks.js";
@@ -1465,6 +1466,9 @@ async function wrap(child: RpcChild, cwd: string): Promise<PiSession> {
     state.sessionFile ?? state.sessionId,
     cwd,
   );
+  const toolOutputs = new ToolOutputTracker(
+    state.sessionFile ?? state.sessionId,
+  );
   toolSources.recover(stitch(messages.filter(isConversation).map(toPiMessage)));
   /**
    * When each assistant message finished, keyed by its start timestamp. pi's
@@ -1819,6 +1823,7 @@ async function wrap(child: RpcChild, cwd: string): Promise<PiSession> {
     }
 
     for (const e of toEvents(frame)) {
+      toolOutputs.record(e);
       switch (e.type) {
         case "text":
         case "thinking":
@@ -1841,7 +1846,7 @@ async function wrap(child: RpcChild, cwd: string): Promise<PiSession> {
           streaming = false;
           break;
       }
-      emit(toolSources.event(e));
+      emit(toolOutputs.event(toolSources.event(e)));
     }
   });
 
@@ -1911,9 +1916,11 @@ async function wrap(child: RpcChild, cwd: string): Promise<PiSession> {
       return true;
     },
     messages() {
-      return toolSources.annotate(
-        stitch(
-          messages.filter(isConversation).map((m) => withEnd(toPiMessage(m))),
+      return toolOutputs.annotate(
+        toolSources.annotate(
+          stitch(
+            messages.filter(isConversation).map((m) => withEnd(toPiMessage(m))),
+          ),
         ),
       );
     },
@@ -2152,6 +2159,7 @@ async function wrap(child: RpcChild, cwd: string): Promise<PiSession> {
     dispose() {
       activity.finish();
       toolSources.save();
+      toolOutputs.save();
       unsubscribe();
       unsubscribeExit();
       listeners.clear();
@@ -2162,6 +2170,7 @@ async function wrap(child: RpcChild, cwd: string): Promise<PiSession> {
     detach() {
       activity.save();
       toolSources.save();
+      toolOutputs.save();
       unsubscribe();
       unsubscribeExit();
       listeners.clear();

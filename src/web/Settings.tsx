@@ -91,19 +91,43 @@ import { CodemodeSettings } from "./CodemodeSettings.js";
 
 const CATEGORIES = [
   { id: "appearance", label: "Appearance", icon: <Palette size={16} /> },
-  { id: "transcript", label: "Transcript", icon: <ChatText size={16} /> },
+  { id: "transcript", label: "Chat", icon: <ChatText size={16} /> },
   { id: "sessions", label: "Sessions", icon: <ListBullets size={16} /> },
   {
     id: "instructions",
     label: "Agent instructions",
     icon: <ListBullets size={16} />,
   },
-  { id: "automatic", label: "Automatic actions", icon: <GearSix size={16} /> },
+  { id: "automatic", label: "Automation", icon: <GearSix size={16} /> },
   { id: "tools", label: "Tools", icon: <GearSix size={16} /> },
   { id: "notifications", label: "Notifications", icon: <Bell size={16} /> },
-  { id: "shortcuts", label: "Shortcuts", icon: <Keyboard size={16} /> },
+  {
+    id: "shortcuts",
+    label: "Keyboard shortcuts",
+    icon: <Keyboard size={16} />,
+  },
+  { id: "general", label: "General", icon: <GearSix size={16} /> },
 ] as const;
 type Category = (typeof CATEGORIES)[number]["id"];
+
+const CATEGORY_HINTS: Record<Category, string> = {
+  appearance:
+    "Themes and scrollbars. Saved in this browser; changes apply immediately.",
+  transcript:
+    "How conversations look and how the message box behaves. Saved in this browser.",
+  sessions: "How sessions appear in the sidebar. Saved in this browser.",
+  instructions:
+    "Instructions loaded by the agent from global and project AGENTS.md files.",
+  automatic:
+    "Background models and context management. Saved on this machine, independently of the chat model.",
+  tools:
+    "Which tools the agent can use. These settings change agent behavior, not the chat display.",
+  notifications:
+    "Desktop alerts for this browser. Your browser must allow notifications for this site.",
+  shortcuts:
+    "App-wide key bindings saved in this browser. Select the pencil to record a shortcut; Escape cancels.",
+  general: "Preferences for the settings page. Saved in this browser.",
+};
 
 /**
  * Four squares of a palette's actual colors: backdrop, border, body text,
@@ -158,23 +182,23 @@ const CHAT_FADE_FIELDS: { key: keyof ChatFade; label: string; hint: string }[] =
   [
     {
       key: "length",
-      label: "Length",
-      hint: "How far above the message box it starts, in rem.",
+      label: "Fade distance",
+      hint: "Distance above the message box, in rem (relative to font size).",
     },
     {
       key: "floor",
-      label: "End opacity",
-      hint: "How visible the text stays at the box. 0 fades it out completely.",
+      label: "Minimum opacity",
+      hint: "Visibility at the message box: 0 hides text; 1 keeps it fully visible.",
     },
     {
       key: "easeIn",
-      label: "Ease in",
-      hint: "How softly the fade starts. 1 starts abruptly.",
+      label: "Start softness",
+      hint: "Higher values make the fade begin more gradually; 1 starts abruptly.",
     },
     {
       key: "drop",
-      label: "Drop",
-      hint: "How early it gets dim. Higher dims sooner and holds longer.",
+      label: "Fade strength",
+      hint: "Higher values dim text earlier in the fade.",
     },
   ];
 
@@ -203,9 +227,9 @@ function ChatFadeControl({ expandByDefault }: { expandByDefault: boolean }) {
             className="size-4 shrink-0 accent-amber-400"
           />
           <span className="flex-1">
-            {t("Chat fade")}
+            {t("Fade above the message box")}
             <span className="block text-meta text-neutral-500">
-              {t("Fade the chat out above the message box.")}
+              {t("Gradually fade messages where they meet the message box.")}
             </span>
           </span>
         </OptionRow>
@@ -280,15 +304,19 @@ function ScrollPastControl() {
         <span className="flex-1">
           {t("Scroll past the end")}
           <span className="block text-meta text-neutral-500">
-            {t("Let the chat scroll past its last message.")}
+            {t(
+              "Add space below the last message so you can scroll it above the message box.",
+            )}
           </span>
         </span>
       </OptionRow>
       {on && (
         <div className="grid grid-cols-[auto_1fr] items-center gap-x-3 gap-y-1 px-2">
           <FadeField
-            label={t("Amount")}
-            hint={t("How far, in % of the window height.")}
+            label={t("Extra space")}
+            hint={t(
+              "Space below the last message, as a percentage of the window height.",
+            )}
             range={SCROLL_PAST_RANGE}
             value={amount}
             onChange={(v) => change(true, v)}
@@ -453,8 +481,8 @@ function ChatFadePreview({ fade }: { fade: ChatFade }) {
 
 /**
  * The Settings page, shown in the page dialog: one <fieldset> per setting, all
- * browser-local (see prefs.ts). The personality, which is the server's, lives
- * in Packages with the other pwi extensions.
+ * grouped by purpose. Display preferences are browser-local; agent settings
+ * are saved on the server. Extension settings live in Packages.
  */
 export function Settings({
   cwd,
@@ -523,7 +551,7 @@ export function Settings({
     : Notification.permission === "denied"
       ? t("Blocked — allow notifications for this site in your browser.")
       : t(
-          "Only when the page is in the background. Shows the first line of the answer.",
+          "Send a desktop notification when the agent finishes while this page is in the background. Includes the first line of the answer.",
         );
 
   const [category, setCategory] = useState<Category>("appearance");
@@ -589,24 +617,6 @@ export function Settings({
     text: string;
     node: ReactNode;
   }[] = [
-    {
-      category: "instructions",
-      label: t("Agent instructions"),
-      text: "global local project AGENTS.md agent.md instructions",
-      node: <AgentInstructions cwd={cwd} open={open} />,
-    },
-    {
-      category: "automatic",
-      label: t("Automatic actions"),
-      text: `${t("Commit naming")} ${t("Session naming")} ${t("Compaction")} ${t("Automatic compaction")} ${t("Log reduction")} model provider gpt reducer compact rename context automatic summarize`,
-      node: <AutomaticActions />,
-    },
-    {
-      category: "tools",
-      label: t("Native codemode"),
-      text: "native codemode code mode codex notebook tools off on only",
-      node: <CodemodeSettings open={open} />,
-    },
     {
       category: "appearance",
       group: t("Themes"),
@@ -742,162 +752,9 @@ export function Settings({
       ),
     },
     {
-      category: "appearance",
-      group: t("Chat"),
-      label: t("Chat fade"),
-      text: `gradient mask composer message box ${CHAT_FADE_FIELDS.map((f) => `${t(f.label)} ${t(f.hint)}`).join(" ")}`,
-      node: <ChatFadeControl expandByDefault={expandDetails} />,
-    },
-    {
-      category: "appearance",
-      group: t("Settings behavior"),
-      label: t("Expand setting details"),
-      text: `collapse open default ${t("Settings with details, like Chat fade, start expanded.")}`,
-      node: (
-        <OptionRow>
-          <input
-            type="checkbox"
-            checked={expandDetails}
-            onChange={(e) => {
-              setExpandDetails(e.target.checked);
-              writeSettingsExpanded(e.target.checked);
-            }}
-            className="size-4 shrink-0 accent-amber-400"
-          />
-          <span className="flex-1">
-            {t("Expand setting details")}
-            <span className="block text-meta text-neutral-500">
-              {t("Settings with details, like Chat fade, start expanded.")}
-            </span>
-          </span>
-        </OptionRow>
-      ),
-    },
-    {
       category: "transcript",
-      label: t("Scroll past the end"),
-      text: `overscroll bottom padding ${t("Let the chat scroll past its last message.")} ${t("Amount")}`,
-      node: <ScrollPastControl />,
-    },
-    {
-      category: "transcript",
-      label: t("Message separators"),
-      text: `divider line turn ${t("Show lines between conversation turns.")}`,
-      node: (
-        <OptionRow>
-          <input
-            type="checkbox"
-            checked={messageSeparators}
-            onChange={(e) => {
-              setMessageSeparators(e.target.checked);
-              writeMessageSeparators(e.target.checked);
-            }}
-            className="size-4 shrink-0 accent-amber-400"
-          />
-          <span className="flex-1">
-            {t("Message separators")}
-            <span className="block text-meta text-neutral-500">
-              {t("Show lines between conversation turns.")}
-            </span>
-          </span>
-        </OptionRow>
-      ),
-    },
-    {
-      category: "transcript",
-      label: t("Work display"),
-      text: "cursor timeline working visualization phases timing rounds",
-      node: (
-        <div role="radiogroup" aria-label={t("Work display")}>
-          <div className="px-2 py-1 text-ui">{t("Work display")}</div>
-          {WORK_DISPLAYS.map((mode) => (
-            <OptionRow key={mode.id} selected={workDisplay === mode.id}>
-              <input
-                type="radio"
-                name="workDisplay"
-                checked={workDisplay === mode.id}
-                onChange={() => {
-                  setWorkDisplay(mode.id);
-                  writeWorkDisplay(mode.id);
-                }}
-                className="size-3.5 shrink-0 accent-amber-400"
-              />
-              <span className="flex-1">
-                {t(mode.label)}
-                <span className="block text-meta text-neutral-500">
-                  {t(mode.hint)}
-                </span>
-              </span>
-            </OptionRow>
-          ))}
-        </div>
-      ),
-    },
-    {
-      category: "transcript",
-      label: t("Codemode tool labels"),
-      text: "codemode nested tools modules names labels text icon both read search replace diagnostics command",
-      node: (
-        <OptionRow>
-          <span className="flex-1">
-            {t("Codemode tool labels")}
-            <span className="block text-meta text-neutral-500">
-              {t(
-                "Choose how nested tool actions appear. Codemode itself stays text-only.",
-              )}
-            </span>
-          </span>
-          <select
-            aria-label={t("Codemode tool labels")}
-            value={codemodeToolLabels}
-            onChange={(e) => {
-              const mode = CODEMODE_TOOL_LABELS.find(
-                (option) => option.id === e.target.value,
-              )?.id;
-              if (!mode) return;
-              setCodemodeToolLabels(mode);
-              writeCodemodeToolLabels(mode);
-            }}
-            className={inputClass.sm}
-          >
-            {CODEMODE_TOOL_LABELS.map((option) => (
-              <option key={option.id} value={option.id}>
-                {t(option.label)}
-              </option>
-            ))}
-          </select>
-        </OptionRow>
-      ),
-    },
-    {
-      category: "transcript",
-      label: t("Project-relative tool paths"),
-      text: "tools paths project relative absolute full directory",
-      node: (
-        <OptionRow>
-          <input
-            type="checkbox"
-            checked={relativeToolPaths}
-            onChange={(e) => {
-              setRelativeToolPaths(e.target.checked);
-              writeRelativeToolPaths(e.target.checked);
-            }}
-            className="size-4 shrink-0 accent-amber-400"
-          />
-          <span className="flex-1">
-            {t("Project-relative tool paths")}
-            <span className="block text-meta text-neutral-500">
-              {t(
-                "Show project files as src/… in tool labels. External paths stay unchanged.",
-              )}
-            </span>
-          </span>
-        </OptionRow>
-      ),
-    },
-    {
-      category: "transcript",
-      label: t("Your messages"),
+      group: t("Messages"),
+      label: t("Long user messages"),
       text: `prompt collapse expand show more ${USER_MODES.map((m) => `${t(m.label)} ${t(m.hint)}`).join(" ")}`,
       node: (
         <div role="radiogroup" aria-labelledby="user-mode-label">
@@ -905,7 +762,7 @@ export function Settings({
             id="user-mode-label"
             className="px-2 pt-1 pb-1 text-ui text-neutral-300"
           >
-            {t("Your messages")}
+            {t("Long user messages")}
           </div>
           {USER_MODES.map((m) => (
             <OptionRow key={m.id} selected={m.id === userMode}>
@@ -930,7 +787,33 @@ export function Settings({
     },
     {
       category: "transcript",
-      label: t("Message footer"),
+      group: t("Messages"),
+      label: t("Message separators"),
+      text: `divider line turn ${t("Show lines between conversation turns.")}`,
+      node: (
+        <OptionRow>
+          <input
+            type="checkbox"
+            checked={messageSeparators}
+            onChange={(e) => {
+              setMessageSeparators(e.target.checked);
+              writeMessageSeparators(e.target.checked);
+            }}
+            className="size-4 shrink-0 accent-amber-400"
+          />
+          <span className="flex-1">
+            {t("Message separators")}
+            <span className="block text-meta text-neutral-500">
+              {t("Show lines between conversation turns.")}
+            </span>
+          </span>
+        </OptionRow>
+      ),
+    },
+    {
+      category: "transcript",
+      group: t("Messages"),
+      label: t("Message action layout"),
       text: `copy edit fork time buttons right left align ${FOOTER_LAYOUTS.map((m) => `${t(m.label)} ${t(m.hint)}`).join(" ")}`,
       node: (
         <div role="radiogroup" aria-labelledby="footer-layout-label">
@@ -938,7 +821,12 @@ export function Settings({
             id="footer-layout-label"
             className="px-2 pt-1 pb-1 text-ui text-neutral-300"
           >
-            {t("Message footer")}
+            {t("Message action layout")}
+            <span className="block text-meta text-neutral-500">
+              {t(
+                "Position the copy, edit, and fork buttons and the timestamp below messages.",
+              )}
+            </span>
           </div>
           {FOOTER_LAYOUTS.map((m) => (
             <OptionRow key={m.id} selected={m.id === footer}>
@@ -965,8 +853,123 @@ export function Settings({
       ),
     },
     {
-      category: "sessions",
-      label: t("Ask only button"),
+      category: "transcript",
+      group: t("Agent activity"),
+      label: t("Agent activity"),
+      text: "cursor timeline working visualization phases timing rounds",
+      node: (
+        <div role="radiogroup" aria-label={t("Agent activity")}>
+          <div className="px-2 py-1 text-ui">{t("Agent activity")}</div>
+          <p className="px-2 pb-1 text-meta text-neutral-500">
+            {t(
+              "Choose how thinking, tool calls, and elapsed time appear in the conversation.",
+            )}
+          </p>
+          {WORK_DISPLAYS.map((mode) => (
+            <OptionRow key={mode.id} selected={workDisplay === mode.id}>
+              <input
+                type="radio"
+                name="workDisplay"
+                checked={workDisplay === mode.id}
+                onChange={() => {
+                  setWorkDisplay(mode.id);
+                  writeWorkDisplay(mode.id);
+                }}
+                className="size-3.5 shrink-0 accent-amber-400"
+              />
+              <span className="flex-1">
+                {t(mode.label)}
+                <span className="block text-meta text-neutral-500">
+                  {t(mode.hint)}
+                </span>
+              </span>
+            </OptionRow>
+          ))}
+        </div>
+      ),
+    },
+    {
+      category: "transcript",
+      group: t("Agent activity"),
+      label: t("Nested tool labels"),
+      text: "codemode nested tools modules names labels text icon both read search replace diagnostics command",
+      node: (
+        <OptionRow>
+          <span className="flex-1">
+            {t("Nested tool labels")}
+            <span className="block text-meta text-neutral-500">
+              {t(
+                "Show names, icons, or both for tools called inside codemode. The parent codemode label always uses text.",
+              )}
+            </span>
+          </span>
+          <select
+            aria-label={t("Nested tool labels")}
+            value={codemodeToolLabels}
+            onChange={(e) => {
+              const mode = CODEMODE_TOOL_LABELS.find(
+                (option) => option.id === e.target.value,
+              )?.id;
+              if (!mode) return;
+              setCodemodeToolLabels(mode);
+              writeCodemodeToolLabels(mode);
+            }}
+            className={inputClass.sm}
+          >
+            {CODEMODE_TOOL_LABELS.map((option) => (
+              <option key={option.id} value={option.id}>
+                {t(option.label)}
+              </option>
+            ))}
+          </select>
+        </OptionRow>
+      ),
+    },
+    {
+      category: "transcript",
+      group: t("Agent activity"),
+      label: t("Shorten project file paths"),
+      text: "tools paths project relative absolute full directory",
+      node: (
+        <OptionRow>
+          <input
+            type="checkbox"
+            checked={relativeToolPaths}
+            onChange={(e) => {
+              setRelativeToolPaths(e.target.checked);
+              writeRelativeToolPaths(e.target.checked);
+            }}
+            className="size-4 shrink-0 accent-amber-400"
+          />
+          <span className="flex-1">
+            {t("Shorten project file paths")}
+            <span className="block text-meta text-neutral-500">
+              {t(
+                "Show paths relative to the project, such as src/app.ts, instead of full paths. Files outside the project keep their full paths.",
+              )}
+            </span>
+          </span>
+        </OptionRow>
+      ),
+    },
+    {
+      category: "transcript",
+      group: t("Scrolling"),
+      label: t("Scroll past the end"),
+      text: `overscroll bottom padding ${t("Add space below the last message so you can scroll it above the message box.")} ${t("Extra space")}`,
+      node: <ScrollPastControl />,
+    },
+    {
+      category: "transcript",
+      group: t("Scrolling"),
+      label: t("Fade above the message box"),
+      text: `gradient mask composer message box ${CHAT_FADE_FIELDS.map((f) => `${t(f.label)} ${t(f.hint)}`).join(" ")}`,
+      node: <ChatFadeControl expandByDefault={expandDetails} />,
+    },
+    {
+      category: "transcript",
+      group: t("Message box"),
+      label: t("Ask only behavior"),
       text: `question once sticky ${ASK_MODES.map((m) => `${t(m.label)} ${t(m.hint)}`).join(" ")}`,
       node: (
         <div role="radiogroup" aria-labelledby="ask-mode-label">
@@ -974,7 +977,12 @@ export function Settings({
             id="ask-mode-label"
             className="px-2 pt-1 pb-1 text-ui text-neutral-300"
           >
-            {t("Ask only button")}
+            {t("Ask only behavior")}
+            <span className="block text-meta text-neutral-500">
+              {t(
+                "Choose when the message box’s ? button switches off after you enable it.",
+              )}
+            </span>
           </div>
           {ASK_MODES.map((m) => (
             <OptionRow key={m.id} selected={m.id === askMode}>
@@ -999,7 +1007,7 @@ export function Settings({
     },
     {
       category: "sessions",
-      label: t("Session order"),
+      label: t("Sort sessions by"),
       text: `sort order list ${SESSION_SORTS.map((s) => t(s.label)).join(" ")}`,
       node: (
         <div role="radiogroup" aria-labelledby="session-sort-label">
@@ -1007,7 +1015,12 @@ export function Settings({
             id="session-sort-label"
             className="px-2 pt-1 pb-1 text-ui text-neutral-300"
           >
-            {t("Session order")}
+            {t("Sort sessions by")}
+            <span className="block text-meta text-neutral-500">
+              {t(
+                "Choose the order of unpinned sessions in the sidebar. Pinned sessions stay at the top.",
+              )}
+            </span>
           </div>
           {SESSION_SORTS.map((s) => (
             <OptionRow key={s.id} selected={s.id === sessionSort}>
@@ -1027,18 +1040,18 @@ export function Settings({
     },
     {
       category: "sessions",
-      label: t("Session titles"),
-      text: `name first latest last recent prompt message ${t("First prompt")} ${t("Latest prompt")} ${t("A name you set with the pencil in the session list always wins.")}`,
+      label: t("Unnamed session titles"),
+      text: `name first latest last recent prompt message ${t("First prompt")} ${t("Latest prompt")} ${t("Use the first or latest prompt for unnamed sessions. Renaming a session overrides this choice.")}`,
       node: (
         <div role="radiogroup" aria-labelledby="session-titles-label">
           <div
             id="session-titles-label"
             className="px-2 pt-1 pb-1 text-ui text-neutral-300"
           >
-            {t("Session titles")}
+            {t("Unnamed session titles")}
             <span className="block text-meta text-neutral-500">
               {t(
-                "A name you set with the pencil in the session list always wins.",
+                "Use the first or latest prompt for unnamed sessions. Renaming a session overrides this choice.",
               )}
             </span>
           </div>
@@ -1062,38 +1075,17 @@ export function Settings({
     },
     {
       category: "sessions",
-      label: t("Show attachments in sessions"),
-      text: `text image pasted files thumbnails ${t("Show text and image attachment chips in the session list.")}`,
-      node: (
-        <OptionRow>
-          <input
-            type="checkbox"
-            checked={sessionAttachments}
-            onChange={(e) => onSessionAttachments(e.target.checked)}
-            className="size-4 shrink-0 accent-amber-400"
-          />
-          <span className="flex-1">
-            {t("Show attachments in sessions")}
-            <span className="block text-meta text-neutral-500">
-              {t("Show text and image attachment chips in the session list.")}
-            </span>
-          </span>
-        </OptionRow>
-      ),
-    },
-    {
-      category: "sessions",
-      label: t("Title lines"),
-      text: `session list name wrap new line multiline ${t("How many lines a title in the session list may wrap to.")} ${t("All")}`,
+      label: t("Session title lines"),
+      text: `session list name wrap new line multiline ${t("Maximum lines per sidebar title. All shows the full title.")} ${t("All")}`,
       node: (
         <div role="radiogroup" aria-labelledby="session-lines-label">
           <div
             id="session-lines-label"
             className="px-2 pt-1 pb-1 text-ui text-neutral-300"
           >
-            {t("Title lines")}
+            {t("Session title lines")}
             <span className="block text-meta text-neutral-500">
-              {t("How many lines a title in the session list may wrap to.")}
+              {t("Maximum lines per sidebar title. All shows the full title.")}
             </span>
           </div>
           {SESSION_LINES.map((m) => (
@@ -1116,8 +1108,47 @@ export function Settings({
       ),
     },
     {
+      category: "sessions",
+      label: t("Show attachment previews"),
+      text: `text image pasted files thumbnails ${t("Show text and image attachment chips in the session list.")}`,
+      node: (
+        <OptionRow>
+          <input
+            type="checkbox"
+            checked={sessionAttachments}
+            onChange={(e) => onSessionAttachments(e.target.checked)}
+            className="size-4 shrink-0 accent-amber-400"
+          />
+          <span className="flex-1">
+            {t("Show attachment previews")}
+            <span className="block text-meta text-neutral-500">
+              {t("Show text and image attachment chips in the session list.")}
+            </span>
+          </span>
+        </OptionRow>
+      ),
+    },
+    {
+      category: "instructions",
+      label: t("Agent instructions"),
+      text: "global local project AGENTS.md agent.md instructions",
+      node: <AgentInstructions cwd={cwd} open={open} />,
+    },
+    {
+      category: "automatic",
+      label: t("Automatic actions"),
+      text: "commit naming message model session naming title model conversation summary compaction automatic summarize when context is full tool log reduction model provider gpt reducer compact rename history background SoL-Pi Packages",
+      node: <AutomaticActions />,
+    },
+    {
+      category: "tools",
+      label: t("Native codemode"),
+      text: "native codemode code mode codex notebook tools off on only",
+      node: <CodemodeSettings open={open} />,
+    },
+    {
       category: "notifications",
-      label: t("Notify when a run finishes"),
+      label: t("Notify when the agent finishes"),
       text: `alert desktop done ${notifyHint}`,
       node: (
         <OptionRow disabled={notifyBlocked}>
@@ -1129,9 +1160,35 @@ export function Settings({
             className="size-4 shrink-0 accent-amber-400"
           />
           <span className="flex-1">
-            {t("Notify when a run finishes")}
+            {t("Notify when the agent finishes")}
             <span className="block text-meta text-neutral-500">
               {notifyHint}
+            </span>
+          </span>
+        </OptionRow>
+      ),
+    },
+    {
+      category: "general",
+      label: t("Expand advanced controls by default"),
+      text: "collapse open default advanced controls chat fade sliders",
+      node: (
+        <OptionRow>
+          <input
+            type="checkbox"
+            checked={expandDetails}
+            onChange={(e) => {
+              setExpandDetails(e.target.checked);
+              writeSettingsExpanded(e.target.checked);
+            }}
+            className="size-4 shrink-0 accent-amber-400"
+          />
+          <span className="flex-1">
+            {t("Expand advanced controls by default")}
+            <span className="block text-meta text-neutral-500">
+              {t(
+                "Open advanced controls automatically, such as the sliders for fading above the message box.",
+              )}
             </span>
           </span>
         </OptionRow>
@@ -1293,6 +1350,9 @@ export function Settings({
                 title={t(c.label)}
                 className={n ? "mt-6" : ""}
               >
+                <p className="mb-4 px-2 text-meta text-neutral-500">
+                  {t(CATEGORY_HINTS[c.id])}
+                </p>
                 <div className="flex flex-col gap-2">
                   {Array.from(
                     new Set(
