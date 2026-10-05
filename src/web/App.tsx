@@ -4,6 +4,7 @@ import { useSession } from "./useSession.js";
 import { startPointerDrag } from "./pointerDrag.js";
 import { sessionPrompts } from "./sessionName.js";
 import { EditorColumn } from "./EditorColumn.js";
+import { ToolCwdContext } from "./toolPaths.js";
 import {
   FileNavigationContext,
   fileLocation,
@@ -1927,33 +1928,35 @@ export default function App() {
           );
       }}
     >
-      <Chat
-        snapshot={s.snapshot}
-        draftRev={inserted.side === side ? inserted.n : 0}
-        focus={sessionFocus.side === side ? sessionFocus : undefined}
-        partial={s.partial}
-        busy={s.busy}
-        opening={s.opening}
-        userMode={userMode}
-        askMode={askMode}
-        onAskMode={changeAskMode}
-        command={s.command}
-        modelError={s.modelError}
-        onSend={s.send}
-        onAnswerAsk={s.answerAsk}
-        onAbort={s.abort}
-        onModelChange={s.changeModel}
-        onThinkingChange={s.changeThinking}
-        onFastChange={s.changeFast}
-        onCommandMenu={s.refreshCommands}
-        onCompact={s.compact}
-        compacting={s.compacting}
-        onFork={s.fork}
-        onEdit={s.edit}
-        onRestart={s.restart}
-        restarting={s.restarting}
-        restartError={s.restartError}
-      />
+      <ToolCwdContext.Provider value={s.snapshot?.cwd || project || ""}>
+        <Chat
+          snapshot={s.snapshot}
+          draftRev={inserted.side === side ? inserted.n : 0}
+          focus={sessionFocus.side === side ? sessionFocus : undefined}
+          partial={s.partial}
+          busy={s.busy}
+          opening={s.opening}
+          userMode={userMode}
+          askMode={askMode}
+          onAskMode={changeAskMode}
+          command={s.command}
+          modelError={s.modelError}
+          onSend={s.send}
+          onAnswerAsk={s.answerAsk}
+          onAbort={s.abort}
+          onModelChange={s.changeModel}
+          onThinkingChange={s.changeThinking}
+          onFastChange={s.changeFast}
+          onCommandMenu={s.refreshCommands}
+          onCompact={s.compact}
+          compacting={s.compacting}
+          onFork={s.fork}
+          onEdit={s.edit}
+          onRestart={s.restart}
+          restarting={s.restarting}
+          restartError={s.restartError}
+        />
+      </ToolCwdContext.Provider>
     </FileNavigationContext.Provider>
   );
 

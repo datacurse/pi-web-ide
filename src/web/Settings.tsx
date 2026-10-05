@@ -43,6 +43,11 @@ import {
   type ScrollbarTone,
   readMessageSeparators,
   readWorkDisplay,
+  readCodemodeToolLabels,
+  CODEMODE_TOOL_LABELS,
+  readRelativeToolPaths,
+  writeRelativeToolPaths,
+  writeCodemodeToolLabels,
   writeWorkDisplay,
   WORK_DISPLAYS,
   writeMessageSeparators,
@@ -525,6 +530,12 @@ export function Settings({
   const [expandDetails, setExpandDetails] = useState(readSettingsExpanded);
   const [footer, setFooter] = useState(readFooterLayout);
   const [workDisplay, setWorkDisplay] = useState(readWorkDisplay);
+  const [codemodeToolLabels, setCodemodeToolLabels] = useState(
+    readCodemodeToolLabels,
+  );
+  const [relativeToolPaths, setRelativeToolPaths] = useState(
+    readRelativeToolPaths,
+  );
   const [messageSeparators, setMessageSeparators] = useState(
     readMessageSeparators,
   );
@@ -820,6 +831,68 @@ export function Settings({
             </OptionRow>
           ))}
         </div>
+      ),
+    },
+    {
+      category: "transcript",
+      label: t("Codemode tool labels"),
+      text: "codemode nested tools modules names labels text icon both read search replace diagnostics command",
+      node: (
+        <OptionRow>
+          <span className="flex-1">
+            {t("Codemode tool labels")}
+            <span className="block text-meta text-neutral-500">
+              {t(
+                "Choose how nested tool actions appear. Codemode itself stays text-only.",
+              )}
+            </span>
+          </span>
+          <select
+            aria-label={t("Codemode tool labels")}
+            value={codemodeToolLabels}
+            onChange={(e) => {
+              const mode = CODEMODE_TOOL_LABELS.find(
+                (option) => option.id === e.target.value,
+              )?.id;
+              if (!mode) return;
+              setCodemodeToolLabels(mode);
+              writeCodemodeToolLabels(mode);
+            }}
+            className={inputClass.sm}
+          >
+            {CODEMODE_TOOL_LABELS.map((option) => (
+              <option key={option.id} value={option.id}>
+                {t(option.label)}
+              </option>
+            ))}
+          </select>
+        </OptionRow>
+      ),
+    },
+    {
+      category: "transcript",
+      label: t("Project-relative tool paths"),
+      text: "tools paths project relative absolute full directory",
+      node: (
+        <OptionRow>
+          <input
+            type="checkbox"
+            checked={relativeToolPaths}
+            onChange={(e) => {
+              setRelativeToolPaths(e.target.checked);
+              writeRelativeToolPaths(e.target.checked);
+            }}
+            className="size-4 shrink-0 accent-amber-400"
+          />
+          <span className="flex-1">
+            {t("Project-relative tool paths")}
+            <span className="block text-meta text-neutral-500">
+              {t(
+                "Show project files as src/… in tool labels. External paths stay unchanged.",
+              )}
+            </span>
+          </span>
+        </OptionRow>
       ),
     },
     {

@@ -66,6 +66,51 @@ export function subscribeWorkDisplay(onChange: () => void): () => void {
   };
 }
 
+export type CodemodeToolLabels = "text" | "icon" | "both";
+export const CODEMODE_TOOL_LABELS = [
+  { id: "text", label: "Text" },
+  { id: "icon", label: "Icon" },
+  { id: "both", label: "Both" },
+] as const;
+
+export function readCodemodeToolLabels(): CodemodeToolLabels {
+  const value = readStored("pwi:codemodeToolLabels");
+  if (value === "text" || value === "icon" || value === "both") return value;
+  return readStored("pwi:toolIcons") === "true" ? "both" : "text";
+}
+
+export function writeCodemodeToolLabels(mode: CodemodeToolLabels): void {
+  writeStored("pwi:codemodeToolLabels", mode);
+  window.dispatchEvent(new Event("pwi:codemodeToolLabels"));
+}
+
+export function subscribeCodemodeToolLabels(onChange: () => void): () => void {
+  window.addEventListener("pwi:codemodeToolLabels", onChange);
+  window.addEventListener("storage", onChange);
+  return () => {
+    window.removeEventListener("pwi:codemodeToolLabels", onChange);
+    window.removeEventListener("storage", onChange);
+  };
+}
+
+export function readRelativeToolPaths(): boolean {
+  return readStored("pwi:relativeToolPaths") !== "false";
+}
+
+export function writeRelativeToolPaths(enabled: boolean): void {
+  writeStored("pwi:relativeToolPaths", String(enabled));
+  window.dispatchEvent(new Event("pwi:relativeToolPaths"));
+}
+
+export function subscribeRelativeToolPaths(onChange: () => void): () => void {
+  window.addEventListener("pwi:relativeToolPaths", onChange);
+  window.addEventListener("storage", onChange);
+  return () => {
+    window.removeEventListener("pwi:relativeToolPaths", onChange);
+    window.removeEventListener("storage", onChange);
+  };
+}
+
 /**
  * Which palette the UI is painted in: the four Catppuccin flavors, plus
  * Claude's own dark and light interfaces.

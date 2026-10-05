@@ -1,23 +1,12 @@
 import type { PiBlock, PiTool } from "../shared/types.js";
 import { MarkdownText } from "./Markdown.js";
-import { toolDescription } from "./workTimeline.js";
+import { ToolLabel } from "./ToolLabel.js";
 import { AnchorDiff } from "./AnchorDiff.js";
 import { anchorDiff, anchorSources, type AnchorSource } from "./anchorDiff.js";
 import { isExecTool } from "./execDisplay.js";
 import { ExecBlock } from "./ExecBlock.js";
-
-function ToolLabel({ tool }: { tool: PiTool }) {
-  const description = toolDescription(tool);
-  const separator = description === tool.name ? -1 : description.indexOf(" ");
-  const action = separator < 0 ? description : description.slice(0, separator);
-  const parameters = separator < 0 ? "" : description.slice(separator);
-  return (
-    <>
-      <span className="text-neutral-200">{action}</span>
-      {parameters && <span className="text-neutral-500">{parameters}</span>}
-    </>
-  );
-}
+import { SourceRead, isSourceRead } from "./SourceRead.js";
+import { ShellRun, isShellRun } from "./ShellRun.js";
 
 function ToolInput({ tool, source }: { tool: PiTool; source?: AnchorSource }) {
   const diff = anchorDiff(tool, source);
@@ -49,10 +38,12 @@ export function RawBlocks({
   blocks,
   streaming,
   toolSources = anchorSources(blocks),
+  codemodeChild = false,
 }: {
   blocks: PiBlock[];
   streaming?: boolean;
   toolSources?: Map<string, AnchorSource>;
+  codemodeChild?: boolean;
 }) {
   return (
     <>
@@ -77,6 +68,7 @@ export function RawBlocks({
                     ...child,
                   }))}
                   toolSources={toolSources}
+                  codemodeChild={codemodeChild}
                 />
               )}
             </ExecBlock>
@@ -89,10 +81,22 @@ export function RawBlocks({
               className={`my-3 ${block.isError ? "text-red-300" : "text-neutral-300"}`}
             >
               <summary className="cursor-pointer list-none font-mono chat-code [&::-webkit-details-marker]:hidden">
-                <ToolLabel tool={block} />
+                <ToolLabel
+                  tool={block}
+                  source={toolSources.get(block.id)}
+                  codemodeChild={codemodeChild}
+                />
               </summary>
-              <ToolInput tool={block} source={toolSources.get(block.id)} />
-              {block.result !== undefined && <ToolOutput tool={block} />}
+              {isSourceRead(block) && !block.isError ? (
+                <SourceRead tool={block} />
+              ) : isShellRun(block) ? (
+                <ShellRun tool={block} />
+              ) : (
+                <>
+                  <ToolInput tool={block} source={toolSources.get(block.id)} />
+                  {block.result !== undefined && <ToolOutput tool={block} />}
+                </>
+              )}
               {block.children && (
                 <RawBlocks
                   blocks={block.children.map((child) => ({
@@ -100,6 +104,9 @@ export function RawBlocks({
                     ...child,
                   }))}
                   toolSources={toolSources}
+                  codemodeChild={
+                    codemodeChild || block.name.split(".").at(-1) === "codemode"
+                  }
                 />
               )}
             </details>

@@ -10,6 +10,7 @@ import {
   type ThoughtItem,
 } from "./workTimeline.js";
 import { ShinyText } from "./ShinyText.js";
+import { ToolLabel } from "./ToolLabel.js";
 
 /** Native disclosures keep individual expansion state while streaming updates arrive. */
 function Disclosure({
@@ -84,7 +85,9 @@ export function WorkTool({
   const content =
     tool.name === "codemode" || tool.name.endsWith(".codemode") ? (
       <div data-custom="codemode tool list" className="my-3 text-neutral-300">
-        <div className="font-mono chat-code">{tool.name}</div>
+        <div className="font-mono chat-code">
+          <ToolLabel tool={tool} source={toolSources.get(tool.id)} />
+        </div>
         {!!tool.children?.length && (
           <div className="pl-8 [&>*]:my-0">
             {tool.children.map((child) => (
@@ -102,6 +105,7 @@ export function WorkTool({
       <RawBlocks
         blocks={[{ kind: "tool", ...tool }]}
         toolSources={toolSources}
+        codemodeChild={nested}
       />
     );
   if (!nested) return content;
