@@ -400,7 +400,9 @@ export async function piVersion(): Promise<string | null> {
 export async function piLatestVersion(): Promise<string | null> {
   try {
     return await latestVersion(
-      pnpmGlobalPi()?.name ?? "@earendil-works/pi-coding-agent",
+      pnpmGlobalPi()?.name ??
+        pnpmLocalPi()?.name ??
+        "@earendil-works/pi-coding-agent",
     );
   } catch {
     return null;
@@ -586,18 +588,8 @@ export async function update(source?: string): Promise<MutationResult> {
   );
 }
 
-/**
- * pnpm's v11 global installs live in isolated, hashed projects. Pi cannot
- * self-update those, and updating the project directly would leave its global
- * shim pointing at the old installation. Use the owning global manager instead.
- * Inspect only the configured executable; never replace an unrelated pi on PATH.
- */
-function pnpmGlobalPi(): {
-  bin: string;
-  globalDir: string;
-  binDir: string;
-  name: string;
-} | null {
+/** Resolve only the executable we actually spawn, including pnpm's cmd-shim. */
+function configuredPi(): { executable: string; entry: string } | null {
   const candidates = PI_BIN.includes("/")
     ? [resolve(PI_BIN)]
     : (process.env.PATH ?? "").split(delimiter).map((dir) => join(dir, PI_BIN));
@@ -610,43 +602,103 @@ function pnpmGlobalPi(): {
       continue;
     }
     try {
-      // cmd-shim is a regular shell script, not a symlink to the package.
       const shim =
         statSync(executable).size <= 65_536
           ? readFileSync(executable, "utf8")
           : "";
       const target = shim.match(/^# cmd-shim-target=(.+)\r?$/m)?.[1].trim();
-      const entry =
-        target && isAbsolute(target) ? realpathSync(target) : executable;
-      const globalDir = entry.match(
-        /^(.*\/node_modules)\/v11\/[^/]+\/node_modules\//,
-      )?.[1];
-      if (!globalDir) return null;
-      let root = dirname(entry);
-      while (root !== dirname(root)) {
-        try {
-          const pkg: unknown = JSON.parse(
-            readFileSync(join(root, "package.json"), "utf8"),
-          );
-          if (
-            isRecord(pkg) &&
-            (pkg.name === "@earendil-works/pi-coding-agent" ||
-              pkg.name === "@mariozechner/pi-coding-agent")
-          ) {
-            const binDir = dirname(executable);
-            const bin = join(binDir, "pnpm");
-            accessSync(bin, constants.X_OK);
-            return { bin, globalDir, binDir, name: pkg.name };
+      return {
+        executable,
+        entry: target && isAbsolute(target) ? realpathSync(target) : executable,
+      };
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+/** A local dependency must belong to the configured CLI, not the open workspace. */
+function pnpmLocalPi(): { root: string; name: string; dev: boolean } | null {
+  const pi = configuredPi();
+  if (!pi) return null;
+  let root = dirname(pi.entry);
+  while (root !== dirname(root)) {
+    try {
+      const pkg: unknown = JSON.parse(
+        readFileSync(join(root, "package.json"), "utf8"),
+      );
+      accessSync(join(root, "pnpm-lock.yaml"));
+      if (isRecord(pkg) && pi.entry.startsWith(`${root}/node_modules/`)) {
+        for (const section of ["dependencies", "devDependencies"] as const) {
+          const deps = pkg[section];
+          if (!isRecord(deps)) continue;
+          for (const name of [
+            "@earendil-works/pi-coding-agent",
+            "@mariozechner/pi-coding-agent",
+          ]) {
+            if (
+              typeof deps[name] !== "string" ||
+              /^(?:workspace:|link:|file:|git|https?:)/.test(deps[name])
+            )
+              continue;
+            const installed = realpathSync(join(root, "node_modules", name));
+            if (pi.entry.startsWith(`${installed}/`))
+              return { root, name, dev: section === "devDependencies" };
           }
-        } catch {
-          // The CLI may be nested several directories below package.json.
         }
-        root = dirname(root);
       }
     } catch {
-      // Unknown wrappers remain the CLI's responsibility.
+      // Keep walking: pnpm's real entry lives below its virtual store.
     }
-    return null;
+    root = dirname(root);
+  }
+  return null;
+}
+
+/**
+ * pnpm's v11 global installs live in isolated, hashed projects. Pi cannot
+ * self-update those, and updating the project directly would leave its global
+ * shim pointing at the old installation. Use the owning global manager instead.
+ * Inspect only the configured executable; never replace an unrelated pi on PATH.
+ */
+function pnpmGlobalPi(): {
+  bin: string;
+  globalDir: string;
+  binDir: string;
+  name: string;
+} | null {
+  const pi = configuredPi();
+  if (!pi) return null;
+  const { executable, entry } = pi;
+  try {
+    const globalDir = entry.match(
+      /^(.*\/node_modules)\/v11\/[^/]+\/node_modules\//,
+    )?.[1];
+    if (!globalDir) return null;
+    let root = dirname(entry);
+    while (root !== dirname(root)) {
+      try {
+        const pkg: unknown = JSON.parse(
+          readFileSync(join(root, "package.json"), "utf8"),
+        );
+        if (
+          isRecord(pkg) &&
+          (pkg.name === "@earendil-works/pi-coding-agent" ||
+            pkg.name === "@mariozechner/pi-coding-agent")
+        ) {
+          const binDir = dirname(executable);
+          const bin = join(binDir, "pnpm");
+          accessSync(bin, constants.X_OK);
+          return { bin, globalDir, binDir, name: pkg.name };
+        }
+      } catch {
+        // The CLI may be nested several directories below package.json.
+      }
+      root = dirname(root);
+    }
+  } catch {
+    // Unknown wrappers remain the CLI's responsibility.
   }
   return null;
 }
@@ -654,12 +706,13 @@ function pnpmGlobalPi(): {
 /** Update the pi CLI itself on this machine. Never automatic. */
 export async function updateSelf(): Promise<MutationResult> {
   const pnpm = pnpmGlobalPi();
-  if (pnpm) {
+  const local = pnpm ? null : pnpmLocalPi();
+  if (pnpm || local) {
+    const name = pnpm?.name ?? local!.name;
     let target: string;
     try {
-      // Resolve a concrete target: pnpm's age policy can choose an older
-      // eligible release for @latest. Do not bypass that policy silently.
-      target = await latestVersion(pnpm.name, true);
+      // Use a concrete release and respect the manager's release-age policy.
+      target = await latestVersion(name, true);
     } catch (err) {
       return {
         ok: false,
@@ -667,20 +720,33 @@ export async function updateSelf(): Promise<MutationResult> {
         reason: `Cannot check the latest pi version: ${err instanceof Error ? err.message : String(err)}`,
       };
     }
-    const result = await mutate(
-      ["add", "--global", `${pnpm.name}@${target}`],
-      pnpm.bin,
-      {
-        ...process.env,
-        // pnpm v12 accepts these through configuration, not add's CLI flags.
-        PNPM_CONFIG_GLOBAL_DIR: pnpm.globalDir,
-        PNPM_CONFIG_GLOBAL_BIN_DIR: pnpm.binDir,
-        PATH: `${pnpm.binDir}${delimiter}${process.env.PATH ?? ""}`,
-      },
-      target,
-    );
+    const result = pnpm
+      ? await mutate(
+          ["add", "--global", `${name}@${target}`],
+          pnpm.bin,
+          {
+            ...process.env,
+            PNPM_CONFIG_GLOBAL_DIR: pnpm.globalDir,
+            PNPM_CONFIG_GLOBAL_BIN_DIR: pnpm.binDir,
+            PATH: `${pnpm.binDir}${delimiter}${process.env.PATH ?? ""}`,
+          },
+          target,
+        )
+      : await mutate(
+          [
+            "--dir",
+            local!.root,
+            "add",
+            "--save-exact",
+            ...(local!.dev ? ["--save-dev"] : []),
+            `${name}@${target}`,
+          ],
+          "pnpm",
+          process.env,
+          target,
+        );
     if (result.ok)
-      result.log += `\nPi ${target} is installed. Restart existing sessions to use this version.`;
+      result.log += `\nPi ${target} is installed.${local ? " The owning project's package.json and pnpm-lock.yaml were updated. Restart the web IDE server and existing sessions to use this version." : " Restart existing sessions to use this version."}`;
     return result;
   }
   return mutate(["update", "--self"]);

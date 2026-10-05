@@ -6,13 +6,151 @@
  * query matches, and what pressing Enter on a row puts in the box. The panel
  * itself is a list with a highlight.
  *
- * The catalog comes from the session (`Snapshot.commands`), never from a table
- * in here: which commands exist depends on the project's extensions, skills
- * and prompt templates under `.pi/`, and a hardcoded list would confidently
- * offer a command the agent does not have.
+ * Extension commands come from the session (`Snapshot.commands`). Browser
+ * equivalents for Pi's TUI-only built-ins are merged into that catalog;
+ * unsupported commands are rejected rather than sent to the model.
  */
 
 import type { PiCommand } from "../shared/types.js";
+
+/** Terminal commands with browser/RPC equivalents; extensions remain session-owned. */
+export const WEB_COMMANDS: PiCommand[] = [
+  {
+    name: "reload",
+    description:
+      "Reload Pi extensions and configuration; keep this conversation",
+    source: "pwi",
+  },
+  {
+    name: "compact",
+    description: "Summarise older messages (optional: focus instructions)",
+    source: "pwi",
+  },
+  {
+    name: "model",
+    description: "Show current model or set provider/model",
+    source: "pwi",
+  },
+  {
+    name: "thinking",
+    description: "Show or set reasoning level",
+    source: "pwi",
+  },
+  {
+    name: "name",
+    description: "Rename this session: /name new title",
+    source: "pwi",
+  },
+  {
+    name: "session",
+    description: "Show session details and context usage",
+    source: "pwi",
+  },
+  {
+    name: "copy",
+    description: "Copy the last assistant response",
+    source: "pwi",
+  },
+  { name: "settings", description: "Open web settings", source: "pwi" },
+  {
+    name: "login",
+    description: "Open provider authentication settings",
+    source: "pwi",
+  },
+  {
+    name: "new",
+    description: "Open a new conversation in this column",
+    source: "pwi",
+  },
+  {
+    name: "resume",
+    description: "Open the saved-session picker",
+    source: "pwi",
+  },
+  {
+    name: "help",
+    description: "List available web and extension commands",
+    source: "pwi",
+  },
+  {
+    name: "tree",
+    description: "Navigate conversation branches (optional: entry ID)",
+    source: "pwi",
+  },
+  {
+    name: "export",
+    description:
+      "Download HTML or JSONL: /export [filename.html|filename.jsonl]",
+    source: "pwi",
+  },
+  {
+    name: "share",
+    description: "Share as an unlisted GitHub gist after confirmation",
+    source: "pwi",
+  },
+  {
+    name: "clone",
+    description: "Duplicate this conversation into a new session",
+    source: "pwi",
+  },
+  { name: "fork", description: "Fork from an earlier response", source: "pwi" },
+  {
+    name: "import",
+    description: "Import a Pi JSONL file from the project",
+    source: "pwi",
+  },
+  {
+    name: "changelog",
+    description: "Download the installed Pi changelog",
+    source: "pwi",
+  },
+  {
+    name: "hotkeys",
+    description: "Open web keyboard-shortcut settings",
+    source: "pwi",
+  },
+  {
+    name: "bug",
+    description: "Open a Pi bug-report form (optional: description)",
+    source: "pwi",
+  },
+  {
+    name: "scoped-models",
+    description: "Configure model-cycling patterns",
+    source: "pwi",
+  },
+  {
+    name: "trust",
+    description: "Show/save project trust: /trust [on|off|reset]",
+    source: "pwi",
+  },
+  {
+    name: "logout",
+    description: "Manage authentication, or /logout provider",
+    source: "pwi",
+  },
+  {
+    name: "quit",
+    description: "Close this chat tab; other sessions keep running",
+    source: "pwi",
+  },
+];
+
+export function commandCatalog(commands: PiCommand[]): PiCommand[] {
+  return [
+    ...WEB_COMMANDS,
+    ...commands.filter(
+      (command) => !WEB_COMMANDS.some((web) => web.name === command.name),
+    ),
+  ];
+}
+
+export function parseSlashCommand(
+  text: string,
+): { name: string; args: string } | null {
+  const match = /^\/([^\s]+)(?:\s+([\s\S]*))?$/.exec(text.trim());
+  return match ? { name: match[1], args: match[2]?.trim() ?? "" } : null;
+}
 
 /** What the composer is currently completing: the command word itself. */
 export interface Completion {

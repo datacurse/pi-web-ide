@@ -19,7 +19,6 @@ import {
 } from "@phosphor-icons/react";
 import type {
   AskAnswer,
-  PiCommand,
   PiImage,
   PiPartial,
   Snapshot,
@@ -36,6 +35,7 @@ import {
   subscribeWorkDisplay,
   type WorkDisplay,
 } from "./prefs.js";
+import { AutoGoalNotice, isAutoGoalText } from "./AutoGoalNotice.js";
 import { rawRows, type RawRow } from "./rawTurns.js";
 import { ASK_MODES, type AskMode, type UserMode } from "./prefs.js";
 import {
@@ -46,6 +46,7 @@ import {
 } from "./drafts.js";
 import {
   completionOptions,
+  commandCatalog,
   parseCompletion,
   type CommandOption,
 } from "./commands.js";
@@ -78,17 +79,6 @@ import {
   joinPastedText,
   splitPastedText,
 } from "./pastedText.js";
-
-/** pi's `get_commands` omits its TUI-only `/compact`; `send` in useSession.ts runs it. */
-const COMPACT_COMMAND: PiCommand = {
-  name: "compact",
-  get description() {
-    return t(
-      "Summarise older messages to free context (optional: focus instructions)",
-    );
-  },
-  source: "pwi",
-};
 
 /**
  * How far from the bottom still counts as "at the bottom" — see `pinned` in
@@ -194,6 +184,17 @@ const HistoryRow = memo(function HistoryRow({
         userMode={userMode}
         onEdit={onEdit}
       />
+    );
+  const supervisorText = row.blocks
+    .flatMap((block) => (block.kind === "text" ? [block.text] : []))
+    .join("\n\n");
+  if (row.role === "other" && isAutoGoalText(supervisorText))
+    return (
+      <div className="chat-gutter my-3">
+        <div className="chat-measure">
+          <AutoGoalNotice text={supervisorText} />
+        </div>
+      </div>
     );
   const durationMs =
     row.workStartedAt !== undefined && row.workEndedAt !== undefined
@@ -471,7 +472,7 @@ export function Chat({
     () =>
       completion
         ? completionOptions(
-            [COMPACT_COMMAND, ...(snapshot?.commands ?? [])],
+            commandCatalog(snapshot?.commands ?? []),
             completion,
           )
         : [],

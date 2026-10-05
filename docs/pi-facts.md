@@ -231,6 +231,45 @@ fire-and-forget `notify` UI request.
 By contrast an unrecognised `/whatever` is sent to the model as ordinary text and
 produces the full `agent_start … agent_settled` sequence.
 
+pwi prevents that fallback in the browser composer: it refreshes the live command
+catalog before forwarding a slash command and rejects unknown or unsupported
+commands locally. Registered extension commands, prompts and skills still go to Pi.
+
+Browser equivalents (`web/commands.ts`, `web/useSession.ts`): `/reload` replaces
+the idle Pi worker while keeping the conversation; `/compact`, `/model provider/model`,
+`/thinking level` and `/name title` use the existing session API. `/session` shows
+session/context details; `/copy` copies the last assistant text; `/help` lists the
+merged catalog. `/settings` and `/login` open the web settings/authentication pages;
+`/new` opens a conversation in the current column and `/resume` opens session search.
+All built-in Pi slash-command names are available in autocomplete, with browser
+equivalents where the terminal interface cannot be forwarded:
+
+- `/tree [entry-id]` uses Pi's native tree-navigation lifecycle and a web question
+  picker; abandoned branches remain in the session file.
+- `/export [filename.html|filename.jsonl]` downloads the active branch. HTML uses
+  Pi's exporter; JSONL preserves the branch with a fresh export header. Paths
+  select a download filename, not an arbitrary server-side write location.
+- `/share` asks before uploading HTML to an unlisted GitHub gist. It requires
+  GitHub CLI authentication on the host. Unlisted is not private; no automatic
+  redaction is promised.
+- `/clone` and `/fork` create new conversations without moving the original
+  worker. The fork picker uses assistant responses, matching pwi's footer action.
+- `/import [path.jsonl]` confirms and copies a session from a known project into
+  the current project; it never overwrites the original conversation.
+- `/trust [on|off|reset]` uses Pi's project-trust store. Existing approved RPC
+  workers retain their permissions; this command sets future saved decisions.
+- `/scoped-models [patterns|all]` saves Pi's model-cycling defaults and restarts
+  the idle worker to apply them.
+- `/changelog` downloads the installed Pi changelog; `/bug [description]` opens
+  an unsubmitted issue form, without sending session contents.
+- `/hotkeys` opens web keyboard-shortcut settings. `/logout [provider]` opens
+  authentication or confirms removal of the specified provider credentials.
+- `/quit` closes the web chat tab; closing a tab does not kill background work.
+
+These are browser equivalents, not support for arbitrary terminal-only custom
+extension components (`ctx.ui.custom` is unavailable in RPC). Unknown commands
+still fail explicitly rather than invoking the model.
+
 Prompt templates (`/hello`) and skills (`/skill:greeter`) are expanded client-side by pi
 and *do* invoke the agent.
 

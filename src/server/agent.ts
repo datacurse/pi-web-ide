@@ -43,6 +43,7 @@ import {
   existsSync,
   ftruncateSync,
   mkdirSync,
+  mkdtempSync,
   openSync,
   readdirSync,
   readFileSync,
@@ -57,6 +58,7 @@ import {
 import { Socket } from "node:net";
 import { join } from "node:path";
 
+import { tmpdir } from "node:os";
 import { isRecord, records } from "./guards.js";
 import { nestTools } from "../shared/toolTree.js";
 import type { PiTool } from "../shared/types.js";
@@ -377,6 +379,7 @@ export function toCommands(list: unknown): PiCommand[] {
       !name ||
       name === REWIND_COMMAND ||
       name === CONTEXT_COMMAND ||
+      name === "pwi-tree" ||
       name === FAST_COMMAND
     )
       continue;
@@ -1146,6 +1149,10 @@ export interface PiSession {
   setAutoCompaction(enabled: boolean): Promise<void>;
   /** Re-read the slash command catalog. The composer calls this when its menu opens. */
   refreshCommands(): Promise<PiCommand[]>;
+  navigateTree(targetId?: string): Promise<void>;
+  exportSession(
+    format: "html" | "jsonl",
+  ): Promise<{ content: string; mime: string }>;
   /**
    * Answer the pending question. False if `id` is not the one pi is
    * actually waiting on — the caller's answer is then for a dialog that has
@@ -1385,7 +1392,7 @@ function personalityFile(): string | undefined {
  */
 export async function forkSession(
   file: string,
-  at: number,
+  at: number | undefined,
   cwd: string,
 ): Promise<PiSession> {
   if (!existsSync(file)) throw new Error(`session file not found: ${file}`);
@@ -1401,12 +1408,15 @@ export async function forkSession(
     const branch = activeBranch(await child.send<unknown>("get_entries"));
     const role = (e: Record<string, unknown>) =>
       isRecord(e.message) ? e.message.role : undefined;
-    const i = branch.findIndex(
-      (e) =>
-        role(e) === "assistant" &&
-        isRecord(e.message) &&
-        e.message.timestamp === at,
-    );
+    const i =
+      at === undefined
+        ? branch.length
+        : branch.findIndex(
+            (e) =>
+              role(e) === "assistant" &&
+              isRecord(e.message) &&
+              e.message.timestamp === at,
+          );
     if (i < 0) throw new Error("that answer is not in the session file");
     const next = branch.slice(i + 1).find((e) => role(e) === "user");
     const result = next
@@ -1984,6 +1994,79 @@ async function wrap(child: RpcChild, cwd: string): Promise<PiSession> {
       activity.rewind(at);
       messages = healDanglingToolCalls(await fetchMessages(child));
       await refreshState();
+    },
+    async navigateTree(targetId = "") {
+      if (streaming || pendingAsk)
+        throw new Error("Finish the current operation before navigating.");
+      const catalog = records(await fetchCommands(child));
+      if (!catalog.some((command) => command.name === "pwi-tree"))
+        throw new Error("Reload this session before navigating.");
+      let reply: unknown;
+      const off = child.onFrame((frame) => {
+        if (
+          frame.method === "setStatus" &&
+          frame.statusKey === "pwi-tree" &&
+          typeof frame.statusText === "string"
+        )
+          reply = frame.statusText;
+      });
+      try {
+        await child.send<unknown>("prompt", {
+          message: `/pwi-tree ${targetId}`,
+        });
+      } finally {
+        off();
+      }
+      if (typeof reply !== "string")
+        throw new Error("Reload this session to enable tree navigation.");
+      let result: unknown;
+      try {
+        result = JSON.parse(reply);
+      } catch {
+        throw new Error("Invalid tree-navigation response.");
+      }
+      if (!isRecord(result))
+        throw new Error("Invalid tree-navigation response.");
+      if (typeof result.error === "string") throw new Error(result.error);
+      if (result.cancelled) return;
+      generation++;
+      messages = healDanglingToolCalls(await fetchMessages(child));
+      await refreshState();
+    },
+    async exportSession(format: "html" | "jsonl") {
+      if (streaming || pendingAsk)
+        throw new Error("Finish the current operation before exporting.");
+      if (format === "jsonl") {
+        const entries = activeBranch(await child.send<unknown>("get_entries"));
+        const header = {
+          type: "session",
+          version: 3,
+          id: state.sessionId,
+          timestamp: new Date().toISOString(),
+          cwd,
+        };
+        let parentId: unknown = null;
+        const branch = entries.map((entry) => {
+          const copy = { ...entry, parentId };
+          parentId = entry.id;
+          return copy;
+        });
+        return {
+          content:
+            [header, ...branch]
+              .map((entry) => JSON.stringify(entry))
+              .join("\n") + "\n",
+          mime: "application/x-ndjson",
+        };
+      }
+      const dir = mkdtempSync(join(tmpdir(), "pwi-export-"));
+      try {
+        const path = join(dir, "session.html");
+        await child.send<unknown>("export_html", { outputPath: path });
+        return { content: readFileSync(path, "utf8"), mime: "text/html" };
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
     },
     async contextBreakdown() {
       if (!canMeasure)

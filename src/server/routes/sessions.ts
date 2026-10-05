@@ -11,6 +11,15 @@ import { type AskAnswer } from "../agent.js";
 import { type PiImage } from "../../shared/types.js";
 import { query, json, type Deps, type Env } from "../http.js";
 
+import { shareSessionHtml } from "../sessionShare.js";
+import {
+  importSessionFile,
+  piChangelog,
+  projectTrust,
+  scopedModels,
+} from "../piCommands.js";
+import { safePath } from "../files.js";
+import { resolve } from "node:path";
 /** Sessions: listing, search, naming, opening, the event stream, and every per-session command. */
 export function sessionsRoutes({ cwd: CWD, registry }: Deps) {
   /** Shape-check attachments here so malformed input 400s instead of reaching pi. */
@@ -573,6 +582,188 @@ export function sessionsRoutes({ cwd: CWD, registry }: Deps) {
           );
         }
       })
+      .post("/sessions/:id/tree", json<{ targetId?: string }>(), async (c) => {
+        const entry = registry.get(c.req.param("id"));
+        if (!entry) return c.json({ error: "not found" }, 404);
+        const { targetId } = c.req.valid("json");
+        if (
+          targetId !== undefined &&
+          (typeof targetId !== "string" || !/^[A-Za-z0-9-]+$/.test(targetId))
+        )
+          return c.json({ error: "Invalid tree entry ID" }, 400);
+        try {
+          await entry.session.navigateTree(targetId);
+          return c.json(registry.snapshot(entry, c.req.param("id")), 200);
+        } catch (err) {
+          return c.json(
+            { error: err instanceof Error ? err.message : String(err) },
+            400,
+          );
+        }
+      })
+      .post(
+        "/sessions/:id/export",
+        json<{ format: "html" | "jsonl" }>(),
+        async (c) => {
+          const entry = registry.get(c.req.param("id"));
+          if (!entry) return c.json({ error: "not found" }, 404);
+          const { format } = c.req.valid("json");
+          if (format !== "html" && format !== "jsonl")
+            return c.json({ error: "Expected html or jsonl" }, 400);
+          try {
+            return c.json(await entry.session.exportSession(format), 200);
+          } catch (err) {
+            return c.json(
+              { error: err instanceof Error ? err.message : String(err) },
+              400,
+            );
+          }
+        },
+      )
+      .post(
+        "/sessions/:id/share",
+        json<{ confirmed: boolean }>(),
+        async (c) => {
+          if (c.req.valid("json").confirmed !== true)
+            return c.json({ error: "Confirm disclosure before sharing" }, 400);
+          const entry = registry.get(c.req.param("id"));
+          if (!entry) return c.json({ error: "not found" }, 404);
+          try {
+            const { content } = await entry.session.exportSession("html");
+            return c.json({ url: await shareSessionHtml(content) }, 200);
+          } catch (err) {
+            return c.json(
+              { error: err instanceof Error ? err.message : String(err) },
+              400,
+            );
+          }
+        },
+      )
+      .post("/sessions/:id/clone", async (c) => {
+        try {
+          const entry = await registry.clone(c.req.param("id"));
+          return c.json({ file: entry.session.file }, 200);
+        } catch (err) {
+          return c.json(
+            { error: err instanceof Error ? err.message : String(err) },
+            400,
+          );
+        }
+      })
+      .post(
+        "/sessions/:id/import",
+        json<{ path: string; confirmed: boolean }>(),
+        async (c) => {
+          const entry = registry.get(c.req.param("id"));
+          if (!entry) return c.json({ error: "not found" }, 404);
+          const { path, confirmed } = c.req.valid("json");
+          if (confirmed !== true || typeof path !== "string")
+            return c.json({ error: "Confirm a JSONL path to import" }, 400);
+          try {
+            if (
+              entry.streaming ||
+              entry.session.isStreaming ||
+              entry.session.ask
+            )
+              throw new Error("Finish the current operation before importing.");
+            const source = safePath(
+              CWD,
+              path.startsWith("~") ? path : resolve(entry.session.cwd, path),
+            );
+            if (!source.endsWith(".jsonl"))
+              throw new Error("Expected a .jsonl file.");
+            return c.json(
+              { file: importSessionFile(source, entry.session.cwd) },
+              200,
+            );
+          } catch (err) {
+            return c.json(
+              { error: err instanceof Error ? err.message : String(err) },
+              400,
+            );
+          }
+        },
+      )
+      .get("/sessions/:id/changelog", (c) => {
+        try {
+          return c.json({ content: piChangelog() }, 200);
+        } catch (err) {
+          return c.json(
+            { error: err instanceof Error ? err.message : String(err) },
+            400,
+          );
+        }
+      })
+      .get("/sessions/:id/scoped-models", async (c) => {
+        const entry = registry.get(c.req.param("id"));
+        if (!entry) return c.json({ error: "not found" }, 404);
+        try {
+          return c.json(
+            { patterns: await scopedModels(entry.session.cwd) },
+            200,
+          );
+        } catch (err) {
+          return c.json(
+            { error: err instanceof Error ? err.message : String(err) },
+            400,
+          );
+        }
+      })
+      .post(
+        "/sessions/:id/scoped-models",
+        json<{ patterns: string[] }>(),
+        async (c) => {
+          const entry = registry.get(c.req.param("id"));
+          if (!entry) return c.json({ error: "not found" }, 404);
+          const { patterns } = c.req.valid("json");
+          if (!Array.isArray(patterns))
+            return c.json({ error: "Expected model patterns" }, 400);
+          try {
+            if (
+              entry.streaming ||
+              entry.session.isStreaming ||
+              entry.session.ask
+            )
+              throw new Error(
+                "Finish the current operation before changing scope.",
+              );
+            await scopedModels(entry.session.cwd, patterns);
+            const fresh = await registry.restart(c.req.param("id"));
+            return c.json(registry.snapshot(fresh, fresh.id), 200);
+          } catch (err) {
+            return c.json(
+              { error: err instanceof Error ? err.message : String(err) },
+              400,
+            );
+          }
+        },
+      )
+      .post(
+        "/sessions/:id/trust",
+        json<{ decision?: boolean | null; confirmed?: boolean }>(),
+        (c) => {
+          const entry = registry.get(c.req.param("id"));
+          if (!entry) return c.json({ error: "not found" }, 404);
+          const { decision, confirmed } = c.req.valid("json");
+          if (
+            decision !== undefined &&
+            (confirmed !== true ||
+              (decision !== null && typeof decision !== "boolean"))
+          )
+            return c.json({ error: "Confirm the trust decision" }, 400);
+          try {
+            return c.json(
+              { decision: projectTrust(entry.session.cwd, decision) },
+              200,
+            );
+          } catch (err) {
+            return c.json(
+              { error: err instanceof Error ? err.message : String(err) },
+              400,
+            );
+          }
+        },
+      )
 
       /**
        * Answer the question pi is blocked on.

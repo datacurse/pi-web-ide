@@ -18,6 +18,8 @@ import type { Side } from "./tabs.js";
 import { api, unwrap } from "./api.js";
 import { t } from "./i18n.js";
 
+import { commandCatalog, parseSlashCommand, WEB_COMMANDS } from "./commands.js";
+import { downloadText } from "./download.js";
 import { emptyPartial, reducePartial } from "../shared/partial.js";
 
 /**
@@ -722,12 +724,420 @@ export function useSession({
   );
 
   const send = useCallback(
-    async (text: string, images?: PiImage[], askOnly = false) => {
+    async (
+      text: string,
+      images?: PiImage[],
+      askOnly = false,
+      onUiCommand?: (name: string) => Promise<void> | void,
+    ) => {
       if (!snapshot) return;
       const trimmed = text.trim();
-      // pi's /compact is TUI-only; over RPC it would reach the model as text.
-      const compactCmd = /^\/compact(?:\s+([\s\S]*))?$/.exec(trimmed);
-      if (compactCmd && !images?.length) return compact(compactCmd[1]?.trim());
+      const slash = parseSlashCommand(trimmed);
+      if (slash) {
+        return runSession(async ({ id, active, update, refresh }) => {
+          const { name, args } = slash;
+          const local = WEB_COMMANDS.some((command) => command.name === name);
+          if (!local) {
+            // Refresh before rejecting: newly registered extension commands are valid.
+            const { commands } = await unwrap(
+              api.sessions[":id"].commands.$post({ param: { id } }),
+            );
+            update((s) => ({ ...s, commands }));
+            if (!commands.some((command) => command.name === name)) {
+              throw new Error(
+                `Unknown command /${name}. Type /help for available commands.`,
+              );
+            }
+            // Registered extension commands, skills and prompts still execute in Pi.
+          } else {
+            if (images?.length)
+              throw new Error("Browser commands do not accept attachments.");
+            setCommand({ text: trimmed, running: true });
+            let result = "";
+            try {
+              if (
+                [
+                  "reload",
+                  "compact",
+                  "name",
+                  "new",
+                  "tree",
+                  "export",
+                  "share",
+                  "clone",
+                  "fork",
+                  "import",
+                  "scoped-models",
+                  "quit",
+                ].includes(name) &&
+                (busy || compacting || snapshot.ask)
+              ) {
+                throw new Error(
+                  "Finish or cancel the current operation before running this command.",
+                );
+              }
+              if (
+                [
+                  "reload",
+                  "session",
+                  "copy",
+                  "settings",
+                  "new",
+                  "resume",
+                  "help",
+                  "share",
+                  "clone",
+                  "fork",
+                  "hotkeys",
+                  "changelog",
+                  "quit",
+                ].includes(name) &&
+                args
+              ) {
+                throw new Error(`/${name} does not accept arguments here.`);
+              }
+              switch (name) {
+                case "reload": {
+                  const fresh = toSnapshot(
+                    await unwrap(
+                      api.sessions[":id"].restart.$post({ param: { id } }),
+                    ),
+                  );
+                  if (!active()) return;
+                  update(() => fresh);
+                  seenErrorRef.current = null;
+                  setPartial(emptyPartial());
+                  setBusy(fresh.isStreaming);
+                  commandsFetchedAt.current = null;
+                  result =
+                    "Pi restarted; extensions and configuration reloaded. Conversation preserved.";
+                  break;
+                }
+                case "compact":
+                  await compact(args || undefined);
+                  return;
+                case "model":
+                  if (args) {
+                    await unwrap(
+                      api.sessions[":id"].model.$post({
+                        param: { id },
+                        json: { model: args },
+                      }),
+                    );
+                    await refresh();
+                  }
+                  result = args
+                    ? `Model set to ${args}.`
+                    : `Current model: ${snapshot.model ?? "none"}. Use /model provider/model or the model selector.`;
+                  break;
+                case "thinking":
+                  if (args) {
+                    await unwrap(
+                      api.sessions[":id"].thinking.$post({
+                        param: { id },
+                        json: { level: args },
+                      }),
+                    );
+                    await refresh();
+                  }
+                  result = args
+                    ? `Thinking level set to ${args}.`
+                    : `Current thinking: ${snapshot.thinkingLevel ?? "none"}. Available: ${snapshot.thinkingLevels.join(", ")}.`;
+                  break;
+                case "name":
+                  if (!args) throw new Error("Usage: /name new session title");
+                  await unwrap(
+                    api.sessions.rename.$post({ json: { id, name: args } }),
+                  );
+                  await refreshSessions();
+                  await refresh();
+                  result = `Session renamed to ${args}.`;
+                  break;
+                case "session":
+                  result = `Session: ${snapshot.id}\nFile: ${snapshot.file ?? "not saved yet"}\nProject: ${snapshot.cwd}\nModel: ${snapshot.model ?? "none"}\nThinking: ${snapshot.thinkingLevel ?? "none"}\nContext: ${snapshot.contextTokens}/${snapshot.contextWindow} tokens\nMessages: ${snapshot.messages.length}`;
+                  break;
+                case "copy": {
+                  const answer = [...snapshot.messages]
+                    .reverse()
+                    .find(
+                      (message) =>
+                        message.role === "assistant" &&
+                        message.blocks.some((block) => block.kind === "text"),
+                    );
+                  if (!answer)
+                    throw new Error("No assistant response to copy.");
+                  await navigator.clipboard.writeText(
+                    answer.blocks
+                      .flatMap((block) =>
+                        block.kind === "text" ? [block.text] : [],
+                      )
+                      .join("\n"),
+                  );
+                  result = "Last assistant response copied.";
+                  break;
+                }
+                case "tree": {
+                  const fresh = toSnapshot(
+                    await unwrap(
+                      api.sessions[":id"].tree.$post({
+                        param: { id },
+                        json: { targetId: args || undefined },
+                      }),
+                    ),
+                  );
+                  update(() => fresh);
+                  setPartial(emptyPartial());
+                  result =
+                    "Session tree updated. Previous branches remain saved.";
+                  break;
+                }
+                case "export": {
+                  const filename =
+                    args.replace(/^([\x27"])([\s\S]*)\1$/, "$2") ||
+                    `session-${id}.html`;
+                  const format =
+                    filename === "jsonl" || filename.endsWith(".jsonl")
+                      ? "jsonl"
+                      : "html";
+                  if (
+                    args &&
+                    !["html", "jsonl"].includes(args) &&
+                    !/\.(html|jsonl)$/.test(filename)
+                  )
+                    throw new Error(
+                      "Usage: /export [filename.html|filename.jsonl]",
+                    );
+                  const exported = await unwrap(
+                    api.sessions[":id"].export.$post({
+                      param: { id },
+                      json: { format },
+                    }),
+                  );
+                  downloadText(
+                    exported.content,
+                    exported.mime,
+                    ["html", "jsonl"].includes(filename)
+                      ? `session-${id}.${format}`
+                      : filename,
+                  );
+                  result =
+                    "Session downloaded. Only the active branch is exported.";
+                  break;
+                }
+                case "share": {
+                  if (
+                    !window.confirm(
+                      "Upload this conversation, including reasoning and tool output, to an unlisted GitHub gist? Anyone with the link can read it. Review for secrets first.",
+                    )
+                  )
+                    return;
+                  const shared = await unwrap(
+                    api.sessions[":id"].share.$post({
+                      param: { id },
+                      json: { confirmed: true },
+                    }),
+                  );
+                  result = `Shared session: ${shared.url}`;
+                  break;
+                }
+                case "clone": {
+                  const cloned = await unwrap(
+                    api.sessions[":id"].clone.$post({ param: { id } }),
+                  );
+                  if (active()) await attach(cloned.file);
+                  return;
+                }
+                case "fork": {
+                  const answers = snapshot.messages.filter(
+                    (message) =>
+                      message.role === "assistant" &&
+                      message.blocks.some((block) => block.kind === "text"),
+                  );
+                  if (!answers.length)
+                    throw new Error("No assistant responses to fork from.");
+                  const selected = window.prompt(
+                    "Fork from response number:\n" +
+                      answers
+                        .map(
+                          (answer, index) =>
+                            `${index + 1}. ${answer.blocks
+                              .flatMap((block) =>
+                                block.kind === "text" ? [block.text] : [],
+                              )
+                              .join(" ")
+                              .slice(0, 100)}`,
+                        )
+                        .join("\n"),
+                    String(answers.length),
+                  );
+                  if (selected === null) return;
+                  const index = Number(selected) - 1;
+                  if (!Number.isInteger(index) || !answers[index])
+                    throw new Error(
+                      "Choose one of the listed response numbers.",
+                    );
+                  const forked = await unwrap(
+                    api.sessions[":id"].fork.$post({
+                      param: { id },
+                      json: { at: answers[index].timestamp },
+                    }),
+                  );
+                  if (active()) await attach(forked.file);
+                  return;
+                }
+                case "import": {
+                  const path =
+                    args.replace(/^([\x27"])([\s\S]*)\1$/, "$2") ||
+                    window.prompt("Pi JSONL file path within a known project:");
+                  if (!path) return;
+                  if (
+                    !window.confirm(
+                      "Import this session into a new conversation? Review untrusted session contents before running prompts.",
+                    )
+                  )
+                    return;
+                  const imported = await unwrap(
+                    api.sessions[":id"].import.$post({
+                      param: { id },
+                      json: { path, confirmed: true },
+                    }),
+                  );
+                  await refreshSessions();
+                  if (active()) await attach(imported.file);
+                  return;
+                }
+                case "changelog": {
+                  const changelog = await unwrap(
+                    api.sessions[":id"].changelog.$get({ param: { id } }),
+                  );
+                  downloadText(
+                    changelog.content,
+                    "text/markdown",
+                    "pi-CHANGELOG.md",
+                  );
+                  result = "Installed Pi changelog downloaded.";
+                  break;
+                }
+                case "bug": {
+                  const url = new URL(
+                    "https://github.com/earendil-works/pi/issues/new",
+                  );
+                  if (args) url.searchParams.set("title", args);
+                  window.open(url.toString(), "_blank", "noopener,noreferrer");
+                  result =
+                    "Bug-report form opened; no conversation data was uploaded.";
+                  break;
+                }
+                case "scoped-models": {
+                  const current = await unwrap(
+                    api.sessions[":id"]["scoped-models"].$get({
+                      param: { id },
+                    }),
+                  );
+                  const value =
+                    args ||
+                    window.prompt(
+                      "Model-cycling patterns (provider/model or wildcards), separated by commas. Use all to remove scope. Saved as Pi defaults; this session will reload.",
+                      current.patterns.join(", ") || "all",
+                    );
+                  if (value === null) return;
+                  const patterns =
+                    value.trim() === "all" || !value.trim()
+                      ? []
+                      : value.split(/[\s,]+/).filter(Boolean);
+                  const fresh = toSnapshot(
+                    await unwrap(
+                      api.sessions[":id"]["scoped-models"].$post({
+                        param: { id },
+                        json: { patterns },
+                      }),
+                    ),
+                  );
+                  if (!active()) return;
+                  update(() => fresh);
+                  setPartial(emptyPartial());
+                  commandsFetchedAt.current = null;
+                  result = "Model scope saved; this session reloaded.";
+                  break;
+                }
+                case "trust": {
+                  if (args && !["on", "off", "reset"].includes(args))
+                    throw new Error("Usage: /trust [on|off|reset]");
+                  if (
+                    args &&
+                    !window.confirm(
+                      `Save project trust "${args}" for ${snapshot.cwd}? This affects future Pi sessions; the current web worker already has approved project access.`,
+                    )
+                  )
+                    return;
+                  const trust = await unwrap(
+                    api.sessions[":id"].trust.$post({
+                      param: { id },
+                      json: args
+                        ? {
+                            decision: args === "reset" ? null : args === "on",
+                            confirmed: true,
+                          }
+                        : {},
+                    }),
+                  );
+                  result = `Saved project trust: ${trust.decision === null ? "not set" : trust.decision ? "trusted" : "not trusted"}. Current web sessions retain their existing permissions.`;
+                  break;
+                }
+                case "logout":
+                  if (args) {
+                    if (!window.confirm(`Log out of ${args} on this machine?`))
+                      return;
+                    await unwrap(
+                      api.auth.logout.$post({ json: { provider: args } }),
+                    );
+                    result = `Logged out of ${args}. Reload sessions to pick up credential changes.`;
+                  } else if (onUiCommand) await onUiCommand(name);
+                  break;
+                case "help":
+                  result = commandCatalog(snapshot.commands)
+                    .map(
+                      (command) =>
+                        `/${command.name} — ${command.description ?? command.source ?? ""}`,
+                    )
+                    .join("\n");
+                  break;
+                default:
+                  if (!onUiCommand)
+                    throw new Error("This command requires the web interface.");
+                  await onUiCommand(name);
+                  break;
+              }
+              if (result)
+                update((s) => ({
+                  ...s,
+                  notices: addNotice(s.notices, {
+                    level: "info",
+                    text: result,
+                    key: "web-command",
+                  }),
+                }));
+            } finally {
+              if (active()) setCommand({ text: trimmed, running: false });
+            }
+            return;
+          }
+          // Do not recursively dispatch: this registered command goes through the ordinary prompt path.
+          setCommand({ text: trimmed, running: true });
+          try {
+            await unwrap(
+              api.sessions[":id"].prompt.$post({
+                param: { id },
+                json: { text: trimmed, images },
+              }),
+            );
+          } catch (err) {
+            if (active()) setCommand({ text: trimmed, running: false });
+            throw err;
+          }
+          if (active()) await refresh();
+        });
+      }
       await runSession(async ({ id, active, update, refresh }) => {
         seenErrorRef.current = null;
         setBusy(true);
@@ -782,7 +1192,7 @@ export function useSession({
           );
       });
     },
-    [snapshot, busy, compact, runSession],
+    [snapshot, busy, compacting, compact, runSession, refreshSessions, attach],
   );
 
   const abort = useCallback(

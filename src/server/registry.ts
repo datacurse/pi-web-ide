@@ -465,6 +465,18 @@ export class Registry {
     return this.install(await forkSession(file, at, entry.session.cwd), null);
   }
 
+  async clone(id: string): Promise<Entry & { id: string }> {
+    const entry = this.entries.get(id);
+    if (!entry) throw new Error(`unknown session: ${id}`);
+    if (entry.streaming || entry.session.isStreaming || entry.session.ask)
+      throw new Error("Finish the current operation before cloning.");
+    if (!entry.session.file)
+      throw new Error("This session has no saved file yet.");
+    return this.install(
+      await forkSession(entry.session.file, undefined, entry.session.cwd),
+      null,
+    );
+  }
   /**
    * Switch the model on an existing session. Disallowed mid-stream: pi has no
    * defined behavior for swapping models under an in-flight request, and

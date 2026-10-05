@@ -511,10 +511,12 @@ export function Settings({
   onAlwaysShowScrollbars,
   scrollbarTone,
   onScrollbarTone,
+  navigateTo,
   onClose,
 }: {
   cwd?: string;
   open: boolean;
+  navigateTo?: { category: Category; revision: number };
   theme: ThemeId;
   editorTheme: string;
   onEditorTheme: (theme: string) => void;
@@ -607,6 +609,9 @@ export function Settings({
   };
 
   const [category, setCategory] = useState<Category>("appearance");
+  useEffect(() => {
+    if (navigateTo) setCategory(navigateTo.category);
+  }, [navigateTo]);
   const [expandDetails, setExpandDetails] = useState(readSettingsExpanded);
   const [footer, setFooter] = useState(readFooterLayout);
   const [workDisplay, setWorkDisplay] = useState(readWorkDisplay);

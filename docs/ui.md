@@ -195,6 +195,9 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
   total elapsed time and expandable numbered model rounds). The choice persists per browser
   and updates both panes immediately. Timeline uses the same Markdown/tool renderer and
   keeps the final answer outside the rounds; turns without recorded activity fall back to Cursor.
+- Auto-goal supervision renders as a compact English status disclosure with a semantic
+  icon, confidence or continuation count when supplied, and the original output collapsed
+  underneath. No bordered notification box or generic speaker label; supervision stays enabled.
 - Recorded activity persists server-side. Snapshot refreshes must preserve newer live
   telemetry received while the request was in flight.
 - History is virtualized; expanding work must not mount the whole transcript.

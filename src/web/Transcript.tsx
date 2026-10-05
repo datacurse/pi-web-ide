@@ -26,6 +26,7 @@ import type {
   PiImage,
   PiNotice,
 } from "../shared/types.js";
+import { AutoGoalNotice, isAutoGoalText } from "./AutoGoalNotice.js";
 import { api, unwrap } from "./api.js";
 import { Button, IconButton, ListRow } from "./ui.js";
 import { timeAgo } from "./SessionList.js";
@@ -852,14 +853,20 @@ export function Notices({ notices }: { notices: PiNotice[] }) {
   if (notices.length === 0) return null;
   return (
     <div className="chat-gutter my-3 space-y-2">
-      {notices.map((n, i) => (
-        <div
-          key={i}
-          className={`chat-measure rounded-sm border px-3 py-2 text-body whitespace-pre-wrap break-words ${NOTICE_STYLE[n.level]}`}
-        >
-          <NoticeText text={n.text} />
-        </div>
-      ))}
+      {notices.map((n, i) =>
+        isAutoGoalText(n.text) ? (
+          <div key={i} className="chat-measure">
+            <AutoGoalNotice text={n.text} />
+          </div>
+        ) : (
+          <div
+            key={i}
+            className={`chat-measure rounded-sm border px-3 py-2 text-body whitespace-pre-wrap break-words ${NOTICE_STYLE[n.level]}`}
+          >
+            <NoticeText text={n.text} />
+          </div>
+        ),
+      )}
     </div>
   );
 }

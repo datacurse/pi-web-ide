@@ -215,6 +215,10 @@ export default function App() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   /** Stats, Packages or Settings, shown in a modal over everything. */
   const [page, setPage] = useState<PageId | null>(null);
+  const [settingsTarget, setSettingsTarget] = useState<{
+    category: "shortcuts";
+    revision: number;
+  }>();
   /**
    * Which side panel is showing, if any — one value, because they are
    * mutually exclusive the way VS Code's activity bar is: one column, one
@@ -1895,6 +1899,7 @@ export default function App() {
       <Settings
         cwd={project}
         open={active}
+        navigateTo={settingsTarget}
         theme={theme}
         editorTheme={editorTheme}
         onEditorTheme={setEditorTheme}
@@ -1963,7 +1968,25 @@ export default function App() {
           onAskMode={changeAskMode}
           command={s.command}
           modelError={s.modelError}
-          onSend={s.send}
+          onSend={(text, images, askOnly) =>
+            s.send(text, images, askOnly, async (name) => {
+              if (name === "hotkeys") {
+                setSettingsTarget((previous) => ({
+                  category: "shortcuts",
+                  revision: (previous?.revision ?? 0) + 1,
+                }));
+                setPage("settings");
+              } else if (name === "settings") setPage("settings");
+              else if (name === "login" || name === "logout")
+                setPage("authentication");
+              else if (name === "resume") setSearchOpen(true);
+              else if (name === "new") await newSession(side);
+              else if (name === "quit") {
+                const entry = groupOf(tabsRef.current, side).active;
+                if (entry) (side === "right" ? closeRight : closeTab)(entry);
+              }
+            })
+          }
           onAnswerAsk={s.answerAsk}
           onAbort={s.abort}
           onModelChange={s.changeModel}
