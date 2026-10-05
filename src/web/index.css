@@ -995,7 +995,10 @@ input[type="number"]::-webkit-outer-spin-button {
 .chat-round {
   --round-marker-top: calc(var(--prose-size) * 0.8);
 }
-.chat-round:has(.chat-round-content > details:first-child) {
+.chat-round:has(.chat-round-content > details:first-child),
+.chat-round:has(
+  .chat-round-content > [data-custom="codemode tool list"]:first-child
+) {
   --round-marker-top: calc(var(--code-size) * 0.75);
 }
 .chat-round:first-child > .chat-round-line {

@@ -1,6 +1,7 @@
 import { activityGroups } from "../shared/activity.js";
 import { ActivityPanel } from "./Activity.js";
 import { RawBlocks } from "./RawOutput.js";
+import { WorkTool } from "./WorkTimeline.js";
 import type { RawRow } from "./rawTurns.js";
 import { phaseBlocks } from "./turnPhases.js";
 import { anchorSources } from "./anchorDiff.js";
@@ -26,11 +27,20 @@ export function TimedWork({ row }: { row: RawRow }) {
           );
         if (!content.length) return null;
         return (
-          <RawBlocks
-            blocks={content}
-            toolSources={sources}
-            streaming={!!row.running && round.end === undefined}
-          />
+          <>
+            {content.map((block, index) =>
+              block.kind === "tool" ? (
+                <WorkTool key={block.id} tool={block} toolSources={sources} />
+              ) : (
+                <RawBlocks
+                  key={index}
+                  blocks={[block]}
+                  toolSources={sources}
+                  streaming={!!row.running && round.end === undefined}
+                />
+              ),
+            )}
+          </>
         );
       }}
     />

@@ -72,7 +72,7 @@ function Thought({
   );
 }
 
-function Tool({
+export function WorkTool({
   tool,
   toolSources,
   nested = false,
@@ -88,7 +88,7 @@ function Tool({
         {!!tool.children?.length && (
           <div className="pl-4 [&>*]:my-0">
             {tool.children.map((child) => (
-              <Tool
+              <WorkTool
                 key={child.id}
                 tool={child}
                 toolSources={toolSources}
@@ -177,7 +177,11 @@ export function WorkTimeline({
               entry.kind === "thought" ? (
                 <Thought key={j} item={entry} />
               ) : (
-                <Tool key={entry.id} tool={entry} toolSources={toolSources} />
+                <WorkTool
+                  key={entry.id}
+                  tool={entry}
+                  toolSources={toolSources}
+                />
               ),
             )}
           </Disclosure>
