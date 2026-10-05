@@ -981,7 +981,7 @@ export function Settings({
             {t("Nested tool labels")}
             <span className="block text-meta text-neutral-500">
               {t(
-                "Show names, icons, or both for tools called inside codemode. The parent codemode label always uses text.",
+                "Show names, icons, or both for tools called inside codemode. The parent codemode label always shows its icon and name.",
               )}
             </span>
           </span>

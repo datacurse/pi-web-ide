@@ -52,7 +52,8 @@ export function ToolLabel({
   const separator = description === tool.name ? -1 : description.indexOf(" ");
   const action = separator < 0 ? description : description.slice(0, separator);
   const name = tool.name.split(".").at(-1) ?? tool.name;
-  const mode = codemodeChild && name !== "codemode" ? preference : "text";
+  const mode =
+    name === "codemode" ? "both" : codemodeChild ? preference : "text";
   const icons = mode !== "text";
   const location = tool.source ?? source;
   const path =
