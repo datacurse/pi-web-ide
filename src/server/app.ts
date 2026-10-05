@@ -26,6 +26,7 @@ import { gitRoutes } from "./routes/git.js";
 import { packagesRoutes } from "./routes/packages.js";
 import { terminalsRoutes } from "./routes/terminals.js";
 
+import { providerAuthRoutes } from "./routes/providerAuth.js";
 export function createApp(deps: Deps) {
   const app = new Hono<Env>();
 
@@ -70,6 +71,7 @@ export function createApp(deps: Deps) {
   // the browser's `hc` client every route's path, body and response.
   const api = app
     .route("/api", systemRoutes(deps))
+    .route("/api", providerAuthRoutes())
     .route("/api", sessionsRoutes(deps))
     .route("/api", filesRoutes(deps))
     .route("/api", gitRoutes(deps))

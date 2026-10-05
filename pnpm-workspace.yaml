@@ -4,6 +4,8 @@
 # platform and ABI and installs its spawn-helper — without it there is no
 # terminal at all.
 allowBuilds:
+  '@google/genai': false
   '@homebridge/node-pty-prebuilt-multiarch': true
   '@tailwindcss/oxide': true
   esbuild: true
+  protobufjs: false

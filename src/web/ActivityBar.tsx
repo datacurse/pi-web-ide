@@ -22,6 +22,7 @@ import {
   Code,
   GitBranch,
   Gear,
+  Key,
   Network,
   SquaresFour,
   TerminalWindow,
@@ -193,6 +194,12 @@ export function ActivityBar({
           t("Packages"),
           t("Packages installed on this machine"),
           <SquaresFour size={20} />,
+        )}
+        {page(
+          "authentication",
+          t("Authentication"),
+          t("Sign in to AI providers"),
+          <Key size={20} />,
         )}
         {page("settings", t("Settings"), t("Settings"), <Gear size={20} />)}
 

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { X } from "@phosphor-icons/react";
+import { Authentication } from "./Authentication.js";
 import { useSession } from "./useSession.js";
 import { startPointerDrag } from "./pointerDrag.js";
 import { sessionPrompts } from "./sessionName.js";
@@ -1831,6 +1832,11 @@ export default function App() {
       keys: shortcutKeys("view.terminal"),
       run: toggleTerminal,
     },
+    {
+      id: "page.authentication",
+      label: t("Open Authentication"),
+      run: () => setPage("authentication"),
+    },
     { id: "page.fleet", label: t("Open Fleet"), run: () => setPage("fleet") },
     { id: "page.stats", label: t("Open Stats"), run: () => setPage("stats") },
     {
@@ -1858,6 +1864,8 @@ export default function App() {
   /** A page's content inside the page dialog. */
   const renderPage = (page: PageId, active: boolean) => {
     const onClose = () => setPage(null);
+    if (page === "authentication")
+      return <Authentication open={active} onClose={onClose} />;
     if (page === "stats")
       return <Stats open={active} revision={replies} onClose={onClose} />;
     if (page === "fleet") return <Fleet open={active} onClose={onClose} />;

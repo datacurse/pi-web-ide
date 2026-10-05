@@ -18,6 +18,13 @@ import { dirname, join } from "node:path";
 import { askOnce } from "./agent.js";
 import { isRecord, records } from "./guards.js";
 
+let catalogGeneration = 0;
+/** Credentials changed through the provider page; do not retain the old availability. */
+export function invalidateModels(): void {
+  catalogGeneration++;
+  cached = undefined;
+  inFlight = undefined;
+}
 /** Models change when credentials change, which happens outside this process. */
 const TTL_MS = 10 * 60_000;
 
@@ -44,13 +51,15 @@ let inFlight: Promise<Map<string, ModelMeta>> | undefined;
 export function modelCatalog(): Promise<Map<string, ModelMeta>> {
   if (cached && Date.now() - cached.at < TTL_MS)
     return Promise.resolve(cached.catalog);
+  const generation = catalogGeneration;
   inFlight ??= fetchCatalog()
     .then((catalog) => {
-      cached = { at: Date.now(), catalog };
+      if (generation === catalogGeneration)
+        cached = { at: Date.now(), catalog };
       return catalog;
     })
     .finally(() => {
-      inFlight = undefined;
+      if (generation === catalogGeneration) inFlight = undefined;
     });
   return inFlight;
 }

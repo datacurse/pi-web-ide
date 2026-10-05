@@ -2,8 +2,10 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { t } from "./i18n.js";
 
 /** The rail's bottom group: places you visit, not work beside, so a popup rather than a tab. */
-export type PageId = "fleet" | "stats" | "packages" | "settings" | "themes";
+export type PageId =
+  "fleet" | "stats" | "packages" | "settings" | "themes" | "authentication";
 const TITLE: Record<PageId, string> = {
+  authentication: "Authentication",
   fleet: "Fleet",
   stats: "Stats",
   packages: "Packages",
