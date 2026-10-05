@@ -575,7 +575,7 @@ export interface ToolCost {
   /** Of `ms`, what other extensions' result hooks took (pi-lens), in measured calls. */
   hookMs: number;
   measured: number;
-  /** Codemode's actual nested calls; detail only, not added to wrapper totals. */
+  /** Codemode detail, not additive: child tokens estimate saved arguments only. */
   children?: Record<string, ToolCost>;
 }
 

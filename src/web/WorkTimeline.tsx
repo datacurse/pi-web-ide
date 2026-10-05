@@ -115,7 +115,7 @@ export function WorkTool({
     (tool.isError !== undefined ||
       (!tool.outputUnavailable && tool.result !== undefined));
   return (
-    <div className="work-tool-branch relative [&>*]:my-0">
+    <div className="work-tool-branch relative flow-root [&>*]:my-0">
       {completed && (
         <span
           role="img"

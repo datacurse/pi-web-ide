@@ -768,6 +768,10 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
   `bash: (shell)`. Slowest and Largest calls list single calls, or a measured bash call's
   commands (tool, command or path, value); Background jobs lists what `&` left running,
   longest first, with how long it ran. The `title` adds when, the project and the prompt.
+  Codemode's indented calls show saved argument estimates in a separate Arg tokens
+  column; their total Tokens are unknown (`–`) and have no token bar because nested
+  results are not persisted. These estimates are not a breakdown of the wrapper total.
+  Nested calls sort by argument tokens in Tokens mode; their measured times can overlap.
 - Stats covers other machines too: every concrete `Host` in `~/.ssh/config` with pi
   sessions is mirrored over rsync (`server/machines.ts`), no config of its own. The
   header filters All / This PC / one button per machine (ssh alias), the same way as

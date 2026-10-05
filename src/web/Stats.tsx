@@ -2024,7 +2024,13 @@ function ToolCosts({ turns }: { turns: StatsTurn[] }) {
           nested: true,
         })),
     ]);
-  const max = Math.max(1, ...rows.map(({ c }) => c[by]));
+  const hasNested = rows.some((row) => row.nested);
+  const max = Math.max(
+    1,
+    ...rows
+      .filter(({ nested }) => by !== "tokens" || !nested)
+      .map(({ c }) => c[by]),
+  );
   const cell = (m: Metric | "avg") =>
     `w-14 shrink-0 text-right tabular-nums ${m === by ? "text-neutral-200" : "text-neutral-500"}`;
   return (
@@ -2053,6 +2059,11 @@ function ToolCosts({ turns }: { turns: StatsTurn[] }) {
             <span className="min-w-0 flex-1" />
             <span className="w-14 shrink-0 text-right">{t("Calls")}</span>
             <span className="w-14 shrink-0 text-right">{t("Tokens")}</span>
+            {hasNested && (
+              <span className="w-14 shrink-0 text-right">
+                {t("Arg tokens")}
+              </span>
+            )}
             <span className="w-14 shrink-0 text-right">{t("Time")}</span>
             <span className="w-14 shrink-0 text-right">{t("Per call")}</span>
             <span className="w-14 shrink-0 text-right">{t("Hooks")}</span>
@@ -2066,13 +2077,22 @@ function ToolCosts({ turns }: { turns: StatsTurn[] }) {
                 {nested ? `↳ ${key}` : key}
               </span>
               <div className="h-2 min-w-0 flex-1">
-                <div
-                  className="h-full rounded-full bg-amber-500"
-                  style={{ width: `${(c[by] / max) * 100}%` }}
-                />
+                {(!nested || by !== "tokens") && (
+                  <div
+                    className="h-full rounded-full bg-amber-500"
+                    style={{ width: `${(c[by] / max) * 100}%` }}
+                  />
+                )}
               </div>
               <span className={cell("calls")}>{num().format(c.calls)}</span>
-              <span className={cell("tokens")}>{num().format(c.tokens)}</span>
+              <span className={cell("tokens")}>
+                {nested ? "\u2013" : num().format(c.tokens)}
+              </span>
+              {hasNested && (
+                <span className={cell("avg")}>
+                  {nested ? num().format(c.tokens) : "\u2013"}
+                </span>
+              )}
               <span className={cell("ms")}>{callDuration(c.ms)}</span>
               <span className={cell("avg")}>
                 {callDuration(c.ms / c.calls)}
@@ -2090,10 +2110,10 @@ function ToolCosts({ turns }: { turns: StatsTurn[] }) {
           { pct: measured },
         )}
       </p>
-      {rows.some((row) => row.nested) && (
+      {hasNested && (
         <p className="mt-1 text-meta text-neutral-500">
           {t(
-            "Indented rows are actual calls inside codemode, not extra wrapper costs. Their tokens estimate arguments only; their time is recorded nested duration (parallel calls can overlap).",
+            "Codemode wrapper tokens include the script and returned output. Nested results are not saved, so their total tokens are unknown (–); Arg tokens estimates only their saved arguments, not a breakdown of the wrapper total. Nested rows are sorted by argument tokens in Tokens mode. Their recorded times can overlap when calls run in parallel.",
           )}
         </p>
       )}
