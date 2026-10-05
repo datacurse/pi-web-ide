@@ -327,14 +327,24 @@ export default function App() {
       writeNotify(false);
       return;
     }
-    if (typeof Notification === "undefined") return;
-    const permission =
-      Notification.permission === "default"
-        ? await Notification.requestPermission()
-        : Notification.permission;
-    const granted = permission === "granted";
-    setNotify(granted);
-    writeNotify(granted);
+    if (typeof Notification === "undefined" || !window.isSecureContext) {
+      setNotify(false);
+      writeNotify(false);
+      throw new Error(
+        t("Notifications require HTTPS or localhost and a supported browser."),
+      );
+    }
+    let granted = false;
+    try {
+      const permission =
+        Notification.permission === "default"
+          ? await Notification.requestPermission()
+          : Notification.permission;
+      granted = permission === "granted";
+    } finally {
+      setNotify(granted);
+      writeNotify(granted);
+    }
   }, []);
 
   /**
@@ -635,11 +645,15 @@ export default function App() {
     if (document.visibilityState === "visible" && document.hasFocus()) return;
     const info = sessionsRef.current.find((s) => s.path === file);
     const title = info?.name || info?.firstMessage || "pwi";
-    const n = new Notification(title, { body, tag: file ?? "pwi" });
-    n.onclick = () => {
-      window.focus();
-      n.close();
-    };
+    try {
+      const n = new Notification(title, { body, tag: file ?? "pwi" });
+      n.onclick = () => {
+        window.focus();
+        n.close();
+      };
+    } catch (error) {
+      console.warn("Could not send desktop notification", error);
+    }
   }, []);
 
   const [tabs, setTabs] = useState<Tabs>({ project: "", files: [] });
@@ -1882,7 +1896,7 @@ export default function App() {
         askMode={askMode}
         onAskMode={changeAskMode}
         notify={notify}
-        onNotify={(on) => void changeNotify(on)}
+        onNotify={changeNotify}
         latestPrompt={latestPrompt}
         onLatestPrompt={changeLatestPrompt}
         sessionAttachments={sessionAttachments}

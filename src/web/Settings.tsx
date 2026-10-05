@@ -522,7 +522,7 @@ export function Settings({
   askMode: AskMode;
   onAskMode: (mode: AskMode) => void;
   notify: boolean;
-  onNotify: (on: boolean) => void;
+  onNotify: (on: boolean) => Promise<void>;
   latestPrompt: boolean;
   onLatestPrompt: (on: boolean) => void;
   sessionAttachments: boolean;
@@ -537,22 +537,72 @@ export function Settings({
   onScrollbarTone: (value: ScrollbarTone) => void;
   onClose: () => void;
 }) {
-  /*
-   * Permission is read at render rather than stored: the browser owns it,
-   * it can be revoked from the address bar at any time, and a copy in React
-   * state would be the stale one. Both branches disable the control, for
-   * different reasons the hint has to tell apart — "your browser cannot"
-   * and "you told your browser not to" are not the same answer.
-   */
-  const supported = typeof Notification !== "undefined";
-  const notifyBlocked = !supported || Notification.permission === "denied";
+  const supported =
+    typeof Notification !== "undefined" && window.isSecureContext;
+  const readPermission = () => (supported ? Notification.permission : "denied");
+  const [permission, setPermission] = useState(readPermission);
+  const [notificationStatus, setNotificationStatus] = useState("");
+  const [notificationPending, setNotificationPending] = useState(false);
+  useEffect(() => {
+    if (!open) return;
+    const refresh = () => setPermission(readPermission());
+    refresh();
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, [open, supported]);
+  const notifyBlocked = !supported || permission === "denied";
   const notifyHint = !supported
-    ? t("This browser does not support notifications.")
-    : Notification.permission === "denied"
+    ? t("Notifications require HTTPS or localhost and a supported browser.")
+    : permission === "denied"
       ? t("Blocked — allow notifications for this site in your browser.")
-      : t(
-          "Send a desktop notification when the agent finishes while this page is in the background. Includes the first line of the answer.",
+      : permission === "default"
+        ? t("Enable to allow desktop notifications in your browser.")
+        : t(
+            "Send a desktop notification when the agent finishes while this page is in the background. Includes the first line of the answer.",
+          );
+  const changeNotifications = async (on: boolean) => {
+    setNotificationPending(true);
+    setNotificationStatus("");
+    try {
+      await onNotify(on);
+    } catch (error) {
+      setNotificationStatus(
+        error instanceof Error ? error.message : String(error),
+      );
+    } finally {
+      setPermission(readPermission());
+      setNotificationPending(false);
+    }
+  };
+  const testNotification = () => {
+    try {
+      const notification = new Notification("pwi", {
+        body: t("Desktop notifications are working."),
+        tag: "pwi:test",
+      });
+      notification.onclick = () => {
+        window.focus();
+        notification.close();
+      };
+      notification.onerror = () =>
+        setNotificationStatus(
+          t("The browser could not display the notification."),
         );
+      setNotificationStatus(
+        t(
+          "Test notification sent. If it does not appear, check your system notification settings and Do Not Disturb.",
+        ),
+      );
+    } catch (error) {
+      setNotificationStatus(
+        error instanceof Error ? error.message : String(error),
+      );
+    }
+  };
 
   const [category, setCategory] = useState<Category>("appearance");
   const [expandDetails, setExpandDetails] = useState(readSettingsExpanded);
@@ -1151,21 +1201,37 @@ export function Settings({
       label: t("Notify when the agent finishes"),
       text: `alert desktop done ${notifyHint}`,
       node: (
-        <OptionRow disabled={notifyBlocked}>
-          <input
-            type="checkbox"
-            checked={notify}
-            disabled={notifyBlocked}
-            onChange={(e) => onNotify(e.target.checked)}
-            className="size-4 shrink-0 accent-amber-400"
-          />
-          <span className="flex-1">
-            {t("Notify when the agent finishes")}
-            <span className="block text-meta text-neutral-500">
-              {notifyHint}
+        <div className="space-y-2">
+          <OptionRow disabled={notifyBlocked || notificationPending}>
+            <input
+              type="checkbox"
+              checked={notify && permission === "granted"}
+              disabled={notificationPending || notifyBlocked}
+              onChange={(e) => void changeNotifications(e.target.checked)}
+              className="size-4 shrink-0 accent-amber-400"
+            />
+            <span className="flex-1">
+              {t("Notify when the agent finishes")}
+              <span className="block text-meta text-neutral-500">
+                {notifyHint}
+              </span>
             </span>
-          </span>
-        </OptionRow>
+          </OptionRow>
+          <Button
+            size="sm"
+            disabled={
+              !notify || permission !== "granted" || notificationPending
+            }
+            onClick={testNotification}
+          >
+            {t("Send test notification")}
+          </Button>
+          {notificationStatus && (
+            <p role="status" className="text-meta text-neutral-500">
+              {notificationStatus}
+            </p>
+          )}
+        </div>
       ),
     },
     {

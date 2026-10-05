@@ -557,15 +557,18 @@ export function useSession({
             setSnapshot((s) => (s ? { ...s, ask: e.ask } : s));
             if (e.ask) announce(snap.file, askLine(e.ask));
             break;
-          case "idle":
+          case "idle": {
             setBusy(false);
+            const shouldAnnounce = worked;
+            worked = false;
             void (async () => {
               const settled = await refetch();
-              if (worked) announce(snap.file, replyLine(settled));
-              worked = false;
+              if (shouldAnnounce && !superseded() && esRef.current === es)
+                announce(snap.file, replyLine(settled));
             })();
             void refreshSessions();
             break;
+          }
           case "error":
             setBusy(false);
             setCommand((c) => (c ? { ...c, running: false } : c));
