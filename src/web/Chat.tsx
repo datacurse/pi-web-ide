@@ -246,7 +246,9 @@ const HistoryRow = memo(function HistoryRow({
             </>
           )
         )}
-        <RawBlocks blocks={row.blocks} />
+        {!(workDisplay === "timeline" && row.activity?.steps.length) && (
+          <RawBlocks blocks={row.blocks} />
+        )}
         {row.answerAt !== undefined && (
           <AnswerActions
             at={row.answerAt}

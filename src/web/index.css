@@ -991,6 +991,33 @@ input[type="number"]::-webkit-outer-spin-button {
 .flow-trim > :last-child {
   margin-bottom: 0;
 }
+/* Align round markers with the first content line, not a nested Markdown margin. */
+.chat-round {
+  --round-marker-top: calc(var(--prose-size) * 0.8);
+}
+.chat-round:has(.chat-round-content > details:first-child) {
+  --round-marker-top: calc(var(--code-size) * 0.75);
+}
+.chat-round:first-child > .chat-round-line {
+  top: var(--round-marker-top);
+}
+.chat-round:last-child > .chat-round-line {
+  bottom: auto;
+  height: var(--round-marker-top);
+}
+.chat-round-dot {
+  top: var(--round-marker-top);
+}
+.chat-round-content
+  > [data-custom="raw model output"]:first-child
+  > :first-child {
+  margin-top: 0;
+}
+.chat-round-content
+  > [data-custom="raw model output"]:last-child
+  > :last-child {
+  margin-bottom: 0;
+}
 /* Dense work folds use tighter Markdown spacing than the main transcript. */
 .chat-round-work :is(p, ul, ol, blockquote, h1, h2, h3, h4, pre, table) {
   margin-block: 0;

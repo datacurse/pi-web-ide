@@ -297,21 +297,11 @@ function RoundGroup({
   roundRefs?: Map<number, HTMLElement>;
 }) {
   const tools = round.groups.flatMap((group) => group.tools);
-  const wrappers = tools.filter(
+  const calls = tools.filter(
     (tool) =>
-      tool.label === "codemode" &&
-      tools.some((child) => child.id.startsWith(tool.id + "/")),
+      tool.label !== "codemode" ||
+      !tools.some((child) => child.id.startsWith(tool.id + "/")),
   );
-  const calls = tools.filter((tool) => !wrappers.includes(tool));
-  const failed =
-    calls.filter((tool) => tool.isError).length +
-    wrappers.filter(
-      (tool) =>
-        tool.isError &&
-        !calls.some(
-          (child) => child.id.startsWith(tool.id + "/") && child.isError,
-        ),
-    ).length;
   return (
     <div
       ref={(element) => {
@@ -319,39 +309,7 @@ function RoundGroup({
         else roundRefs?.delete(round.id);
       }}
     >
-      <div className="px-2">
-        <ActivitySteps
-          groups={round.groups}
-          now={now}
-          start={round.start}
-          label={t("Round duration")}
-          showBar={false}
-          showPhases={false}
-          leading={
-            <span className="flex items-center gap-1 text-meta text-neutral-500">
-              <Clock size={12} aria-hidden />
-              <span className="tabular-nums">
-                {activityDuration((round.end ?? now) - round.start)}
-              </span>
-            </span>
-          }
-          status={
-            <>
-              {calls.length > 0 && (
-                <span className="text-neutral-500">
-                  {plural(calls.length, "1 tool", "{n} tools")}
-                </span>
-              )}
-              {failed > 0 && (
-                <span className="text-red-400">
-                  {t("{n} failed", { n: failed })}
-                </span>
-              )}
-            </>
-          }
-        />
-      </div>
-      <div className="chat-nested flow-trim flow-root px-2">
+      <div className="chat-round-content chat-nested flow-trim flow-root px-2">
         {renderContent ? (
           renderContent(round, now)
         ) : (
@@ -397,34 +355,41 @@ export function ActivityBreakdown({
 }) {
   return (
     <ol className="mt-1 space-y-0" aria-label={t("Turn timeline")}>
-      {activityRounds(activityGroups(activity)).map((round, index) => (
-        <li
-          key={round.id}
-          className="relative pl-4 last:[&>span:first-child]:border-transparent"
-        >
-          <span
-            aria-hidden
-            className="absolute left-1 top-0 bottom-0 border-l border-neutral-800"
-          />
-          <span
-            aria-hidden
-            className="absolute left-1 top-1 size-2 rounded-full border border-neutral-500 bg-neutral-950"
-          />
-          <RoundGroup
-            round={round}
-            now={now}
-            renderContent={(item, time) => (
-              <>
-                <div className="py-1 text-meta text-neutral-500">
-                  {t("Round {n}", { n: index + 1 })}
-                </div>
-                {renderContent?.(item, time)}
-              </>
-            )}
-            roundRefs={roundRefs}
-          />
-        </li>
-      ))}
+      {activityRounds(activityGroups(activity)).map((round, index) => {
+        const tools = round.groups.flatMap((group) => group.tools);
+        const failed = tools.some((tool) => tool.isError);
+        const completed = round.end !== undefined;
+        const outcome = failed
+          ? t("failed")
+          : completed
+            ? t("Completed")
+            : t("In progress");
+        const timing = `${t("Round {n}", { n: index + 1 })} · ${outcome} · ${activityDuration((round.end ?? now) - round.start)}`;
+        return (
+          <li
+            key={round.id}
+            className="chat-round relative pb-3 pl-4 last:pb-0"
+          >
+            <span
+              aria-hidden
+              className="chat-round-line absolute left-1 top-0 bottom-0 -translate-x-1/2 border-l border-neutral-800"
+            />
+            <span
+              role="img"
+              tabIndex={0}
+              title={timing}
+              aria-label={timing}
+              className={`chat-round-dot absolute left-0 size-2 -translate-y-1/2 rounded-full border ${failed ? "border-red-400 bg-red-400" : completed ? "border-green-400 bg-green-400" : "border-neutral-500 bg-neutral-950"}`}
+            />
+            <RoundGroup
+              round={round}
+              now={now}
+              renderContent={renderContent}
+              roundRefs={roundRefs}
+            />
+          </li>
+        );
+      })}
     </ol>
   );
 }
@@ -476,7 +441,7 @@ export function ActivityHistory({
             type="button"
             disabled={!group}
             onClick={() => group && onSelect(group.id)}
-            title={`${phaseTitle(kind)}${phaseHint(kind) ? ` · ${phaseHint(kind)}` : ""}`}
+            title={`${phaseTitle(kind)} · ${activityDuration(ms ?? 0)}${phaseHint(kind) ? ` · ${phaseHint(kind)}` : ""}`}
             aria-label={`${phaseTitle(kind)} · ${activityDuration(ms ?? 0)}`}
             className={`flex shrink-0 items-center gap-1 text-left disabled:cursor-default ${active ? PHASE_STYLE[kind].text : ms === undefined ? "text-neutral-600" : "text-neutral-500"}`}
           >
@@ -498,6 +463,7 @@ export function ActivityPanel({
   activity,
   renderContent,
   liveContent,
+  collapsedContent,
   controls,
   stickyLeading,
   waitingForInput = false,
@@ -507,6 +473,7 @@ export function ActivityPanel({
   activity: TurnActivity;
   renderContent?: RoundContent;
   liveContent?: ReactNode;
+  collapsedContent?: ReactNode;
   controls?: ReactNode;
   stickyLeading?: ReactNode;
   waitingForInput?: boolean;
@@ -595,7 +562,10 @@ export function ActivityPanel({
               {roundCount}
             </span>
           </span>
-          <span className="flex items-center gap-1">
+          <span
+            className="flex items-center gap-1"
+            title={`${t("Total time")} · ${activityDuration((activity.end ?? now) - activity.start)}`}
+          >
             <span className="flex w-3 shrink-0 justify-center">
               <Clock size={12} aria-hidden />
             </span>
@@ -617,7 +587,10 @@ export function ActivityPanel({
               {roundCount}
             </span>
           </span>
-          <span className="flex items-center gap-1">
+          <span
+            className="flex items-center gap-1"
+            title={`${t("Total time")} · ${activityDuration((activity.end ?? now) - activity.start)}`}
+          >
             <span className="flex w-3 shrink-0 justify-center">
               <Clock size={12} aria-hidden />
             </span>
@@ -650,6 +623,7 @@ export function ActivityPanel({
       {renderContent && breakdown}
       {!renderContent && breakdown}
       {liveContent}
+      {!open && collapsedContent}
       {status}
     </div>
   );

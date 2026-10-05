@@ -9,16 +9,17 @@ import { anchorSources } from "./anchorDiff.js";
 export function TimedWork({ row }: { row: RawRow }) {
   const activity = row.activity;
   if (!activity || !activity.steps.length) return null;
-  const blocks = phaseBlocks(
-    activityGroups(activity),
-    row.workMessages ?? [],
-    row.workPartial,
-  );
+  const groups = activityGroups(activity);
+  const blocks = phaseBlocks(groups, row.workMessages ?? [], row.workPartial);
+  const lastGroup = groups.at(-1);
+  if (lastGroup && row.blocks.length)
+    blocks.get(lastGroup.id)?.push(...row.blocks);
   const sources = anchorSources(row.work ?? []);
   return (
     <ActivityPanel
       activity={activity}
       breakdownAvailable
+      collapsedContent={<RawBlocks blocks={row.blocks} />}
       renderContent={(round) => (
         <RawBlocks
           blocks={round.groups.flatMap((group) => blocks.get(group.id) ?? [])}

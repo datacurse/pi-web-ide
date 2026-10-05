@@ -104,6 +104,11 @@ export function RawBlocks({
               )}
             </details>
           );
+        if (
+          (block.kind === "thinking" || block.kind === "text") &&
+          !block.text.trim()
+        )
+          return null;
         return (
           <div
             key={i}
