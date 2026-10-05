@@ -11,22 +11,28 @@ export function TimedWork({ row }: { row: RawRow }) {
   if (!activity || !activity.steps.length) return null;
   const groups = activityGroups(activity);
   const blocks = phaseBlocks(groups, row.workMessages ?? [], row.workPartial);
-  const lastGroup = groups.at(-1);
-  if (lastGroup && row.blocks.length)
-    blocks.get(lastGroup.id)?.push(...row.blocks);
   const sources = anchorSources(row.work ?? []);
   return (
     <ActivityPanel
       activity={activity}
       breakdownAvailable
-      collapsedContent={<RawBlocks blocks={row.blocks} />}
-      renderContent={(round) => (
-        <RawBlocks
-          blocks={round.groups.flatMap((group) => blocks.get(group.id) ?? [])}
-          toolSources={sources}
-          streaming={!!row.running && round.end === undefined}
-        />
-      )}
+      renderContent={(round) => {
+        const content = round.groups
+          .flatMap((group) => blocks.get(group.id) ?? [])
+          .filter((block) =>
+            block.kind === "thinking" || block.kind === "text"
+              ? !!block.text.trim()
+              : true,
+          );
+        if (!content.length) return null;
+        return (
+          <RawBlocks
+            blocks={content}
+            toolSources={sources}
+            streaming={!!row.running && round.end === undefined}
+          />
+        );
+      }}
     />
   );
 }

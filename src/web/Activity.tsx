@@ -356,6 +356,8 @@ export function ActivityBreakdown({
   return (
     <ol className="mt-1 space-y-0" aria-label={t("Turn timeline")}>
       {activityRounds(activityGroups(activity)).map((round, index) => {
+        const content = renderContent?.(round, now);
+        if (renderContent && content == null) return null;
         const tools = round.groups.flatMap((group) => group.tools);
         const failed = tools.some((tool) => tool.isError);
         const completed = round.end !== undefined;
@@ -384,7 +386,7 @@ export function ActivityBreakdown({
             <RoundGroup
               round={round}
               now={now}
-              renderContent={renderContent}
+              renderContent={renderContent ? () => content : undefined}
               roundRefs={roundRefs}
             />
           </li>
@@ -397,11 +399,9 @@ export function ActivityBreakdown({
 export function ActivityHistory({
   activity,
   now = Date.now(),
-  onSelect,
 }: {
   activity: TurnActivity;
   now?: number;
-  onSelect: (id: number) => void;
 }) {
   const groups = activityGroups(activity);
   const current = [...groups]
@@ -424,7 +424,7 @@ export function ActivityHistory({
     ),
   ];
   return (
-    <div
+    <span
       className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1"
       aria-label={t("Elapsed activity history, not completion progress")}
     >
@@ -436,14 +436,11 @@ export function ActivityHistory({
           groups.find((item) => item.kind === kind);
         const active = !!current && current.id === group?.id;
         return (
-          <button
+          <span
             key={kind}
-            type="button"
-            disabled={!group}
-            onClick={() => group && onSelect(group.id)}
             title={`${phaseTitle(kind)} · ${activityDuration(ms ?? 0)}${phaseHint(kind) ? ` · ${phaseHint(kind)}` : ""}`}
             aria-label={`${phaseTitle(kind)} · ${activityDuration(ms ?? 0)}`}
-            className={`flex shrink-0 items-center gap-1 text-left disabled:cursor-default ${active ? PHASE_STYLE[kind].text : ms === undefined ? "text-neutral-600" : "text-neutral-500"}`}
+            className={`flex shrink-0 items-center gap-1 text-left transition-colors ${active ? PHASE_STYLE[kind].text : `${ms === undefined ? "text-neutral-600" : "text-neutral-500"} group-hover/timing:text-neutral-300 group-focus-visible/timing:text-neutral-300`}`}
           >
             <span className="flex w-3 shrink-0 justify-center">
               <Icon size={12} aria-hidden />
@@ -451,10 +448,10 @@ export function ActivityHistory({
             <span className="tabular-nums">
               {ms === undefined ? "0s" : activityDuration(ms)}
             </span>
-          </button>
+          </span>
         );
       })}
-    </div>
+    </span>
   );
 }
 
@@ -463,7 +460,6 @@ export function ActivityPanel({
   activity,
   renderContent,
   liveContent,
-  collapsedContent,
   controls,
   stickyLeading,
   waitingForInput = false,
@@ -473,7 +469,6 @@ export function ActivityPanel({
   activity: TurnActivity;
   renderContent?: RoundContent;
   liveContent?: ReactNode;
-  collapsedContent?: ReactNode;
   controls?: ReactNode;
   stickyLeading?: ReactNode;
   waitingForInput?: boolean;
@@ -503,18 +498,6 @@ export function ActivityPanel({
       roundRefs={roundRefs.current}
     />
   ) : null;
-  const select = (id: number) => {
-    rememberBreakdownOpen(activity.start, true);
-    setOpenOverride(true);
-    requestAnimationFrame(() => {
-      const round = activityRounds(activityGroups(activity)).find((item) =>
-        item.groups.some((group) => group.id === id),
-      );
-      const detail = round && roundRefs.current.get(round.id);
-      if (!detail) return;
-      detail.scrollIntoView({ block: "nearest", behavior: "smooth" });
-    });
-  };
   const status =
     activity.end === undefined && current && step ? (
       <div className="mt-2 flex items-baseline gap-2 text-body text-neutral-400">
@@ -536,45 +519,21 @@ export function ActivityPanel({
       </div>
     ) : null;
   const summary = (
-    <div className="mt-2 flex flex-wrap items-center gap-2 text-meta text-neutral-500">
+    <>
       {controls}
-      {breakdownAvailable ? (
-        <button
-          type="button"
-          data-custom="inline timing disclosure"
-          className="flex shrink-0 items-center gap-3 hover:text-neutral-300"
-          onClick={() => {
-            const next = !open;
-            rememberBreakdownOpen(activity.start, next);
-            setOpenOverride(next);
-          }}
-          aria-expanded={open}
-          aria-label={t("Toggle breakdown")}
-        >
-          <span className="flex items-center gap-1">
-            <span className="flex w-3 shrink-0 justify-center">
-              <ListNumbers size={12} aria-hidden />
-            </span>
-            <span
-              aria-label={plural(roundCount, "1 round", "{n} rounds")}
-              className="tabular-nums"
-            >
-              {roundCount}
-            </span>
-          </span>
-          <span
-            className="flex items-center gap-1"
-            title={`${t("Total time")} · ${activityDuration((activity.end ?? now) - activity.start)}`}
-          >
-            <span className="flex w-3 shrink-0 justify-center">
-              <Clock size={12} aria-hidden />
-            </span>
-            <span className="tabular-nums">
-              {activityDuration((activity.end ?? now) - activity.start)}
-            </span>
-          </span>
-        </button>
-      ) : (
+      <button
+        type="button"
+        data-custom="inline timing disclosure"
+        className="group/timing mt-2 flex w-full flex-wrap items-center gap-2 text-left text-meta text-neutral-500 transition-colors hover:text-neutral-300 focus-visible:text-neutral-300 disabled:cursor-default"
+        disabled={!breakdownAvailable}
+        onClick={() => {
+          const next = !open;
+          rememberBreakdownOpen(activity.start, next);
+          setOpenOverride(next);
+        }}
+        aria-expanded={breakdownAvailable ? open : undefined}
+        aria-label={t("Toggle breakdown")}
+      >
         <span className="flex shrink-0 items-center gap-3">
           <span className="flex items-center gap-1">
             <span className="flex w-3 shrink-0 justify-center">
@@ -599,16 +558,16 @@ export function ActivityPanel({
             </span>
           </span>
         </span>
-      )}
-      <ActivityHistory activity={activity} now={now} onSelect={select} />
-      {activity.end === undefined && silence >= 3000 && (
-        <span className="shrink-0">
-          {" "}
-          · {t("No new output for")}{" "}
-          <span className="tabular-nums">{activityDuration(silence)}</span>
-        </span>
-      )}
-    </div>
+        <ActivityHistory activity={activity} now={now} />
+        {activity.end === undefined && silence >= 3000 && (
+          <span className="shrink-0">
+            {" "}
+            · {t("No new output for")}{" "}
+            <span className="tabular-nums">{activityDuration(silence)}</span>
+          </span>
+        )}
+      </button>
+    </>
   );
   return (
     <div>
@@ -623,7 +582,6 @@ export function ActivityPanel({
       {renderContent && breakdown}
       {!renderContent && breakdown}
       {liveContent}
-      {!open && collapsedContent}
       {status}
     </div>
   );
