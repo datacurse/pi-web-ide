@@ -318,7 +318,7 @@ export function Chat({
    * working. pi appends no message for one, so this is the only record of
    * it on screen; see useSession.ts for its lifetime.
    */
-  command?: { text: string; running: boolean } | null;
+  command?: { text: string; running: boolean; result?: string } | null;
   onSend: (text: string, images?: PiImage[], askOnly?: boolean) => void;
   onAnswerAsk: (askId: string, answer: AskAnswer) => void;
   onAbort: () => void;
@@ -806,6 +806,7 @@ export function Chat({
                 <CommandRow
                   command={command.text}
                   running={command.running}
+                  result={command.result}
                   first={rows.length === 0}
                 />
               )}

@@ -210,6 +210,7 @@ export function useSession({
   const [command, setCommand] = useState<{
     text: string;
     running: boolean;
+    result?: string;
   } | null>(null);
   const [modelError, setModelError] = useState<string | null>(null);
 
@@ -1108,17 +1109,17 @@ export function useSession({
                   await onUiCommand(name);
                   break;
               }
-              if (result)
-                update((s) => ({
-                  ...s,
-                  notices: addNotice(s.notices, {
-                    level: "info",
-                    text: result,
-                    key: "web-command",
-                  }),
-                }));
+              if (active())
+                setCommand({
+                  text: trimmed,
+                  running: false,
+                  result: result || undefined,
+                });
             } finally {
-              if (active()) setCommand({ text: trimmed, running: false });
+              if (active())
+                setCommand((current) =>
+                  current ? { ...current, running: false } : current,
+                );
             }
             return;
           }

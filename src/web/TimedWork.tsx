@@ -14,35 +14,43 @@ export function TimedWork({ row }: { row: RawRow }) {
   const blocks = phaseBlocks(groups, row.workMessages ?? [], row.workPartial);
   const sources = anchorSources(row.work ?? []);
   return (
-    <ActivityPanel
-      activity={activity}
-      breakdownAvailable
-      renderContent={(round) => {
-        const content = round.groups
-          .flatMap((group) => blocks.get(group.id) ?? [])
-          .filter((block) =>
-            block.kind === "thinking" || block.kind === "text"
-              ? !!block.text.trim()
-              : true,
+    <>
+      <ActivityPanel
+        activity={activity}
+        breakdownAvailable
+        renderContent={(round) => {
+          const content = round.groups
+            .flatMap((group) => blocks.get(group.id) ?? [])
+            .filter((block) =>
+              block.kind === "thinking"
+                ? !!block.text.trim()
+                : block.kind === "tool",
+            );
+          if (!content.length) return null;
+          return (
+            <>
+              {content.map((block, index) =>
+                block.kind === "tool" ? (
+                  <WorkTool key={block.id} tool={block} toolSources={sources} />
+                ) : (
+                  <RawBlocks
+                    key={index}
+                    blocks={[block]}
+                    toolSources={sources}
+                    streaming={!!row.running && round.end === undefined}
+                  />
+                ),
+              )}
+            </>
           );
-        if (!content.length) return null;
-        return (
-          <>
-            {content.map((block, index) =>
-              block.kind === "tool" ? (
-                <WorkTool key={block.id} tool={block} toolSources={sources} />
-              ) : (
-                <RawBlocks
-                  key={index}
-                  blocks={[block]}
-                  toolSources={sources}
-                  streaming={!!row.running && round.end === undefined}
-                />
-              ),
-            )}
-          </>
-        );
-      }}
-    />
+        }}
+      />
+      <RawBlocks
+        blocks={(row.work ?? []).filter(
+          (block) => block.kind === "text" || block.kind === "image",
+        )}
+        streaming={row.running}
+      />
+    </>
   );
 }

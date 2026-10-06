@@ -883,15 +883,33 @@ export function Notices({ notices }: { notices: PiNotice[] }) {
 export function CommandRow({
   command,
   running,
+  result,
   first,
 }: {
   command: string;
   running: boolean;
+  result?: string;
   first: boolean;
 }) {
   const spinner = useSpinner(running);
   return (
-    <UserRow first={first}>
+    <UserRow
+      first={first}
+      below={
+        result ? (
+          <div className="chat-measure mt-3 flex items-start gap-2 text-body text-neutral-300">
+            <Check
+              size={16}
+              className="mt-0.5 shrink-0 text-green-400"
+              aria-hidden
+            />
+            <div className="whitespace-pre-wrap break-words">
+              <NoticeText text={result} />
+            </div>
+          </div>
+        ) : undefined
+      }
+    >
       <div className="flex items-center gap-2">
         <span className="font-mono text-body">{command}</span>
         {running && (
