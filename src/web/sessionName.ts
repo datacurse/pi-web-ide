@@ -1,23 +1,34 @@
-import type { PiMessage, PiSessionInfo } from "../shared/types.js";
+import type { PiImage, PiMessage, PiSessionInfo } from "../shared/types.js";
 import { sessionPreview } from "../shared/sessionPreview.js";
 import { t } from "./i18n.js";
 
+/** Browser-only previews; never wait for the session file to catch up to Send. */
+export interface LiveSessionImages {
+  firstImages?: PiImage[];
+  lastImages?: PiImage[];
+}
+
 export function sessionPrompts(
   messages: PiMessage[],
-): Partial<
-  Pick<
-    PiSessionInfo,
-    "firstMessage" | "lastPrompt" | "firstAttachments" | "lastAttachments"
-  >
-> {
+): LiveSessionImages &
+  Partial<
+    Pick<
+      PiSessionInfo,
+      "firstMessage" | "lastPrompt" | "firstAttachments" | "lastAttachments"
+    >
+  > {
   const prompts = messages
     .filter((m) => m.role === "user")
-    .map((m) =>
-      sessionPreview(
-        m.blocks.find((b) => b.kind === "text")?.text ?? "",
-        m.blocks.filter((b) => b.kind === "image").length,
-      ),
-    )
+    .map((m) => {
+      const images = m.blocks.filter((b) => b.kind === "image");
+      return {
+        ...sessionPreview(
+          m.blocks.find((b) => b.kind === "text")?.text ?? "",
+          images.length,
+        ),
+        images,
+      };
+    })
     .filter((preview) => preview.text || preview.attachments.length);
   if (!prompts.length) return {};
   return {
@@ -25,6 +36,8 @@ export function sessionPrompts(
     lastPrompt: prompts[prompts.length - 1].text,
     firstAttachments: prompts[0].attachments,
     lastAttachments: prompts[prompts.length - 1].attachments,
+    firstImages: prompts[0].images,
+    lastImages: prompts[prompts.length - 1].images,
   };
 }
 /**

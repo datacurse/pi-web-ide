@@ -46,6 +46,7 @@ import {
   isTermTab,
   termId,
   termTab,
+  webTab,
   isSessionTab,
   moveTab,
   pinnedFirst,
@@ -1319,6 +1320,13 @@ export default function App() {
     (id: string) => openInLastSide(termTab(id)),
     [openInLastSide],
   );
+  const newWebTab = (side: Side) => {
+    const entry = webTab();
+    if (side === "right" && tabsRef.current.right) selectRight(entry);
+    else if (side === "right") moveToGroup(entry, "right");
+    else selectTab(entry);
+  };
+
   /** A new shell as an editor tab in one column, listed in the dock too. */
   const newTerminalTab = async (side: Side) => {
     try {
@@ -1796,6 +1804,11 @@ export default function App() {
       keys: shortcutKeys("tab.reopen"),
       run: reopenClosedTab,
     },
+    {
+      id: "web.newTab",
+      label: t("New Web Tab"),
+      run: () => newWebTab(lastUsedSide()),
+    },
     ...(project
       ? [
           {
@@ -2181,6 +2194,7 @@ export default function App() {
             onNewTerminal={
               project ? () => void newTerminalTab("left") : undefined
             }
+            onNewWeb={() => newWebTab("left")}
             onReorder={reorderTabs}
             onMove={moveToGroup}
             onFocus={() => {
@@ -2219,6 +2233,7 @@ export default function App() {
               onNewTerminal={
                 project ? () => void newTerminalTab("right") : undefined
               }
+              onNewWeb={() => newWebTab("right")}
               onReorder={reorderRight}
               onMove={moveToGroup}
               onFocus={() => {

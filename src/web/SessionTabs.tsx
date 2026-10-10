@@ -4,6 +4,7 @@ import {
   ChatText,
   Crosshair,
   GitDiff,
+  Globe,
   Path,
   PencilSimple,
   Plus,
@@ -25,6 +26,8 @@ import {
   isDiffTab,
   isSessionTab,
   isTermTab,
+  isWebTab,
+  isFileTab,
   tabLabel,
   tabPath,
 } from "./tabs.js";
@@ -151,7 +154,7 @@ export function SessionTabs({
    */
   onToggleList?: () => void;
   /** Open a new session in this column. */
-  onNew?: () => void;
+  onNew?: React.MouseEventHandler<HTMLButtonElement>;
   /**
    * Take a tab dropped from the OTHER column. Absent means this strip does
    * not accept them, which is the single-column case.
@@ -408,7 +411,8 @@ export function SessionTabs({
           const isDiff = isDiffTab(file);
           const isTerm = isTermTab(file);
           /** An editable file: not a diff or a terminal. */
-          const isEdit = isFile && !isDiff && !isTerm;
+          const isEdit = isFileTab(file);
+          const isWeb = isWebTab(file);
           const info = isFile ? undefined : byFile.get(file);
           const state = isFile ? null : (attention.get(file) ?? null);
           const label = isFile
@@ -606,6 +610,9 @@ export function SessionTabs({
                         className="shrink-0 text-neutral-400"
                       />
                     )}
+                    {isWeb && (
+                      <Globe size={13} className="shrink-0 text-neutral-400" />
+                    )}
                     <span
                       className={`fade-end ${isEdit || isDiff ? "font-mono" : ""}`}
                     >
@@ -700,7 +707,7 @@ export function SessionTabs({
       )}
 
       {onNew && (
-        <StripCell onClick={onNew} label={t("New session")} className="-mr-1">
+        <StripCell onClick={onNew} label={t("New tab")} className="-mr-1">
           <Plus size={16} />
         </StripCell>
       )}
@@ -712,8 +719,9 @@ export function SessionTabs({
           const isFile = !isSessionTab(file);
           const isDiff = isDiffTab(file);
           /** Diffs and terminals: nothing to offer but closing. */
-          const closeOnly = menu.closeOnly || isDiff || isTermTab(file);
-          const isEdit = isFile && !isDiff && !isTermTab(file);
+          const closeOnly =
+            menu.closeOnly || isDiff || isTermTab(file) || isWebTab(file);
+          const isEdit = isFileTab(file);
           const info = isFile ? undefined : byFile.get(file);
           const label = isFile
             ? tabLabel(file)

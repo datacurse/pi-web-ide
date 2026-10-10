@@ -22,6 +22,12 @@ const FILE_PREFIX = "file:";
 const DIFF_PREFIX = "diff:";
 const PAGE_PREFIX = "page:";
 const TERM_PREFIX = "term:";
+const WEB_PREFIX = "web:";
+// randomUUID requires HTTPS; the IDE also runs on plain HTTP over a tailnet.
+export const webTab = (): string =>
+  `${WEB_PREFIX}${crypto.randomUUID?.() ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`}`;
+export const isWebTab = (entry: string): boolean =>
+  entry.startsWith(WEB_PREFIX);
 
 /** A server shell shown as an editor tab instead of in the dock. */
 export const termTab = (id: string): string => `${TERM_PREFIX}${id}`;
@@ -74,7 +80,8 @@ export const isSessionTab = (entry: string): boolean =>
   !isFileTab(entry) &&
   !isDiffTab(entry) &&
   !isPageTab(entry) &&
-  !isTermTab(entry);
+  !isTermTab(entry) &&
+  !isWebTab(entry);
 
 /** The absolute path inside a file or diff entry. Meaningless for a session. */
 export const tabPath = (entry: string): string =>
@@ -89,6 +96,7 @@ export const tabPath = (entry: string): string =>
  */
 export const tabLabel = (entry: string): string => {
   if (isTermTab(entry)) return t("Terminal");
+  if (isWebTab(entry)) return t("Web");
   const path = tabPath(entry);
   const name = path.split("/").pop() || path;
   if (!isDiffTab(entry)) return name;

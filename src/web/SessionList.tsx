@@ -18,7 +18,11 @@ import {
   writeHiddenSessions,
   type SessionSort,
 } from "./prefs.js";
-import { sessionLabel, shortName } from "./sessionName.js";
+import {
+  sessionLabel,
+  shortName,
+  type LiveSessionImages,
+} from "./sessionName.js";
 import { ATTENTION_UI, attentionRank, type Attention } from "./attention.js";
 import { highlight, useSessionSearch } from "./searchHits.js";
 import {
@@ -98,7 +102,7 @@ export function SessionList({
   project,
   width,
 }: {
-  sessions: PiSessionInfo[];
+  sessions: (PiSessionInfo & LiveSessionImages)[];
   /** Each session's working / ready / needs state, keyed by file. */
   attention: Map<string, Attention>;
   /** Why the listing failed, when it did; shown instead of "No sessions yet". */
@@ -183,7 +187,7 @@ export function SessionList({
     writeHiddenSessions(next);
     if (!sessions.some((s) => next.includes(s.path))) setShowHidden(false);
   };
-  const rows = (
+  const rows: typeof sessions = (
     searching
       ? hits.map(
           (h) => sessions.find((s) => s.path === h.session.path) ?? h.session,
@@ -363,6 +367,9 @@ export function SessionList({
               (latestPrompt
                 ? (s.lastAttachments ?? s.firstAttachments)
                 : s.firstAttachments) ?? [];
+            const images = latestPrompt
+              ? (s.lastImages ?? s.firstImages)
+              : s.firstImages;
             const state = attention.get(s.path) ?? null;
             const isHidden = hidden.includes(s.path);
 
@@ -460,13 +467,17 @@ export function SessionList({
                       attachment.kind === "image" ? (
                         <img
                           key={i}
-                          src={`/api/sessions/image?${new URLSearchParams({
-                            cwd: project,
-                            file: s.path,
-                            latest: latestPrompt ? "1" : "0",
-                            index: String(attachment.index),
-                            version: s.lastAsked ?? s.lastActive,
-                          })}`}
+                          src={
+                            images?.[attachment.index - 1]
+                              ? `data:${images[attachment.index - 1].mimeType};base64,${images[attachment.index - 1].data}`
+                              : `/api/sessions/image?${new URLSearchParams({
+                                  cwd: project,
+                                  file: s.path,
+                                  latest: latestPrompt ? "1" : "0",
+                                  index: String(attachment.index),
+                                  version: s.lastAsked ?? s.lastActive,
+                                })}`
+                          }
                           alt={t("Image {n}", { n: attachment.index })}
                           loading="lazy"
                           className="size-14 rounded-md border border-neutral-700 object-cover"

@@ -17,6 +17,14 @@ export function TimedWork({ row }: { row: RawRow }) {
     <>
       <ActivityPanel
         activity={activity}
+        liveContent={
+          <RawBlocks
+            blocks={(row.work ?? []).filter(
+              (block) => block.kind === "text" || block.kind === "image",
+            )}
+            streaming={row.running}
+          />
+        }
         breakdownAvailable
         renderContent={(round) => {
           const content = round.groups
@@ -44,12 +52,6 @@ export function TimedWork({ row }: { row: RawRow }) {
             </>
           );
         }}
-      />
-      <RawBlocks
-        blocks={(row.work ?? []).filter(
-          (block) => block.kind === "text" || block.kind === "image",
-        )}
-        streaming={row.running}
       />
     </>
   );

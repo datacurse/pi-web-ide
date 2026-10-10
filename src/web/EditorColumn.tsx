@@ -2,6 +2,7 @@ import { useState } from "react";
 import {
   Brain,
   ChatText,
+  Globe,
   Plus,
   TerminalWindow,
   Wrench,
@@ -11,6 +12,7 @@ import { chatMarkdown, type ChatExport } from "./chatExport.js";
 import type { Hunk } from "../shared/hunks.js";
 import { SessionTabs, tabDomId } from "./SessionTabs.js";
 import { Terminal } from "./Terminal.js";
+import { WebPage } from "./WebPage.js";
 import { DiffView } from "./DiffView.js";
 import { FileEditor } from "./FileEditor.js";
 import type { FileLocation } from "./fileNavigation.js";
@@ -19,6 +21,7 @@ import {
   isDiffTab,
   isFileTab,
   isTermTab,
+  isWebTab,
   termId,
   tabPath,
 } from "./tabs.js";
@@ -69,6 +72,7 @@ export function EditorColumn({
   onAutoName,
   onNewSession,
   onNewTerminal,
+  onNewWeb,
 }: {
   side: Side;
   group: TabGroup;
@@ -108,6 +112,7 @@ export function EditorColumn({
   onNewSession: () => void;
   /** Absent without a project: a shell has to start somewhere. */
   onNewTerminal?: () => void;
+  onNewWeb: () => void;
 }) {
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const active = group.active;
@@ -116,7 +121,8 @@ export function EditorColumn({
   const showsDiff = active !== undefined && isDiffTab(active);
   const showsTerm = active !== undefined && isTermTab(active);
   /** The chat hides under a file, a diff or a terminal. */
-  const showsDoc = showsFile || showsDiff || showsTerm;
+  const showsWeb = active !== undefined && isWebTab(active);
+  const showsDoc = showsFile || showsDiff || showsTerm || showsWeb;
   const canCopy = !!chat && !!messages?.length;
   const copy = (level: ChatExport) => {
     setMenu(null);
@@ -155,7 +161,10 @@ export function EditorColumn({
         onSelect={onSelect}
         onClose={onClose}
         onToggleList={onToggleList}
-        onNew={onNewSession}
+        onNew={(e) => {
+          const box = e.currentTarget.getBoundingClientRect();
+          setMenu({ x: box.left, y: box.bottom });
+        }}
         latestPrompt={latestPrompt}
         pinned={pinned}
         focused={focused}
@@ -238,6 +247,14 @@ export function EditorColumn({
           {/* Mounted only while showing, like the dock: the server replays the
 					    scrollback on attach, and a hidden xterm cannot measure itself. */}
           {showsTerm && <Terminal key={active} id={termId(active)} focused />}
+          {group.files.filter(isWebTab).map((entry) => (
+            <div
+              key={entry}
+              className={`min-h-0 flex-1 flex-col ${entry === active ? "flex" : "hidden"}`}
+            >
+              <WebPage entry={entry} active={entry === active} />
+            </div>
+          ))}
           {/*
            * The chat stays MOUNTED under a file tab rather than being swapped
            * out: it holds the live EventSource and the transcript's scroll
@@ -288,6 +305,16 @@ export function EditorColumn({
             }}
           >
             {t("New Terminal Tab")}
+          </MenuItem>
+          <MenuItem
+            icon={<Globe size={16} />}
+            role="menuitem"
+            onClick={() => {
+              setMenu(null);
+              onNewWeb();
+            }}
+          >
+            {t("New Web Tab")}
           </MenuItem>
           {canCopy && (
             <>
