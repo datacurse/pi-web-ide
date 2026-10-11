@@ -345,10 +345,6 @@ export function Chat({
   /** Bumped when a session is selected: focus the composer once it shows. */
   focus?: { entry: string; n: number };
 }) {
-  const partial = useSyncExternalStore(
-    partialStore.subscribe,
-    partialStore.getSnapshot,
-  );
   const [text, setText] = useState("");
   const pasted = useMemo(() => splitPastedText(text), [text]);
   // In "toggle" mode sticky until switched off or the session changes; "once" clears it on send.
@@ -365,12 +361,9 @@ export function Chat({
   const [contextOpen, setContextOpen] = useState(false);
   const closeContext = useCallback(() => setContextOpen(false), []);
   const viewport = useRef<HTMLDivElement>(null);
-  const content = useRef<HTMLDivElement>(null);
-  const [scrollParent, setScrollParent] = useState<HTMLDivElement | null>(null);
-  const attachViewport = useCallback((element: HTMLDivElement | null) => {
-    viewport.current = element;
-    setScrollParent(element);
-  }, []);
+  const [expandedWork, setExpandedWork] = useState<Set<string>>(
+    () => new Set(),
+  );
   const fileInput = useRef<HTMLInputElement>(null);
   /**
    * The staged images, readable synchronously. A paste is async (the blob has
@@ -393,23 +386,6 @@ export function Chat({
    * re-render per scroll event would cost more than the button is worth.
    */
   const [atBottom, setAtBottom] = useState(true);
-  const scrollFrame = useRef<number | undefined>(undefined);
-  const followStream = useCallback(() => {
-    if (!pinned.current || scrollFrame.current !== undefined) return;
-    scrollFrame.current = requestAnimationFrame(() => {
-      scrollFrame.current = undefined;
-      const el = viewport.current;
-      if (el && pinned.current) el.scrollTop = el.scrollHeight;
-    });
-  }, []);
-  useEffect(
-    () => () => {
-      if (scrollFrame.current !== undefined)
-        cancelAnimationFrame(scrollFrame.current);
-      scrollFrame.current = undefined;
-    },
-    [],
-  );
   const toBottom = () => {
     const el = viewport.current;
     if (!el) return;
@@ -514,100 +490,15 @@ export function Chat({
     if (completing) onCommandMenu();
   }, [completing, onCommandMenu]);
 
-  /*
-   * Follow the stream only while the reader is already AT the bottom.
-   *
-   * Scrolling up is how you read back through a run that is still going, and
-   * yanking the view down on every delta made that impossible: the transcript
-   * grows several times a second, so every attempt to inspect an earlier tool
-   * call was undone before it could be read. Being parked at the bottom is
-   * the only state in which "keep me at the bottom" is what the reader asked
-   * for.
-   *
-   * Tracked from the scroll event rather than measured here, because by the
-   * time this effect runs the new content has already grown the scroll height
-   * and the reader is no longer at the bottom by definition. The last scroll
-   * the USER made is the intent worth reading.
-   *
-   * The jump is instant, and that is what keeps the flag honest. A scroll
-   * event cannot say who caused it, so a SMOOTH follow un-pins itself: text
-   * arrives faster than the animation travels, the handler sees a gap well
-   * short of the bottom, reads it as the reader scrolling away, and following
-   * stops mid-stream. Landing exactly at the bottom means the event our own
-   * scroll produces re-states "still pinned" instead of contradicting it.
-   */
-  useEffect(() => {
-    // A different session opens at its latest turn, and resets the intent:
-    // the previous one may well have been left scrolled up.
-    pinned.current = true;
-    followStream();
-  }, [snapshot?.id, followStream]);
-
-  useEffect(() => {
-    followStream();
-  }, [snapshot?.messages.length, partial, followStream]);
-
-  useEffect(() => {
-    const el = viewport.current;
-    const body = content.current;
-    if (!el || !body) return;
-    const resize = new ResizeObserver(followStream);
-    resize.observe(body);
-    return () => resize.disconnect();
-  }, [snapshot?.id, scrollParent, followStream]);
-
-  /**
-   * A call settles into the transcript with the message that made it, then
-   * shows up in `partial.tools` once it starts running. Rendering both drew
-   * the call twice and bumped the fold's count by one until its result
-   * settled. So a live call's output goes onto its settled row, and only
-   * calls not yet in the transcript stay in the partial.
-   */
-  const { messages, liveTools } = useMemo(() => {
-    const settled = snapshot?.messages ?? [];
-    if (partial.tools.length === 0)
-      return { messages: settled, liveTools: partial.tools };
-    return mergeLiveTools(settled, partial.tools);
-  }, [snapshot?.messages, partial.tools]);
-
-  const workDisplay = useSyncExternalStore(
-    subscribeWorkDisplay,
-    readWorkDisplay,
-  );
-  const [expandedWork, setExpandedWork] = useState<Set<string>>(
-    () => new Set(),
-  );
-  // Session actions can change with a snapshot; row event handlers keep
-  // their identity while still invoking the latest action.
-  const rowActions = useRef({ onEdit, onFork });
-  rowActions.current = { onEdit, onFork };
-  const editRow = useCallback(
-    (at: number, text: string, images: PiImage[]) =>
-      rowActions.current.onEdit(at, text, images),
-    [],
-  );
-  const forkRow = useCallback(
-    (at: number) => rowActions.current.onFork(at),
-    [],
-  );
-  const buildRows = useMemo(() => createRawRows(), [snapshot?.id]);
-  const toggleWork = useCallback((key: string) => {
-    setExpandedWork((previous) => {
-      const next = new Set(previous);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-  }, []);
-  const rows = useMemo(
-    () =>
-      buildRows(
-        messages,
-        { ...partial, tools: liveTools },
-        busy,
-        snapshot?.activity,
-      ),
-    [buildRows, messages, partial, liveTools, busy, snapshot?.activity],
+  const zoomImage = useCallback(
+    (src: string) => {
+      setZoomed(
+        Object.entries(imageWorkspaces).find(
+          ([, workspace]) => workspace.exportedSrc === src,
+        )?.[0] ?? src,
+      );
+    },
+    [imageWorkspaces],
   );
 
   if (!snapshot) {
@@ -729,10 +620,6 @@ export function Chat({
     setAttachError(null);
   };
 
-  const hasPartial = Boolean(
-    partial.text || partial.thinking || liveTools.length,
-  );
-
   return (
     /*
      * `min-h-0` twice, and it is load-bearing: a flex item defaults to
@@ -741,132 +628,26 @@ export function Chat({
      * `overflow-y-auto` never has anything to scroll, and the DOCUMENT
      * scrolls instead — taking the session list and the composer with it.
      */
-    <ZoomContext.Provider
-      value={(src) =>
-        setZoomed(
-          Object.entries(imageWorkspaces).find(
-            ([, workspace]) => workspace.exportedSrc === src,
-          )?.[0] ?? src,
-        )
-      }
-    >
+    <ZoomContext.Provider value={zoomImage}>
       <main className="flex min-h-0 flex-1 flex-col">
         {/* The rows own their top spacing; the last one needs a floor under
 			    it, and the scroll container is the only thing that knows which
 			    row that is. */}
-        <div className="relative flex min-h-0 flex-1 flex-col">
-          <div
-            ref={attachViewport}
-            onClickCapture={(e) => {
-              if (
-                e.target instanceof Element &&
-                e.target.closest('[data-custom="inline timing disclosure"]')
-              ) {
-                pinned.current = false;
-                setAtBottom(false);
-              }
-            }}
-            onScroll={(e) => {
-              const el = e.currentTarget;
-              const bottom =
-                el.scrollHeight - el.scrollTop - el.clientHeight <=
-                PINNED_SLACK_PX;
-              pinned.current = bottom;
-              // Only on a CHANGE: the setter is called for every scroll event
-              // otherwise, which React would coalesce but still has to diff.
-              setAtBottom((was) => (was === bottom ? was : bottom));
-            }}
-            style={{ overflowAnchor: "none" }}
-            className="no-scrollbar fade-bottom min-h-0 flex-1 overflow-y-auto pb-[max(3rem,var(--chat-scroll-past,0px))]"
-          >
-            {snapshot.messages.length === 0 &&
-              !hasPartial &&
-              !busy &&
-              !command && (
-                <div className="flex h-full flex-col items-center justify-center gap-2 text-center select-none">
-                  <PiMark className="text-display size-[1em] text-amber-400" />
-                  <div className="text-title text-neutral-200">
-                    {t("New session")}
-                  </div>
-                  <div className="text-ui text-neutral-500">
-                    {t("in")}{" "}
-                    <span className="font-mono text-neutral-400">
-                      {snapshot.cwd.split(/[\\/]/).filter(Boolean).at(-1) ??
-                        snapshot.cwd}
-                    </span>
-                    {" · "}
-                    {t("type")}{" "}
-                    <kbd className="font-mono text-neutral-400">/</kbd>{" "}
-                    {t("for commands")}
-                  </div>
-                </div>
-              )}
-            <div ref={content}>
-              {scrollParent && rows.length > 0 && (
-                <Virtuoso
-                  key={snapshot.id}
-                  customScrollParent={scrollParent}
-                  data={rows}
-                  initialTopMostItemIndex={rows.length - 1}
-                  increaseViewportBy={200}
-                  computeItemKey={(i, row) => `${row.role}:${row.at}:${i}`}
-                  itemContent={(i, row) => {
-                    const key = `${snapshot.id}:${row.role}:${row.at}`;
-                    return (
-                      <div className="flow-root">
-                        <HistoryRow
-                          row={row}
-                          rowKey={key}
-                          first={i === 0}
-                          userMode={userMode}
-                          workDisplay={workDisplay}
-                          onEdit={busy ? undefined : editRow}
-                          onFork={forkRow}
-                          expanded={expandedWork.has(key)}
-                          onToggle={toggleWork}
-                        />
-                      </div>
-                    );
-                  }}
-                />
-              )}
-
-              {/* Below the transcript: a local command answers after the last
-				    message, and before the next prompt clears it. */}
-              {command && (
-                <CommandRow
-                  command={command.text}
-                  running={command.running}
-                  result={command.result}
-                  first={rows.length === 0}
-                />
-              )}
-
-              <Notices notices={snapshot.notices} />
-
-              {/* Last, under the work that led to it: the agent is stopped here
-				    until this is answered. Keyed so a second question does not
-				    inherit the first one's typed draft. */}
-              {snapshot.ask && (
-                <AskPanel
-                  key={snapshot.ask.id}
-                  ask={snapshot.ask}
-                  onAnswer={onAnswerAsk}
-                />
-              )}
-
-              {/* Errors are visible in the chat, never only in stderr. */}
-              {snapshot.error && (
-                <div className="chat-gutter my-3">
-                  <div className="chat-measure rounded-sm border border-red-900 bg-red-950/40 px-3 py-2 text-body text-red-300">
-                    <NoticeText text={snapshot.error} />
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-          <OverlayScrollbar target={viewport} />
-        </div>
+        <ChatTranscript
+          snapshot={snapshot}
+          partialStore={partialStore}
+          busy={busy}
+          userMode={userMode}
+          command={command}
+          onEdit={onEdit}
+          onFork={onFork}
+          onAnswerAsk={onAnswerAsk}
+          viewport={viewport}
+          pinned={pinned}
+          setAtBottom={setAtBottom}
+          expandedWork={expandedWork}
+          setExpandedWork={setExpandedWork}
+        />
 
         {/*
          * Git sits in the READING column, not the wide track, and no rule
@@ -1281,3 +1062,270 @@ export function Chat({
     </ZoomContext.Provider>
   );
 }
+
+/** Owns streamed state: tokens never rerender the composer or its controls. */
+const ChatTranscript = memo(function ChatTranscript({
+  snapshot,
+  partialStore,
+  busy,
+  userMode,
+  command,
+  onEdit,
+  onFork,
+  onAnswerAsk,
+  viewport,
+  pinned,
+  setAtBottom,
+  expandedWork,
+  setExpandedWork,
+}: {
+  snapshot: Snapshot;
+  partialStore: PartialStore;
+  busy: boolean;
+  userMode: UserMode;
+  command?: { text: string; running: boolean; result?: string } | null;
+  onEdit: (at: number, text: string, images: PiImage[]) => void;
+  onFork: (at: number) => Promise<void>;
+  onAnswerAsk: (askId: string, answer: AskAnswer) => void;
+  viewport: React.RefObject<HTMLDivElement | null>;
+  pinned: React.RefObject<boolean>;
+  setAtBottom: React.Dispatch<React.SetStateAction<boolean>>;
+  expandedWork: Set<string>;
+  setExpandedWork: React.Dispatch<React.SetStateAction<Set<string>>>;
+}) {
+  const partial = useSyncExternalStore(
+    partialStore.subscribe,
+    partialStore.getSnapshot,
+  );
+  const content = useRef<HTMLDivElement>(null);
+  const [scrollParent, setScrollParent] = useState<HTMLDivElement | null>(null);
+  const attachViewport = useCallback((element: HTMLDivElement | null) => {
+    viewport.current = element;
+    setScrollParent(element);
+  }, []);
+  const scrollFrame = useRef<number | undefined>(undefined);
+  const followStream = useCallback(() => {
+    if (!pinned.current || scrollFrame.current !== undefined) return;
+    scrollFrame.current = requestAnimationFrame(() => {
+      scrollFrame.current = undefined;
+      const el = viewport.current;
+      if (el && pinned.current) el.scrollTop = el.scrollHeight;
+    });
+  }, []);
+  useEffect(
+    () => () => {
+      if (scrollFrame.current !== undefined)
+        cancelAnimationFrame(scrollFrame.current);
+      scrollFrame.current = undefined;
+    },
+    [],
+  );
+  /*
+   * Follow the stream only while the reader is already AT the bottom.
+   *
+   * Scrolling up is how you read back through a run that is still going, and
+   * yanking the view down on every delta made that impossible: the transcript
+   * grows several times a second, so every attempt to inspect an earlier tool
+   * call was undone before it could be read. Being parked at the bottom is
+   * the only state in which "keep me at the bottom" is what the reader asked
+   * for.
+   *
+   * Tracked from the scroll event rather than measured here, because by the
+   * time this effect runs the new content has already grown the scroll height
+   * and the reader is no longer at the bottom by definition. The last scroll
+   * the USER made is the intent worth reading.
+   *
+   * The jump is instant, and that is what keeps the flag honest. A scroll
+   * event cannot say who caused it, so a SMOOTH follow un-pins itself: text
+   * arrives faster than the animation travels, the handler sees a gap well
+   * short of the bottom, reads it as the reader scrolling away, and following
+   * stops mid-stream. Landing exactly at the bottom means the event our own
+   * scroll produces re-states "still pinned" instead of contradicting it.
+   */
+  useEffect(() => {
+    // A different session opens at its latest turn, and resets the intent:
+    // the previous one may well have been left scrolled up.
+    pinned.current = true;
+    followStream();
+  }, [snapshot?.id, followStream]);
+
+  useEffect(() => {
+    followStream();
+  }, [snapshot?.messages.length, partial, followStream]);
+
+  useEffect(() => {
+    const el = viewport.current;
+    const body = content.current;
+    if (!el || !body) return;
+    const resize = new ResizeObserver(followStream);
+    resize.observe(body);
+    return () => resize.disconnect();
+  }, [snapshot?.id, scrollParent, followStream]);
+
+  /**
+   * A call settles into the transcript with the message that made it, then
+   * shows up in `partial.tools` once it starts running. Rendering both drew
+   * the call twice and bumped the fold's count by one until its result
+   * settled. So a live call's output goes onto its settled row, and only
+   * calls not yet in the transcript stay in the partial.
+   */
+  const { messages, liveTools } = useMemo(() => {
+    const settled = snapshot?.messages ?? [];
+    if (partial.tools.length === 0)
+      return { messages: settled, liveTools: partial.tools };
+    return mergeLiveTools(settled, partial.tools);
+  }, [snapshot?.messages, partial.tools]);
+
+  const workDisplay = useSyncExternalStore(
+    subscribeWorkDisplay,
+    readWorkDisplay,
+  );
+  // Session actions can change with a snapshot; row event handlers keep
+  // their identity while still invoking the latest action.
+  const rowActions = useRef({ onEdit, onFork });
+  rowActions.current = { onEdit, onFork };
+  const editRow = useCallback(
+    (at: number, text: string, images: PiImage[]) =>
+      rowActions.current.onEdit(at, text, images),
+    [],
+  );
+  const forkRow = useCallback(
+    (at: number) => rowActions.current.onFork(at),
+    [],
+  );
+  const buildRows = useMemo(() => createRawRows(), [snapshot?.id]);
+  const toggleWork = useCallback(
+    (key: string) => {
+      setExpandedWork((previous) => {
+        const next = new Set(previous);
+        if (next.has(key)) next.delete(key);
+        else next.add(key);
+        return next;
+      });
+    },
+    [setExpandedWork],
+  );
+  const rows = useMemo(
+    () =>
+      buildRows(
+        messages,
+        { ...partial, tools: liveTools },
+        busy,
+        snapshot?.activity,
+      ),
+    [buildRows, messages, partial, liveTools, busy, snapshot?.activity],
+  );
+  const hasPartial = Boolean(
+    partial.text || partial.thinking || liveTools.length,
+  );
+  return (
+    <div className="relative flex min-h-0 flex-1 flex-col">
+      <div
+        ref={attachViewport}
+        onClickCapture={(e) => {
+          if (
+            e.target instanceof Element &&
+            e.target.closest('[data-custom="inline timing disclosure"]')
+          ) {
+            pinned.current = false;
+            setAtBottom(false);
+          }
+        }}
+        onScroll={(e) => {
+          const el = e.currentTarget;
+          const bottom =
+            el.scrollHeight - el.scrollTop - el.clientHeight <= PINNED_SLACK_PX;
+          pinned.current = bottom;
+          // Only on a CHANGE: the setter is called for every scroll event
+          // otherwise, which React would coalesce but still has to diff.
+          setAtBottom((was) => (was === bottom ? was : bottom));
+        }}
+        style={{ overflowAnchor: "none" }}
+        className="no-scrollbar fade-bottom min-h-0 flex-1 overflow-y-auto pb-[max(3rem,var(--chat-scroll-past,0px))]"
+      >
+        {snapshot.messages.length === 0 && !hasPartial && !busy && !command && (
+          <div className="flex h-full flex-col items-center justify-center gap-2 text-center select-none">
+            <PiMark className="text-display size-[1em] text-amber-400" />
+            <div className="text-title text-neutral-200">
+              {t("New session")}
+            </div>
+            <div className="text-ui text-neutral-500">
+              {t("in")}{" "}
+              <span className="font-mono text-neutral-400">
+                {snapshot.cwd.split(/[\\/]/).filter(Boolean).at(-1) ??
+                  snapshot.cwd}
+              </span>
+              {" · "}
+              {t("type")} <kbd className="font-mono text-neutral-400">/</kbd>{" "}
+              {t("for commands")}
+            </div>
+          </div>
+        )}
+        <div ref={content}>
+          {scrollParent && rows.length > 0 && (
+            <Virtuoso
+              key={snapshot.id}
+              customScrollParent={scrollParent}
+              data={rows}
+              initialTopMostItemIndex={rows.length - 1}
+              increaseViewportBy={200}
+              computeItemKey={(i, row) => `${row.role}:${row.at}:${i}`}
+              itemContent={(i, row) => {
+                const key = `${snapshot.id}:${row.role}:${row.at}`;
+                return (
+                  <div className="flow-root">
+                    <HistoryRow
+                      row={row}
+                      rowKey={key}
+                      first={i === 0}
+                      userMode={userMode}
+                      workDisplay={workDisplay}
+                      onEdit={busy ? undefined : editRow}
+                      onFork={forkRow}
+                      expanded={expandedWork.has(key)}
+                      onToggle={toggleWork}
+                    />
+                  </div>
+                );
+              }}
+            />
+          )}
+
+          {/* Below the transcript: a local command answers after the last
+				    message, and before the next prompt clears it. */}
+          {command && (
+            <CommandRow
+              command={command.text}
+              running={command.running}
+              result={command.result}
+              first={rows.length === 0}
+            />
+          )}
+
+          <Notices notices={snapshot.notices} />
+
+          {/* Last, under the work that led to it: the agent is stopped here
+				    until this is answered. Keyed so a second question does not
+				    inherit the first one's typed draft. */}
+          {snapshot.ask && (
+            <AskPanel
+              key={snapshot.ask.id}
+              ask={snapshot.ask}
+              onAnswer={onAnswerAsk}
+            />
+          )}
+
+          {/* Errors are visible in the chat, never only in stderr. */}
+          {snapshot.error && (
+            <div className="chat-gutter my-3">
+              <div className="chat-measure rounded-sm border border-red-900 bg-red-950/40 px-3 py-2 text-body text-red-300">
+                <NoticeText text={snapshot.error} />
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+      <OverlayScrollbar target={viewport} />
+    </div>
+  );
+});

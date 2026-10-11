@@ -11,7 +11,7 @@ import type {
   PiSessionInfo,
   Snapshot,
 } from "../shared/types.js";
-import { gitChanged } from "./GitActions.js";
+import { scheduleGitChanged } from "./GitActions.js";
 import { groupOf, sideOfTab, withGroup } from "./tabs.js";
 import type { Side } from "./tabs.js";
 import { api, unwrap } from "./api.js";
@@ -642,8 +642,8 @@ export function useSession({
             worked = true;
             break;
           case "tool_end":
-            // Any tool may have touched the tree; re-read the changed-file count now.
-            gitChanged(snap.cwd || project);
+            // Several tools may settle together; refresh the repo once per burst.
+            scheduleGitChanged(snap.cwd || project);
             break;
           case "message_done":
             // Refetch rather than appending: the server already settled this

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { CaretDown, Check, GitBranch, Sparkle } from "@phosphor-icons/react";
 import { readGitAutoName, writeGitAutoName } from "./prefs.js";
 import { Button, MenuItem, inputClass } from "./ui.js";
-import { api } from "./api.js";
+import { api, unwrap } from "./api.js";
 import { t, plural } from "./i18n.js";
 
 /** What `GET /api/git` answers with. See src/server/git.ts. */
@@ -107,8 +107,30 @@ function suggestBranch(): string {
  * SourceControl on the same `cwd` re-reads instead of showing the old count.
  */
 export const GIT_CHANGED = "pwi:git-changed";
-export const gitChanged = (cwd: string) =>
+const pendingChanges = new Map<string, ReturnType<typeof setTimeout>>();
+const versions = new Map<string, number>();
+const invalidateGit = (cwd: string) =>
+  versions.set(cwd, (versions.get(cwd) ?? 0) + 1);
+
+export const gitChanged = (cwd: string) => {
+  clearTimeout(pendingChanges.get(cwd));
+  pendingChanges.delete(cwd);
+  invalidateGit(cwd);
   window.dispatchEvent(new CustomEvent(GIT_CHANGED, { detail: cwd }));
+};
+
+/** Fixed refresh windows: bursts coalesce, but a continuous run never starves. */
+export function scheduleGitChanged(cwd: string) {
+  invalidateGit(cwd);
+  if (pendingChanges.has(cwd)) return;
+  pendingChanges.set(
+    cwd,
+    setTimeout(() => {
+      pendingChanges.delete(cwd);
+      window.dispatchEvent(new CustomEvent(GIT_CHANGED, { detail: cwd }));
+    }, 100),
+  );
+}
 
 /**
  * What is running on each `cwd` right now ("Committing & pushing…"), shared
@@ -133,6 +155,38 @@ export function setGitState(cwd: string, state: GitState) {
   states.set(cwd, state);
   window.dispatchEvent(new Event(GIT_BUSY));
 }
+const refreshing = new Map<string, Promise<GitState>>();
+const trailingReads = new Map<string, ReturnType<typeof setTimeout>>();
+
+/** Share status reads across panes and serialize invalidations during a GET. */
+export function refreshGitState(cwd: string): Promise<GitState> {
+  const existing = refreshing.get(cwd);
+  if (existing) return existing;
+  clearTimeout(trailingReads.get(cwd));
+  trailingReads.delete(cwd);
+  const request = (async () => {
+    const version = versions.get(cwd);
+    const state = await unwrap(api.git.$get({ query: { cwd } }));
+    setGitState(cwd, state);
+    if (version !== versions.get(cwd)) {
+      // Resolve current readers even during sustained tool activity. One
+      // trailing read makes sure a change during the GET is not lost.
+      trailingReads.set(
+        cwd,
+        setTimeout(() => {
+          trailingReads.delete(cwd);
+          void refreshGitState(cwd).catch(() => {});
+        }, 100),
+      );
+    }
+    return state;
+  })().finally(() => {
+    refreshing.delete(cwd);
+  });
+  refreshing.set(cwd, request);
+  return request;
+}
+
 export const useGitState = (cwd: string) =>
   useSyncExternalStore(subscribeBusy, () => states.get(cwd) ?? null);
 const subscribeBusy = (cb: () => void) => {
@@ -186,11 +240,7 @@ export function GitActions({
   const [nameError, setNameError] = useState<string | null>(null);
   const root = useRef<HTMLDivElement | null>(null);
 
-  const refresh = async () => {
-    const r = await api.git.$get({ query: { cwd } });
-    if (!r.ok) return;
-    setGitState(cwd, await r.json());
-  };
+  const refresh = () => refreshGitState(cwd).catch(() => {});
 
   useEffect(() => {
     setResult(null);

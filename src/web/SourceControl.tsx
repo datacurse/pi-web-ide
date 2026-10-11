@@ -34,8 +34,8 @@ import {
   GIT_CHANGED,
   busyLabel,
   gitChanged,
+  refreshGitState,
   setGitBusy,
-  setGitState,
   useGitBusy,
   useGitState,
 } from "./GitActions.js";
@@ -201,10 +201,7 @@ function RepoRow({
   const state = useGitState(cwd);
 
   useEffect(() => {
-    const load = () =>
-      unwrap(api.git.$get({ query: { cwd } }))
-        .then((s) => setGitState(cwd, s))
-        .catch(() => {});
+    const load = () => refreshGitState(cwd).catch(() => {});
     void load();
     const on = (e: Event) => {
       if ((e as CustomEvent<string>).detail === cwd) void load();
@@ -377,12 +374,11 @@ function RepoView({
 
   const reload = useCallback(async () => {
     try {
-      const [git, changes, log] = await Promise.all([
-        unwrap(api.git.$get({ query: { cwd } })),
+      const [, changes, log] = await Promise.all([
+        refreshGitState(cwd),
         unwrap(api.git.changes.$get({ query: { cwd } })),
         unwrap(api.git.log.$get({ query: { cwd } })),
       ]);
-      setGitState(cwd, git);
       setFiles(changes.files);
       onChanges(changes.files.length);
       setCommits(log.commits);
