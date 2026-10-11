@@ -9,6 +9,8 @@ import { t, plural } from "./i18n.js";
 export interface GitState {
   repo: boolean;
   branch: string;
+  /** Undefined on older servers; those still need full history refreshes. */
+  head?: string;
   changed: number;
   ahead: number;
   behind: number;
@@ -107,6 +109,11 @@ function suggestBranch(): string {
  * SourceControl on the same `cwd` re-reads instead of showing the old count.
  */
 export const GIT_CHANGED = "pwi:git-changed";
+export type GitChangedEvent = CustomEvent<string> & { history?: boolean };
+const notifyGitChanged = (cwd: string, history: boolean) =>
+  window.dispatchEvent(
+    Object.assign(new CustomEvent(GIT_CHANGED, { detail: cwd }), { history }),
+  );
 const pendingChanges = new Map<string, ReturnType<typeof setTimeout>>();
 const versions = new Map<string, number>();
 const invalidateGit = (cwd: string) =>
@@ -116,7 +123,7 @@ export const gitChanged = (cwd: string) => {
   clearTimeout(pendingChanges.get(cwd));
   pendingChanges.delete(cwd);
   invalidateGit(cwd);
-  window.dispatchEvent(new CustomEvent(GIT_CHANGED, { detail: cwd }));
+  notifyGitChanged(cwd, true);
 };
 
 /** Fixed refresh windows: bursts coalesce, but a continuous run never starves. */
@@ -127,7 +134,7 @@ export function scheduleGitChanged(cwd: string) {
     cwd,
     setTimeout(() => {
       pendingChanges.delete(cwd);
-      window.dispatchEvent(new CustomEvent(GIT_CHANGED, { detail: cwd }));
+      notifyGitChanged(cwd, false);
     }, 100),
   );
 }

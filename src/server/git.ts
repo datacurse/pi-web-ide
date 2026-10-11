@@ -40,6 +40,8 @@ const MAX_MESSAGE_BYTES = 8_000;
 export interface GitStatus {
   repo: boolean;
   branch: string;
+  /** Current commit, or empty for a repository with no commits yet. */
+  head: string;
   /** Files with staged, unstaged or untracked changes — the commit's size. */
   changed: number;
   /** Commits this branch has that its upstream does not, and vice versa. */
@@ -137,6 +139,7 @@ export async function status(cwd: string): Promise<GitStatus> {
   const empty: GitStatus = {
     repo: false,
     branch: "",
+    head: "",
     changed: 0,
     ahead: 0,
     behind: 0,
@@ -149,40 +152,32 @@ export async function status(cwd: string): Promise<GitStatus> {
   const inside = await git(cwd, ["rev-parse", "--is-inside-work-tree"]);
   if (inside.code !== 0 || inside.stdout !== "true") return empty;
 
-  const [branch, porcelain, upstream, remote, gh] = await Promise.all([
-    git(cwd, ["rev-parse", "--abbrev-ref", "HEAD"]),
-    git(cwd, ["status", "--porcelain"]),
-    git(cwd, ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"]),
+  const [porcelain, remote, gh] = await Promise.all([
+    git(cwd, ["status", "--porcelain=v2", "--branch", "--ahead-behind"]),
     git(cwd, ["remote"]),
     has(cwd, "gh"),
   ]);
-
-  // `--porcelain` lists one path per line, so the line count IS the number of
-  // changed paths — no parse needed, and it counts untracked files too, which
-  // `git add -A` will commit.
-  const changed = porcelain.stdout ? porcelain.stdout.split("\n").length : 0;
-
-  let ahead = 0;
-  let behind = 0;
-  if (upstream.code === 0) {
-    const counts = await git(cwd, [
-      "rev-list",
-      "--left-right",
-      "--count",
-      "@{u}...HEAD",
-    ]);
-    const [b, a] = counts.stdout.split(/\s+/).map(Number);
-    behind = Number.isFinite(b) ? b : 0;
-    ahead = Number.isFinite(a) ? a : 0;
+  // v2 supplies HEAD, branch, upstream and divergence in one invocation.
+  // Quoted paths (including newlines) stay on one record without -z.
+  const rows = porcelain.stdout ? porcelain.stdout.split("\n") : [];
+  const headers = new Map<string, string>();
+  for (const row of rows) {
+    const match = /^# (branch\.\S+) (.*)$/.exec(row);
+    if (match) headers.set(match[1], match[2]);
   }
+  const changed = rows.filter((row) => !row.startsWith("# ")).length;
+  const branch = headers.get("branch.head") ?? "";
+  const head = headers.get("branch.oid") ?? "";
+  const counts = /^\+(\d+) -(\d+)$/.exec(headers.get("branch.ab") ?? "");
 
   return {
     repo: true,
-    branch: branch.code === 0 ? branch.stdout : "",
+    branch: branch === "(detached)" ? "HEAD" : branch,
+    head: head === "(initial)" ? "" : head,
     changed,
-    ahead,
-    behind,
-    upstream: upstream.code === 0 ? upstream.stdout : "",
+    ahead: counts ? Number(counts[1]) : 0,
+    behind: counts ? Number(counts[2]) : 0,
+    upstream: headers.get("branch.upstream") ?? "",
     remote: remote.stdout.split("\n")[0] ?? "",
     gh,
   };

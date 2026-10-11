@@ -35,6 +35,7 @@ import {
   busyLabel,
   gitChanged,
   refreshGitState,
+  type GitChangedEvent,
   setGitBusy,
   useGitBusy,
   useGitState,
@@ -334,10 +335,9 @@ const noop = () => {};
 /**
  * One repository's panel.
  *
- * Both lists are re-read on `revision` — App bumps it whenever the agent's
- * hunks change — rather than polled: the tree changes constantly while an
- * agent works, and a poll would be a request per interval forever for a list
- * nobody is looking at.
+ * Refresh the working tree on each revision. History only changes when HEAD
+ * or the branch changes, or after an explicit Git action; ordinary file edits
+ * should not reread and redraw the commit list.
  */
 function RepoView({
   cwd,
@@ -349,7 +349,7 @@ function RepoView({
   notRepo,
 }: {
   cwd: string;
-  /** Changes when something may have touched the tree; re-reads both lists. */
+  /** Changes when something may have touched the working tree. */
   revision: unknown;
   onClose: () => void;
   /** Show this file's diff in a tab. `ref` is "" for the working tree. */
@@ -364,6 +364,7 @@ function RepoView({
   const state = useGitState(cwd);
   const [files, setFiles] = useState<Change[] | null>(null);
   const [commits, setCommits] = useState<Commit[]>([]);
+  const [historyRevision, setHistoryRevision] = useState(0);
   const [message, setMessage] = useState("");
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [autoName, setAutoName] = useState(readGitAutoName);
@@ -374,14 +375,15 @@ function RepoView({
 
   const reload = useCallback(async () => {
     try {
-      const [, changes, log] = await Promise.all([
+      const [git, changes] = await Promise.all([
         refreshGitState(cwd),
         unwrap(api.git.changes.$get({ query: { cwd } })),
-        unwrap(api.git.log.$get({ query: { cwd } })),
       ]);
       setFiles(changes.files);
       onChanges(changes.files.length);
-      setCommits(log.commits);
+      // A bundle can outlive its server: without a HEAD marker, retain the
+      // old full-refresh behavior rather than leaving commits stale.
+      if (git.head === undefined) setHistoryRevision((n) => n + 1);
       setError(null);
     } catch (err) {
       setFiles([]);
@@ -390,12 +392,34 @@ function RepoView({
   }, [cwd, onChanges]);
 
   useEffect(() => {
+    if (!state?.repo) {
+      if (state) setCommits([]);
+      return;
+    }
+    let live = true;
+    void unwrap(api.git.log.$get({ query: { cwd } })).then(
+      (log) => {
+        if (live) setCommits(log.commits);
+      },
+      (err) => {
+        if (live) setError(err instanceof Error ? err.message : String(err));
+      },
+    );
+    return () => {
+      live = false;
+    };
+  }, [cwd, state?.repo, state?.head, state?.branch, historyRevision]);
+
+  useEffect(() => {
     void reload();
   }, [reload, revision]);
 
   useEffect(() => {
     const on = (e: Event) => {
-      if ((e as CustomEvent<string>).detail === cwd) void reload();
+      const change = e as GitChangedEvent;
+      if (change.detail !== cwd) return;
+      if (change.history !== false) setHistoryRevision((n) => n + 1);
+      void reload();
     };
     window.addEventListener(GIT_CHANGED, on);
     return () => window.removeEventListener(GIT_CHANGED, on);
