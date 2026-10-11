@@ -9,6 +9,7 @@ import {
 } from "./anchorDiff.js";
 import { isExecTool } from "./execDisplay.js";
 import { ExecBlock } from "./ExecBlock.js";
+import { LazyDetails } from "./LazyDetails.js";
 import { SourceRead, isSourceRead } from "./SourceRead.js";
 import { ShellRun, isShellRun } from "./ShellRun.js";
 import { SearchResults, isSearchTool } from "./SearchResults.js";
@@ -81,18 +82,20 @@ export function RawBlocks({
           );
         if (block.kind === "tool")
           return (
-            <details
+            <LazyDetails
               key={block.id}
               data-custom="raw tool disclosure"
               className={`my-3 ${block.isError ? "text-red-300" : "text-neutral-300"}`}
+              summary={
+                <summary className="cursor-pointer list-none font-mono chat-code [&::-webkit-details-marker]:hidden">
+                  <ToolLabel
+                    tool={block}
+                    source={toolSources.get(block.id)}
+                    codemodeChild={codemodeChild}
+                  />
+                </summary>
+              }
             >
-              <summary className="cursor-pointer list-none font-mono chat-code [&::-webkit-details-marker]:hidden">
-                <ToolLabel
-                  tool={block}
-                  source={toolSources.get(block.id)}
-                  codemodeChild={codemodeChild}
-                />
-              </summary>
               {isSourceRead(block) && !block.isError ? (
                 <SourceRead tool={block} />
               ) : isSearchTool(block) ? (
@@ -117,7 +120,7 @@ export function RawBlocks({
                   }
                 />
               )}
-            </details>
+            </LazyDetails>
           );
         if (
           (block.kind === "thinking" || block.kind === "text") &&
