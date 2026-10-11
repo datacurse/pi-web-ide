@@ -707,7 +707,11 @@ export function SessionTabs({
       )}
 
       {onNew && (
-        <StripCell onClick={onNew} label={t("New tab")} className="-mr-1">
+        <StripCell
+          onClick={onNew}
+          label={t("New AI Session")}
+          className="-mr-1"
+        >
           <Plus size={16} />
         </StripCell>
       )}

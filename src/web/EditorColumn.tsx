@@ -161,10 +161,7 @@ export function EditorColumn({
         onSelect={onSelect}
         onClose={onClose}
         onToggleList={onToggleList}
-        onNew={(e) => {
-          const box = e.currentTarget.getBoundingClientRect();
-          setMenu({ x: box.left, y: box.bottom });
-        }}
+        onNew={onNewSession}
         latestPrompt={latestPrompt}
         pinned={pinned}
         focused={focused}
