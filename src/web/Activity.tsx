@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   Brain,
   ArrowUpRight,
@@ -353,9 +353,13 @@ export function ActivityBreakdown({
   renderContent?: RoundContent;
   roundRefs?: Map<number, HTMLElement>;
 }) {
+  const rounds = useMemo(
+    () => activityRounds(activityGroups(activity)),
+    [activity],
+  );
   return (
     <ol className="mt-1 space-y-0" aria-label={t("Turn timeline")}>
-      {activityRounds(activityGroups(activity)).map((round, index) => {
+      {rounds.map((round, index) => {
         const content = renderContent?.(round, now);
         if (renderContent && content == null) return null;
         const tools = round.groups.flatMap((group) => group.tools);
@@ -403,7 +407,7 @@ export function ActivityHistory({
   activity: TurnActivity;
   now?: number;
 }) {
-  const groups = activityGroups(activity);
+  const groups = useMemo(() => activityGroups(activity), [activity]);
   const current = [...groups]
     .reverse()
     .find((group) => group.end === undefined);
@@ -482,8 +486,9 @@ export function ActivityPanel({
   const roundRefs = useRef(new Map<number, HTMLElement>());
   const now = useClock(activity.end === undefined);
   const step = activity.steps.at(-1);
-  const current = activityGroups(activity).at(-1);
-  const roundCount = activityRounds(activityGroups(activity)).length;
+  const groups = useMemo(() => activityGroups(activity), [activity]);
+  const current = groups.at(-1);
+  const roundCount = useMemo(() => activityRounds(groups).length, [groups]);
   const streaming =
     step && ["thinking", "text", "toolcall"].includes(step.kind);
   const silence =

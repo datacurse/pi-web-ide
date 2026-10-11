@@ -97,12 +97,18 @@ function CodeBox({
   useEffect(() => {
     if (!lang) return;
     let live = true;
-    highlightLines(lang, displayText).then(
-      (lines) => live && lines && setColored({ text: displayText, lines }),
-      () => {}, // No colour is the fallback, not an error.
-    );
+    // Debounce expensive code parsing, not text delivery. Superseded blocks
+    // never start a parse; the final text always gets its full highlighting.
+    const timer = setTimeout(() => {
+      if (!live) return;
+      highlightLines(lang, displayText).then(
+        (lines) => live && lines && setColored({ text: displayText, lines }),
+        () => {}, // No colour is the fallback, not an error.
+      );
+    }, 120);
     return () => {
       live = false;
+      clearTimeout(timer);
     };
   }, [lang, displayText]);
 

@@ -32,6 +32,7 @@ export function mergeLiveTools(
   messages: PiMessage[],
   tools: PiTool[],
 ): { messages: PiMessage[]; liveTools: PiTool[] } {
+  if (tools.length === 0) return { messages, liveTools: tools };
   const represented = new Set(tools.map((tool) => tool.id));
   const referenced = new Set(tools.map((tool) => tool.parentId));
   const parents = messages.flatMap((message) =>
@@ -73,15 +74,21 @@ export function mergeLiveTools(
           : saved.outputUnavailable,
     };
   };
-  const merged = messages.map((message) => ({
-    ...message,
-    blocks: message.blocks.map((block) => {
+  let changed = false;
+  const merged = messages.map((message) => {
+    let messageChanged = false;
+    const blocks = message.blocks.map((block) => {
       if (block.kind !== "tool") return block;
       const tool = live.get(block.id);
       if (!tool) return block;
       live.delete(block.id);
+      messageChanged = changed = true;
       return { kind: "tool" as const, ...merge(block, tool) };
-    }),
-  }));
-  return { messages: merged, liveTools: [...live.values()] };
+    });
+    return messageChanged ? { ...message, blocks } : message;
+  });
+  return {
+    messages: changed ? merged : messages,
+    liveTools: [...live.values()],
+  };
 }

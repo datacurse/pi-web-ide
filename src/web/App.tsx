@@ -1973,7 +1973,7 @@ export default function App() {
           snapshot={s.snapshot}
           draftRev={inserted.side === side ? inserted.n : 0}
           focus={sessionFocus.side === side ? sessionFocus : undefined}
-          partial={s.partial}
+          partialStore={s.partialStore}
           busy={s.busy}
           opening={s.opening}
           userMode={userMode}

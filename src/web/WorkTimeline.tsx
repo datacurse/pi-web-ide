@@ -1,10 +1,10 @@
 import { CaretRight, Check, X } from "@phosphor-icons/react";
-import { useSyncExternalStore } from "react";
+import { memo, useSyncExternalStore } from "react";
 import { readCodemodeCollapsed, subscribeCodemodeCollapsed } from "./prefs.js";
 import type { PiBlock, PiTool } from "../shared/types.js";
 import type { TurnActivity } from "../shared/activity.js";
 import { RawBlocks } from "./RawOutput.js";
-import { anchorSources, type AnchorSource } from "./anchorDiff.js";
+import { useAnchorSources, type AnchorSource } from "./anchorDiff.js";
 import {
   currentWorkStatus,
   explorationLabel,
@@ -75,7 +75,7 @@ function Thought({
   );
 }
 
-export function WorkTool({
+export const WorkTool = memo(function WorkTool({
   tool,
   toolSources,
   nested = false,
@@ -148,7 +148,7 @@ export function WorkTool({
       {content}
     </div>
   );
-}
+});
 
 export function WorkTimeline({
   blocks,
@@ -162,7 +162,7 @@ export function WorkTimeline({
   expanded?: boolean;
 }) {
   const items = workTimeline(blocks, activity, !!running);
-  const toolSources = anchorSources(blocks);
+  const toolSources = useAnchorSources(blocks);
   const status = running ? currentWorkStatus(activity, blocks) : undefined;
   const hasVisibleThinking = items.some(
     (item) => item.kind === "thought" && item.active,

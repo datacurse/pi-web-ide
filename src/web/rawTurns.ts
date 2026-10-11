@@ -1,4 +1,4 @@
-import type { PiBlock, PiMessage, PiPartial } from "../shared/types.js";
+import type { PiBlock, PiMessage, PiPartial, PiTool } from "../shared/types.js";
 import type { TurnActivity } from "../shared/activity.js";
 
 export type RawRow = {
@@ -16,6 +16,18 @@ export type RawRow = {
   workMessages?: PiMessage[];
   workPartial?: PiPartial;
 };
+
+// Reducers replace tools immutably. Keep their block wrappers stable when
+// only text changes so source reconstruction and tool cards can be reused.
+const toolBlocks = new WeakMap<PiTool, PiBlock>();
+function toolBlock(tool: PiTool): PiBlock {
+  let block = toolBlocks.get(tool);
+  if (!block) {
+    block = { kind: "tool", ...tool };
+    toolBlocks.set(tool, block);
+  }
+  return block;
+}
 
 /** Keep only a settled final answer outside the work disclosure. */
 function partitionTurn(
@@ -43,18 +55,56 @@ function partitionTurn(
   };
 }
 
+type CachedRow = { messages: PiMessage[]; row: RawRow };
+
+/** A per-chat cache: retain unchanged historical rows, never an old session. */
+export function createRawRows() {
+  const cache: CachedRow[] = [];
+  return (
+    messages: PiMessage[],
+    partial: PiPartial,
+    busy: boolean,
+    activity?: TurnActivity[],
+  ) => rawRows(messages, partial, busy, activity, cache);
+}
+
 /** One disclosure per assistant turn, with only its settled final answer outside. */
 export function rawRows(
   messages: PiMessage[],
   partial: PiPartial,
   busy: boolean,
   activity: TurnActivity[] = [],
+  cache?: CachedRow[],
 ): RawRow[] {
   const rows: RawRow[] = [];
+  const traces = new Map<number, TurnActivity>();
+  for (const trace of activity)
+    if (trace.asked !== undefined && !traces.has(trace.asked))
+      traces.set(trace.asked, trace);
+  const append = (source: PiMessage[], row: RawRow) => {
+    if (cache) cache[rows.length] = { messages: source, row };
+    rows.push(row);
+  };
   let turn: PiMessage[] = [];
   let turnAt: number | undefined;
   const flush = (live: boolean) => {
     if (!turn.length && !live) return;
+    const at = turnAt ?? turn[0]?.timestamp ?? 0;
+    const trace = traces.get(at);
+    const cached = cache?.[rows.length];
+    if (
+      !live &&
+      cached &&
+      !cached.row.running &&
+      cached.row.at === at &&
+      cached.row.activity === trace &&
+      cached.messages.length === turn.length &&
+      turn.every((message, i) => cached.messages[i] === message)
+    ) {
+      rows.push(cached.row);
+      turn = [];
+      return;
+    }
     const { work, answer } = partitionTurn(turn, live);
     const blocks = work.flatMap((message) => message.blocks);
     if (live)
@@ -65,11 +115,9 @@ export function rawRows(
         ...(partial.text
           ? [{ kind: "text" as const, text: partial.text }]
           : []),
-        ...partial.tools.map((tool) => ({ kind: "tool" as const, ...tool })),
+        ...partial.tools.map(toolBlock),
       );
-    const at = turnAt ?? turn[0]?.timestamp ?? 0;
-    const trace = activity.find((item) => item.asked === at);
-    rows.push({
+    append(turn, {
       role: "assistant",
       at,
       answerAt: answer?.timestamp,
@@ -91,16 +139,25 @@ export function rawRows(
       turn.push(message);
     else {
       flush(false);
-      rows.push({
-        role: message.role,
-        at: message.timestamp,
-        blocks: message.blocks,
-      });
+      const cached = cache?.[rows.length];
+      if (
+        cached?.messages.length === 1 &&
+        cached.messages[0] === message &&
+        cached.row.role === message.role
+      )
+        rows.push(cached.row);
+      else
+        append([message], {
+          role: message.role,
+          at: message.timestamp,
+          blocks: message.blocks,
+        });
       turnAt = message.timestamp;
     }
   }
   flush(
     busy || !!partial.text || !!partial.thinking || partial.tools.length > 0,
   );
+  if (cache) cache.length = rows.length;
   return rows;
 }

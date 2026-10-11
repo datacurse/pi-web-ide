@@ -8,7 +8,6 @@ import type {
   PiEvent,
   PiImage,
   PiMessage,
-  PiPartial,
   PiSessionInfo,
   Snapshot,
 } from "../shared/types.js";
@@ -21,6 +20,7 @@ import { t } from "./i18n.js";
 import { commandCatalog, parseSlashCommand, WEB_COMMANDS } from "./commands.js";
 import { downloadText } from "./download.js";
 import { emptyPartial, reducePartial } from "../shared/partial.js";
+import { createPartialStore } from "./sessionPartial.js";
 
 /**
  * The server's JSON, made safe to render.
@@ -197,7 +197,8 @@ export function useSession({
    */
   const snapshotRef = useRef<Snapshot | null>(null);
   snapshotRef.current = snapshot;
-  const [partial, setPartial] = useState<PiPartial>(emptyPartial);
+  const [partialStore] = useState(createPartialStore);
+  const setPartial = partialStore.set;
   const [busy, setBusy] = useState(false);
   /**
    * The local slash command last sent, and whether it is still working.
@@ -215,6 +216,7 @@ export function useSession({
   const [modelError, setModelError] = useState<string | null>(null);
 
   const esRef = useRef<EventSource | null>(null);
+  const cancelStreamRef = useRef<(() => void) | null>(null);
   /**
    * The turn error this attachment watched arrive. The server drops an error
    * once its turn has ended (`clearDeadError`), so the refetch right after
@@ -244,6 +246,7 @@ export function useSession({
     // An attach still in flight must not land in a pane that was emptied.
     attachSeq.current++;
     targetRef.current = undefined;
+    cancelStreamRef.current?.();
     esRef.current?.close();
     esRef.current = null;
     setSnapshot(null);
@@ -286,6 +289,7 @@ export function useSession({
       const superseded = () => attachSeq.current !== seq;
       targetRef.current = file;
 
+      cancelStreamRef.current?.();
       esRef.current?.close();
       esRef.current = null;
       setPartial(emptyPartial());
@@ -429,6 +433,52 @@ export function useSession({
       const es = new EventSource(`/api/sessions/${snap.id}/events`);
       esRef.current = es;
 
+      // Keep every delta, but publish at most once per 50ms rather than
+      // rerendering App and reparsing Markdown for every SSE frame.
+      let pendingEvents: PiEvent[] = [];
+      const pendingActivity = new Map<
+        number,
+        NonNullable<ReturnType<typeof parseActivity>>
+      >();
+      let streamTimer: ReturnType<typeof setTimeout> | undefined;
+      let streamBusy = false;
+      let streamText = false;
+      const flushStream = () => {
+        clearTimeout(streamTimer);
+        streamTimer = undefined;
+        if (superseded() || esRef.current !== es) return;
+        const events = pendingEvents;
+        pendingEvents = [];
+        if (events.length) setPartial((p) => events.reduce(reducePartial, p));
+        if (streamBusy) setBusy(true);
+        if (streamText) setCommand(null);
+        streamBusy = streamText = false;
+        if (pendingActivity.size) {
+          const updates = new Map(pendingActivity);
+          pendingActivity.clear();
+          setSnapshot((s) =>
+            s
+              ? {
+                  ...s,
+                  activity: [
+                    ...(s.activity ?? []).filter(
+                      (turn) => !updates.has(turn.start),
+                    ),
+                    ...updates.values(),
+                  ],
+                }
+              : s,
+          );
+        }
+      };
+      const scheduleStream = () => {
+        streamTimer ??= setTimeout(flushStream, 50);
+      };
+      cancelStreamRef.current = () => {
+        clearTimeout(streamTimer);
+        pendingEvents = [];
+        pendingActivity.clear();
+      };
       /*
        * The id is a handle on a LIVE session and the server can lose it —
        * restart, crash, idle eviction. The FILE is the durable identity, so
@@ -444,28 +494,47 @@ export function useSession({
         }, 1_000);
       };
 
-      const refetch = async (): Promise<Snapshot | undefined> => {
-        const baseline = snapshotRef.current;
-        const rr = await api.sessions[":id"]
-          .$get({ param: { id: snap.id } })
-          .catch(() => null);
-        if (!rr || rr.status === 404) {
-          reattach();
+      // message_done and idle commonly arrive together. Share their request
+      // and serialize later refreshes so an older response cannot land last.
+      let refreshVersion = 0;
+      let refreshing: Promise<Snapshot | undefined> | undefined;
+      const refetch = (): Promise<Snapshot | undefined> => {
+        refreshVersion++;
+        refreshing ??= (async () => {
+          await new Promise((resolve) => setTimeout(resolve, 50));
+          while (!superseded() && esRef.current === es) {
+            const version = refreshVersion;
+            const baseline = snapshotRef.current;
+            const rr = await api.sessions[":id"]
+              .$get({ param: { id: snap.id } })
+              .catch(() => null);
+            if (superseded() || esRef.current !== es) return undefined;
+            if (!rr || rr.status === 404) {
+              reattach();
+              return undefined;
+            }
+            if (!rr.ok) return undefined;
+            const s = toSnapshot(await rr.json());
+            if (superseded() || esRef.current !== es) return undefined;
+            // A newer completion needs a newer snapshot, not an overlapping GET.
+            if (version !== refreshVersion) continue;
+            flushStream();
+            setSnapshot((current) =>
+              preserveLiveActivity(
+                { ...s, error: s.error ?? seenErrorRef.current },
+                current,
+                baseline,
+              ),
+            );
+            setPartial(s.partial ?? emptyPartial());
+            setBusy(s.isStreaming);
+            return s;
+          }
           return undefined;
-        }
-        if (!rr.ok) return undefined;
-        const s = toSnapshot(await rr.json());
-        if (superseded() || esRef.current !== es) return undefined;
-        setSnapshot((current) =>
-          preserveLiveActivity(
-            { ...s, error: s.error ?? seenErrorRef.current },
-            current,
-            baseline,
-          ),
-        );
-        setPartial(s.partial ?? emptyPartial());
-        setBusy(s.isStreaming);
-        return s;
+        })().finally(() => {
+          refreshing = undefined;
+        });
+        return refreshing;
       };
 
       /*
@@ -497,19 +566,30 @@ export function useSession({
             "tool_end",
           ].includes(e.type)
         ) {
-          setPartial((p) => reducePartial(p, e));
+          pendingEvents.push(e);
+          scheduleStream();
         }
+        if (
+          ![
+            "text",
+            "thinking",
+            "activity",
+            "tool_start",
+            "tool_update",
+          ].includes(e.type)
+        )
+          flushStream();
         switch (e.type) {
           case "text":
-            setBusy(true);
+            streamBusy = true;
+            streamText = true;
             // A command that turned into a real turn (`/review`) is no
             // longer waiting on anything — the turn itself is the answer,
             // and the transcript now shows it.
-            setCommand(null);
             worked = true;
             break;
           case "thinking":
-            setBusy(true);
+            streamBusy = true;
             worked = true;
             break;
           case "tool_start":
@@ -527,19 +607,8 @@ export function useSession({
           case "activity": {
             const activity = parseActivity(e.activity);
             if (!activity) break;
-            setSnapshot((s) =>
-              s
-                ? {
-                    ...s,
-                    activity: [
-                      ...(s.activity ?? []).filter(
-                        (turn) => turn.start !== activity.start,
-                      ),
-                      activity,
-                    ],
-                  }
-                : s,
-            );
+            pendingActivity.set(activity.start, activity);
+            scheduleStream();
             break;
           }
           case "notice":
@@ -616,7 +685,10 @@ export function useSession({
     const file = snapshotRef.current?.file;
     if (esRef.current?.readyState === EventSource.CLOSED && file)
       void attachRef.current(file);
-    return () => esRef.current?.close();
+    return () => {
+      cancelStreamRef.current?.();
+      esRef.current?.close();
+    };
   }, []);
 
   // The spinner stops on its own: `/model` and friends change the session
@@ -1395,7 +1467,7 @@ export function useSession({
 
   return {
     snapshot,
-    partial,
+    partialStore,
     busy,
     opening,
     command,

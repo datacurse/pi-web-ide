@@ -4,15 +4,15 @@ import { RawBlocks } from "./RawOutput.js";
 import { WorkTool } from "./WorkTimeline.js";
 import type { RawRow } from "./rawTurns.js";
 import { phaseBlocks } from "./turnPhases.js";
-import { anchorSources } from "./anchorDiff.js";
+import { useAnchorSources } from "./anchorDiff.js";
 
 /** Reuse the recorded phases while keeping today's tool and Markdown renderer. */
 export function TimedWork({ row }: { row: RawRow }) {
+  const sources = useAnchorSources(row.work ?? []);
   const activity = row.activity;
   if (!activity || !activity.steps.length) return null;
   const groups = activityGroups(activity);
-  const blocks = phaseBlocks(groups, row.workMessages ?? [], row.workPartial);
-  const sources = anchorSources(row.work ?? []);
+  let blocks: ReturnType<typeof phaseBlocks> | undefined;
   return (
     <>
       <ActivityPanel
@@ -27,8 +27,13 @@ export function TimedWork({ row }: { row: RawRow }) {
         }
         breakdownAvailable
         renderContent={(round) => {
+          const roundBlocks = (blocks ??= phaseBlocks(
+            groups,
+            row.workMessages ?? [],
+            row.workPartial,
+          ));
           const content = round.groups
-            .flatMap((group) => blocks.get(group.id) ?? [])
+            .flatMap((group) => roundBlocks.get(group.id) ?? [])
             .filter((block) =>
               block.kind === "thinking"
                 ? !!block.text.trim()

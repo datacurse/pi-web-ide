@@ -2,7 +2,11 @@ import type { PiBlock, PiTool } from "../shared/types.js";
 import { MarkdownText } from "./Markdown.js";
 import { ToolLabel } from "./ToolLabel.js";
 import { AnchorDiff } from "./AnchorDiff.js";
-import { anchorDiff, anchorSources, type AnchorSource } from "./anchorDiff.js";
+import {
+  anchorDiff,
+  useAnchorSources,
+  type AnchorSource,
+} from "./anchorDiff.js";
 import { isExecTool } from "./execDisplay.js";
 import { ExecBlock } from "./ExecBlock.js";
 import { SourceRead, isSourceRead } from "./SourceRead.js";
@@ -38,7 +42,7 @@ function ToolOutput({ tool }: { tool: PiTool }) {
 export function RawBlocks({
   blocks,
   streaming,
-  toolSources = anchorSources(blocks),
+  toolSources: suppliedSources,
   codemodeChild = false,
 }: {
   blocks: PiBlock[];
@@ -46,6 +50,7 @@ export function RawBlocks({
   toolSources?: Map<string, AnchorSource>;
   codemodeChild?: boolean;
 }) {
+  const toolSources = useAnchorSources(blocks, suppliedSources);
   return (
     <>
       {blocks.map((block, i) => {

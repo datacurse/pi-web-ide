@@ -8,6 +8,7 @@ import {
   useSyncExternalStore,
 } from "react";
 import { Virtuoso } from "react-virtuoso";
+import type { PartialStore } from "./sessionPartial.js";
 import {
   ArrowDown,
   CaretRight,
@@ -17,12 +18,7 @@ import {
   QuestionMark,
   Square,
 } from "@phosphor-icons/react";
-import type {
-  AskAnswer,
-  PiImage,
-  PiPartial,
-  Snapshot,
-} from "../shared/types.js";
+import type { AskAnswer, PiImage, Snapshot } from "../shared/types.js";
 import { Button, ContextMenu, IconButton, MenuItem } from "./ui.js";
 import { mergeLiveTools } from "../shared/toolTree.js";
 import { ModelSelector } from "./ModelSelector.js";
@@ -36,7 +32,7 @@ import {
   type WorkDisplay,
 } from "./prefs.js";
 import { AutoGoalNotice, isAutoGoalText } from "./AutoGoalNotice.js";
-import { rawRows, type RawRow } from "./rawTurns.js";
+import { createRawRows, type RawRow } from "./rawTurns.js";
 import { ASK_MODES, type AskMode, type UserMode } from "./prefs.js";
 import {
   clearDraft,
@@ -158,6 +154,7 @@ function CommandPicker({
 
 const HistoryRow = memo(function HistoryRow({
   row,
+  rowKey,
   first,
   expanded,
   onToggle,
@@ -167,9 +164,10 @@ const HistoryRow = memo(function HistoryRow({
   workDisplay,
 }: {
   row: RawRow;
+  rowKey: string;
   first: boolean;
   expanded: boolean;
-  onToggle: () => void;
+  onToggle: (key: string) => void;
   userMode: UserMode;
   workDisplay: WorkDisplay;
   onEdit?: (at: number, text: string, images: PiImage[]) => void;
@@ -225,7 +223,7 @@ const HistoryRow = memo(function HistoryRow({
                   type="button"
                   data-custom="work disclosure: muted status text without button chrome"
                   aria-expanded={expanded}
-                  onClick={onToggle}
+                  onClick={() => onToggle(rowKey)}
                   className="group/work chat-prose inline-flex items-center gap-1.5 py-1 text-neutral-500 transition-colors hover:text-neutral-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-neutral-500"
                 >
                   {workLabel}
@@ -273,7 +271,7 @@ let focusedOnLoad = false;
 
 export function Chat({
   snapshot,
-  partial,
+  partialStore,
   busy,
   opening,
   userMode,
@@ -299,7 +297,7 @@ export function Chat({
   focus,
 }: {
   snapshot: Snapshot | null;
-  partial: PiPartial;
+  partialStore: PartialStore;
   busy: boolean;
   /**
    * A session is being opened and there is nothing to show yet. Separate
@@ -347,6 +345,10 @@ export function Chat({
   /** Bumped when a session is selected: focus the composer once it shows. */
   focus?: { entry: string; n: number };
 }) {
+  const partial = useSyncExternalStore(
+    partialStore.subscribe,
+    partialStore.getSnapshot,
+  );
   const [text, setText] = useState("");
   const pasted = useMemo(() => splitPastedText(text), [text]);
   // In "toggle" mode sticky until switched off or the session changes; "once" clears it on send.
@@ -562,15 +564,37 @@ export function Chat({
   const [expandedWork, setExpandedWork] = useState<Set<string>>(
     () => new Set(),
   );
+  // Session actions can change with a snapshot; row event handlers keep
+  // their identity while still invoking the latest action.
+  const rowActions = useRef({ onEdit, onFork });
+  rowActions.current = { onEdit, onFork };
+  const editRow = useCallback(
+    (at: number, text: string, images: PiImage[]) =>
+      rowActions.current.onEdit(at, text, images),
+    [],
+  );
+  const forkRow = useCallback(
+    (at: number) => rowActions.current.onFork(at),
+    [],
+  );
+  const buildRows = useMemo(() => createRawRows(), [snapshot?.id]);
+  const toggleWork = useCallback((key: string) => {
+    setExpandedWork((previous) => {
+      const next = new Set(previous);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }, []);
   const rows = useMemo(
     () =>
-      rawRows(
+      buildRows(
         messages,
         { ...partial, tools: liveTools },
         busy,
         snapshot?.activity,
       ),
-    [messages, partial, liveTools, busy, snapshot?.activity],
+    [buildRows, messages, partial, liveTools, busy, snapshot?.activity],
   );
 
   if (!snapshot) {
@@ -779,20 +803,14 @@ export function Chat({
                       <div className="flow-root">
                         <HistoryRow
                           row={row}
+                          rowKey={key}
                           first={i === 0}
                           userMode={userMode}
                           workDisplay={workDisplay}
-                          onEdit={busy ? undefined : onEdit}
-                          onFork={onFork}
+                          onEdit={busy ? undefined : editRow}
+                          onFork={forkRow}
                           expanded={expandedWork.has(key)}
-                          onToggle={() =>
-                            setExpandedWork((previous) => {
-                              const next = new Set(previous);
-                              if (next.has(key)) next.delete(key);
-                              else next.add(key);
-                              return next;
-                            })
-                          }
+                          onToggle={toggleWork}
                         />
                       </div>
                     );

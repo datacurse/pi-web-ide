@@ -1,10 +1,41 @@
-import type { PiTool } from "../shared/types.js";
-import { removedRange, type AnchorSource } from "../shared/anchorHistory.js";
+import { useMemo } from "react";
+import type { PiBlock, PiTool } from "../shared/types.js";
+import {
+  removedRange,
+  recordedAnchorSources as anchorSources,
+  type AnchorSource,
+} from "../shared/anchorHistory.js";
 
 export {
   recordedAnchorSources as anchorSources,
   type AnchorSource,
 } from "../shared/anchorHistory.js";
+
+/** Prose deltas do not change the recorded tools used to reconstruct diffs. */
+export function useAnchorSources(
+  blocks: PiBlock[],
+  supplied?: Map<string, AnchorSource>,
+) {
+  const resolve = useMemo(() => {
+    let previous: PiBlock[] = [];
+    let sources = new Map<string, AnchorSource>();
+    return (current: PiBlock[]) => {
+      const tools = current.filter((block) => block.kind === "tool");
+      if (
+        tools.length !== previous.length ||
+        tools.some((tool, i) => tool !== previous[i])
+      ) {
+        previous = tools;
+        sources = anchorSources(tools);
+      }
+      return sources;
+    };
+  }, []);
+  return useMemo(
+    () => supplied ?? resolve(blocks),
+    [blocks, supplied, resolve],
+  );
+}
 
 export type AnchorDiff = AnchorSource &
   (
