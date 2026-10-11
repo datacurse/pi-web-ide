@@ -602,6 +602,10 @@ export interface Snapshot {
   /** "provider/id", or undefined if the session has no model selected yet. */
   model: string | undefined;
   messages: PiMessage[];
+  /** Wire-only offset: messages replace this suffix of the client's transcript. */
+  messagesFrom?: number;
+  /** Validated retained-prefix token for incremental snapshot requests. */
+  messageCursor?: string;
   partial: PiPartial | null;
   /** Measured turn timelines; absent on older servers and for unobserved history. */
   activity?: TurnActivity[];

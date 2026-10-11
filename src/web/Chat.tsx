@@ -393,6 +393,23 @@ export function Chat({
    * re-render per scroll event would cost more than the button is worth.
    */
   const [atBottom, setAtBottom] = useState(true);
+  const scrollFrame = useRef<number | undefined>(undefined);
+  const followStream = useCallback(() => {
+    if (!pinned.current || scrollFrame.current !== undefined) return;
+    scrollFrame.current = requestAnimationFrame(() => {
+      scrollFrame.current = undefined;
+      const el = viewport.current;
+      if (el && pinned.current) el.scrollTop = el.scrollHeight;
+    });
+  }, []);
+  useEffect(
+    () => () => {
+      if (scrollFrame.current !== undefined)
+        cancelAnimationFrame(scrollFrame.current);
+      scrollFrame.current = undefined;
+    },
+    [],
+  );
   const toBottom = () => {
     const el = viewport.current;
     if (!el) return;
@@ -523,25 +540,21 @@ export function Chat({
     // A different session opens at its latest turn, and resets the intent:
     // the previous one may well have been left scrolled up.
     pinned.current = true;
-    const el = viewport.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [snapshot?.id]);
+    followStream();
+  }, [snapshot?.id, followStream]);
 
   useEffect(() => {
-    const el = viewport.current;
-    if (el && pinned.current) el.scrollTop = el.scrollHeight;
-  }, [snapshot?.messages.length, partial.text, partial.thinking]);
+    followStream();
+  }, [snapshot?.messages.length, partial, followStream]);
 
   useEffect(() => {
     const el = viewport.current;
     const body = content.current;
     if (!el || !body) return;
-    const resize = new ResizeObserver(() => {
-      if (pinned.current) el.scrollTop = el.scrollHeight;
-    });
+    const resize = new ResizeObserver(followStream);
     resize.observe(body);
     return () => resize.disconnect();
-  }, [snapshot?.id, scrollParent]);
+  }, [snapshot?.id, scrollParent, followStream]);
 
   /**
    * A call settles into the transcript with the message that made it, then

@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { CaretDown, CaretRight } from "@phosphor-icons/react";
@@ -396,19 +397,56 @@ const options: MarkdownToJSX.Options = {
   },
 };
 
-/**
- * Assistant prose only. Tool output, bash output, and echoed user input stay
- * plain `whitespace-pre-wrap` — those are verbatim text, not prose, and
- * markdown syntax characters in them (a `#` in a shell comment, a stray `_`
- * in a path) would otherwise get mangled into headings and italics.
- *
- * Memoized on `text`: message blocks are rebuilt into new array/object
- * instances on every snapshot refetch, but the string content of a settled
- * block never changes, so this skips re-parsing the whole document on
- * unrelated state updates. The one block still being streamed necessarily
- * gets a new `text` every delta and reparses — that one is expected to.
- */
+/** Throttle live formatting without splitting Markdown's document semantics. */
+function useStreamingText(text: string, streaming: boolean) {
+  const [displayed, setDisplayed] = useState(text);
+  const latest = useRef(text);
+  latest.current = text;
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => {
+    if (!streaming) {
+      clearTimeout(timer.current);
+      timer.current = undefined;
+      setDisplayed(text);
+    } else if (text !== displayed && timer.current === undefined) {
+      // Throttle, not debounce: continuous output still advances, but long
+      // responses do not reparse their whole document twenty times a second.
+      const delay = globalThis.Math.min(
+        250,
+        globalThis.Math.max(80, text.length / 200),
+      );
+      timer.current = setTimeout(() => {
+        timer.current = undefined;
+        setDisplayed(latest.current);
+      }, delay);
+    }
+  }, [text, streaming, displayed]);
+  useEffect(
+    () => () => {
+      clearTimeout(timer.current);
+      timer.current = undefined;
+    },
+    [],
+  );
+  // Final output and replaced messages are never held behind the stream clock.
+  return !streaming || !text.startsWith(displayed) ? text : displayed;
+}
+
+/** Tool payloads remain literal; only assistant prose is parsed as Markdown. */
 export const MarkdownText = memo(function MarkdownText({
+  text,
+  streaming,
+}: {
+  text: string;
+  streaming?: boolean;
+}) {
+  const displayText = useStreamingText(text, !!streaming);
+  return <RenderedMarkdown text={displayText} streaming={streaming} />;
+});
+
+// Keep the parser behind its own memo boundary: incoming tokens that have
+// not reached the formatting clock must not invoke markdown-to-jsx again.
+const RenderedMarkdown = memo(function RenderedMarkdown({
   text,
   streaming,
 }: {

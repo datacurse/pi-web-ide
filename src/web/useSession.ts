@@ -48,6 +48,9 @@ function toSnapshot(raw: Partial<Snapshot>): Snapshot {
     cwd: typeof raw.cwd === "string" ? raw.cwd : "",
     model: typeof raw.model === "string" ? raw.model : undefined,
     messages: Array.isArray(raw.messages) ? raw.messages : [],
+    messageCursor:
+      typeof raw.messageCursor === "string" ? raw.messageCursor : undefined,
+    messagesFrom: 0,
     partial: raw.partial ?? null,
     activity: Array.isArray(raw.activity)
       ? raw.activity.flatMap((v) => {
@@ -502,11 +505,28 @@ export function useSession({
         refreshVersion++;
         refreshing ??= (async () => {
           await new Promise((resolve) => setTimeout(resolve, 50));
+          let fullRefresh = false;
           while (!superseded() && esRef.current === es) {
+            // Invalid/mismatched wire metadata retries once without a cursor.
+            // Old servers omit the fields and naturally take the full path.
             const version = refreshVersion;
             const baseline = snapshotRef.current;
+            const cursorCount = Number(
+              baseline?.messageCursor?.split(":", 1)[0],
+            );
+            const cursor =
+              !fullRefresh &&
+              baseline?.id === snap.id &&
+              Number.isSafeInteger(cursorCount) &&
+              cursorCount >= 0 &&
+              cursorCount <= baseline.messages.length
+                ? baseline.messageCursor
+                : undefined;
             const rr = await api.sessions[":id"]
-              .$get({ param: { id: snap.id } })
+              .$get(
+                { param: { id: snap.id } },
+                { headers: cursor ? { "x-pwi-transcript": cursor } : {} },
+              )
               .catch(() => null);
             if (superseded() || esRef.current !== es) return undefined;
             if (!rr || rr.status === 404) {
@@ -514,7 +534,33 @@ export function useSession({
               return undefined;
             }
             if (!rr.ok) return undefined;
-            const s = toSnapshot(await rr.json());
+            const raw: Partial<Snapshot> = await rr.json();
+            const from = raw.messagesFrom ?? 0;
+            if (from > 0) {
+              if (
+                !cursor ||
+                !Number.isSafeInteger(from) ||
+                from !== cursorCount ||
+                !Array.isArray(raw.messages)
+              ) {
+                if (fullRefresh) return undefined;
+                fullRefresh = true;
+                continue;
+              }
+              // A local edit/reload during the GET may have replaced our base.
+              // Retry against that new base rather than grafting onto stale rows.
+              if (
+                !baseline ||
+                from > baseline.messages.length ||
+                snapshotRef.current?.messages !== baseline.messages
+              )
+                continue;
+              raw.messages = [
+                ...baseline.messages.slice(0, from),
+                ...(raw.messages ?? []),
+              ];
+            }
+            const s = toSnapshot(raw);
             if (superseded() || esRef.current !== es) return undefined;
             // A newer completion needs a newer snapshot, not an overlapping GET.
             if (version !== refreshVersion) continue;

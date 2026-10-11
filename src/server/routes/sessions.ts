@@ -7,6 +7,7 @@ import { searchSessions } from "../search.js";
 import { readFile as readReviewFile, writeReviewed } from "../files.js";
 import { resolve as resolveHunks } from "../../shared/hunks.js";
 import { nameSession } from "../autoname.js";
+import { transcriptDelta } from "../transcriptDelta.js";
 import { type AskAnswer } from "../agent.js";
 import { type PiImage } from "../../shared/types.js";
 import { query, json, type Deps, type Env } from "../http.js";
@@ -336,7 +337,10 @@ export function sessionsRoutes({ cwd: CWD, registry }: Deps) {
              */
             await registry.refreshIfFileIsAhead(entry.id);
             const fresh = registry.get(entry.id) ?? entry;
-            return c.json(registry.snapshot(fresh, entry.id), 200);
+            return c.json(
+              transcriptDelta(registry.snapshot(fresh, entry.id)),
+              200,
+            );
           } catch (err) {
             return c.json(
               { error: err instanceof Error ? err.message : String(err) },
@@ -347,8 +351,8 @@ export function sessionsRoutes({ cwd: CWD, registry }: Deps) {
       )
 
       /**
-       * Full snapshot. The client calls this on attach and whenever it is in any
-       * doubt — refetching the whole thing is always correct and always cheap enough.
+       * Full snapshot by default; an opt-in cursor returns a validated suffix.
+       * Older clients and invalidated history always receive the full transcript.
        */
       .get("/sessions/:id", async (c) => {
         if (!registry.get(c.req.param("id")))
@@ -362,7 +366,13 @@ export function sessionsRoutes({ cwd: CWD, registry }: Deps) {
         await registry.refreshIfFileIsAhead(c.req.param("id"));
         const entry = registry.get(c.req.param("id"));
         if (!entry) return c.json({ error: "not found" }, 404);
-        return c.json(registry.snapshot(entry, c.req.param("id")), 200);
+        return c.json(
+          transcriptDelta(
+            registry.snapshot(entry, c.req.param("id")),
+            c.req.header("x-pwi-transcript"),
+          ),
+          200,
+        );
       })
 
       /**
