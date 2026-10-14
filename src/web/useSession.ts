@@ -1,3 +1,4 @@
+import { EventStream } from "./EventStream.js";
 import type { Tabs } from "./tabStore.js";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { addNotice, ASK_ONLY } from "../shared/types.js";
@@ -218,7 +219,7 @@ export function useSession({
   } | null>(null);
   const [modelError, setModelError] = useState<string | null>(null);
 
-  const esRef = useRef<EventSource | null>(null);
+  const esRef = useRef<EventStream | null>(null);
   const cancelStreamRef = useRef<(() => void) | null>(null);
   /**
    * The turn error this attachment watched arrive. The server drops an error
@@ -433,7 +434,7 @@ export function useSession({
       setBusy(snap.isStreaming);
       seenErrorRef.current = null;
 
-      const es = new EventSource(`/api/sessions/${snap.id}/events`);
+      const es = new EventStream(`/api/sessions/${snap.id}/events`);
       esRef.current = es;
 
       // Keep every delta, but publish at most once per 50ms rather than
@@ -700,11 +701,10 @@ export function useSession({
         }
       };
 
-      // The browser retries a dropped SSE connection on its own, but gives up
-      // for good on an HTTP error — exactly what a restarted server returns for
-      // an id it no longer has. CLOSED means only we can recover it.
+      // Reopen from the durable file after any socket loss, including a restart
+      // that forgot the live session id. The fresh snapshot recovers missed events.
       es.onerror = () => {
-        if (es.readyState === EventSource.CLOSED) reattach();
+        if (es.readyState === EventStream.CLOSED) reattach();
         else void refetch();
       };
       return key;
@@ -729,7 +729,7 @@ export function useSession({
     // Fast Refresh re-runs effects: an edit to this file ran the cleanup below
     // and left the tab deaf to its session. Reopen the stream it closed.
     const file = snapshotRef.current?.file;
-    if (esRef.current?.readyState === EventSource.CLOSED && file)
+    if (esRef.current?.readyState === EventStream.CLOSED && file)
       void attachRef.current(file);
     return () => {
       cancelStreamRef.current?.();

@@ -1,3 +1,4 @@
+import { watchFiles } from "../fileWatch.js";
 import { Hono, type Context } from "hono";
 import { getMimeType } from "hono/utils/mime";
 import { createStreamBody } from "@hono/node-server/utils/stream";
@@ -9,8 +10,6 @@ import {
   mkdirSync,
   rmSync,
   statSync,
-  watch,
-  type FSWatcher,
 } from "node:fs";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
@@ -253,29 +252,14 @@ export function filesRoutes({ cwd: CWD }: Deps) {
         });
         res.write(": connected\n\n");
 
-        let timer: NodeJS.Timeout | undefined;
-        const changed = () => {
-          clearTimeout(timer);
-          timer = setTimeout(() => res.write("data: change\n\n"), 250);
-        };
-        const watchers: FSWatcher[] = [];
-        // Capped so a huge expanded tree cannot exhaust the inotify limit.
-        for (const rel of ["", ...(c.req.queries("dir") ?? [])].slice(0, 500)) {
-          try {
-            const w = watch(safePath(CWD, join(root, rel)), changed);
-            // A watched folder deleted or unreadable must not crash the server.
-            w.on("error", () => w.close());
-            watchers.push(w);
-          } catch {
-            // Gone or outside every project: nothing to watch there.
-          }
-        }
+        const detach = watchFiles(CWD, root, c.req.queries("dir") ?? [], () => {
+          res.write("data: change\n\n");
+        });
 
         const keepalive = setInterval(() => res.write(": ping\n\n"), 15_000);
         res.on("close", () => {
           clearInterval(keepalive);
-          clearTimeout(timer);
-          for (const w of watchers) w.close();
+          detach();
         });
         return RESPONSE_ALREADY_SENT;
       })

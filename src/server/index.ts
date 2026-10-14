@@ -3,6 +3,7 @@
  * and the built client, the terminal WebSocket, port takeover, shutdown.
  */
 
+import { attachEvents } from "./eventSockets.js";
 import { createApp } from "./app.js";
 import { hostAllowed, originAllowed, VITE_PORT, type Header } from "./http.js";
 import { getRequestListener } from "@hono/node-server";
@@ -155,10 +156,8 @@ const server = createServer(getRequestListener(app.fetch));
 /**
  * The terminal socket: `/api/terminal/socket?id=<terminal>`.
  *
- * `noServer` and a manual upgrade, not `new WebSocketServer({ server })`,
- * because this process has exactly one WebSocket path and everything else on
- * the port is HTTP — an attached-to-server ws would answer upgrades on any
- * path, including a typo'd one, with a socket that then goes silent.
+ * `noServer` and a manual upgrade restrict sockets to the terminal and live
+ * event paths. All other paths on this port remain HTTP.
  *
  * Messages are JSON in both directions. `input` is not raw frames: a resize
  * has to travel the same ordered channel as the keystrokes around it, or a
@@ -176,7 +175,9 @@ server.on("upgrade", (req, socket, head) => {
     return typeof value === "string" ? value : undefined;
   };
   if (
-    url.pathname !== "/api/terminal/socket" ||
+    (url.pathname !== "/api/terminal/socket" &&
+      url.pathname !== "/api/files/watch" &&
+      !/^\/api\/sessions\/[^/]+\/events$/.test(url.pathname)) ||
     !hostAllowed(header) ||
     !originAllowed(header)
   ) {
@@ -188,6 +189,10 @@ server.on("upgrade", (req, socket, head) => {
   const rows = Number(url.searchParams.get("rows")) || 24;
 
   sockets.handleUpgrade(req, socket, head, (ws) => {
+    if (url.pathname !== "/api/terminal/socket") {
+      attachEvents(ws, req, CWD, registry);
+      return;
+    }
     /*
      * Creating is the POST above, never this: a socket that created its own
      * terminal would mint a second shell every time a flaky connection

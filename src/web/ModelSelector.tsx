@@ -83,9 +83,7 @@ export function ModelSelector({
         if (!cancelled)
           setCatalogError(
             controller.signal.aborted
-              ? t(
-                  "Model list timed out. Close other app browser tabs and retry.",
-                )
+              ? t("Model list timed out. Retry to reconnect.")
               : t("Could not load models: {error}", {
                   error: err instanceof Error ? err.message : String(err),
                 }),

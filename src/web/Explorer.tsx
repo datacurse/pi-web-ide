@@ -8,6 +8,7 @@
  * closing this panel must not close what you opened.
  */
 
+import { EventStream } from "./EventStream.js";
 import {
   createContext,
   useCallback,
@@ -984,7 +985,7 @@ export function Explorer({
     const q = new URLSearchParams({ root: cwd });
     for (const d of openDirs)
       if (d.startsWith(`${cwd}/`)) q.append("dir", d.slice(cwd.length + 1));
-    const events = new EventSource(`/api/files/watch?${q}`);
+    const events = new EventStream(`/api/files/watch?${q}`, true);
     events.onmessage = () => setManual((n) => n + 1);
     return () => events.close();
   }, [cwd, openDirs]);

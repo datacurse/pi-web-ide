@@ -2,11 +2,9 @@
  * app.ts — the HTTP API as one Hono app, with no side effects of its own:
  * index.ts serves it, and tests call it in-process with `app.request()`.
  *
- * SSE for events, POST for commands. SSE rather than WebSocket on purpose:
- * this is one-directional streaming plus discrete commands. The browser gives
- * us reconnect semantics for free, and prompt/abort are plain POSTs. A
- * WebSocket would buy nothing and cost us a framing/reconnect/ack protocol to
- * write and debug. The terminal is the exception, in index.ts.
+ * POST for commands, with SSE routes kept for HTTP clients. The browser uses
+ * WebSocket upgrades in index.ts for live updates: long-lived SSE connections
+ * exhaust HTTP/1's per-host pool when several app tabs are open.
  */
 
 import { Hono } from "hono";
