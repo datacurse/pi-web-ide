@@ -2175,6 +2175,7 @@ export default function App() {
            * column's tabs sit at the same height as the first's.
            */}
           <EditorColumn
+            key={`left:${tabs.project}`}
             side="left"
             onReveal={revealFile}
             onTogglePin={togglePin}
@@ -2208,12 +2209,16 @@ export default function App() {
             hunks={leftHunks.snapshot?.hunks ?? EMPTY_HUNKS}
             onHunksChanged={() => void leftHunks.reloadSnapshot()}
             chat={chatFor(left, "left")}
+            chatEntry={
+              left.snapshot?.file ?? left.snapshot?.id ?? left.targetRef.current
+            }
             messages={left.snapshot?.messages}
             focused={!tabs.right || focusedSide === "left"}
           />
 
           {tabs.right && (
             <EditorColumn
+              key={`right:${tabs.project}`}
               side="right"
               onReveal={revealFile}
               onTogglePin={togglePin}
@@ -2250,6 +2255,11 @@ export default function App() {
                 tabs.right.files.some(isSessionTab)
                   ? chatFor(right, "right")
                   : null
+              }
+              chatEntry={
+                right.snapshot?.file ??
+                right.snapshot?.id ??
+                right.targetRef.current
               }
               messages={right.snapshot?.messages}
               focused={focusedSide === "right"}

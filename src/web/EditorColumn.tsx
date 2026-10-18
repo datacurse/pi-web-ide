@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { RetainedView } from "./RetainedView.js";
 import {
   Brain,
   ChatText,
@@ -20,6 +21,7 @@ import {
   diffParts,
   isDiffTab,
   isFileTab,
+  isSessionTab,
   isTermTab,
   isWebTab,
   termId,
@@ -64,6 +66,7 @@ export function EditorColumn({
   hunks,
   onHunksChanged,
   chat,
+  chatEntry,
   messages,
   focused,
   onReveal,
@@ -99,6 +102,7 @@ export function EditorColumn({
   onHunksChanged: () => void;
   /** This column's chat, or null when the column holds no session. */
   chat: React.ReactNode;
+  chatEntry?: string;
   /** The chat's transcript, for the right-click Copy items. */
   messages?: PiMessage[];
   /** In a split, whether this is the column keys and new tabs go to. */
@@ -211,39 +215,51 @@ export function EditorColumn({
             e.preventDefault();
             setMenu({ x: e.clientX, y: e.clientY });
           }}
-          className="flex min-h-0 min-w-0 flex-1 flex-col"
+          className="relative flex min-h-0 min-w-0 flex-1 flex-col"
         >
-          {showsFile && (
-            <FileEditor
-              // Keyed by path: switching files must build a new editor rather
-              // than reuse one holding another file's undo history.
-              key={active}
-              path={tabPath(active)}
-              reveal={
-                fileReveal?.path === tabPath(active) ? fileReveal : undefined
-              }
-              cwd={cwd}
-              onDirty={onDirty}
-            />
-          )}
-          {showsDiff && (
-            <DiffView
-              // Same rule as the editor: a merge view is built around its two
-              // documents and cannot be repointed at another file.
-              key={active}
-              path={diffParts(active).path}
-              refName={diffParts(active).ref}
-              cwd={cwd}
-              sessionId={sessionId}
-              // Only this file's hunks: the pane shows one file, and the
-              // others' decisions belong to their own tabs.
-              hunks={hunks.filter((h) => h.path === diffParts(active).path)}
-              onChanged={onHunksChanged}
-            />
-          )}
-          {/* Mounted only while showing, like the dock: the server replays the
-					    scrollback on attach, and a hidden xterm cannot measure itself. */}
-          {showsTerm && <Terminal key={active} id={termId(active)} focused />}
+          {group.files.filter(isFileTab).map((entry) => (
+            <RetainedView
+              key={entry}
+              active={entry === active}
+              preloadDelay={300 + group.files.indexOf(entry) * 150}
+            >
+              <FileEditor
+                path={tabPath(entry)}
+                reveal={
+                  fileReveal?.path === tabPath(entry) ? fileReveal : undefined
+                }
+                cwd={cwd}
+                onDirty={onDirty}
+                active={entry === active}
+              />
+            </RetainedView>
+          ))}
+          {group.files.filter(isDiffTab).map((entry) => (
+            <RetainedView
+              key={entry}
+              active={entry === active}
+              preloadDelay={300 + group.files.indexOf(entry) * 150}
+            >
+              <DiffView
+                path={diffParts(entry).path}
+                refName={diffParts(entry).ref}
+                cwd={cwd}
+                sessionId={sessionId}
+                hunks={hunks.filter((h) => h.path === diffParts(entry).path)}
+                onChanged={onHunksChanged}
+                active={entry === active}
+              />
+            </RetainedView>
+          ))}
+          {group.files.filter(isTermTab).map((entry) => (
+            <RetainedView key={entry} active={entry === active}>
+              <Terminal
+                id={termId(entry)}
+                focused={entry === active && focused}
+                active={entry === active}
+              />
+            </RetainedView>
+          ))}
           {group.files.filter(isWebTab).map((entry) => (
             <div
               key={entry}
@@ -252,19 +268,20 @@ export function EditorColumn({
               <WebPage entry={entry} active={entry === active} />
             </div>
           ))}
-          {/*
-           * The chat stays MOUNTED under a file tab rather than being swapped
-           * out: it holds the live EventSource and the transcript's scroll
-           * position, so unmounting to look at a file would drop a streaming
-           * turn and lose your place in it. `hidden` costs a hidden subtree;
-           * remounting costs the session.
-           */}
-          {chat && (
-            <div
-              className={`flex min-h-0 min-w-0 flex-1 flex-col ${showsDoc ? "hidden" : ""}`}
+          {group.files.filter(isSessionTab).map((entry) => (
+            <RetainedView
+              key={entry}
+              active={entry === chatEntry}
+              visible={!showsDoc && entry === chatEntry}
+              freeze
             >
               {chat}
-            </div>
+            </RetainedView>
+          ))}
+          {!chatEntry && chat && (
+            <RetainedView key="empty-chat" active={!showsDoc}>
+              {chat}
+            </RetainedView>
           )}
           {/* Nothing to show: an empty column says so rather than going blank. */}
           {!showsDoc && !chat && (

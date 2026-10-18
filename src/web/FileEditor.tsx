@@ -45,10 +45,12 @@ export function FileEditor({
   path,
   cwd,
   onDirty,
+  active = true,
   reveal,
 }: {
   path: string;
   cwd: string;
+  active?: boolean;
   reveal?: FileLocation;
   /**
    * Report unsaved state upward, so the tab can show a dot.
@@ -80,6 +82,8 @@ export function FileEditor({
    */
   const baseRef = useRef<string | null>(null);
   baseRef.current = base;
+  const dirtyRef = useRef(dirty);
+  dirtyRef.current = dirty;
 
   const editFormatted = useCallback((text: string) => {
     const editor = view.current;
@@ -183,6 +187,40 @@ export function FileEditor({
       view.current = null;
     };
   }, [path]);
+
+  // Reveal cached content immediately, then refresh only an untouched buffer.
+  // Never overwrite edits made while this request was in flight.
+  useEffect(() => {
+    if (!active || !view.current || dirtyRef.current) return;
+    const baseline = baseRef.current;
+    let live = true;
+    void unwrap(api.file.$get({ query: { path } }))
+      .then((file) => {
+        const editor = view.current;
+        if (
+          !live ||
+          !editor ||
+          dirtyRef.current ||
+          baseRef.current !== baseline ||
+          editor.state.doc.toString() !== baseline
+        )
+          return;
+        const text = file.content ?? "";
+        if (text === baseline) return;
+        baseRef.current = text;
+        editor.dispatch({
+          changes: { from: 0, to: editor.state.doc.length, insert: text },
+        });
+        setBase(text);
+        setPreview(text);
+        setPreviewVersion((version) => version + 1);
+        setDirty(false);
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [active, path]);
 
   // Reveal subsequent links without rebuilding the editor or losing unsaved text/undo history.
   useEffect(() => {

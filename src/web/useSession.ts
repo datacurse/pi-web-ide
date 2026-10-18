@@ -201,8 +201,25 @@ export function useSession({
    */
   const snapshotRef = useRef<Snapshot | null>(null);
   snapshotRef.current = snapshot;
-  const [partialStore] = useState(createPartialStore);
-  const setPartial = partialStore.set;
+  const [partialStore, setPartialStore] = useState(createPartialStore);
+  const partialRef = useRef(partialStore);
+  const setPartial = useCallback(
+    (change: Parameters<typeof partialStore.set>[0]) =>
+      partialRef.current.set(change),
+    [],
+  );
+  const cachedSessions = useRef(
+    new Map<
+      string,
+      {
+        snapshot: Snapshot;
+        partialStore: ReturnType<typeof createPartialStore>;
+        busy: boolean;
+        command: { text: string; running: boolean; result?: string } | null;
+      }
+    >(),
+  );
+  const attachedScope = useRef(scope);
   const [busy, setBusy] = useState(false);
   /**
    * The local slash command last sent, and whether it is still working.
@@ -219,6 +236,29 @@ export function useSession({
   } | null>(null);
   const [modelError, setModelError] = useState<string | null>(null);
 
+  // Cache only this tab set, never closed tabs or another project's transcripts.
+  if (snapshot) {
+    cachedSessions.current.set(
+      `${attachedScope.current}\0${snapshot.file ?? snapshot.id}`,
+      {
+        snapshot,
+        partialStore,
+        busy,
+        command,
+      },
+    );
+  }
+  useEffect(() => {
+    const tabs = tabsRef.current;
+    const open = new Set([...tabs.files, ...(tabs.right?.files ?? [])]);
+    for (const [key, value] of cachedSessions.current) {
+      if (
+        !key.startsWith(`${tabs.project}\0`) ||
+        !open.has(value.snapshot.file ?? value.snapshot.id)
+      )
+        cachedSessions.current.delete(key);
+    }
+  });
   const esRef = useRef<EventStream | null>(null);
   const cancelStreamRef = useRef<(() => void) | null>(null);
   /**
@@ -254,7 +294,10 @@ export function useSession({
     esRef.current?.close();
     esRef.current = null;
     setSnapshot(null);
-    setPartial(emptyPartial());
+    snapshotRef.current = null;
+    const emptyStore = createPartialStore();
+    partialRef.current = emptyStore;
+    setPartialStore(emptyStore);
     setBusy(false);
     setModelError(null);
     // Closing the last tab is not a pending open: the pane must fall back to
@@ -296,27 +339,26 @@ export function useSession({
       cancelStreamRef.current?.();
       esRef.current?.close();
       esRef.current = null;
-      setPartial(emptyPartial());
       setModelError(null);
 
-      /*
-       * Blank the pane when this attach is for a DIFFERENT session.
-       *
-       * Opening spawns a pi child and reads the whole transcript, so on a
-       * big session it is seconds. Leaving the previous conversation on
-       * screen for those seconds made a click in the session list look like
-       * it had done nothing at all — the tab strip changed, the thing filling
-       * the window did not. A reattach to the SAME session (an EventSource
-       * that dropped, a server restart) deliberately keeps its transcript:
-       * there is nothing new to wait for and blanking it would be a flicker.
-       */
+      // Return to the exact cached transcript immediately; the authoritative
+      // snapshot and stream below catch it up without an empty/loading frame.
       const showing = snapshotRef.current;
       const same =
         showing && file && (showing.file === file || showing.id === file);
+      attachedScope.current = scope;
       if (!same) {
-        setSnapshot(null);
-        setBusy(false);
-        setOpening(true);
+        const cached = file
+          ? cachedSessions.current.get(`${scope}\0${file}`)
+          : undefined;
+        const store = cached?.partialStore ?? createPartialStore();
+        partialRef.current = store;
+        setPartialStore(store);
+        snapshotRef.current = cached?.snapshot ?? null;
+        setSnapshot(cached?.snapshot ?? null);
+        setBusy(cached?.busy ?? false);
+        setCommand(cached?.command ?? null);
+        setOpening(!cached);
       }
 
       const r = await api.sessions.open

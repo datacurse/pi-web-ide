@@ -233,8 +233,10 @@ export function DiffView({
   sessionId,
   hunks,
   onChanged,
+  active = true,
 }: {
   path: string;
+  active?: boolean;
   /** Commit sha, or "" for the working tree. */
   refName: string;
   cwd: string;
@@ -270,9 +272,9 @@ export function DiffView({
    * changing is the cheapest signal that it did.
    */
   useEffect(() => {
-    if (refName) return;
+    if (refName || !active) return;
     void reload();
-  }, [hunks, refName, reload]);
+  }, [hunks, refName, reload, active]);
 
   const decide = async (hunk: Hunk, state: HunkState) => {
     if (!sessionId) return;

@@ -95,10 +95,12 @@ function themeColors(host: HTMLElement) {
 export function Terminal({
   id,
   focused,
+  active = true,
   onFocus,
   onExit,
 }: {
   id: string;
+  active?: boolean;
   /** The layout's focused pane, so a split can be pointed at by keyboard. */
   focused?: boolean;
   onFocus?: () => void;
@@ -106,6 +108,11 @@ export function Terminal({
 }) {
   const host = useRef<HTMLDivElement | null>(null);
   const view = useRef<XTerm | null>(null);
+  const visibleRef = useRef(active);
+  visibleRef.current = active;
+  const focusedRef = useRef(focused);
+  focusedRef.current = focused;
+  const fitView = useRef<(() => void) | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   /*
@@ -204,7 +211,7 @@ export function Terminal({
       view.current = term;
       // A split that is created focused should take the keyboard without a
       // click: the gesture that made it was already a decision to use it.
-      if (focused) term.focus();
+      if (focusedRef.current && visibleRef.current) term.focus();
 
       /*
        * Attach, and keep attaching.
@@ -297,7 +304,13 @@ export function Terminal({
        * which is not a window resize.
        */
       const sendSize = () => {
-        if (term && socket?.readyState === WebSocket.OPEN)
+        if (
+          visibleRef.current &&
+          node.clientWidth > 0 &&
+          node.clientHeight > 0 &&
+          term &&
+          socket?.readyState === WebSocket.OPEN
+        )
           socket.send(
             JSON.stringify({
               type: "resize",
@@ -306,8 +319,21 @@ export function Terminal({
             }),
           );
       };
+      fitView.current = () => {
+        if (!visibleRef.current || !node.clientWidth || !node.clientHeight)
+          return;
+        fit.fit();
+        sendSize();
+      };
       observer = new ResizeObserver(() => {
-        if (!live || !term) return;
+        if (
+          !live ||
+          !term ||
+          !visibleRef.current ||
+          !node.clientWidth ||
+          !node.clientHeight
+        )
+          return;
         fit.fit();
         sendSize();
       });
@@ -319,6 +345,7 @@ export function Terminal({
 
     return () => {
       live = false;
+      fitView.current = null;
       if (retry) clearTimeout(retry);
       observer?.disconnect();
       socket?.close();
@@ -334,8 +361,9 @@ export function Terminal({
   // Focus follows the layout, so clicking one pane and then splitting puts
   // the keyboard in the new shell without a second click.
   useEffect(() => {
-    if (focused) view.current?.focus();
-  }, [focused]);
+    if (active) fitView.current?.();
+    if (focused && active) view.current?.focus();
+  }, [focused, active]);
 
   return (
     <div
