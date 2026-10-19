@@ -396,7 +396,38 @@ export function GitActions({
 
   return (
     <div ref={root} className="relative flex items-center gap-1.5">
-      <div className="flex h-control-md items-stretch overflow-hidden rounded-full border border-neutral-700 bg-neutral-900 text-meta">
+      {/*
+       * Only FAILURE gets a line, plus a PR's URL because that is a thing you
+       * click rather than a notification.
+       *
+       * A success message here was permanent clutter for information the
+       * button already carries: the changed-file count drops to nothing and
+       * the tree is clean. Announcing that a thing you clicked did what it
+       * says is noise you learn to look past — and it sat next to the
+       * composer, where it competed with the thing you were typing.
+       */}
+      {result && !result.ok && (
+        <button
+          data-custom="composer pill"
+          onClick={() => setResult(null)}
+          title={result.error}
+          className="max-w-60 fade-end rounded-full px-2 py-1 text-meta text-red-400 hover:text-red-300"
+        >
+          {result.error ?? t("Failed")}
+        </button>
+      )}
+      {result?.ok && result.url && (
+        <a
+          href={result.url}
+          target="_blank"
+          rel="noreferrer"
+          className="max-w-60 fade-end rounded-full px-2 py-1 text-meta text-neutral-400 hover:text-neutral-200"
+        >
+          {t("Pull request ↗")}
+        </a>
+      )}
+
+      <div className="flex h-control-md shrink-0 items-stretch overflow-hidden rounded-full border border-neutral-700 bg-neutral-900 text-meta">
         <button
           data-custom="composer pill"
           onClick={() => void start(primary)}
@@ -495,37 +526,6 @@ export function GitActions({
             </span>
           </MenuItem>
         </div>
-      )}
-
-      {/*
-       * Only FAILURE gets a line, plus a PR's URL because that is a thing you
-       * click rather than a notification.
-       *
-       * A success message here was permanent clutter for information the
-       * button already carries: the changed-file count drops to nothing and
-       * the tree is clean. Announcing that a thing you clicked did what it
-       * says is noise you learn to look past — and it sat next to the
-       * composer, where it competed with the thing you were typing.
-       */}
-      {result && !result.ok && (
-        <button
-          data-custom="composer pill"
-          onClick={() => setResult(null)}
-          title={result.error}
-          className="max-w-60 fade-end rounded-full px-2 py-1 text-meta text-red-400 hover:text-red-300"
-        >
-          {result.error ?? t("Failed")}
-        </button>
-      )}
-      {result?.ok && result.url && (
-        <a
-          href={result.url}
-          target="_blank"
-          rel="noreferrer"
-          className="max-w-60 fade-end rounded-full px-2 py-1 text-meta text-neutral-400 hover:text-neutral-200"
-        >
-          {t("Pull request ↗")}
-        </a>
       )}
 
       {pending && (
