@@ -213,7 +213,8 @@ const HistoryRow = memo(function HistoryRow({
         {row.role !== "assistant" && (
           <div className="font-mono text-meta text-neutral-500">{row.role}</div>
         )}
-        {workDisplay === "timeline" && row.activity?.steps.length ? (
+        {workDisplay === "timeline" &&
+        (row.running || row.activity?.steps.length) ? (
           <TimedWork row={row} />
         ) : (
           (!!row.work?.length || row.running) && (

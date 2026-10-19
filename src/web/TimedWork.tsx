@@ -9,8 +9,15 @@ import { useAnchorSources } from "./anchorDiff.js";
 /** Reuse the recorded phases while keeping today's tool and Markdown renderer. */
 export function TimedWork({ row }: { row: RawRow }) {
   const sources = useAnchorSources(row.work ?? []);
-  const activity = row.activity;
-  if (!activity || !activity.steps.length) return null;
+  // Keep the selected display while the first activity frame is in flight.
+  const start = row.workStartedAt ?? row.at;
+  const activity = row.activity?.steps.length
+    ? row.activity
+    : {
+        start,
+        steps: [{ kind: "preparing" as const, label: "Requesting", start }],
+        tools: [],
+      };
   const groups = activityGroups(activity);
   let blocks: ReturnType<typeof phaseBlocks> | undefined;
   return (
