@@ -100,6 +100,8 @@ import {
   readTerminalLayout,
   readTerminalWidth,
   readListWidth,
+  readListVisible,
+  writeListVisible,
   clampListWidth,
   LIST_MIN_PX,
   LIST_MAX_PX,
@@ -212,6 +214,11 @@ export default function App() {
   /** Why the last session listing failed, shown in place of an empty list. */
   const [listError, setListError] = useState<string | null>(null);
   const [listOpen, setListOpen] = useState(false);
+  const [listVisible, setListVisible] = useState(readListVisible);
+  const showList = (visible: boolean) => {
+    setListVisible(visible);
+    writeListVisible(visible);
+  };
   const [searchOpen, setSearchOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   /** Stats, Packages or Settings, shown in a modal over everything. */
@@ -1831,6 +1838,13 @@ export default function App() {
       run: jumpToWaiting,
     },
     {
+      id: "view.sessions",
+      label: listVisible
+        ? t("Hide Session History")
+        : t("Show Session History"),
+      run: () => showList(!listVisible),
+    },
+    {
       id: "view.explorer",
       label: panel === "editor" ? t("Hide Explorer") : t("Show Explorer"),
       run: () => selectPanel("editor"),
@@ -2049,6 +2063,8 @@ export default function App() {
         uncommitted={uncommitted}
         dockOpen={dockOpen}
         onToggleDock={toggleTerminal}
+        listVisible={listVisible}
+        onToggleList={() => showList(!listVisible)}
         onPage={setPage}
         version={__APP_VERSION__}
       />
@@ -2324,9 +2340,11 @@ export default function App() {
         onKeyDown={listDividerKeys}
         // Same line and 9px hit box as the panel's divider, leaning right to
         // stay off the editor's scrollbar.
-        className="relative z-10 w-0 shrink-0 data-hover:cursor-col-resize border-l border-neutral-800 transition-colors delay-1000 duration-500 ease-out after:absolute after:inset-y-0 after:-left-0.75 after:-right-1.5 after:content-[''] data-hover:border-amber-600 data-hover:delay-0 data-hover:duration-100 focus-visible:border-amber-500 focus-visible:outline-none motion-reduce:transition-none narrow:hidden"
+        className={`relative z-10 w-0 shrink-0 data-hover:cursor-col-resize border-l border-neutral-800 transition-colors delay-1000 duration-500 ease-out after:absolute after:inset-y-0 after:-left-0.75 after:-right-1.5 after:content-[\'\'] data-hover:border-amber-600 data-hover:delay-0 data-hover:duration-100 focus-visible:border-amber-500 focus-visible:outline-none motion-reduce:transition-none narrow:hidden ${listVisible ? "" : "hidden"}`}
       />
       <SessionList
+        visible={listVisible}
+        onHide={() => showList(false)}
         width={listWidth}
         sessions={shown}
         attention={attention}

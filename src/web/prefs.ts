@@ -792,6 +792,15 @@ export function writePanel(panel: Panel): void {
   writeStored(PANEL_KEY, panel ?? "");
 }
 
+/** Desktop session history visibility; the narrow drawer stays independent. */
+export function readListVisible(): boolean {
+  return readStored("pwi:listVisible") !== "0";
+}
+
+export function writeListVisible(visible: boolean): void {
+  writeStored("pwi:listVisible", visible ? "1" : "0");
+}
+
 const DOCK_OPEN_KEY = "pwi:dockOpen";
 
 /** Whether the terminal dock is open. Unset: open if the terminal was the side panel. */

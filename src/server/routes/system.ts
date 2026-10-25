@@ -3,6 +3,7 @@ import { browseAction, type BrowseAction } from "../browseActions.js";
 import {
   listModels,
   readSettings,
+  writeSettings,
   setDefaultModel,
   setDefaultThinkingLevel,
 } from "../models.js";
@@ -97,12 +98,14 @@ export function systemRoutes({
             defaultProvider: p,
             defaultModel: m,
             defaultThinkingLevel: t,
+            pwiDefaultFastMode: f,
           } = readSettings();
           return c.json(
             {
               models: await listModels(),
               default: p && m ? `${p}/${m}` : null,
               defaultThinking: typeof t === "string" ? t : null,
+              defaultFast: typeof f === "boolean" ? f : null,
             },
             200,
           );
@@ -316,6 +319,25 @@ export function systemRoutes({
           return c.json(
             { error: err instanceof Error ? err.message : String(err) },
             400,
+          );
+        }
+      })
+
+      .post("/default-fast-mode", json<{ enabled: boolean | null }>(), (c) => {
+        const { enabled } = c.req.valid("json");
+        if (enabled !== null && typeof enabled !== "boolean")
+          return c.json({ error: "enabled must be a boolean or null" }, 400);
+        try {
+          const settings = readSettings();
+          if (enabled === null) delete settings.pwiDefaultFastMode;
+          else settings.pwiDefaultFastMode = enabled;
+          writeSettings(settings);
+          registry.discardSpares();
+          return c.json({ enabled }, 200);
+        } catch (err) {
+          return c.json(
+            { error: err instanceof Error ? err.message : String(err) },
+            500,
           );
         }
       })

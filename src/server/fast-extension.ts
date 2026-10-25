@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { FAST_COMMAND, supportsFastMode } from "../shared/fastMode.ts";
 
 interface Context {
@@ -27,8 +30,24 @@ interface Pi {
 export default function fastMode(pi: Pi) {
   let enabled = false;
   pi.on("session_start", (_event, ctx) => {
+    const entries = ctx.sessionManager.getEntries();
     enabled = false;
-    for (const entry of ctx.sessionManager.getEntries()) {
+    // Only new conversations inherit the default; history keeps its saved mode.
+    if (!entries.some((entry) => entry.type === "message")) {
+      try {
+        const settings = JSON.parse(
+          readFileSync(
+            process.env.PWI_PI_SETTINGS ??
+              join(homedir(), ".pi", "agent", "settings.json"),
+            "utf8",
+          ),
+        );
+        enabled = settings?.pwiDefaultFastMode === true;
+      } catch {
+        // Missing settings default to Standard.
+      }
+    }
+    for (const entry of entries) {
       if (entry.type !== "custom" || entry.customType !== FAST_COMMAND)
         continue;
       const data = entry.data;
@@ -40,6 +59,7 @@ export default function fastMode(pi: Pi) {
       )
         enabled = data.enabled;
     }
+    pi.appendEntry(FAST_COMMAND, { enabled });
   });
   pi.registerCommand(FAST_COMMAND, {
     handler(args, ctx) {

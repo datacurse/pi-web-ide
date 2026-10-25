@@ -18,7 +18,7 @@ then survive a server restart); `gh` is optional (enables "Create PR").
 
 ```bash
 pnpm install
-pnpm dev                     # built UI + API :8890, hot-reload UI :5480
+pnpm dev                     # built UI + API :8890, hot-reload UI :5173
 pnpm build && pnpm start     # single process, serves dist/ itself
 pnpm typecheck               # must pass; includes scripts/check-ui.sh
 pnpm deadcode                # unused files/exports/dependencies, including a production-only pass
@@ -32,7 +32,7 @@ code, and `pnpm check` before committing. To format on save in an editor, enable
 its Prettier integration; it will use `.prettierrc.json`.
 
 `pnpm dev` builds `dist/`, then starts a backend on :8890 serving that built
-UI, plus Vite on :5480 for hot reload. Both UIs use the same backend. No
+UI, plus Vite on :5173 for hot reload. Both UIs use the same backend. No
 systemd service or separate `pnpm start` is needed.
 
 Starting production pwi while an older pwi holds the port stops the old one
@@ -47,7 +47,7 @@ being signalled. Stop an existing dev runner before starting another one.
 | ------------------------- | -------------------------------------------------------------- | -------------------------- |
 | `PWI_CWD`                 | starting project (or pass it as the first argument)            | process cwd                |
 | `PWI_PORT`                | server port                                                    | `8890`                     |
-| `PWI_VITE_PORT`           | dev server port                                                | `5480`                     |
+| `PWI_VITE_PORT`           | dev server port                                                | `5173`                     |
 | `PWI_MODEL`               | startup model, `provider/id`                                   | pi's default               |
 | `PWI_PI_BIN`              | path to the pi binary                                          | `pi` on `PATH`             |
 | `PWI_NAMING_MODEL`        | fallback for commit/session naming unless selected in Settings | `openai-codex/gpt-6.1-sol` |

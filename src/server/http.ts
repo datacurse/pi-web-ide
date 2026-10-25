@@ -21,7 +21,7 @@ import type { Terminals } from "./terminals.js";
  * shell here. Empty unless PWI_DEV=1, which only `pnpm dev` sets, so a
  * production server's boundary is unchanged.
  */
-export const VITE_PORT = Number(process.env.PWI_VITE_PORT ?? 5480);
+export const VITE_PORT = Number(process.env.PWI_VITE_PORT ?? 5173);
 const DEV_ORIGINS = new Set(
   process.env.PWI_DEV === "1"
     ? [`http://127.0.0.1:${VITE_PORT}`, `http://localhost:${VITE_PORT}`]

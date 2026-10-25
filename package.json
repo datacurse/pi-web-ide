@@ -31,6 +31,7 @@
     "@lezer/highlight": "^1.2.3",
     "@phosphor-icons/react": "^2.1.10",
     "@xterm/addon-fit": "^0.11.0",
+    "@xterm/addon-web-links": "^0.12.0",
     "@xterm/xterm": "^6.0.0",
     "fancy-ansi": "^0.1.3",
     "hono": "^4.13.9",

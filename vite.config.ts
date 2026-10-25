@@ -53,7 +53,7 @@ export default defineConfig({
     // Same env var the server reads to build its dev redirect (see index.ts):
     // two places deciding this independently is how you get a 302 to a port
     // nothing is listening on.
-    port: Number(process.env.PWI_VITE_PORT ?? 5480),
+    port: Number(process.env.PWI_VITE_PORT ?? 5173),
     // A dev server that silently moves to the next free port makes that
     // redirect wrong, which is worse than failing to start.
     strictPort: true,

@@ -101,6 +101,8 @@ export function SessionList({
   onSearch,
   project,
   width,
+  visible,
+  onHide,
 }: {
   sessions: (PiSessionInfo & LiveSessionImages)[];
   /** Each session's working / ready / needs state, keyed by file. */
@@ -136,6 +138,9 @@ export function SessionList({
   project: string;
   /** Column width in px on a wide viewport; the drawer keeps its own. */
   width: number;
+  /** Desktop visibility, independent of the narrow drawer. */
+  visible: boolean;
+  onHide: () => void;
 }) {
   /*
    * Sorted here rather than on the server: both timestamps are already on
@@ -248,7 +253,11 @@ export function SessionList({
         // the drawer's only.
         style={{ "--list-w": `${width}px` } as React.CSSProperties}
         className={`w-(--list-w) shrink-0 flex-col border-neutral-800 narrow:border-l bg-neutral-950 narrow:fixed narrow:inset-y-0 narrow:right-0 narrow:z-30 narrow:w-[min(20rem,85vw)] narrow:shadow-2xl ${
-          open ? "flex" : "hidden wide:flex"
+          open
+            ? `flex ${visible ? "" : "wide:hidden"}`
+            : visible
+              ? "hidden wide:flex"
+              : "hidden"
         }`}
       >
         {/*
@@ -292,6 +301,13 @@ export function SessionList({
             label={t("Open search window (Ctrl+O)")}
           >
             <ArrowsOut size={16} />
+          </StripCell>
+          <StripCell
+            className="narrow:hidden"
+            onClick={onHide}
+            label={t("Hide session history")}
+          >
+            <X size={16} />
           </StripCell>
         </div>
 

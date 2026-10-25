@@ -22,6 +22,7 @@ import {
   Code,
   GitBranch,
   Gear,
+  ClockCounterClockwise,
   Key,
   Network,
   SquaresFour,
@@ -101,6 +102,8 @@ export function ActivityBar({
   uncommitted,
   dockOpen,
   onToggleDock,
+  listVisible,
+  onToggleList,
   onPage,
   version,
 }: {
@@ -113,6 +116,8 @@ export function ActivityBar({
   /** The terminal dock under the editor columns. */
   dockOpen: boolean;
   onToggleDock: () => void;
+  listVisible: boolean;
+  onToggleList: () => void;
   /** Open a page in the page dialog. */
   onPage: (page: PageId) => void;
   /** Full build string. Displayed short, but kept whole in the tooltip. */
@@ -159,6 +164,20 @@ export function ActivityBar({
         <GitBranch size={20} />
       </RailButton>
 
+      <div className="narrow:hidden">
+        <RailButton
+          label={
+            listVisible ? t("Hide session history") : t("Show session history")
+          }
+          title={
+            listVisible ? t("Hide session history") : t("Show session history")
+          }
+          active={listVisible}
+          onClick={onToggleList}
+        >
+          <ClockCounterClockwise size={20} />
+        </RailButton>
+      </div>
       {/* Set apart from the panels above: it toggles the dock under the
 			    tabs, not the left column. */}
       <div aria-hidden className="my-1 w-full border-t border-neutral-800" />

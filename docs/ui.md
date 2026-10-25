@@ -9,18 +9,18 @@ fits none of the existing ones, and record it here.
 
 ## Type
 
-| Class               | Size   | Use                                              |
-| ------------------- | ------ | ------------------------------------------------ |
-| `text-caption`      | 11px   | Floor. Badges, counts, uppercase section labels. |
-| `text-meta`         | 12px   | Hints, secondary labels, mono chips.            |
-| `text-ui`           | 13px   | Default chrome: buttons, list rows, inputs, menus, panel headers. |
-| `text-body`         | 14px   | Content: chat tool output, notices, questions, editors, tables. |
-| `text-title`        | 16px   | Dialog titles, empty-state heading.              |
-| `text-display`      | 48px   | The π mark only.                                 |
-| `.chat-prose`       | 17px   | Assistant/user prose (`--prose-size`), and reasoning. |
-| `.chat-code`        | 15px   | Code blocks, tool/group/thought lines (`--code-size`, the optical match for 17px sans). |
-| `text-h1/h2/h3`     | em     | Markdown headings, relative to prose.            |
-| `text-code-inline`  | 0.875em | Inline code and math fallback inside prose.     |
+| Class              | Size    | Use                                                                                     |
+| ------------------ | ------- | --------------------------------------------------------------------------------------- |
+| `text-caption`     | 11px    | Floor. Badges, counts, uppercase section labels.                                        |
+| `text-meta`        | 12px    | Hints, secondary labels, mono chips.                                                    |
+| `text-ui`          | 13px    | Default chrome: buttons, list rows, inputs, menus, panel headers.                       |
+| `text-body`        | 14px    | Content: chat tool output, notices, questions, editors, tables.                         |
+| `text-title`       | 16px    | Dialog titles, empty-state heading.                                                     |
+| `text-display`     | 48px    | The π mark only.                                                                        |
+| `.chat-prose`      | 17px    | Assistant/user prose (`--prose-size`), and reasoning.                                   |
+| `.chat-code`       | 15px    | Code blocks, tool/group/thought lines (`--code-size`, the optical match for 17px sans). |
+| `text-h1/h2/h3`    | em      | Markdown headings, relative to prose.                                                   |
+| `text-code-inline` | 0.875em | Inline code and math fallback inside prose.                                             |
 
 - Never go below 11px.
 - Pick by role, not by how much room there is:
@@ -42,11 +42,11 @@ fits none of the existing ones, and record it here.
 
 ## Radius
 
-| Class          | Size | Use                                            |
-| -------------- | ---- | ---------------------------------------------- |
-| `rounded-sm`   | 4px  | Controls: buttons, inputs, chips, inline code, list-row hovers. |
-| `rounded-md`   | 8px  | Floating surfaces: menus, popovers, dialogs, thumbnails. |
-| `rounded-lg`   | 12px | The composer and the user message bubble.      |
+| Class          | Size | Use                                                                   |
+| -------------- | ---- | --------------------------------------------------------------------- |
+| `rounded-sm`   | 4px  | Controls: buttons, inputs, chips, inline code, list-row hovers.       |
+| `rounded-md`   | 8px  | Floating surfaces: menus, popovers, dialogs, thumbnails.              |
+| `rounded-lg`   | 12px | The composer and the user message bubble.                             |
 | `rounded-full` | —    | Composer toolbar pills and icon buttons, dots, badges, progress bars. |
 
 - Side variants use the same scale: `rounded-t-sm`.
@@ -110,11 +110,11 @@ fits none of the existing ones, and record it here.
 - The file editor shows the active-line background only with an empty selection;
   selecting text hides it so the line and selection highlights do not overlap.
 
-| Token            | Size | Use                                              |
-| ---------------- | ---- | ------------------------------------------------ |
-| `control-sm`     | 24px | `Button`/`IconButton` `sm`: toolbars, headers.   |
-| `control-md`     | 28px | `Button`/`IconButton` `md`: dialogs, composer.   |
-| `bar`            | 36px | `PanelHeader`: every panel and editor top row.   |
+| Token        | Size | Use                                            |
+| ------------ | ---- | ---------------------------------------------- |
+| `control-sm` | 24px | `Button`/`IconButton` `sm`: toolbars, headers. |
+| `control-md` | 28px | `Button`/`IconButton` `md`: dialogs, composer. |
+| `bar`        | 36px | `PanelHeader`: every panel and editor top row. |
 
 They are spacing keys, so `h-control-sm`, `size-control-md` and `h-bar` all work.
 
@@ -132,7 +132,7 @@ They are spacing keys, so `h-control-sm`, `size-control-md` and `h-bar` all work
   Lists do the same through `ScrollPane` (OverlayScrollbar.tsx), so row highlights span
   the full width: Explorer, sessions, Source Control, Fleet, command palette, session
   search, directory picker. Use it for any new scrolling list.
-Text and icon buttons of the same size share a height and line up in a row.
+  Text and icon buttons of the same size share a height and line up in a row.
 
 ## Icons
 
@@ -156,7 +156,7 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
   All / Dark / Light (`subtle` when on, else `ghost`). Order: dark then light (`light` flag in
   `prefs.ts`), built-ins first.
 - Appearance shows two rows instead: `Theme` (swatch, current name, `Browse themes`) and `Editor
-  theme` (editor swatch, `Match app theme` or the theme's name, and a `Match app theme` reset while
+theme` (editor swatch, `Match app theme` or the theme's name, and a `Match app theme` reset while
   overridden). One gallery, not two lists, because most people want one theme everywhere.
 - VS Code themes (`@shikijs/themes`, converted at build time by `scripts/vscode-themes.ts` into
   `vscodeThemes.json`; mapping in `vscodeTheme.ts`) fill the same 18 `--ct-*` slots, as inline
@@ -222,14 +222,17 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
   `Ask only behavior`, `pwi:askMode`) to pick `Toggle` (default: stays on until switched
   off) or `One shot` (switches off after each send). The menu marks the current mode
   with a `Check`.
-- GPT-6.1 Sol on `openai-codex` has an opt-in `Fast · 2.5× usage` button
-  beside reasoning. It starts off, turns amber when selected, and persists per
-  session outside model context. The tooltip explains the allowance multiplier
-  and account-dependent availability; it is independent of reasoning effort.
+- GPT-6.1 Sol on `openai-codex` has a Standard / `Fast · 2.5× usage` pill
+  beside reasoning. Each option has the same default star as model and thinking:
+  click to save or clear the startup default without changing the active session.
+  Fast turns amber when selected; the selected mode persists outside model context.
+  The tooltip explains the allowance multiplier and account-dependent availability;
+  it is independent of reasoning effort.
   It requests `service_tier: "priority"` only for Sol, and Standard requests
   `"default"`. It is disabled during streaming or saving; old children show
   a restart hint rather than sending an unknown command to the model. Other
-  models do not show it, and no global default is changed.
+  models do not show it. The machine-wide default (`pwiDefaultFastMode` in pi's
+  settings.json) applies only to new conversations; existing sessions keep their mode.
 - Reasoning options come from the active session's model, not a universal list.
   Levels mapping to the same provider effort share one option, preferring the
   matching level name (Sol's `minimal` and `low` appear only as `low`). Current
@@ -261,12 +264,12 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
   off removes the mask and hides its controls). While on, a `GearSix` (20px) button beside it,
   square and as tall as the row (`self-stretch aspect-square`, the row's hover fill,
   `neutral-800` while open), collapses or expands its controls, with `Reset` shown while expanded; `Expand setting
-  details` (`pwi:settingsExpanded`, on by default) sets whether such panels start
+details` (`pwi:settingsExpanded`, on by default) sets whether such panels start
   expanded, and flipping it applies at once. The controls (`pwi:chatFade`, per browser) tune it live with
   sliders for Length, End opacity, Ease in and Drop, plus `Reset`; `applyChatFade` in
   `prefs.ts` builds the gradient into `--chat-fade`. The fields share one
   `grid-cols-[auto_1fr]`: names in the first column so every description (`text-meta
-  neutral-500`) starts at the same edge, and under each name a typeable mono number
+neutral-500`) starts at the same edge, and under each name a typeable mono number
   (`inputClass.sm`, `w-16`: a stretched number input sizes the column to ~20 characters) left of a `.range` slider (index.css: 4px `neutral-700` track, amber
   up to a 12px amber thumb). Under the sliders, a preview: the
   curve as an SVG chart (x opacity, y position, dashed lines at the fade start and the box)
@@ -277,7 +280,7 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
   `0.8(1-t)^4 + 0.2(1-t^4)` (held dim, but still ended at zero).
 - In a narrow pane the box and the user pill keep 24px to the pane's sides, the same as the
   box's gap to the bottom (`pb-6`): `.chat-gutter`'s minimum is `2.25rem`.
-	corners. The composer and pill share the same width: `-mx-3` overhangs the `chat-measure` column by the box's padding. A sticky prompt inside a timed turn clears its nested gutter so it doesn't shrink a second time. The transcript reserves its scrollbar on both sides (`scrollbar-gutter: stable both-edges`), and the
+  corners. The composer and pill share the same width: `-mx-3` overhangs the `chat-measure` column by the box's padding. A sticky prompt inside a timed turn clears its nested gutter so it doesn't shrink a second time. The transcript reserves its scrollbar on both sides (`scrollbar-gutter: stable both-edges`), and the
   box's edge is an inset `ring-1 ring-neutral-700` (Commit & Push's border colour, the same
   focused or not), not a border. The git row's right edge follows the box,
   `mb-2` above it (the same gap as between its buttons), every button `control-md` tall. It is a ring in a ghost round `IconButton`, `size="sm"`, as wide as the other composer buttons (~24px outer edge: a `size-7 shrink-0` SVG with `stroke={1.5}`, so the flex button cannot shrink it)
@@ -361,12 +364,12 @@ Themes remap `neutral-*`, so components name the neutral step, never a hex.
 
 Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `attention.ts`):
 
-| State   | Meaning                                  | Tab `π`            | Dot (tab end, list row) |
-| ------- | ---------------------------------------- | ------------------ | ----------------------- |
-| idle    | nothing new                              | `neutral-500`      | none                    |
-| working | streaming                                | amber, glowing and pulsing | list only, pulsing amber |
-| ready   | new activity since this browser saw it   | green, glowing     | list only, green        |
-| needs   | blocked on a question (`ask`)            | `red-400`, steady  | red                     |
+| State   | Meaning                                | Tab `π`                    | Dot (tab end, list row)  |
+| ------- | -------------------------------------- | -------------------------- | ------------------------ |
+| idle    | nothing new                            | `neutral-500`              | none                     |
+| working | streaming                              | amber, glowing and pulsing | list only, pulsing amber |
+| ready   | new activity since this browser saw it | green, glowing             | list only, green         |
+| needs   | blocked on a question (`ask`)          | `red-400`, steady          | red                      |
 
 - The tab's `π` lights up immediately when a prompt is sent, including a new session
   before its file exists; it does not wait for an acknowledgement or streamed output.
@@ -480,6 +483,7 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
   unrelated extension or compaction notices.
 
 ## Reasoning
+
 - Reasoning appears in the turn’s work disclosure, using Markdown and `neutral-500` text.
 - There is no separate shown/folded/hidden preference; the work toggle controls visibility.
 
@@ -529,8 +533,8 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
   4. `Cut`, `Copy`, `Paste` (into the folder, or the file's folder; a cut is used
      up by one paste, a copy of a taken name becomes `name copy.ext`).
   5. `Rename…`, `Delete`.
-  Everything that changes files (4 and 5) sits together at the bottom, with
-  `Delete` last; path copying is read-only and stays above it.
+     Everything that changes files (4 and 5) sits together at the bottom, with
+     `Delete` last; path copying is read-only and stays above it.
 - Right-click the empty space below the rows → the same menu for the project root,
   without the entries that would change or name the root itself.
 - New File/Folder and Rename type into an inline field in the row's place:
@@ -588,7 +592,7 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
   menu is Close items only). Only the dock's per-shell close ends a shell, and that
   closes its editor tabs too. The PTY has one size: whichever view last took focus sets it.
 - Right-clicking the transcript (or an empty column) opens `New AI Session` / `New Terminal
-  Tab`, both in that column. Not over buttons or the composer area (the box, git row and
+Tab`, both in that column. Not over buttons or the composer area (the box, git row and
   jump-to-latest, `data-no-column-menu`). Under a `MenuSeparator` it offers `Copy Chat`,
   `Copy Chat with Reasoning` and `Copy Chat with Reasoning and Tools`: Markdown
   (`chatExport.ts`), a `## You` / `## pi` heading per speaker change, reasoning as a
@@ -675,7 +679,7 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
   SoL-Pi config can override them. Failed model loads show an error and Retry.
 - Keyboard shortcuts lists every app-wide shortcut (`SHORTCUTS` in `shortcuts.ts`), one row each,
   like Obsidian's Hotkeys: the name, the keys as a `kbd` chip (`rounded-sm bg-neutral-800
-  px-1.5 py-0.5 font-mono text-meta`, `Blank` in `neutral-500` when unset), then `sm`
+px-1.5 py-0.5 font-mono text-meta`, `Blank` in `neutral-500` when unset), then `sm`
   `IconButton`s: restore default (only when changed), remove, change. Change records the
   next key press with Ctrl, Alt or Meta (Escape or any click cancels; the chip reads
   `Press keys…` on `amber-900/40`); keys taken from another shortcut leave it Blank.
@@ -683,7 +687,7 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
   `bg-red-500/20 text-red-400 animate-pulse` with a tooltip saying it will not work.
   Defaults avoid those keys: Alt+Shift+T reopens the last tab closed in this page load,
   Alt+N starts a session in the last-used column, Ctrl+O, Ctrl+P, Ctrl+`, Alt+J, Alt+1–9.
-  Changes live in `pwi:shortcuts`; the palette shows the current keys.
+Changes live in `pwi:shortcuts`; the palette shows the current keys.
 - The interface is English-only, with no language setting. `i18n.ts` provides
   placeholder and English plural helpers; dates and numbers use the browser locale.
 - A `Search settings` field (`inputClass.sm`) tops the nav. A query shows every matching
@@ -730,7 +734,7 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
   toggle (`Button sm`, `subtle`/`ghost`, `aria-pressed`) beside the chart's label that restacks the
   columns by kcal. Without one, a `text-meta` line says where to enter it. Under the chart, side by side:
   `Up next` (the next 8 planned: time or `now`, colour dot, name, muscle groups, then `+N more planned
-  today`) and `Muscle load now` (`Bars` of each group's current load, with a `text-meta` line on how
+today`) and `Muscle load now` (`Bars` of each group's current load, with a `text-meta` line on how
   it decays).
 - Stats Overview starts with Provider, Model and Request mode selects (`inputClass.sm`), defaulting
   to All providers / All models / All modes. Request mode offers Standard, Fast, Unknown
@@ -818,25 +822,25 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
 New UI uses these; convert raw markup when you touch it. Tune styles in
 `ui.tsx`, never at call sites. `className` is for layout only (margin, width, flex).
 
-| Primitive       | Props                                                       | Use |
-| --------------- | ----------------------------------------------------------- | --- |
-| `Button`        | `variant`: primary / secondary (default) / subtle / ghost / warning (inside amber notices) / cell (with `size="bar"`: a text `StripCell`, full height, `neutral-800` rule on its left); `size`: sm (12px) / md (13px) / bar (13px, flat, `h-bar`, flush with the panel's edges) | Text buttons. One `primary` per dialog or panel. Cancel is `secondary`. |
-| `IconButton`    | `label` (required; aria-label + tooltip), `variant`: ghost / outline / solid, `size`: sm 24px / md 28px, `round` | Icon-only buttons. `round` only in the composer toolbar. |
-| `MenuItem`      | button props, `icon?` (16px Phosphor, fixed slot, greys with the row) | Rows in dropdown and context menus. Context-menu items carry an icon; give every item in one menu an icon or none. A description goes under the label (`block text-meta text-neutral-500` span), never beside it. |
-| `MenuSeparator` | —                                                           | Rule between groups of `MenuItem`s. |
-| `ContextMenu`   | `x`, `y`, `label`, `width` (220), `onClose`                 | Right-click menu 6px off the pointer (right and below, flipped to the other side where it would not fit): fixed, clamped on screen, closes on outside click, Escape, scroll, resize. A second right-click within 500ms at the same spot (4px) closes it and shows the browser's own menu instead (`nativeMenuOnDoubleRightClick`, anywhere in the app). Items call `onClose` after acting. No vertical padding: item hovers run flush to its top and bottom edges; its items are `px-2 py-2` (edge to icon = icon to text; dropdown items stay `px-3 py-1.5`) and its separators have no margin. |
-| `NavItem`       | `icon` (16px Phosphor), `selected`, button props            | Category row in a page's left nav (Settings): `control-md`, `rounded-sm`, `neutral-800` fill when current. |
-| `Section`       | `title`                                                     | Settings group (fieldset + uppercase legend). |
-| `OptionRow`     | `selected`, `disabled`                                      | Clickable row wrapping a radio or checkbox. |
-| `sectionLabel`  | class string                                                | Uppercase group heading on any element. |
-| `inputClass.sm/md` | class string                                             | Inputs and textareas (a string so refs pass through). |
-| `IconLink`      | `label`, `href`, `variant`, `size` (as `IconButton`)       | An `IconButton` that is a link, opening in a new tab (Fleet's Tailscale links). |
-| `ListRow`       | `selected`, `muted`, `size`: ui (default) / body, button props                           | Tree and list rows (Explorer, Source Control, directory picker). 22px; indent with `style.paddingLeft`. |
-| `tabClass(active)` | class string; caller adds `pr-3` (the close button overlays the label) | Session/editor tabs and terminal tabs: flat, full `bar` height, amber 2px underline when active, no fill. The strip is `h-bar` with a hidden scrollbar (`.tab-strip`). |
-| `tabClassVertical(active)` | class string | Tabs in a vertical list (terminal dock): full width, `control-md` tall, amber 2px left edge when active. |
-| `useBatches(total)` | returns `{ shown, end, more }`                           | Long lists (session list, Stats answers): render `rows.slice(0, shown)`, then `{more && <div ref={end} className="h-4" />}`; 50 more mount when it scrolls into view. |
-| `PanelHeader`   | `title?`, `onClose?`, `closeLabel?`, `cells?`, children     | Top row of a side panel or editor tab. Children go after the title. `cells`: children are `StripCell`s and the close is one too, flush to the right edge. |
-| `StripCell`     | `label` (aria-label + tooltip), button props                | Flat square icon cell the row's full height, `neutral-800` rule on its left, no radius, `neutral-900` hover: the tab strip's `+`, session search's `ArrowsOut`, the Explorer header and project row. 16px icons. |
+| Primitive                  | Props                                                                                                                                                                                                                                                                           | Use                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `Button`                   | `variant`: primary / secondary (default) / subtle / ghost / warning (inside amber notices) / cell (with `size="bar"`: a text `StripCell`, full height, `neutral-800` rule on its left); `size`: sm (12px) / md (13px) / bar (13px, flat, `h-bar`, flush with the panel's edges) | Text buttons. One `primary` per dialog or panel. Cancel is `secondary`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `IconButton`               | `label` (required; aria-label + tooltip), `variant`: ghost / outline / solid, `size`: sm 24px / md 28px, `round`                                                                                                                                                                | Icon-only buttons. `round` only in the composer toolbar.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `MenuItem`                 | button props, `icon?` (16px Phosphor, fixed slot, greys with the row)                                                                                                                                                                                                           | Rows in dropdown and context menus. Context-menu items carry an icon; give every item in one menu an icon or none. A description goes under the label (`block text-meta text-neutral-500` span), never beside it.                                                                                                                                                                                                                                                                                                                                                                                |
+| `MenuSeparator`            | —                                                                                                                                                                                                                                                                               | Rule between groups of `MenuItem`s.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `ContextMenu`              | `x`, `y`, `label`, `width` (220), `onClose`                                                                                                                                                                                                                                     | Right-click menu 6px off the pointer (right and below, flipped to the other side where it would not fit): fixed, clamped on screen, closes on outside click, Escape, scroll, resize. A second right-click within 500ms at the same spot (4px) closes it and shows the browser's own menu instead (`nativeMenuOnDoubleRightClick`, anywhere in the app). Items call `onClose` after acting. No vertical padding: item hovers run flush to its top and bottom edges; its items are `px-2 py-2` (edge to icon = icon to text; dropdown items stay `px-3 py-1.5`) and its separators have no margin. |
+| `NavItem`                  | `icon` (16px Phosphor), `selected`, button props                                                                                                                                                                                                                                | Category row in a page's left nav (Settings): `control-md`, `rounded-sm`, `neutral-800` fill when current.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `Section`                  | `title`                                                                                                                                                                                                                                                                         | Settings group (fieldset + uppercase legend).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `OptionRow`                | `selected`, `disabled`                                                                                                                                                                                                                                                          | Clickable row wrapping a radio or checkbox.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `sectionLabel`             | class string                                                                                                                                                                                                                                                                    | Uppercase group heading on any element.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `inputClass.sm/md`         | class string                                                                                                                                                                                                                                                                    | Inputs and textareas (a string so refs pass through).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `IconLink`                 | `label`, `href`, `variant`, `size` (as `IconButton`)                                                                                                                                                                                                                            | An `IconButton` that is a link, opening in a new tab (Fleet's Tailscale links).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `ListRow`                  | `selected`, `muted`, `size`: ui (default) / body, button props                                                                                                                                                                                                                  | Tree and list rows (Explorer, Source Control, directory picker). 22px; indent with `style.paddingLeft`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `tabClass(active)`         | class string; caller adds `pr-3` (the close button overlays the label)                                                                                                                                                                                                          | Session/editor tabs and terminal tabs: flat, full `bar` height, amber 2px underline when active, no fill. The strip is `h-bar` with a hidden scrollbar (`.tab-strip`).                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `tabClassVertical(active)` | class string                                                                                                                                                                                                                                                                    | Tabs in a vertical list (terminal dock): full width, `control-md` tall, amber 2px left edge when active.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `useBatches(total)`        | returns `{ shown, end, more }`                                                                                                                                                                                                                                                  | Long lists (session list, Stats answers): render `rows.slice(0, shown)`, then `{more && <div ref={end} className="h-4" />}`; 50 more mount when it scrolls into view.                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `PanelHeader`              | `title?`, `onClose?`, `closeLabel?`, `cells?`, children                                                                                                                                                                                                                         | Top row of a side panel or editor tab. Children go after the title. `cells`: children are `StripCell`s and the close is one too, flush to the right edge.                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `StripCell`                | `label` (aria-label + tooltip), button props                                                                                                                                                                                                                                    | Flat square icon cell the row's full height, `neutral-800` rule on its left, no radius, `neutral-900` hover: the tab strip's `+`, session search's `ArrowsOut`, the Explorer header and project row. 16px icons.                                                                                                                                                                                                                                                                                                                                                                                 |
 
 - Body text defaults to `text-ui`; set a size only when it differs.
 - A state color on an icon goes on the icon (`<Star className="text-amber-400">`), not on the button.
@@ -850,7 +854,7 @@ New UI uses these; convert raw markup when you touch it. Tune styles in
 - Current `data-custom` reasons: `tab close`,
   `composer pill` (model selects, git split button), `composer`, `choice card`
   (chat question options, package search hits), `session card`, `transcript
-  disclosure`, `context meter`, `image thumbnail`, `thumbnail remove badge`,
+disclosure`, `context meter`, `image thumbnail`, `thumbnail remove badge`,
   `pinned-folder chip`, `activity bar item`, `search field`, `search result`,
   `range slider`, `settings gear`, `the whole row, like the session search field`
   (the Explorer's project select).

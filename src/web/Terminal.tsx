@@ -9,6 +9,7 @@ import {
 } from "@phosphor-icons/react";
 import type { Terminal as XTerm } from "@xterm/xterm";
 import type { FitAddon } from "@xterm/addon-fit";
+import type { WebLinksAddon } from "@xterm/addon-web-links";
 
 import {
   activeTab,
@@ -49,6 +50,7 @@ import { t, plural } from "./i18n.js";
 interface XTermModules {
   Terminal: typeof XTerm;
   FitAddon: typeof FitAddon;
+  WebLinksAddon: typeof WebLinksAddon;
 }
 
 let loading: Promise<XTermModules> | null = null;
@@ -57,11 +59,20 @@ function load(): Promise<XTermModules> {
   loading ??= Promise.all([
     import("@xterm/xterm"),
     import("@xterm/addon-fit"),
-  ]).then(([term, fit]) => ({
+    import("@xterm/addon-web-links"),
+  ]).then(([term, fit, links]) => ({
     Terminal: term.Terminal,
     FitAddon: fit.FitAddon,
+    WebLinksAddon: links.WebLinksAddon,
   }));
   return loading;
+}
+
+/** Require an intentional modifier-click, for plain URLs and OSC 8 links alike. */
+function openTerminalLink(event: MouseEvent, uri: string) {
+  if (!(event.ctrlKey || event.metaKey) || !/^https?:\/\//i.test(uri)) return;
+  event.preventDefault();
+  window.open(uri, "_blank", "noopener,noreferrer");
 }
 
 /**
@@ -180,10 +191,10 @@ export function Terminal({
       );
     };
 
-    void load().then(({ Terminal: XTermCtor, FitAddon: Fit }) => {
+    void load().then(({ Terminal: Term, FitAddon: Fit, WebLinksAddon }) => {
       if (!live || !host.current) return;
 
-      term = new XTermCtor({
+      term = new Term({
         fontFamily:
           'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace',
         // The `text-body` token: terminal output is content. xterm wants
@@ -199,6 +210,7 @@ export function Terminal({
         scrollback: 5000,
         cursorBlink: true,
         theme: themeColors(host.current),
+        linkHandler: { activate: openTerminalLink },
         // The pane is resizable, so a fixed width would either clip or
         // leave a gutter. Reflow keeps wrapped output readable after a
         // drag instead of leaving it wrapped at the old width.
@@ -206,6 +218,7 @@ export function Terminal({
       });
       const fit = new Fit();
       term.loadAddon(fit);
+      term.loadAddon(new WebLinksAddon(openTerminalLink));
       term.open(host.current);
       fit.fit();
       view.current = term;

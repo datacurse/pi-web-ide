@@ -55,6 +55,7 @@ export function ModelSelector({
   /** pi's saved startup model, so the star shows the truth after a reload or a switch. */
   const [defaultModel, setDefaultModel] = useState<string | null>(null);
   const [defaultThinking, setDefaultThinking] = useState<string | null>(null);
+  const [defaultFast, setDefaultFast] = useState<string | null>(null);
   const [fastPending, setFastPending] = useState(false);
 
   useEffect(() => {
@@ -79,6 +80,9 @@ export function ModelSelector({
         setModels(d.models);
         setDefaultModel(d.default ?? null);
         setDefaultThinking(d.defaultThinking ?? null);
+        setDefaultFast(
+          d.defaultFast === null ? null : d.defaultFast ? "on" : "off",
+        );
       } catch (err) {
         if (!cancelled)
           setCatalogError(
@@ -225,10 +229,9 @@ export function ModelSelector({
       )}
 
       {supportsFastMode(model) && onFastChange && (
-        <Button
-          size="sm"
-          variant={fastMode ? "warning" : "ghost"}
-          aria-pressed={fastMode === true}
+        <select
+          data-custom="composer pill"
+          value={fastMode ? "on" : "off"}
           disabled={disabled || fastPending || fastMode === undefined}
           title={
             fastMode === undefined
@@ -237,17 +240,40 @@ export function ModelSelector({
                   "Fast mode — uses 2.5× subscription allowance; availability depends on your account",
                 )
           }
-          onClick={async () => {
+          className={`${cls} ${fastMode ? "text-amber-400" : "text-neutral-300"} hover:bg-neutral-800`}
+          onChange={async (event) => {
             setFastPending(true);
             try {
-              await onFastChange(!fastMode);
+              await onFastChange(event.target.value === "on");
             } finally {
               setFastPending(false);
             }
           }}
         >
-          {t("Fast · 2.5× usage")}
-        </Button>
+          {[
+            { value: "off", label: t("Standard") },
+            { value: "on", label: t("Fast · 2.5× usage") },
+          ].map(({ value, label }) => (
+            <option key={value} value={value}>
+              <DefaultStar
+                what="speed"
+                saved={defaultFast === value}
+                onToggle={() =>
+                  toggleDefault(
+                    (next) =>
+                      api["default-fast-mode"].$post({
+                        json: { enabled: next === null ? null : next === "on" },
+                      }),
+                    defaultFast,
+                    value,
+                    setDefaultFast,
+                  )
+                }
+              />
+              {label}
+            </option>
+          ))}
+        </select>
       )}
 
       {catalogError && (
@@ -284,7 +310,7 @@ function DefaultStar({
   saved,
   onToggle,
 }: {
-  what: "model" | "reasoning level";
+  what: "model" | "reasoning level" | "speed";
   saved: boolean;
   onToggle: () => void;
 }) {
@@ -299,9 +325,13 @@ function DefaultStar({
           ? saved
             ? t("Startup default model \u2014 click to clear")
             : t("Make this the startup default model")
-          : saved
-            ? t("Startup default reasoning level \u2014 click to clear")
-            : t("Make this the startup default reasoning level")
+          : what === "speed"
+            ? saved
+              ? t("Startup default speed — click to clear")
+              : t("Make this the startup default speed")
+            : saved
+              ? t("Startup default reasoning level — click to clear")
+              : t("Make this the startup default reasoning level")
       }
       onPointerDown={stop}
       onPointerUp={stop}
