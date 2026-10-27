@@ -222,13 +222,15 @@ theme` (editor swatch, `Match app theme` or the theme's name, and a `Match app t
   `Ask only behavior`, `pwi:askMode`) to pick `Toggle` (default: stays on until switched
   off) or `One shot` (switches off after each send). The menu marks the current mode
   with a `Check`.
-- GPT-6.1 Sol on `openai-codex` has a Standard / `Fast · 2.5× usage` pill
-  beside reasoning. Each option has the same default star as model and thinking:
-  click to save or clear the startup default without changing the active session.
-  Fast turns amber when selected; the selected mode persists outside model context.
-  The tooltip explains the allowance multiplier and account-dependent availability;
-  it is independent of reasoning effort.
-  It requests `service_tier: "priority"` only for Sol, and Standard requests
+- GPT-6 Sol and GPT-6.1 Sol on `openai` and `openai-codex` have a Standard /
+  Fast pill beside reasoning. Each option has the same default star as model
+  and thinking: click to save or clear the startup default without changing
+  the active session. Fast turns amber when selected; the selected mode
+  persists outside model context. GPT-6.1 Sol on Codex retains its
+  `Fast · 2.5× usage` label; other supported combinations use a generic
+  Fast label because pricing and availability vary by provider and account.
+  The control is independent of reasoning effort. It requests
+  `service_tier: "priority"` for supported Sol models, and Standard requests
   `"default"`. It is disabled during streaming or saving; old children show
   a restart hint rather than sending an unknown command to the model. Other
   models do not show it. The machine-wide default (`pwiDefaultFastMode` in pi's

@@ -3,6 +3,7 @@ import {
   AppWindow,
   ArrowsLeftRight,
   Columns,
+  Copy,
   Plus,
   Rows,
   X,
@@ -75,6 +76,51 @@ function openTerminalLink(event: MouseEvent, uri: string) {
   window.open(uri, "_blank", "noopener,noreferrer");
 }
 
+/** TUIs may print each URL row separately, so xterm's isWrapped is false. */
+function registerWrappedLinks(term: XTerm) {
+  return term.registerLinkProvider({
+    provideLinks(y, callback) {
+      const buffer = term.buffer.active;
+      for (let start = y - 1; start >= Math.max(0, y - 32); start--) {
+        const first = buffer.getLine(start)?.translateToString(true) ?? "";
+        const url = first.trim();
+        if (!/^https?:\/\/\S+$/i.test(url)) continue;
+        const indent = first.indexOf(url);
+        let text = url;
+        let end = start;
+        let last = first;
+        while (end - start < 31 && last.length >= term.cols - 2) {
+          const next = buffer.getLine(end + 1)?.translateToString(true) ?? "";
+          const part = next.trim();
+          if (
+            !part ||
+            /\s/.test(part) ||
+            /^https?:\/\//i.test(part) ||
+            next.indexOf(part) !== indent
+          )
+            break;
+          text += part;
+          last = next;
+          end++;
+        }
+        if (end > start && y - 1 <= end) {
+          callback([
+            {
+              text,
+              range: {
+                start: { x: indent + 1, y: start + 1 },
+                end: { x: last.length, y: end + 1 },
+              },
+              activate: openTerminalLink,
+            },
+          ]);
+          return;
+        }
+      }
+      callback(undefined);
+    },
+  });
+}
 /**
  * The colors are the app's own, read from the theme at mount.
  *
@@ -125,6 +171,44 @@ export function Terminal({
   focusedRef.current = focused;
   const fitView = useRef<(() => void) | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [hasSelection, setHasSelection] = useState(false);
+  const copySelection = () => {
+    const selection = view.current?.getSelection();
+    if (!selection) return;
+    // TUIs can hard-wrap long login URLs instead of using terminal soft wraps.
+    // Only unwrap a selection consisting of one URL, never commands/prose.
+    const trimmed = selection.trim();
+    const parts = trimmed.split(/\r?\n/).map((line) => line.trim());
+    const text =
+      parts.length > 1 &&
+      /^https?:\/\//i.test(parts[0]) &&
+      parts.every((part, index) =>
+        index === 0 ? /^\S+$/.test(part) : /^(?!https?:\/\/)\S+$/i.test(part),
+      )
+        ? parts.join("")
+        : selection;
+    // A copy event works on HTTP tailnet pages too, without moving focus out
+    // of Fleet's modal dialog or relying on remote clipboard utilities.
+    const copy = (event: ClipboardEvent) => {
+      if (!event.clipboardData) return;
+      event.preventDefault();
+      event.clipboardData.setData("text/plain", text);
+    };
+    document.addEventListener("copy", copy);
+    try {
+      if (!document.execCommand("copy")) {
+        void navigator.clipboard
+          ?.writeText(text)
+          .catch(() =>
+            setError(
+              t("Could not copy. Try selecting the text and pressing Ctrl+C."),
+            ),
+          );
+      }
+    } finally {
+      document.removeEventListener("copy", copy);
+    }
+  };
 
   /*
    * Keyed on the terminal id, and everything below is torn down when it
@@ -218,10 +302,29 @@ export function Terminal({
       });
       const fit = new Fit();
       term.loadAddon(fit);
+      registerWrappedLinks(term);
       term.loadAddon(new WebLinksAddon(openTerminalLink));
       term.open(host.current);
       fit.fit();
       view.current = term;
+      term.onSelectionChange(() =>
+        setHasSelection(term?.hasSelection() ?? false),
+      );
+      term.attachCustomKeyEventHandler((event) => {
+        if (
+          (event.ctrlKey || event.metaKey) &&
+          !event.altKey &&
+          event.key.toLowerCase() === "c" &&
+          term?.hasSelection()
+        ) {
+          if (event.type === "keydown") {
+            event.preventDefault();
+            copySelection();
+          }
+          return false;
+        }
+        return true;
+      });
       // A split that is created focused should take the keyboard without a
       // click: the gesture that made it was already a decision to use it.
       if (focusedRef.current && visibleRef.current) term.focus();
@@ -383,8 +486,20 @@ export function Terminal({
       // Mousedown, not click: a drag that selects text in a pane is also a
       // decision about which pane is current, and it ends outside.
       onMouseDown={onFocus}
-      className="flex min-h-0 min-w-0 flex-1 flex-col bg-neutral-950"
+      className="relative flex min-h-0 min-w-0 flex-1 flex-col bg-neutral-950"
     >
+      {hasSelection && (
+        <div className="absolute top-1 right-2 z-10 bg-neutral-950">
+          <Button
+            size="sm"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={copySelection}
+          >
+            <Copy size={14} />
+            {t("Copy selection")}
+          </Button>
+        </div>
+      )}
       {error && (
         <div className="border-b border-red-900 bg-red-950/40 px-3 py-2 text-meta text-red-300">
           {error}

@@ -236,9 +236,13 @@ export function ModelSelector({
           title={
             fastMode === undefined
               ? t("Restart this session to use Fast mode")
-              : t(
-                  "Fast mode — uses 2.5× subscription allowance; availability depends on your account",
-                )
+              : model === "openai-codex/gpt-6.1-sol"
+                ? t(
+                    "Fast mode — uses 2.5× subscription allowance; availability depends on your account",
+                  )
+                : t(
+                    "Fast mode — requests priority service; availability and pricing depend on your provider and account",
+                  )
           }
           className={`${cls} ${fastMode ? "text-amber-400" : "text-neutral-300"} hover:bg-neutral-800`}
           onChange={async (event) => {
@@ -252,7 +256,13 @@ export function ModelSelector({
         >
           {[
             { value: "off", label: t("Standard") },
-            { value: "on", label: t("Fast · 2.5× usage") },
+            {
+              value: "on",
+              label:
+                model === "openai-codex/gpt-6.1-sol"
+                  ? t("Fast · 2.5× usage")
+                  : t("Fast"),
+            },
           ].map(({ value, label }) => (
             <option key={value} value={value}>
               <DefaultStar

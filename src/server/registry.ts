@@ -25,9 +25,11 @@ import {
   type AskAnswer,
   type PiSession,
 } from "./agent.js";
+import { modelCatalog } from "./models.js";
 import { currentEpoch } from "./packages.js";
 import { lastMessageAt } from "./sessions.js";
 import type { Hunk } from "../shared/hunks.js";
+import { supportsFastMode } from "../shared/fastMode.js";
 import {
   addNotice,
   type ContextBreakdown,
@@ -489,7 +491,29 @@ export class Registry {
     if (entry.streaming || entry.session.isStreaming)
       throw new Error("cannot switch models while streaming");
     entry.lastActivity = Date.now();
-    await entry.session.setModel(spec);
+    try {
+      await entry.session.setModel(spec);
+    } catch (err) {
+      if (
+        !(err instanceof Error) ||
+        err.message !== `Model not found: ${spec}` ||
+        !(await modelCatalog()).has(spec)
+      )
+        throw err;
+      // The picker uses a new Pi child, but this session's child may have
+      // started before the model was added to Pi's catalog. Reopen its saved
+      // conversation so both see the same models, then retry once.
+      if (!entry.session.file)
+        throw new Error(
+          `${err.message}. Start a new session to load newly added models.`,
+        );
+      if (entry.session.ask)
+        throw new Error(
+          "Finish the current operation before switching models.",
+        );
+      const fresh = await this.restart(id);
+      await fresh.session.setModel(spec);
+    }
   }
 
   async setFastMode(id: string, enabled: boolean): Promise<void> {
@@ -500,7 +524,42 @@ export class Registry {
     if (!entry.session.setFastMode)
       throw new Error("restart this session to use Fast mode");
     entry.lastActivity = Date.now();
-    await entry.session.setFastMode(enabled);
+    try {
+      await entry.session.setFastMode(enabled);
+    } catch (err) {
+      if (
+        !enabled ||
+        !(err instanceof Error) ||
+        err.message !== "Fast mode is not supported for this model" ||
+        !supportsFastMode(entry.session.model)
+      )
+        throw err;
+      // An existing child keeps the fast-mode extension loaded at its start.
+      // Reload it after the support list changes, preserving the conversation.
+      if (!entry.session.file)
+        throw new Error(
+          "Start a new session to load updated Fast mode support.",
+        );
+      if (entry.session.ask)
+        throw new Error(
+          "Finish the current operation before changing Fast mode.",
+        );
+      const fresh = await this.restart(id);
+      try {
+        if (!fresh.session.setFastMode)
+          throw new Error("restart this session to use Fast mode");
+        await fresh.session.setFastMode(enabled);
+      } catch (retryError) {
+        if (
+          retryError instanceof Error &&
+          retryError.message === "Fast mode is not supported for this model"
+        )
+          throw new Error(
+            "Restart the app server to load updated Fast mode support.",
+          );
+        throw retryError;
+      }
+    }
   }
 
   /**
