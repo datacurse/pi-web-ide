@@ -225,7 +225,7 @@ theme` (editor swatch, `Match app theme` or the theme's name, and a `Match app t
 - GPT-6 Sol and GPT-6.1 Sol on `openai` and `openai-codex` have a Standard /
   Fast pill beside reasoning. Each option has the same default star as model
   and thinking: click to save or clear the startup default without changing
-  the active session. Fast turns amber when selected; the selected mode
+  the active session. All three closed selectors use the same neutral text color; the selected mode
   persists outside model context. GPT-6.1 Sol on Codex retains its
   `Fast · 2.5× usage` label; other supported combinations use a generic
   Fast label because pricing and availability vary by provider and account.

@@ -244,7 +244,7 @@ export function ModelSelector({
                     "Fast mode — requests priority service; availability and pricing depend on your provider and account",
                   )
           }
-          className={`${cls} ${fastMode ? "text-amber-400" : "text-neutral-300"} hover:bg-neutral-800`}
+          className={`${cls} text-neutral-300 hover:bg-neutral-800`}
           onChange={async (event) => {
             setFastPending(true);
             try {
