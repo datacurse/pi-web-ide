@@ -16,7 +16,6 @@ import { scheduleGitChanged } from "./GitActions.js";
 import { groupOf, sideOfTab, withGroup } from "./tabs.js";
 import type { Side } from "./tabs.js";
 import { api, unwrap } from "./api.js";
-import { t } from "./i18n.js";
 
 import { commandCatalog, parseSlashCommand, WEB_COMMANDS } from "./commands.js";
 import { downloadText } from "./download.js";
@@ -126,7 +125,7 @@ function replyLine(snapshot: Snapshot | undefined): string {
       .trim()
       .split("\n")
       .find((l) => l.trim()) ?? "";
-  if (!line) return t("Finished.");
+  if (!line) return "Finished.";
   return line.length > 140 ? `${line.slice(0, 140)}…` : line;
 }
 
@@ -139,7 +138,7 @@ function askLine(ask: PiAsk): string {
   const line = (
     ask.message ||
     ask.title ||
-    t("pi is waiting for an answer")
+    "pi is waiting for an answer"
   ).trim();
   return line.length > 140 ? `${line.slice(0, 140)}…` : line;
 }
@@ -735,7 +734,7 @@ export function useSession({
             setCommand((c) => (c ? { ...c, running: false } : c));
             if (worked) {
               worked = false;
-              announce(snap.file, t("Failed: {error}", { error: e.message }));
+              announce(snap.file, `Failed: ${e.message}`);
             }
             seenErrorRef.current = e.message;
             setSnapshot((s) => (s ? { ...s, error: e.message } : s));
@@ -827,7 +826,7 @@ export function useSession({
         if (attachSeq.current === seq) {
           setSnapshot((s) =>
             s?.id === snapshot.id
-              ? { ...s, error: body.error ?? t("could not compact") }
+              ? { ...s, error: body.error ?? "could not compact" }
               : s,
           );
         }

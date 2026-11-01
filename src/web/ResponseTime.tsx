@@ -1,13 +1,13 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { formatDuration, locale, t } from "./i18n.js";
+import { formatDuration } from "./format.js";
 import { timeAgo } from "./SessionList.js";
 
 export function responseTimeDetails(
   at: number,
   durationMs?: number,
 ): { date: string; worked?: string } {
-  const date = new Date(at).toLocaleString(locale(), {
+  const date = new Date(at).toLocaleString(undefined, {
     year: "numeric",
     month: "short",
     day: "numeric",
@@ -17,7 +17,7 @@ export function responseTimeDetails(
   const worked =
     durationMs === undefined
       ? undefined
-      : t("Worked for {duration}", { duration: formatDuration(durationMs) });
+      : `Worked for ${formatDuration(durationMs)}`;
   return { date, worked };
 }
 

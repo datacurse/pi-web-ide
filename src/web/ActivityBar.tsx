@@ -30,7 +30,6 @@ import {
 } from "@phosphor-icons/react";
 import type { Panel } from "./App.js";
 import type { PageId } from "./PageDialog.js";
-import { t, plural } from "./i18n.js";
 
 /**
  * One rail button.
@@ -88,7 +87,10 @@ function RailButton({
             {badge > 9 ? "9+" : badge}
           </span>
           <span className="sr-only">
-            , {plural(badge, "{n} uncommitted file", "{n} uncommitted files")}
+            ,{" "}
+            {badge === 1
+              ? `${badge} uncommitted file`
+              : `${badge} uncommitted files`}
           </span>
         </>
       )}
@@ -130,15 +132,15 @@ export function ActivityBar({
   );
   return (
     <nav
-      aria-label={t("Panels")}
+      aria-label="Panels"
       className="flex w-11 shrink-0 flex-col items-center border-r border-neutral-800 bg-neutral-950"
     >
       <RailButton
-        label={panel === "editor" ? t("Hide editor") : t("Show editor")}
+        label={panel === "editor" ? "Hide editor" : "Show editor"}
         title={
           panel === "editor"
-            ? t("Hide editor")
-            : t("Browse and edit the project's files")
+            ? "Hide editor"
+            : "Browse and edit the project's files"
         }
         active={panel === "editor"}
         onClick={() => onSelect("editor")}
@@ -148,14 +150,12 @@ export function ActivityBar({
 
       <RailButton
         label={
-          panel === "review"
-            ? t("Hide source control")
-            : t("Show source control")
+          panel === "review" ? "Hide source control" : "Show source control"
         }
         title={
           panel === "review"
-            ? t("Hide source control")
-            : t("Changes, commits and the commit message")
+            ? "Hide source control"
+            : "Changes, commits and the commit message"
         }
         active={panel === "review"}
         badge={uncommitted}
@@ -166,12 +166,8 @@ export function ActivityBar({
 
       <div className="narrow:hidden">
         <RailButton
-          label={
-            listVisible ? t("Hide session history") : t("Show session history")
-          }
-          title={
-            listVisible ? t("Hide session history") : t("Show session history")
-          }
+          label={listVisible ? "Hide session history" : "Show session history"}
+          title={listVisible ? "Hide session history" : "Show session history"}
           active={listVisible}
           onClick={onToggleList}
         >
@@ -182,11 +178,11 @@ export function ActivityBar({
 			    tabs, not the left column. */}
       <div aria-hidden className="my-1 w-full border-t border-neutral-800" />
       <RailButton
-        label={dockOpen ? t("Hide terminal") : t("Show terminal")}
+        label={dockOpen ? "Hide terminal" : "Show terminal"}
         title={
           dockOpen
-            ? t("Hide terminal (Ctrl+`) — the shells keep running")
-            : t("Show terminal (Ctrl+`)")
+            ? "Hide terminal (Ctrl+`) — the shells keep running"
+            : "Show terminal (Ctrl+`)"
         }
         active={dockOpen}
         onClick={onToggleDock}
@@ -198,29 +194,29 @@ export function ActivityBar({
       <div className="mt-auto flex flex-col items-center">
         {page(
           "fleet",
-          t("Fleet"),
-          t("Your tailnet machines: pwi links, terminals, Start"),
+          "Fleet",
+          "Your tailnet machines: pwi links, terminals, Start",
           <Network size={20} />,
         )}
         {page(
           "stats",
-          t("Stats"),
-          t("Usage stats: streaks, answer times, every answer"),
+          "Stats",
+          "Usage stats: streaks, answer times, every answer",
           <ChartBar size={20} />,
         )}
         {page(
           "packages",
-          t("Packages"),
-          t("Packages installed on this machine"),
+          "Packages",
+          "Packages installed on this machine",
           <SquaresFour size={20} />,
         )}
         {page(
           "authentication",
-          t("Authentication"),
-          t("Sign in to AI providers"),
+          "Authentication",
+          "Sign in to AI providers",
           <Key size={20} />,
         )}
-        {page("settings", t("Settings"), t("Settings"), <Gear size={20} />)}
+        {page("settings", "Settings", "Settings", <Gear size={20} />)}
 
         {/*
          * Just the release number, because 11px of rail is all there is. The
@@ -230,10 +226,7 @@ export function ActivityBar({
          * at all.
          */}
         <p
-          title={t(
-            "Version {version} — version + git commit; * means uncommitted changes",
-            { version },
-          )}
+          title={`Version ${version} — version + git commit; * means uncommitted changes`}
           className="pb-1.5 text-caption leading-none text-neutral-600"
         >
           {version.split("+")[0]}

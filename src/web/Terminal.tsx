@@ -37,7 +37,6 @@ import {
   tabClassVertical,
 } from "./ui.js";
 import { api } from "./api.js";
-import { t, plural } from "./i18n.js";
 
 /**
  * xterm.js, loaded on demand.
@@ -201,7 +200,7 @@ export function Terminal({
           ?.writeText(text)
           .catch(() =>
             setError(
-              t("Could not copy. Try selecting the text and pressing Ctrl+C."),
+              "Could not copy. Try selecting the text and pressing Ctrl+C.",
             ),
           );
       }
@@ -267,11 +266,8 @@ export function Terminal({
             // Origin is not its own, and the Vite proxy rewrites Host but
             // not Origin — so a dev page served from Vite is refused unless
             // the server was started with PWI_DEV=1 to allow it.
-            t(
-              "The server is up but refused the terminal connection. If this page is Vite's ({host}), start the server with `pnpm dev` rather than `pnpm start`, or open it directly instead.",
-              { host: location.host },
-            )
-          : t("Cannot reach the server. Still retrying."),
+            `The server is up but refused the terminal connection. If this page is Vite's (${location.host}), start the server with \`pnpm dev\` rather than \`pnpm start\`, or open it directly instead.`
+          : "Cannot reach the server. Still retrying.",
       );
     };
 
@@ -381,14 +377,14 @@ export function Terminal({
             // The shell itself ended. Nothing to reattach to.
             finished = true;
             term?.write(
-              `\r\n\x1b[90m[${t("shell exited")}${msg.code ? ` (${msg.code})` : ""}]\x1b[0m\r\n`,
+              `\r\n\x1b[90m[${"shell exited"}${msg.code ? ` (${msg.code})` : ""}]\x1b[0m\r\n`,
             );
             onExit?.();
           } else if (msg.type === "error") {
             // "no such terminal": the id in the restored layout is not on
             // this server. Retrying cannot conjure it.
             finished = true;
-            setError(msg.message ?? t("terminal failed"));
+            setError(msg.message ?? "terminal failed");
           }
         };
 
@@ -399,7 +395,7 @@ export function Terminal({
           const wait = Math.min(250 * 2 ** attempt, 5000);
           attempt += 1;
           if (attempt === 1)
-            term?.write(`\r\n\x1b[90m[${t("reconnecting…")}]\x1b[0m\r\n`);
+            term?.write(`\r\n\x1b[90m[${"reconnecting…"}]\x1b[0m\r\n`);
           // Three failures without ever opening is no longer a blip. Once,
           // not per attempt: the banner would otherwise refetch forever.
           if (attempt === 3 && !everOpened) void explain();
@@ -496,7 +492,7 @@ export function Terminal({
             onClick={copySelection}
           >
             <Copy size={14} />
-            {t("Copy selection")}
+            Copy selection
           </Button>
         </div>
       )}
@@ -588,10 +584,7 @@ export function TerminalPane({
     // A refusal (the MAX_TERMINALS cap, a cwd that stopped existing) has to
     // surface here: there is no shell to print it in.
     if (!r.ok || !body.id) {
-      setError(
-        body.error ??
-          t("could not start a shell ({status})", { status: r.status }),
-      );
+      setError(body.error ?? `could not start a shell (${r.status})`);
       return;
     }
     place(body.id);
@@ -682,14 +675,14 @@ export function TerminalPane({
 
         {!tab ? (
           <div className="flex flex-1 items-center justify-center p-4 text-center text-meta text-neutral-500">
-            {t("No shell yet.")}
+            No shell yet.
             <Button
               variant="subtle"
               size="sm"
               className="ml-2"
               onClick={() => void spawn(inDock(addTab))}
             >
-              {t("Start one")}
+              Start one
             </Button>
           </div>
         ) : (
@@ -705,7 +698,7 @@ export function TerminalPane({
                     aria-orientation={
                       tab.direction === "column" ? "horizontal" : "vertical"
                     }
-                    aria-label={t("Resize split")}
+                    aria-label="Resize split"
                     onPointerDown={startDrag(i - 1)}
                     {...hoverIntent}
                     className={`relative shrink-0 bg-neutral-800 transition-colors delay-1000 duration-500 data-hover:bg-amber-600 data-hover:delay-0 data-hover:duration-100 ${
@@ -742,8 +735,8 @@ export function TerminalPane({
                     size="sm"
                     className="absolute top-1 right-2 opacity-0 focus-visible:opacity-100 group-hover:opacity-100 [div:hover>&]:opacity-100"
                     onClick={() => closeTerm(id)}
-                    label={t("Close this shell")}
-                    title={t("Close this shell (SIGHUP)")}
+                    label="Close this shell"
+                    title="Close this shell (SIGHUP)"
                   >
                     <X size={13} />
                   </IconButton>
@@ -772,9 +765,9 @@ export function TerminalPane({
               aria-haspopup="menu"
               aria-current={i === layout.active}
               title={
-                t("Terminal tab {n}", { n: i + 1 }) +
+                `Terminal tab ${i + 1}` +
                 (tb.terminals.length > 1
-                  ? ` ${plural(tb.terminals.length, "({n} split)", "({n} splits)")}`
+                  ? ` ${tb.terminals.length === 1 ? `(${tb.terminals.length} split)` : `(${tb.terminals.length} splits)`}`
                   : "")
               }
               className={`${tabClassVertical(i === layout.active)} font-mono`}
@@ -789,7 +782,7 @@ export function TerminalPane({
             size="sm"
             className="mt-1 shrink-0 self-center"
             onClick={() => void spawn(inDock(addTab))}
-            label={t("New terminal tab")}
+            label="New terminal tab"
           >
             <Plus size={13} />
           </IconButton>
@@ -799,8 +792,8 @@ export function TerminalPane({
           size="sm"
           className="self-center"
           onClick={() => void spawn(inDock(splitActive))}
-          label={t("Split terminal")}
-          title={t("Split: another shell beside this one")}
+          label="Split terminal"
+          title="Split: another shell beside this one"
         >
           {/* The icon shows the direction the new pane will appear in. */}
           {tab?.direction === "column" ? (
@@ -814,7 +807,7 @@ export function TerminalPane({
           className="self-center"
           disabled={!tab}
           onClick={() => tab && onToEditor(tab.focus)}
-          label={t("Open this shell in an editor tab")}
+          label="Open this shell in an editor tab"
         >
           <AppWindow size={14} />
         </IconButton>
@@ -823,11 +816,11 @@ export function TerminalPane({
             size="sm"
             className="self-center"
             onClick={() => onLayout(toggleDirection(layout))}
-            label={t("Change split direction")}
+            label="Change split direction"
             title={
               tab.direction === "row"
-                ? t("Stack the splits vertically")
-                : t("Put the splits side by side")
+                ? "Stack the splits vertically"
+                : "Put the splits side by side"
             }
           >
             {tab.direction === "row" ? (
@@ -843,8 +836,8 @@ export function TerminalPane({
           onClick={swapSide}
           label={
             side === "right"
-              ? t("Move tabs to the left")
-              : t("Move tabs to the right")
+              ? "Move tabs to the left"
+              : "Move tabs to the right"
           }
         >
           <ArrowsLeftRight size={14} />
@@ -853,8 +846,8 @@ export function TerminalPane({
           size="sm"
           className="self-center"
           onClick={onClose}
-          label={t("Hide terminal")}
-          title={t("Hide (every shell keeps running)")}
+          label="Hide terminal"
+          title="Hide (every shell keeps running)"
         >
           <X size={13} />
         </IconButton>
@@ -864,7 +857,7 @@ export function TerminalPane({
         <ContextMenu
           x={menu.x}
           y={menu.y}
-          label={t("Terminal tab {n}", { n: menu.index + 1 })}
+          label={`Terminal tab ${menu.index + 1}`}
           onClose={() => setMenu(null)}
         >
           {/* Opens the tab's focused shell. */}
@@ -878,7 +871,7 @@ export function TerminalPane({
               if (id) onToEditor(id);
             }}
           >
-            {t("Open in Editor Tab")}
+            Open in Editor Tab
           </MenuItem>
         </ContextMenu>
       )}

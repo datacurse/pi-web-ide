@@ -11,7 +11,7 @@ import { sessionLabel } from "./sessionName.js";
 import { timeAgo } from "./SessionList.js";
 import { highlight, useSessionSearch } from "./searchHits.js";
 import { IconButton } from "./ui.js";
-import { t } from "./i18n.js";
+
 import { ScrollPane } from "./OverlayScrollbar.js";
 
 const RECENT = 50;
@@ -77,7 +77,7 @@ export function SessionSearch({
   return (
     <dialog
       ref={ref}
-      aria-label={t("Search sessions")}
+      aria-label="Search sessions"
       onClose={onClose}
       onClick={(e) => {
         if (e.target === ref.current) onClose();
@@ -90,7 +90,7 @@ export function SessionSearch({
           <CircleNotch
             size={18}
             className="shrink-0 animate-spin text-neutral-500"
-            aria-label={t("Searching")}
+            aria-label="Searching"
           />
         ) : (
           <MagnifyingGlass size={18} className="shrink-0 text-neutral-500" />
@@ -115,19 +115,19 @@ export function SessionSearch({
               pick(rows[active].session);
             }
           }}
-          placeholder={t("Search sessions in this project…")}
-          aria-label={t("Search sessions")}
+          placeholder="Search sessions in this project…"
+          aria-label="Search sessions"
           className="min-w-0 flex-1 bg-transparent text-title text-neutral-100 outline-none placeholder:text-neutral-500"
         />
         <IconButton
           variant={wholeWord ? "on" : "ghost"}
           aria-pressed={wholeWord}
           onClick={() => setWholeWord((w) => !w)}
-          label={t("Match whole word (Alt+W)")}
+          label="Match whole word (Alt+W)"
         >
           <TextAUnderline size={16} />
         </IconButton>
-        <IconButton onClick={onClose} label={t("Close search")}>
+        <IconButton onClick={onClose} label="Close search">
           <X size={13} />
         </IconButton>
       </div>
@@ -135,7 +135,7 @@ export function SessionSearch({
       <ScrollPane
         ref={list}
         role="listbox"
-        aria-label={t("Sessions")}
+        aria-label="Sessions"
         className="min-h-0 flex-1"
         innerClassName="p-1.5"
       >
@@ -146,7 +146,7 @@ export function SessionSearch({
         ) : (
           rows.length === 0 && (
             <p className="px-3 py-4 text-ui text-neutral-400">
-              {terms.length ? t("No sessions match.") : t("No sessions yet.")}
+              {terms.length ? "No sessions match." : "No sessions yet."}
             </p>
           )
         )}

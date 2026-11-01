@@ -40,7 +40,6 @@ import {
   inputClass,
   tabClass,
 } from "./ui.js";
-import { t } from "./i18n.js";
 
 /**
  * A diff tab's tooltip: the long form VS Code puts in the tab itself.
@@ -50,7 +49,7 @@ import { t } from "./i18n.js";
  */
 const diffTitle = (entry: string): string => {
   const { ref, path } = diffParts(entry);
-  return `${path} — ${ref ? t("{ref} ↔ parent", { ref: ref.slice(0, 7) }) : t("HEAD ↔ working tree")}`;
+  return `${path} — ${ref ? `${ref.slice(0, 7)} ↔ parent` : "HEAD ↔ working tree"}`;
 };
 
 /**
@@ -133,7 +132,7 @@ export function SessionTabs({
   onTogglePin,
   onRename,
   onAutoName,
-  label = t("Open sessions"),
+  label = "Open sessions",
 }: {
   /** Open session files, in strip order. */
   tabs: string[];
@@ -334,8 +333,8 @@ export function SessionTabs({
           onClick={onToggleList}
           aria-expanded={listOpen}
           aria-controls="session-list"
-          label={listOpen ? t("Hide session list") : t("Show session list")}
-          title={t("Sessions")}
+          label={listOpen ? "Hide session list" : "Show session list"}
+          title="Sessions"
           className="ml-1 self-center wide:hidden"
         >
           <span aria-hidden>{"\u2261"}</span>
@@ -539,8 +538,8 @@ export function SessionTabs({
                       if (e.key === "Escape") setRenaming(null);
                     }}
                     onBlur={() => setRenaming(null)}
-                    aria-label={t("Rename {name}", { name: label })}
-                    title={t("Enter to save, Escape to cancel")}
+                    aria-label={`Rename ${label}`}
+                    title="Enter to save, Escape to cancel"
                     className={`w-52 ${inputClass.sm}`}
                   />
                 </form>
@@ -589,7 +588,7 @@ export function SessionTabs({
                         size={12}
                         weight="fill"
                         className="shrink-0 text-neutral-500"
-                        aria-label={t("Pinned")}
+                        aria-label="Pinned"
                       />
                     )}
                     {/* Marks an AI session so it never reads as a code tab, and
@@ -617,7 +616,7 @@ export function SessionTabs({
                       className={`fade-end ${isEdit || isDiff ? "font-mono" : ""}`}
                     >
                       {naming === file
-                        ? t("Naming…")
+                        ? "Naming…"
                         : isFile
                           ? label
                           : sessionLabel(info, latestPrompt)}
@@ -631,7 +630,7 @@ export function SessionTabs({
                       />
                     )}
                     {dirty && (
-                      <span className="sr-only">, {t("unsaved changes")}</span>
+                      <span className="sr-only">, unsaved changes</span>
                     )}
                     {/* Waiting on you: the same dot as unsaved, in the state's color. */}
                     {state === "needs" && (
@@ -642,7 +641,7 @@ export function SessionTabs({
                     )}
                     {state && (
                       <span className="sr-only">
-                        , {t(ATTENTION_UI[state].label)}
+                        , {ATTENTION_UI[state].label}
                       </span>
                     )}
                   </button>
@@ -664,17 +663,15 @@ export function SessionTabs({
                         closeOnly: true,
                       });
                     }}
-                    aria-label={t("Close tab {name}", { name: label })}
+                    aria-label={`Close tab ${label}`}
                     title={
                       isTerm
-                        ? t(
-                            "Close tab (the shell keeps running in the terminal dock)",
-                          )
+                        ? "Close tab (the shell keeps running in the terminal dock)"
                         : isFile
                           ? dirty
-                            ? t("Close tab — unsaved edits will be lost")
-                            : t("Close tab")
-                          : t("Close tab (the session keeps running)")
+                            ? "Close tab — unsaved edits will be lost"
+                            : "Close tab"
+                          : "Close tab (the session keeps running)"
                     }
                     className={`tab-close absolute top-1/2 right-1.5 flex size-6 -translate-y-1/2 items-center justify-center rounded-sm text-ui leading-none text-neutral-400 transition-opacity duration-150 ease-out after:absolute after:-inset-1 after:content-[''] before:absolute before:inset-y-0 before:-left-3 before:right-0 before:-z-10 before:bg-linear-to-r before:from-transparent before:to-33% before:content-[''] ${isActive ? "before:to-neutral-950" : "before:to-neutral-900"} hover:bg-neutral-800 hover:text-neutral-50 opacity-0 group-hover:opacity-100 group-has-focus-visible:opacity-100 focus-visible:opacity-100 motion-reduce:transition-none`}
                   >
@@ -702,16 +699,12 @@ export function SessionTabs({
 
       {tabs.length === 0 && (
         <p className="min-w-0 flex-1 self-center fade-end px-2 text-meta text-neutral-400">
-          {t("No open sessions. Press + or pick one from the list.")}
+          No open sessions. Press + or pick one from the list.
         </p>
       )}
 
       {onNew && (
-        <StripCell
-          onClick={onNew}
-          label={t("New AI Session")}
-          className="-mr-1"
-        >
+        <StripCell onClick={onNew} label="New AI Session" className="-mr-1">
           <Plus size={16} />
         </StripCell>
       )}
@@ -738,7 +731,7 @@ export function SessionTabs({
             <ContextMenu
               x={menu.x}
               y={menu.y}
-              label={t("Tab {name}", { name: label })}
+              label={`Tab ${label}`}
               onClose={() => setMenu(null)}
             >
               {!closeOnly && !isFile && onTogglePin && (
@@ -748,7 +741,7 @@ export function SessionTabs({
                   autoFocus
                   onClick={act(() => onTogglePin(file))}
                 >
-                  {pinned.includes(file) ? t("Unpin Tab") : t("Pin Tab")}
+                  {pinned.includes(file) ? "Unpin Tab" : "Pin Tab"}
                 </MenuItem>
               )}
               {!closeOnly && !isFile && onRename && (
@@ -761,7 +754,7 @@ export function SessionTabs({
                     setRenaming(file);
                   })}
                 >
-                  {t("Rename…")}
+                  Rename…
                 </MenuItem>
               )}
               {!closeOnly && !isFile && onRename && (
@@ -774,7 +767,7 @@ export function SessionTabs({
                     if (info && next) onRename(info, next);
                   })}
                 >
-                  {t("Name from first prompt")}
+                  Name from first prompt
                 </MenuItem>
               )}
               {!closeOnly && !isFile && onAutoName && (
@@ -788,9 +781,9 @@ export function SessionTabs({
                     void onAutoName(info).finally(() => setNaming(null));
                   })}
                 >
-                  {t("Summarise with pi")}
+                  Summarise with pi
                   <span className="block text-meta text-neutral-500">
-                    {t("Asks pi to title the conversation")}
+                    Asks pi to title the conversation
                   </span>
                 </MenuItem>
               )}
@@ -801,7 +794,7 @@ export function SessionTabs({
                   autoFocus
                   onClick={act(() => onReveal(tabPath(file)))}
                 >
-                  {t("Reveal in Explorer")}
+                  Reveal in Explorer
                 </MenuItem>
               )}
               {!closeOnly && isEdit && (
@@ -815,7 +808,7 @@ export function SessionTabs({
                         .catch(() => {}),
                   )}
                 >
-                  {t("Copy Path")}
+                  Copy Path
                 </MenuItem>
               )}
               {!closeOnly && <MenuSeparator />}
@@ -825,7 +818,7 @@ export function SessionTabs({
                 autoFocus={closeOnly}
                 onClick={act(() => onClose(file))}
               >
-                {t("Close")}
+                Close
               </MenuItem>
               <MenuItem
                 icon={<XCircle size={16} />}
@@ -835,7 +828,7 @@ export function SessionTabs({
                   for (const f of tabs) if (f !== file) onClose(f);
                 })}
               >
-                {t("Close Others")}
+                Close Others
               </MenuItem>
               <MenuItem
                 icon={<ArrowLineRight size={16} />}
@@ -845,7 +838,7 @@ export function SessionTabs({
                   for (const f of tabs.slice(index + 1)) onClose(f);
                 })}
               >
-                {t("Close to the Right")}
+                Close to the Right
               </MenuItem>
               <MenuItem
                 icon={<XSquare size={16} />}
@@ -854,7 +847,7 @@ export function SessionTabs({
                   for (const f of tabs) onClose(f);
                 })}
               >
-                {t("Close All")}
+                Close All
               </MenuItem>
             </ContextMenu>
           );

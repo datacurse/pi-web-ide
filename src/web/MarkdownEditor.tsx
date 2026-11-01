@@ -1,6 +1,5 @@
 import { memo } from "react";
 import Markdown from "markdown-to-jsx";
-import { t } from "./i18n.js";
 
 const options = {
   forceBlock: true,
@@ -150,7 +149,7 @@ export const MarkdownEditor = memo(function MarkdownEditor({
       suppressContentEditableWarning
       role="textbox"
       aria-multiline="true"
-      aria-label={t("Edit formatted Markdown")}
+      aria-label="Edit formatted Markdown"
       onInput={(event) => {
         const content = Array.from(
           event.currentTarget.childNodes,

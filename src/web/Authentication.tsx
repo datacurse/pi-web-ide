@@ -8,7 +8,6 @@ import type {
 import { api, unwrap } from "./api.js";
 import { Button, IconButton, inputClass, NavItem, PanelHeader } from "./ui.js";
 import { ScrollPane } from "./OverlayScrollbar.js";
-import { t } from "./i18n.js";
 
 function PromptForm({
   prompt,
@@ -65,7 +64,7 @@ function PromptForm({
         disabled={busy || !value.trim()}
         className="self-start"
       >
-        {t("Continue")}
+        Continue
       </Button>
     </form>
   );
@@ -170,9 +169,9 @@ export function Authentication({
 
   return (
     <>
-      <PanelHeader title={t("Authentication")} onClose={onClose}>
+      <PanelHeader title="Authentication" onClose={onClose}>
         <IconButton
-          label={t("Refresh")}
+          label="Refresh"
           disabled={busy}
           onClick={() => void act(refresh)}
         >
@@ -187,9 +186,7 @@ export function Authentication({
                 key={p.id}
                 title={
                   p.stored
-                    ? t("Saved credential: {type}", {
-                        type: p.stored === "oauth" ? "OAuth" : "API key",
-                      })
+                    ? `Saved credential: ${p.stored === "oauth" ? "OAuth" : "API key"}`
                     : undefined
                 }
                 icon={
@@ -215,14 +212,13 @@ export function Authentication({
         <ScrollPane className="min-w-0 flex-1 p-6">
           <div className="flex max-w-xl flex-col gap-4">
             <p className="text-meta text-neutral-500">
-              {t(
-                "Sign in to AI providers on this machine. Credentials are saved in Pi’s auth.json and shared with terminal Pi. This does not protect access to the IDE.",
-              )}
+              Sign in to AI providers on this machine. Credentials are saved in
+              Pi’s auth.json and shared with terminal Pi. This does not protect
+              access to the IDE.
             </p>
             <p className="text-meta text-neutral-500">
-              {t(
-                "This page lists built-in and models.json providers. For providers supplied by extensions, use /login in terminal Pi.",
-              )}
+              This page lists built-in and models.json providers. For providers
+              supplied by extensions, use /login in terminal Pi.
             </p>
             {error && (
               <p role="alert" className="text-body text-red-400">
@@ -230,13 +226,11 @@ export function Authentication({
               </p>
             )}
             {!loaded && !error && (
-              <p className="text-meta text-neutral-500">
-                {t("Loading providers…")}
-              </p>
+              <p className="text-meta text-neutral-500">Loading providers…</p>
             )}
             {loaded && !provider && (
               <p className="text-body text-neutral-400">
-                {t("No providers available.")}
+                No providers available.
               </p>
             )}
             {provider && (
@@ -244,20 +238,13 @@ export function Authentication({
                 <h2 className="text-title font-medium">{provider.name}</h2>
                 <p className="text-meta text-neutral-400">
                   {provider.stored
-                    ? t("Already connected · saved credential: {type}", {
-                        type: provider.stored === "oauth" ? "OAuth" : "API key",
-                      })
-                    : t(
-                        "No saved credential. Environment or cloud credentials may still be available.",
-                      )}
+                    ? `Already connected · saved credential: ${provider.stored === "oauth" ? "OAuth" : "API key"}`
+                    : "No saved credential. Environment or cloud credentials may still be available."}
                 </p>
                 {provider.id === "openai" && !provider.stored && codexLogin && (
                   <div className="flex flex-col gap-2">
                     <p className="text-body text-neutral-300">
-                      {t(
-                        "You already have a saved login for {provider}. OpenAI and OpenAI Codex use separate credentials; you do not need to sign in here to keep using Codex.",
-                        { provider: codexLogin.name },
-                      )}
+                      {`You already have a saved login for ${codexLogin.name}. OpenAI and OpenAI Codex use separate credentials; you do not need to sign in here to keep using Codex.`}
                     </p>
                     <Button
                       className="self-start"
@@ -268,7 +255,7 @@ export function Authentication({
                         setError("");
                       }}
                     >
-                      {t("View existing login")}
+                      View existing login
                     </Button>
                   </div>
                 )}
@@ -293,9 +280,7 @@ export function Authentication({
                           })
                         }
                       >
-                        {method.type === "oauth"
-                          ? method.label
-                          : t("Set API key")}
+                        {method.type === "oauth" ? method.label : "Set API key"}
                       </Button>
                     ))}
                     {provider.stored && (
@@ -304,9 +289,7 @@ export function Authentication({
                         onClick={() => {
                           if (
                             window.confirm(
-                              t(
-                                "Remove this provider’s saved credential? This does not revoke it or remove environment credentials.",
-                              ),
+                              "Remove this provider’s saved credential? This does not revoke it or remove environment credentials.",
                             )
                           )
                             void act(async () => {
@@ -320,7 +303,7 @@ export function Authentication({
                             });
                         }}
                       >
-                        {t("Log out")}
+                        Log out
                       </Button>
                     )}
                   </div>
@@ -345,12 +328,12 @@ export function Authentication({
                         rel="noopener noreferrer"
                         className="text-body text-amber-400 underline"
                       >
-                        {t("Open provider sign-in")}
+                        Open provider sign-in
                       </a>
                     )}
                     {pending && login.userCode && (
                       <p className="text-body">
-                        {t("Device code")}:{" "}
+                        Device code:{" "}
                         <code className="font-mono text-amber-400">
                           {login.userCode}
                         </code>
@@ -377,7 +360,7 @@ export function Authentication({
                     )}
                     {pending && !login.prompt && (
                       <p className="text-meta text-neutral-500">
-                        {t("Waiting for provider sign-in…")}
+                        Waiting for provider sign-in…
                       </p>
                     )}
                     {pending && (
@@ -386,14 +369,13 @@ export function Authentication({
                         className="self-start"
                         onClick={() => void act(cancel)}
                       >
-                        {t("Cancel login")}
+                        Cancel login
                       </Button>
                     )}
                     {login.state === "complete" && (
                       <p className="text-meta text-neutral-500">
-                        {t(
-                          "Start a new AI session to pick up the credential. Existing sessions may need to be reopened.",
-                        )}
+                        Start a new AI session to pick up the credential.
+                        Existing sessions may need to be reopened.
                       </p>
                     )}
                   </div>

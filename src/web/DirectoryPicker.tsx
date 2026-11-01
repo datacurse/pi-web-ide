@@ -17,7 +17,7 @@ import {
 } from "./ui.js";
 import { api, unwrap } from "./api.js";
 import { FileGlyph } from "./fileIcon.js";
-import { t } from "./i18n.js";
+
 import { ScrollPane } from "./OverlayScrollbar.js";
 
 /**
@@ -99,7 +99,7 @@ export function DirectoryPicker({
     if (!r?.ok || !body?.entries) {
       // Staying put on failure is the point: an unreadable directory must
       // not blank the list you were successfully browsing a moment ago.
-      setError(body?.error ?? t("could not read that directory"));
+      setError(body?.error ?? "could not read that directory");
       return;
     }
     setError(null);
@@ -152,7 +152,7 @@ export function DirectoryPicker({
       error?: string;
     } | null;
     if (!r?.ok) {
-      setError(body?.error ?? t("could not change the pinned folders"));
+      setError(body?.error ?? "could not change the pinned folders");
       return;
     }
     setError(null);
@@ -281,9 +281,9 @@ export function DirectoryPicker({
           id="picker-title"
           className="text-title font-semibold tracking-tight"
         >
-          {t("Add project")}
+          Add project
         </h2>
-        <IconButton onClick={onClose} label={t("Close directory picker")}>
+        <IconButton onClick={onClose} label="Close directory picker">
           <X size={13} />
         </IconButton>
       </div>
@@ -305,7 +305,7 @@ export function DirectoryPicker({
           size="sm"
           type="button"
           onClick={() => void go(listing?.home ?? "~")}
-          title={t("Home directory")}
+          title="Home directory"
         >
           {/* "~" rather than a house glyph: this row is a path field, the
 					    server expands it, and no font is missing it. */}
@@ -320,8 +320,8 @@ export function DirectoryPicker({
           // reports no parent — not while a request is in flight, since
           // that would make the button flicker under a fast clicker.
           disabled={!listing?.parent}
-          title={t("Parent directory")}
-          aria-label={t("Parent directory")}
+          title="Parent directory"
+          aria-label="Parent directory"
         >
           <span aria-hidden>{"\u2191"}</span>
         </Button>
@@ -330,8 +330,8 @@ export function DirectoryPicker({
           size="sm"
           onClick={() => current && void togglePin(current, pinned)}
           disabled={!current}
-          title={pinned ? t("Unpin this folder") : t("Pin this folder")}
-          aria-label={pinned ? t("Unpin this folder") : t("Pin this folder")}
+          title={pinned ? "Unpin this folder" : "Pin this folder"}
+          aria-label={pinned ? "Unpin this folder" : "Pin this folder"}
           aria-pressed={pinned}
         >
           <Star
@@ -345,17 +345,17 @@ export function DirectoryPicker({
           onChange={(e) => setDraft(e.target.value)}
           spellCheck={false}
           autoComplete="off"
-          aria-label={t("Directory path")}
-          placeholder={t("/absolute/path, ~/path, or type to filter")}
+          aria-label="Directory path"
+          placeholder="/absolute/path, ~/path, or type to filter"
           className={`min-w-0 flex-1 font-mono ${inputClass.sm}`}
         />
         <Button
           variant="subtle"
           size="sm"
           type="submit"
-          title={t("Go to this path")}
+          title="Go to this path"
         >
-          {t("Go")}
+          Go
         </Button>
       </form>
 
@@ -400,8 +400,8 @@ export function DirectoryPicker({
               <button
                 data-custom="pinned-folder chip"
                 onClick={() => void togglePin(path, true)}
-                aria-label={t("Unpin {path}", { path })}
-                title={t("Unpin")}
+                aria-label={`Unpin ${path}`}
+                title="Unpin"
                 className="rounded-r-sm px-1 py-0.5 text-neutral-600 transition-colors duration-150 ease-out hover:bg-neutral-800 hover:text-neutral-200 motion-reduce:transition-none"
               >
                 <X size={9} />
@@ -418,7 +418,7 @@ export function DirectoryPicker({
           disabled={!current || busy || working}
           onClick={() => begin("folder")}
         >
-          <FolderPlus size={14} /> {t("New folder")}
+          <FolderPlus size={14} /> New folder
         </Button>
         <Button
           variant="subtle"
@@ -426,7 +426,7 @@ export function DirectoryPicker({
           disabled={!current || busy || working}
           onClick={() => begin("file")}
         >
-          <FilePlus size={14} /> {t("New file")}
+          <FilePlus size={14} /> New file
         </Button>
         <Button
           variant="subtle"
@@ -434,7 +434,7 @@ export function DirectoryPicker({
           disabled={!current || busy || working}
           onClick={() => void go(current)}
         >
-          {t("Refresh")}
+          Refresh
         </Button>
       </div>
       {edit && (
@@ -456,8 +456,8 @@ export function DirectoryPicker({
             htmlFor="picker-entry-name"
           >
             {edit.action === "move" || edit.action === "copy"
-              ? t("Destination folder")
-              : t("Name")}
+              ? "Destination folder"
+              : "Name"}
             {edit.name && `: ${edit.name}`}
           </label>
           <input
@@ -476,7 +476,7 @@ export function DirectoryPicker({
             type="submit"
             disabled={working || !value.trim()}
           >
-            {working ? t("Working…") : t("Apply")}
+            {working ? "Working…" : "Apply"}
           </Button>
           <Button
             variant="ghost"
@@ -485,7 +485,7 @@ export function DirectoryPicker({
             disabled={working}
             onClick={() => setEdit(null)}
           >
-            {t("Cancel")}
+            Cancel
           </Button>
         </form>
       )}
@@ -496,10 +496,8 @@ export function DirectoryPicker({
         {listing && entries.length === 0 && (
           <p className="px-3 py-4 text-meta text-neutral-400">
             {fragment
-              ? t("Nothing here matches “{fragment}”.", { fragment })
-              : t(
-                  "This folder is empty. Create a file or folder, or add it as a project.",
-                )}
+              ? `Nothing here matches “${fragment}”.`
+              : "This folder is empty. Create a file or folder, or add it as a project."}
           </p>
         )}
         {entries.map((e) => (
@@ -544,7 +542,7 @@ export function DirectoryPicker({
 						    is the one thing a row says beyond its name. */}
               {e.repo && (
                 <span
-                  title={t("Git repository")}
+                  title="Git repository"
                   className="shrink-0 rounded-sm bg-neutral-800 px-1 text-caption text-amber-400/90"
                 >
                   git
@@ -552,13 +550,13 @@ export function DirectoryPicker({
               )}
               {projects.includes(e.path) && (
                 <span className="ml-auto shrink-0 text-caption text-neutral-500">
-                  {t("added")}
+                  added
                 </span>
               )}
             </ListRow>
             <IconButton
               disabled={working || busy}
-              label={t("Actions for {name}", { name: e.name })}
+              label={`Actions for ${e.name}`}
               onClick={(event) => {
                 const box = event.currentTarget.getBoundingClientRect();
                 setMenu({ entry: e, x: box.left, y: box.bottom });
@@ -579,7 +577,7 @@ export function DirectoryPicker({
           // the button says so instead of pretending to work.
           disabled={!current || already || busy || working}
         >
-          {already ? t("Already added") : t("Add this folder")}
+          {already ? "Already added" : "Add this folder"}
         </Button>
         <span className="min-w-0 flex-1 fade-end font-mono text-meta text-neutral-500">
           {error ? <span className="text-red-400">{error}</span> : current}
@@ -589,36 +587,32 @@ export function DirectoryPicker({
         <ContextMenu
           x={menu.x}
           y={menu.y}
-          label={t("File actions")}
+          label="File actions"
           onClose={() => setMenu(null)}
         >
           {menu.entry.dir && (
             <MenuItem onClick={() => void go(menu.entry.path)}>
-              {t("Open folder")}
+              Open folder
             </MenuItem>
           )}
           <MenuItem onClick={() => begin("rename", menu.entry.name)}>
-            {t("Rename")}
+            Rename
           </MenuItem>
           <MenuItem onClick={() => begin("move", menu.entry.name)}>
-            {t("Move to…")}
+            Move to…
           </MenuItem>
           <MenuItem onClick={() => begin("copy", menu.entry.name)}>
-            {t("Copy to…")}
+            Copy to…
           </MenuItem>
           <MenuItem
             onClick={() => {
               const entry = menu.entry;
               setMenu(null);
-              if (
-                window.confirm(
-                  t('Move "{name}" to the Trash?', { name: entry.name }),
-                )
-              )
+              if (window.confirm(`Move "${entry.name}" to the Trash?`))
                 void manage("trash", entry.name);
             }}
           >
-            {t("Move to Trash")}
+            Move to Trash
           </MenuItem>
         </ContextMenu>
       )}

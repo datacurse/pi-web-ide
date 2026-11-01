@@ -13,7 +13,6 @@ import type {
 } from "../shared/types.js";
 import { Button, OptionRow, inputClass } from "./ui.js";
 import { api } from "./api.js";
-import { t } from "./i18n.js";
 
 type Flag =
   | "actionFusion"
@@ -24,35 +23,27 @@ type Flag =
 const FLAGS: { key: Flag; name: () => string; hint: () => string }[] = [
   {
     key: "actionFusion",
-    name: () => t("Action Fusion"),
+    name: () => "Action Fusion",
     hint: () =>
-      t(
-        "An edit or write can run its follow-up check (tests, lint, build) in the same tool call, saving a model turn. Local.",
-      ),
+      "An edit or write can run its follow-up check (tests, lint, build) in the same tool call, saving a model turn. Local.",
   },
   {
     key: "observationPack",
-    name: () => t("ObservationPack"),
+    name: () => "ObservationPack",
     hint: () =>
-      t(
-        "Large outputs that keep being re-sent become a short handle the model can page back through. The full text is archived in the session directory and never deleted automatically.",
-      ),
+      "Large outputs that keep being re-sent become a short handle the model can page back through. The full text is archived in the session directory and never deleted automatically.",
   },
   {
     key: "evidencePreservingReducer",
-    name: () => t("Evidence-Preserving Reducer"),
+    name: () => "Evidence-Preserving Reducer",
     hint: () =>
-      t(
-        "A test or build log over 4 KB is summarised by the reducer model, kept only if every quoted line matches the original. pi waits for that call, so each such log takes a few seconds longer. Sends log contents to that model.",
-      ),
+      "A test or build log over 4 KB is summarised by the reducer model, kept only if every quoted line matches the original. pi waits for that call, so each such log takes a few seconds longer. Sends log contents to that model.",
   },
   {
     key: "onlineContextCompact",
-    name: () => t("Online Context Compact"),
+    name: () => "Online Context Compact",
     hint: () =>
-      t(
-        "Compacts the conversation when a plan step finishes and it pays off or the window is filling, then continues on its own.",
-      ),
+      "Compacts the conversation when a plan step finishes and it pays off or the window is filling, then continues on its own.",
   },
 ];
 
@@ -78,7 +69,7 @@ export function SolPiSettings({ cwd }: { cwd: string }) {
         setRatio(ratioText(body.config));
         setError(null);
       })
-      .catch(() => setError(t("could not load the settings")));
+      .catch(() => setError("could not load the settings"));
   }, [cwd]);
 
   useEffect(() => {
@@ -97,7 +88,7 @@ export function SolPiSettings({ cwd }: { cwd: string }) {
       Settings | { error: string } | null;
     if (!r?.ok || !body || "error" in body) {
       setError(
-        body && "error" in body ? body.error : t("could not save the setting"),
+        body && "error" in body ? body.error : "could not save the setting",
       );
       return false;
     }
@@ -122,7 +113,7 @@ export function SolPiSettings({ cwd }: { cwd: string }) {
   const saveRatio = async () => {
     const text = ratio.trim();
     if (text && !(Number(text) >= 0))
-      return setError(t("the ratio must be a number, 0 or more"));
+      return setError("the ratio must be a number, 0 or more");
     if (await save({ cacheWriteReadRatio: text ? Number(text) : null }))
       setRatio(text);
   };
@@ -141,9 +132,7 @@ export function SolPiSettings({ cwd }: { cwd: string }) {
     <div className="max-w-xl pb-3">
       {settings?.projectFile && (
         <p className="mb-2 rounded-sm border border-amber-900 bg-amber-950/30 px-2 py-1.5 text-meta text-amber-300">
-          {t("{path} replaces these settings while this project is trusted.", {
-            path: settings.projectFile,
-          })}
+          {`${settings.projectFile} replaces these settings while this project is trusted.`}
         </p>
       )}
       {FLAGS.map((f) => (
@@ -167,7 +156,7 @@ export function SolPiSettings({ cwd }: { cwd: string }) {
             c?.evidencePreservingReducer && (
               <Nested>
                 <label className="block text-meta text-neutral-500">
-                  {t("Reducer model")}
+                  Reducer model
                   <select
                     value={reducer}
                     disabled={models === null}
@@ -197,11 +186,10 @@ export function SolPiSettings({ cwd }: { cwd: string }) {
           {f.key === "onlineContextCompact" && c?.onlineContextCompact && (
             <Nested>
               <label className="block text-meta text-neutral-500">
-                {t("Cache write/read cost ratio")}
+                Cache write/read cost ratio
                 <span className="block">
-                  {t(
-                    "Used by Online Context Compact to judge when compacting pays off.",
-                  )}
+                  Used by Online Context Compact to judge when compacting pays
+                  off.
                 </span>
                 <span className="mt-1 flex gap-2">
                   <input
@@ -218,7 +206,7 @@ export function SolPiSettings({ cwd }: { cwd: string }) {
                     onClick={() => void saveRatio()}
                     disabled={!dirty}
                   >
-                    {t("Save")}
+                    Save
                   </Button>
                 </span>
               </label>
@@ -230,11 +218,9 @@ export function SolPiSettings({ cwd }: { cwd: string }) {
         {error ? (
           <span className="text-red-400">{error}</span>
         ) : settings ? (
-          t("{path}. Applies to sessions started from now on.", {
-            path: settings.path,
-          })
+          `${settings.path}. Applies to sessions started from now on.`
         ) : (
-          t("loading…")
+          "loading…"
         )}
       </p>
     </div>

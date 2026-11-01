@@ -13,7 +13,7 @@ import Markdown, { RuleType, type MarkdownToJSX } from "markdown-to-jsx";
 import { extractMath, PLACEHOLDER, type MathSpan } from "./math.js";
 import { Math } from "./Math.js";
 import { Button, ContextMenu, MenuItem } from "./ui.js";
-import { t } from "./i18n.js";
+
 import { highlightLines, type Token } from "./codeHighlight.js";
 import { dedentBlocks } from "./codeIndent.js";
 import { FileNavigationContext } from "./fileNavigation.js";
@@ -142,7 +142,7 @@ function CodeBox({
         className="absolute top-1 right-1 opacity-0 focus-visible:opacity-100 group-hover:opacity-100"
         onClick={copy}
       >
-        {copied ? t("Copied") : t("Copy")}
+        {copied ? "Copied" : "Copy"}
       </Button>
       <pre className="chat-code rounded-sm bg-neutral-900 p-2 pt-7 whitespace-pre-wrap wrap-anywhere text-neutral-300 [tab-size:2]">
         <code>
@@ -218,7 +218,7 @@ function CodeBlock({ lang, text }: { lang?: string; text: string }) {
       {/* Through <img>, so scripts and external loads in the SVG never run. */}
       <img
         src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(text)}`}
-        alt={t("SVG preview")}
+        alt="SVG preview"
         aria-haspopup="menu"
         onContextMenu={(e) => {
           e.preventDefault();
@@ -236,7 +236,7 @@ function CodeBlock({ lang, text }: { lang?: string; text: string }) {
         <ContextMenu
           x={menu.x}
           y={menu.y}
-          label={t("SVG preview")}
+          label="SVG preview"
           onClose={() => setMenu(null)}
         >
           <MenuItem
@@ -244,13 +244,13 @@ function CodeBlock({ lang, text }: { lang?: string; text: string }) {
             autoFocus
             onClick={act(() => copyPng(menu.img))}
           >
-            {t("Copy as PNG")}
+            Copy as PNG
           </MenuItem>
           <MenuItem
             role="menuitem"
             onClick={act(() => navigator.clipboard.writeText(text))}
           >
-            {t("Copy as SVG")}
+            Copy as SVG
           </MenuItem>
         </ContextMenu>
       )}
@@ -261,7 +261,7 @@ function CodeBlock({ lang, text }: { lang?: string; text: string }) {
         className="mt-1 flex items-center gap-1 chat-code font-mono text-neutral-500 hover:text-neutral-300"
       >
         {open ? <CaretDown size={11} /> : <CaretRight size={11} />}
-        {t("Code")}
+        Code
       </button>
       {open && <CodeBox lang={lang} text={text} className="mt-1" />}
     </div>

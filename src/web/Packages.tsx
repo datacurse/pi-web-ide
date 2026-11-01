@@ -49,7 +49,6 @@ import {
 import { setKcal } from "../shared/calories.js";
 import { parseResponse } from "hono/client";
 import { api, unwrap } from "./api.js";
-import { t, locale, perLocale } from "./i18n.js";
 
 /** `2026-09-14T20:53:55.440Z` → `14 Sep 2026`. A publish date is a month, not a minute. */
 function shortDate(iso: string | undefined): string {
@@ -57,7 +56,7 @@ function shortDate(iso: string | undefined): string {
   const d = new Date(iso);
   return Number.isNaN(d.getTime())
     ? ""
-    : d.toLocaleDateString(locale(), {
+    : d.toLocaleDateString(undefined, {
         day: "numeric",
         month: "short",
         year: "numeric",
@@ -79,9 +78,7 @@ function compactCount(n: number): string {
  * two seconds; someone who has not is the reason it is here.
  */
 const warning = () =>
-  t(
-    "Packages run with full system access: extensions are code, and skills can tell the model to run anything.",
-  );
+  "Packages run with full system access: extensions are code, and skills can tell the model to run anything.";
 
 export function Packages({
   open,
@@ -164,10 +161,10 @@ export function Packages({
       }
       setWorking(undefined);
       setLog({
-        title: result.ok ? what : t("{what} — failed", { what }),
+        title: result.ok ? what : `${what} — failed`,
         text: result.ok
-          ? result.log || t("done")
-          : `${result.reason ?? t("failed")}\n\n${result.log}`,
+          ? result.log || "done"
+          : `${result.reason ?? "failed"}\n\n${result.log}`,
       });
       await refresh();
       // The open session's `stale` flag only changes server-side, and
@@ -196,17 +193,17 @@ export function Packages({
    */
   return (
     <section
-      aria-label={t("Packages")}
+      aria-label="Packages"
       className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-neutral-950 text-neutral-100"
     >
-      <PanelHeader title={t("Packages")} onClose={onClose}>
+      <PanelHeader title="Packages" onClose={onClose}>
         <span
           className="ml-auto font-mono text-caption text-neutral-500"
-          title={t("pi on this machine")}
+          title="pi on this machine"
         >
           pi {view?.piVersion ?? "?"}
         </span>
-        <IconButton label={t("Refresh")} onClick={() => void refresh()}>
+        <IconButton label="Refresh" onClick={() => void refresh()}>
           <ArrowClockwise size={16} />
         </IconButton>
       </PanelHeader>
@@ -222,10 +219,10 @@ export function Packages({
               aria-pressed={tab === id}
             >
               {id === "installed"
-                ? t("pi packages")
+                ? "pi packages"
                 : id === "pwi"
-                  ? t("pwi extensions")
-                  : t("Search")}
+                  ? "pwi extensions"
+                  : "Search"}
             </Button>
           ))}
         </div>
@@ -250,26 +247,24 @@ export function Packages({
             project={project}
             onAdd={() => setAdding({ source: "" })}
             onUpdate={(source) =>
-              void mutate(t("update {source}", { source }), () =>
+              void mutate(`update ${source}`, () =>
                 api.packages.update.$post({ json: { source } }),
               )
             }
             onRemove={(source) =>
-              void mutate(t("remove {source}", { source }), () =>
+              void mutate(`remove ${source}`, () =>
                 api.packages.$delete({ json: { source } }),
               )
             }
             onEnabled={(source, enabled) =>
               void mutate(
-                t(enabled ? "enable {source}" : "disable {source}", { source }),
+                enabled ? `enable ${source}` : `disable ${source}`,
                 () => api.packages.enabled.$put({ json: { source, enabled } }),
               )
             }
             busy={!!working || !!view?.busy}
             onUpdatePi={() =>
-              void mutate(t("update pi"), () =>
-                api.packages["update-pi"].$post(),
-              )
+              void mutate("update pi", () => api.packages["update-pi"].$post())
             }
           />
         </div>
@@ -286,7 +281,7 @@ export function Packages({
           onClose={() => setAdding(null)}
           onInstall={(source) => {
             setAdding(null);
-            void mutate(t("install {source}", { source }), () =>
+            void mutate(`install ${source}`, () =>
               api.packages.$post({ json: { source } }),
             );
           }}
@@ -300,7 +295,7 @@ export function Packages({
               {log.title}
             </span>
             <Button variant="ghost" size="sm" onClick={() => setLog(null)}>
-              {t("Dismiss")}
+              Dismiss
             </Button>
           </div>
           <pre className="mt-1 max-h-40 overflow-auto font-mono text-meta whitespace-pre-wrap text-neutral-400">
@@ -351,27 +346,24 @@ function Installed({
             <Cube size={22} />
           </div>
           <div>
-            <h2 className="text-title font-medium">{t("pi packages")}</h2>
+            <h2 className="text-title font-medium">pi packages</h2>
             <p className="mt-1 text-meta text-neutral-500">
-              {t("{count} installed", { count: packages.length })}
+              {`${packages.length} installed`}
               <span className="mx-2 text-neutral-700">/</span>
-              {t("{count} disabled", {
-                count: packages.filter((p) => p.disabled).length,
-              })}
+              {`${packages.filter((p) => p.disabled).length} disabled`}
             </p>
           </div>
         </div>
         <Button variant="primary" size="sm" onClick={onAdd} disabled={busy}>
           <Plus size={14} />
-          {t("Add by source")}
+          Add by source
         </Button>
       </div>
       <div className="mb-4 flex items-start gap-2 rounded-md border border-neutral-800 bg-neutral-900/40 p-3 text-meta text-neutral-400">
         <Info size={16} className="shrink-0 text-neutral-500" />
         <p>
-          {t(
-            "Disable keeps a package installed. Restart existing sessions to apply changes. Project package declarations can override personal settings.",
-          )}
+          Disable keeps a package installed. Restart existing sessions to apply
+          changes. Project package declarations can override personal settings.
         </p>
       </div>
 
@@ -387,11 +379,9 @@ function Installed({
             <tr
               className={`border-b border-neutral-800 bg-neutral-900/60 text-left ${sectionLabel}`}
             >
-              <th className="px-4 py-2 font-normal">{t("Package")}</th>
-              <th className="px-4 py-2 font-normal">{t("Installed")}</th>
-              <th className="px-4 py-2 text-right font-normal">
-                {t("Actions")}
-              </th>
+              <th className="px-4 py-2 font-normal">Package</th>
+              <th className="px-4 py-2 font-normal">Installed</th>
+              <th className="px-4 py-2 text-right font-normal">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -411,10 +401,10 @@ function Installed({
                       >
                         ·{" "}
                         {p.disabled
-                          ? t("disabled")
+                          ? "disabled"
                           : p.autoload
-                            ? t("enabled")
-                            : t("off")}
+                            ? "enabled"
+                            : "off"}
                       </span>
                     </span>
                     {hasSettings(p.identity) && (
@@ -429,43 +419,36 @@ function Installed({
                           )
                         }
                       >
-                        {t("settings")}
+                        settings
                       </Button>
                     )}
                   </td>
                   <td className="px-4 py-4 whitespace-nowrap">
                     <span className="font-mono text-meta text-neutral-300">
-                      {p.installed ?? t("not on disk")}
+                      {p.installed ?? "not on disk"}
                     </span>
                     {p.pinned && (
                       <span
                         className="ml-1 rounded-sm bg-neutral-800 px-1 text-caption text-neutral-400"
-                        title={t(
-                          "pinned to {version}; package updates skip it",
-                          {
-                            version: p.pinned,
-                          },
-                        )}
+                        title={`pinned to ${p.pinned}; package updates skip it`}
                       >
-                        {t("pinned")}
+                        pinned
                       </span>
                     )}
                     {p.filtered && !p.disabled && (
                       <span
                         className="ml-1 text-caption text-neutral-500"
-                        title={t("loads only part of itself")}
+                        title="loads only part of itself"
                       >
-                        {t("filtered")}
+                        filtered
                       </span>
                     )}
                     {!p.autoload && !p.disabled && (
                       <span
                         className="ml-1 text-caption text-neutral-500"
-                        title={t(
-                          "installed, but not loaded unless a project asks for it",
-                        )}
+                        title="installed, but not loaded unless a project asks for it"
                       >
-                        {t("off")}
+                        off
                       </span>
                     )}
                   </td>
@@ -473,15 +456,15 @@ function Installed({
                     <div className="flex items-center justify-end gap-1">
                       <Toggle
                         checked={!p.disabled}
-                        label={t("Enable {source}", { source: p.identity })}
-                        stateLabel={p.disabled ? t("Disabled") : t("Enabled")}
+                        label={`Enable ${p.identity}`}
+                        stateLabel={p.disabled ? "Disabled" : "Enabled"}
                         disabled={busy}
                         onChange={(enabled) => onEnabled(p.source, enabled)}
-                        title={t(
+                        title={
                           p.disabled
                             ? "Restore this package’s previous configuration"
-                            : "Keep installed, but stop loading its resources",
-                        )}
+                            : "Keep installed, but stop loading its resources"
+                        }
                       />
                       {p.kind !== "local" && (
                         <>
@@ -491,10 +474,8 @@ function Installed({
                             onClick={() => onUpdate(p.source)}
                             label={
                               p.pinned
-                                ? t(
-                                    "Pinned: an update will not move it. Install the new version to move the pin.",
-                                  )
-                                : t("Update this package")
+                                ? "Pinned: an update will not move it. Install the new version to move the pin."
+                                : "Update this package"
                             }
                           >
                             <ArrowClockwise size={16} />
@@ -503,7 +484,7 @@ function Installed({
                             size="sm"
                             disabled={busy}
                             onClick={() => onRemove(p.source)}
-                            label={t("Remove this package")}
+                            label="Remove this package"
                           >
                             <Trash size={16} />
                           </IconButton>
@@ -527,7 +508,7 @@ function Installed({
                   colSpan={3}
                   className="py-6 text-center text-meta text-neutral-500"
                 >
-                  {t("No packages installed yet.")}
+                  No packages installed yet.
                 </td>
               </tr>
             )}
@@ -538,28 +519,28 @@ function Installed({
       <div className="mt-4 flex flex-wrap items-start justify-between gap-4 rounded-md border border-neutral-800 bg-neutral-900/40 p-4">
         <div className="min-w-0 flex-1">
           <h3 className="flex flex-wrap items-center gap-2 font-medium">
-            {t("pi itself")}
+            pi itself
             <span className="rounded-sm border border-neutral-700 px-1.5 py-0.5 font-mono text-caption text-neutral-400">
-              {t("Installed")} {piVersion ?? "?"}
+              Installed {piVersion ?? "?"}
             </span>
           </h3>
           <p className="mt-2 flex flex-wrap items-center gap-2 text-meta text-neutral-400">
             <span>
-              {t("Latest")}{" "}
+              Latest{" "}
               <span className="font-mono">
                 {piLatestVersion === undefined
-                  ? t("Checking…")
-                  : (piLatestVersion ?? t("Unavailable"))}
+                  ? "Checking…"
+                  : (piLatestVersion ?? "Unavailable")}
               </span>
             </span>
             {piLatestVersion && piLatestVersion === piVersion && (
-              <span className="text-neutral-500">{t("Up to date")}</span>
+              <span className="text-neutral-500">Up to date</span>
             )}
           </p>
           <p className="mt-2 max-w-prose text-meta leading-relaxed text-neutral-500">
-            {t(
-              "Extensions declare pi's own packages as peer dependencies, so a machine on a different pi is how a package works on one box and throws on another. Updating is never automatic.",
-            )}
+            Extensions declare pi's own packages as peer dependencies, so a
+            machine on a different pi is how a package works on one box and
+            throws on another. Updating is never automatic.
           </p>
         </div>
         <div>
@@ -571,22 +552,20 @@ function Installed({
             }
           >
             <ArrowClockwise size={14} />
-            {t("Update pi")}
+            Update pi
           </Button>
         </div>
       </div>
 
       {project && project.packages.length > 0 && (
         <div className="mt-6 border-t border-neutral-800 pt-3">
-          <h3 className={sectionLabel}>
-            {t("This project — {cwd}", { cwd: project.cwd })}
-          </h3>
+          <h3 className={sectionLabel}>{`This project — ${project.cwd}`}</h3>
           <p className="mt-1 max-w-prose text-meta text-neutral-500">
-            {t("From the project's own")}{" "}
-            <span className="font-mono">.pi/settings.json</span>.{" "}
-            {t(
-              "pi installs these at startup once the project is trusted, and the file is usually committed — so git is their sync, and they are read-only here.",
-            )}
+            From the project's own{" "}
+            <span className="font-mono">.pi/settings.json</span>. pi installs
+            these at startup once the project is trusted, and the file is
+            usually committed — so git is their sync, and they are read-only
+            here.
           </p>
           <ul className="mt-2 space-y-0.5">
             {project.packages.map((p) => (
@@ -594,12 +573,12 @@ function Installed({
                 {p.source}
                 {p.filtered && (
                   <span className="ml-2 text-caption text-neutral-500">
-                    {t("filtered")}
+                    filtered
                   </span>
                 )}
                 {!p.autoload && (
                   <span className="ml-2 text-caption text-neutral-500">
-                    {t("off")}
+                    off
                   </span>
                 )}
               </li>
@@ -623,15 +602,15 @@ function PwiExtensionsSection({ open }: { open: boolean }) {
       .$get()
       .then((r) => (r.ok ? r.json() : null))
       .then((s) =>
-        s ? setState(s) : setError(t("could not load pwi extensions")),
+        s ? setState(s) : setError("could not load pwi extensions"),
       )
-      .catch(() => setError(t("could not load pwi extensions")));
+      .catch(() => setError("could not load pwi extensions"));
   }, []);
   const setToolMetrics = async (on: boolean) => {
     const r = await api["pwi-extensions"]["tool-metrics"]
       .$put({ json: { on } })
       .catch(() => null);
-    if (!r?.ok) return setError(t("could not save the setting"));
+    if (!r?.ok) return setError("could not save the setting");
     setError(null);
     setState(await r.json());
   };
@@ -639,7 +618,7 @@ function PwiExtensionsSection({ open }: { open: boolean }) {
     const r = await api["pwi-extensions"].workout
       .$put({ json: { on } })
       .catch(() => null);
-    if (!r?.ok) return setError(t("could not save the setting"));
+    if (!r?.ok) return setError("could not save the setting");
     setError(null);
     setState(await r.json());
   };
@@ -651,7 +630,7 @@ function PwiExtensionsSection({ open }: { open: boolean }) {
     const r = await api["pwi-extensions"]["workout-exercises"]
       .$put({ json: { off } })
       .catch(() => null);
-    if (!r?.ok) return setError(t("could not save the setting"));
+    if (!r?.ok) return setError("could not save the setting");
     setError(null);
     setState(await r.json());
   };
@@ -660,11 +639,10 @@ function PwiExtensionsSection({ open }: { open: boolean }) {
   ).length;
   return (
     <div>
-      <h3 className={sectionLabel}>{t("pwi extensions")}</h3>
+      <h3 className={sectionLabel}>pwi extensions</h3>
       <p className="mt-1 max-w-prose text-meta text-neutral-500">
-        {t(
-          "Built into pwi and loaded only into the sessions it starts, not into pi in a terminal. A change applies to sessions started from now on.",
-        )}
+        Built into pwi and loaded only into the sessions it starts, not into pi
+        in a terminal. A change applies to sessions started from now on.
       </p>
       {error && <p className="mt-1 text-meta text-red-400">{error}</p>}
       <div className="mt-2 max-w-xl">
@@ -677,11 +655,11 @@ function PwiExtensionsSection({ open }: { open: boolean }) {
             className="size-4 shrink-0 accent-amber-400"
           />
           <span className="flex-1">
-            {t("Tool metrics")}
+            Tool metrics
             <span className="block text-meta text-neutral-500">
-              {t(
-                "Times every tool call, and each command inside a bash call with its output size, for Stats and the context panel. Nothing reaches the model.",
-              )}
+              Times every tool call, and each command inside a bash call with
+              its output size, for Stats and the context panel. Nothing reaches
+              the model.
             </span>
           </span>
         </OptionRow>
@@ -694,18 +672,18 @@ function PwiExtensionsSection({ open }: { open: boolean }) {
             className="size-4 shrink-0 accent-amber-400"
           />
           <span className="flex-1">
-            {t("Workout")}
+            Workout
             <span className="block text-meta text-neutral-500">
-              {t(
-                "A short exercise every so often, on its own schedule rather than your prompts: a card in the corner shows while pi is busy on a turn, rotating muscle groups so the ones just worked rest. Done, Snooze or Skip; nothing blocks. Sets and the plan show in Stats > Workouts.",
-              )}
+              {
+                "A short exercise every so often, on its own schedule rather than your prompts: a card in the corner shows while pi is busy on a turn, rotating muscle groups so the ones just worked rest. Done, Snooze or Skip; nothing blocks. Sets and the plan show in Stats > Workouts."
+              }
             </span>
           </span>
         </OptionRow>
         {state?.workout && (
           <Nested>
             <p className="mb-2 text-meta text-neutral-500">
-              {t("pwi picks only from the exercises ticked here.")}
+              pwi picks only from the exercises ticked here.
             </p>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
               {WORKOUT_KINDS.map((kind) => {
@@ -715,7 +693,7 @@ function PwiExtensionsSection({ open }: { open: boolean }) {
                 return (
                   <label
                     key={kind}
-                    title={last ? t("Keep at least one exercise") : undefined}
+                    title={last ? "Keep at least one exercise" : undefined}
                     className={`flex flex-col items-center gap-1 rounded-sm border p-2 text-meta ${
                       on
                         ? "border-neutral-700 text-neutral-200"
@@ -743,15 +721,13 @@ function PwiExtensionsSection({ open }: { open: boolean }) {
                     </span>
                     {state.workoutProfile && (
                       <span className="text-neutral-500">
-                        {t("≈{n} kcal a set", {
-                          n: kcalFmt().format(
-                            setKcal(
-                              kind,
-                              EXERCISES[kind].amount,
-                              state.workoutProfile,
-                            ),
+                        {`≈${kcalFmt.format(
+                          setKcal(
+                            kind,
+                            EXERCISES[kind].amount,
+                            state.workoutProfile,
                           ),
-                        })}
+                        )} kcal a set`}
                       </span>
                     )}
                   </label>
@@ -771,9 +747,7 @@ function PwiExtensionsSection({ open }: { open: boolean }) {
   );
 }
 
-const kcalFmt = perLocale(
-  (l) => new Intl.NumberFormat(l, { maximumFractionDigits: 1 }),
-);
+const kcalFmt = new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 });
 
 /** How often a set is due and in which hours; saved together with one button. */
 function WorkoutScheduleForm({
@@ -802,7 +776,7 @@ function WorkoutScheduleForm({
       .catch(() => null);
     if (!r?.ok)
       return setError(
-        t("Every 1–240 minutes, between whole hours 0–24 with From before To."),
+        "Every 1–240 minutes, between whole hours 0–24 with From before To.",
       );
     setError(null);
     onSaved(await r.json());
@@ -822,21 +796,19 @@ function WorkoutScheduleForm({
   return (
     <div className="mt-3 text-meta text-neutral-500">
       <p>
-        {t(
-          "A set is due this often after the last one, only between these hours:",
-        )}
+        A set is due this often after the last one, only between these hours:
       </p>
       <div className="mt-1 flex flex-wrap items-end gap-2">
-        {field("every", t("Every, min"))}
-        {field("from", t("From, h"))}
-        {field("to", t("To, h"))}
+        {field("every", "Every, min")}
+        {field("from", "From, h")}
+        {field("to", "To, h")}
         <Button
           variant="subtle"
           size="sm"
           onClick={() => void save()}
           disabled={!dirty}
         >
-          {t("Save")}
+          Save
         </Button>
       </div>
       {error && <p className="mt-1 text-red-400">{error}</p>}
@@ -876,7 +848,7 @@ function WorkoutBody({
       .catch(() => null);
     if (!r?.ok)
       return setError(
-        t("Sex, age 10–120, height 100–250 cm and weight 30–300 kg."),
+        "Sex, age 10–120, height 100–250 cm and weight 30–300 kg.",
       );
     setError(null);
     onSaved(await r.json());
@@ -896,35 +868,35 @@ function WorkoutBody({
   return (
     <div className="mt-3 text-meta text-neutral-500">
       <p>
-        {t(
-          "Your body, for the calorie estimates in Stats > Workouts and on the cards above:",
-        )}
+        {
+          "Your body, for the calorie estimates in Stats > Workouts and on the cards above:"
+        }
       </p>
       <div className="mt-1 flex flex-wrap items-end gap-2">
         <label className="flex flex-col gap-1">
-          {t("Sex")}
+          Sex
           <select
             value={draft.sex}
             onChange={(e) => setDraft({ ...draft, sex: e.target.value })}
             className={`w-24 ${inputClass.sm}`}
           >
             <option value="" disabled>
-              {t("Not set")}
+              Not set
             </option>
-            <option value="male">{t("Male")}</option>
-            <option value="female">{t("Female")}</option>
+            <option value="male">Male</option>
+            <option value="female">Female</option>
           </select>
         </label>
-        {field("age", t("Age"))}
-        {field("heightCm", t("Height, cm"))}
-        {field("weightKg", t("Weight, kg"))}
+        {field("age", "Age")}
+        {field("heightCm", "Height, cm")}
+        {field("weightKg", "Weight, kg")}
         <Button
           variant="subtle"
           size="sm"
           onClick={() => void save()}
           disabled={!dirty}
         >
-          {t("Save")}
+          Save
         </Button>
       </div>
       {error && <p className="mt-1 text-red-400">{error}</p>}
@@ -977,16 +949,16 @@ function Search({ onPick }: { onPick: (info: PiwPackageInfo) => void }) {
       <input
         value={query}
         onChange={(e) => setQuery(e.target.value)}
-        placeholder={t("Search the pi package gallery")}
+        placeholder="Search the pi package gallery"
         className={`w-full ${inputClass.md}`}
       />
       {reason && (
         <div className="mt-2 text-meta text-amber-400">
-          {t("Could not reach the npm registry: {reason}", { reason })}
+          {`Could not reach the npm registry: ${reason}`}
         </div>
       )}
       {loading && hits.length === 0 && (
-        <div className="mt-3 text-meta text-neutral-500">{t("Searching…")}</div>
+        <div className="mt-3 text-meta text-neutral-500">Searching…</div>
       )}
       <ul className="mt-3 space-y-1">
         {hits.map((h) => (
@@ -1022,9 +994,7 @@ function Search({ onPick }: { onPick: (info: PiwPackageInfo) => void }) {
         ))}
       </ul>
       {!loading && hits.length === 0 && !reason && (
-        <div className="mt-3 text-meta text-neutral-500">
-          {t("Nothing matches.")}
-        </div>
+        <div className="mt-3 text-meta text-neutral-500">Nothing matches.</div>
       )}
     </>
   );
@@ -1067,11 +1037,9 @@ function InstallDialog({
       <div className="w-[min(34rem,94vw)] rounded-md border border-neutral-800 bg-neutral-950 p-3 shadow-2xl">
         <div className="flex items-center justify-between">
           <h3 className="text-title font-semibold">
-            {known
-              ? t("Install {name}", { name: known.name })
-              : t("Add a package")}
+            {known ? `Install ${known.name}` : "Add a package"}
           </h3>
-          <IconButton onClick={onClose} label={t("Cancel")}>
+          <IconButton onClick={onClose} label="Cancel">
             <X size={13} />
           </IconButton>
         </div>
@@ -1088,21 +1056,11 @@ function InstallDialog({
               <span>{shortDate(known.published)}</span>
               {known.weeklyDownloads !== undefined && (
                 <span>
-                  {t("{count} downloads/week", {
-                    count: compactCount(known.weeklyDownloads),
-                  })}
+                  {`${compactCount(known.weeklyDownloads)} downloads/week`}
                 </span>
               )}
               <span>
-                {t(
-                  "{ext} ext · {skills} skills · {prompts} prompts · {themes} themes",
-                  {
-                    ext: known.contains.extensions,
-                    skills: known.contains.skills,
-                    prompts: known.contains.prompts,
-                    themes: known.contains.themes,
-                  },
-                )}
+                {`${known.contains.extensions} ext · ${known.contains.skills} skills · ${known.contains.prompts} prompts · ${known.contains.themes} themes`}
               </span>
             </p>
             {known.repository && (
@@ -1126,7 +1084,7 @@ function InstallDialog({
         )}
 
         <label className={`mt-3 block ${sectionLabel}`}>
-          {t("Source")}
+          Source
           <input
             value={source}
             onChange={(e) => {
@@ -1145,15 +1103,15 @@ function InstallDialog({
         {error && <p className="mt-2 text-meta text-red-400">{error}</p>}
 
         <div className="mt-3 flex justify-end gap-2">
-          <Button onClick={onClose}>{t("Cancel")}</Button>
+          <Button onClick={onClose}>Cancel</Button>
           <Button
             variant="primary"
             onClick={() => {
-              if (!source.trim()) return setError(t("a source is required"));
+              if (!source.trim()) return setError("a source is required");
               onInstall(source.trim());
             }}
           >
-            {t("Install")}
+            Install
           </Button>
         </div>
       </div>

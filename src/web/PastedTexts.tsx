@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { FileText, X } from "@phosphor-icons/react";
 import { Button, IconButton } from "./ui.js";
-import { t } from "./i18n.js";
+
 import type { PastedText } from "./pastedText.js";
 
 function TextDialog({
@@ -30,7 +30,7 @@ function TextDialog({
       <div className="flex h-full flex-col">
         <div className="flex items-center justify-between border-b border-neutral-800 px-4 py-3">
           <h2 className="text-title">{item.name}</h2>
-          <IconButton label={t("Close")} size="sm" onClick={onClose}>
+          <IconButton label="Close" size="sm" onClick={onClose}>
             <X size={16} />
           </IconButton>
         </div>
@@ -45,7 +45,7 @@ function TextDialog({
         />
         <div className="flex justify-end gap-2 border-t border-neutral-800 p-3">
           <Button size="sm" onClick={onClose}>
-            {t("Close")}
+            Close
           </Button>
           {onSave && (
             <Button
@@ -56,7 +56,7 @@ function TextDialog({
                 onClose();
               }}
             >
-              {t("Save changes")}
+              Save changes
             </Button>
           )}
         </div>
@@ -92,14 +92,14 @@ export function PastedTexts({
               <span className="fade-end block">{item.name}</span>
               <span className="fade-end block max-w-64 text-meta text-neutral-500">
                 {item.text.split(/\r?\n/).find((line) => line.trim()) ||
-                  t("Empty text")}
+                  "Empty text"}
               </span>
             </span>
           </button>
           {onChange && (
             <IconButton
               size="sm"
-              label={t("Remove {name}", { name: item.name })}
+              label={`Remove ${item.name}`}
               onClick={() => {
                 setOpened(null);
                 onChange(items.filter((_, n) => n !== i));

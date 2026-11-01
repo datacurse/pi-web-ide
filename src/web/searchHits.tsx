@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { PiSessionHit } from "../shared/types.js";
 import { api } from "./api.js";
-import { t } from "./i18n.js";
 
 /** Wrap every occurrence of any term in a bold mark; with `word`, only whole-word ones (as the server matches). */
 export function highlight(
@@ -62,7 +61,7 @@ export function useSessionSearch(project: string, query: string, word = false) {
       } | null;
       if (ticket !== seq.current) return;
       if (!r?.ok || !body?.hits) {
-        setError(body?.error ?? t("Search failed"));
+        setError(body?.error ?? "Search failed");
         return;
       }
       setError(null);

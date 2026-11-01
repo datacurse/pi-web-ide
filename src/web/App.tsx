@@ -147,7 +147,6 @@ import {
 } from "./attention.js";
 import { Button, hoverIntent, IconButton, PanelHeader } from "./ui.js";
 import { api, unwrap } from "./api.js";
-import { t } from "./i18n.js";
 
 /**
  * The stand-in for "no session, so no hunks".
@@ -344,7 +343,7 @@ export default function App() {
       setNotify(false);
       writeNotify(false);
       throw new Error(
-        t("Notifications require HTTPS or localhost and a supported browser."),
+        "Notifications require HTTPS or localhost and a supported browser.",
       );
     }
     let granted = false;
@@ -507,10 +506,7 @@ export default function App() {
       error?: string;
     };
     if (!r.ok || !body.id)
-      throw new Error(
-        body.error ??
-          t("could not start a shell ({status})", { status: r.status }),
-      );
+      throw new Error(body.error ?? `could not start a shell (${r.status})`);
     return body.id;
   };
   const openTerminalAt = async (dir: string) => {
@@ -731,7 +727,7 @@ export default function App() {
       setProjects({
         projects: [],
         seed: "",
-        error: r ? `HTTP ${r.status}` : t("not answering"),
+        error: r ? `HTTP ${r.status}` : "not answering",
       });
       return;
     }
@@ -796,7 +792,7 @@ export default function App() {
         projects?: string[];
       };
       if (!r?.ok) {
-        alert(body?.error ?? t("could not add project"));
+        alert(body?.error ?? "could not add project");
         return;
       }
       const list = body.projects ?? [];
@@ -841,7 +837,7 @@ export default function App() {
     if (!r?.ok) {
       // Said out loud, not left as an empty list: no sessions and no answer
       // look the same in a list, and only one of them is the machine's fault.
-      setListError(r ? `HTTP ${r.status}` : t("pwi is not answering"));
+      setListError(r ? `HTTP ${r.status}` : "pwi is not answering");
       return;
     }
     setListError(null);
@@ -876,7 +872,7 @@ export default function App() {
         const body = (await r?.json().catch(() => null)) as {
           error?: string;
         } | null;
-        alert(body?.error ?? t("could not rename this session"));
+        alert(body?.error ?? "could not rename this session");
       }
       await refreshSessions();
     },
@@ -902,7 +898,7 @@ export default function App() {
         error?: string;
       } | null;
       if (!r?.ok) {
-        alert(body?.error ?? t("could not name this session"));
+        alert(body?.error ?? "could not name this session");
         return;
       }
       if (body?.name) {
@@ -1687,9 +1683,9 @@ export default function App() {
       polled.current.set(s.path, s);
       if (!was || attached.includes(s.path)) continue;
       if (s.needsInput && !was.needsInput)
-        announce(s.path, t("Needs your answer"));
+        announce(s.path, "Needs your answer");
       else if (was.isStreaming && !s.isStreaming && !s.needsInput)
-        announce(s.path, t("Finished"));
+        announce(s.path, "Finished");
     }
   }, [shown, tabs.active, tabs.right?.active, announce]);
 
@@ -1801,93 +1797,88 @@ export default function App() {
   const paletteCommands: PaletteCommand[] = [
     {
       id: "session.new",
-      label: t("New AI Session"),
+      label: "New AI Session",
       keys: shortcutKeys("session.new"),
       run: () => void (lastUsedSide() === "right" ? right : left).attach(),
     },
     {
       id: "tab.reopen",
-      label: t("Reopen Closed Tab"),
+      label: "Reopen Closed Tab",
       keys: shortcutKeys("tab.reopen"),
       run: reopenClosedTab,
     },
     {
       id: "web.newTab",
-      label: t("New Web Tab"),
+      label: "New Web Tab",
       run: () => newWebTab(lastUsedSide()),
     },
     ...(project
       ? [
           {
             id: "terminal.newTab",
-            label: t("New Terminal Tab"),
+            label: "New Terminal Tab",
             run: () => void newTerminalTab(lastUsedSide()),
           },
         ]
       : []),
     {
       id: "session.search",
-      label: t("Search Sessions"),
+      label: "Search Sessions",
       keys: shortcutKeys("session.search"),
       run: () => setSearchOpen(true),
     },
     {
       id: "session.nextWaiting",
-      label: t("Go to Next Waiting Session"),
+      label: "Go to Next Waiting Session",
       keys: shortcutKeys("session.nextWaiting"),
       run: jumpToWaiting,
     },
     {
       id: "view.sessions",
-      label: listVisible
-        ? t("Hide Session History")
-        : t("Show Session History"),
+      label: listVisible ? "Hide Session History" : "Show Session History",
       run: () => showList(!listVisible),
     },
     {
       id: "view.explorer",
-      label: panel === "editor" ? t("Hide Explorer") : t("Show Explorer"),
+      label: panel === "editor" ? "Hide Explorer" : "Show Explorer",
       run: () => selectPanel("editor"),
     },
     {
       id: "view.sourceControl",
-      label:
-        panel === "review"
-          ? t("Hide Source Control")
-          : t("Show Source Control"),
+      label: panel === "review" ? "Hide Source Control" : "Show Source Control",
       run: () => selectPanel("review"),
     },
     {
       id: "view.terminal",
-      label: dockOpen ? t("Hide Terminal") : t("Show Terminal"),
+      label: dockOpen ? "Hide Terminal" : "Show Terminal",
       keys: shortcutKeys("view.terminal"),
       run: toggleTerminal,
     },
     {
       id: "page.authentication",
-      label: t("Open Authentication"),
+      label: "Open Authentication",
       run: () => setPage("authentication"),
     },
-    { id: "page.fleet", label: t("Open Fleet"), run: () => setPage("fleet") },
-    { id: "page.stats", label: t("Open Stats"), run: () => setPage("stats") },
+    { id: "page.fleet", label: "Open Fleet", run: () => setPage("fleet") },
+    { id: "page.stats", label: "Open Stats", run: () => setPage("stats") },
     {
       id: "page.packages",
-      label: t("Open Packages"),
+      label: "Open Packages",
       run: () => setPage("packages"),
     },
     {
       id: "page.settings",
-      label: t("Open Settings"),
+      label: "Open Settings",
       run: () => setPage("settings"),
     },
     ...THEMES.filter((th) => th.id !== theme).map((th) => ({
       id: `theme.${th.id}`,
-      label: t("Theme: {name}", { name: th.label }),
+      label: `Theme: ${th.label}`,
       run: () => setTheme(th.id),
     })),
     {
       id: "window.reload",
-      label: t("Reload Window"),
+      label: "Reload Window",
       run: () => location.reload(),
     },
   ];
@@ -2041,16 +2032,14 @@ export default function App() {
 			*/}
       {restarted && (
         <div className="fixed inset-x-0 top-0 z-50 flex items-center justify-center gap-3 border-b border-amber-800 bg-amber-950/95 px-3 py-1.5 text-ui text-amber-200">
-          <span>
-            {t("pwi restarted — this page is running the previous build.")}
-          </span>
+          <span>pwi restarted — this page is running the previous build.</span>
           <Button variant="warning" size="sm" onClick={() => location.reload()}>
-            {t("Reload")}
+            Reload
           </Button>
           <IconButton
             size="sm"
             onClick={() => setRestarted(false)}
-            label={t("Dismiss")}
+            label="Dismiss"
           >
             <X size={13} className="text-amber-400" />
           </IconButton>
@@ -2116,11 +2105,8 @@ export default function App() {
                   />
                 </Explorer>
               ) : (
-                <PanelEmpty
-                  title={t("Explorer")}
-                  onClose={() => showPanel(null)}
-                >
-                  {t("Pick a project first — the file tree is rooted at it.")}
+                <PanelEmpty title="Explorer" onClose={() => showPanel(null)}>
+                  Pick a project first — the file tree is rooted at it.
                 </PanelEmpty>
               ))}
 
@@ -2144,12 +2130,10 @@ export default function App() {
                 />
               ) : (
                 <PanelEmpty
-                  title={t("Source Control")}
+                  title="Source Control"
                   onClose={() => showPanel(null)}
                 >
-                  {t(
-                    "Pick a project first — a working tree belongs to a repository.",
-                  )}
+                  Pick a project first — a working tree belongs to a repository.
                 </PanelEmpty>
               ))}
           </div>
@@ -2158,7 +2142,7 @@ export default function App() {
           <div
             role="separator"
             aria-orientation="vertical"
-            aria-label={t("Resize panel")}
+            aria-label="Resize panel"
             aria-valuenow={Math.round(panelWidth)}
             aria-valuemin={PANEL_MIN_PERCENT}
             aria-valuemax={TERMINAL_MAX_PERCENT}
@@ -2290,7 +2274,7 @@ export default function App() {
             <div
               role="separator"
               aria-orientation="horizontal"
-              aria-label={t("Resize terminal")}
+              aria-label="Resize terminal"
               aria-valuenow={Math.round(dockHeight)}
               aria-valuemin={TERMINAL_MIN_PERCENT}
               aria-valuemax={TERMINAL_MAX_PERCENT}
@@ -2314,8 +2298,8 @@ export default function App() {
                   onToEditor={termToEditor}
                 />
               ) : (
-                <PanelEmpty title={t("Terminal")} onClose={closeTerminal}>
-                  {t("Pick a project first: a shell has to start somewhere.")}
+                <PanelEmpty title="Terminal" onClose={closeTerminal}>
+                  Pick a project first: a shell has to start somewhere.
                 </PanelEmpty>
               )}
             </div>
@@ -2330,7 +2314,7 @@ export default function App() {
       <div
         role="separator"
         aria-orientation="vertical"
-        aria-label={t("Resize session list")}
+        aria-label="Resize session list"
         aria-valuenow={listWidth}
         aria-valuemin={LIST_MIN_PX}
         aria-valuemax={LIST_MAX_PX}

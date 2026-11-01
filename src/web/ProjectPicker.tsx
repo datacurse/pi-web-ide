@@ -2,7 +2,6 @@ import { useMemo, useState } from "react";
 import { CaretDown, FolderPlus, X } from "@phosphor-icons/react";
 import { DirectoryPicker } from "./DirectoryPicker.js";
 import { StripCell } from "./ui.js";
-import { t } from "./i18n.js";
 
 /**
  * The project list this pwi reports: every directory, plus the cwd it was
@@ -77,7 +76,7 @@ export function ProjectPicker({
           value={project}
           onChange={(e) => onProject(e.target.value)}
           title={project}
-          aria-label={t("Project")}
+          aria-label="Project"
           className="min-w-0 flex-1 cursor-pointer appearance-none bg-neutral-950 pr-8 pl-3 text-ui text-neutral-100 outline-none transition-colors duration-150 ease-out hover:bg-neutral-900 motion-reduce:transition-none"
         >
           {options.map((p) => (
@@ -95,7 +94,7 @@ export function ProjectPicker({
       <StripCell
         onClick={() => setPickerOpen(true)}
         disabled={!!projects.error}
-        label={t("Add project directory")}
+        label="Add project directory"
       >
         <FolderPlus size={16} />
       </StripCell>
@@ -109,16 +108,15 @@ export function ProjectPicker({
           onClick={() => {
             if (
               confirm(
-                t(
-                  "Remove {project} from the project list?\n\nThe directory and its sessions stay on disk — this only hides them here.",
-                  { project },
-                ),
+                `Remove ${project} from the project list?
+
+The directory and its sessions stay on disk — this only hides them here.`,
               )
             ) {
               onRemoveProject(project);
             }
           }}
-          label={t("Remove {project} from the list", { project })}
+          label={`Remove ${project} from the list`}
         >
           <X size={16} />
         </StripCell>

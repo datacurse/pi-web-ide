@@ -31,7 +31,7 @@ import { api, unwrap } from "./api.js";
 import { Button, IconButton, ListRow } from "./ui.js";
 import { timeAgo } from "./SessionList.js";
 import { Attachments, Thumb } from "./Attachments.js";
-import { t, plural, locale } from "./i18n.js";
+
 import type { UserMode } from "./prefs.js";
 import { PastedTexts } from "./PastedTexts.js";
 import { RawBlocks } from "./RawOutput.js";
@@ -109,7 +109,7 @@ function PlainUserText({ text, mode }: { text: string; mode: UserMode }) {
           onClick={() => setOpen((o) => !o)}
         >
           {open ? <CaretUp size={12} /> : <CaretDown size={12} />}
-          {open ? t("Show less") : t("Show more")}
+          {open ? "Show less" : "Show more"}
         </Button>
       )}
     </>
@@ -156,12 +156,8 @@ export function ContextMeter({
         : "text-neutral-400";
   const label =
     limit > 0
-      ? t("Context: {pct}% full ({tokens} of {limit} tokens)", {
-          pct: Math.round(share * 100),
-          tokens: tokens.toLocaleString(locale()),
-          limit: limit.toLocaleString(locale()),
-        })
-      : t("Context usage");
+      ? `Context: ${Math.round(share * 100)}% full (${tokens.toLocaleString(undefined)} of ${limit.toLocaleString(undefined)} tokens)`
+      : "Context usage";
   return (
     <IconButton
       label={label}
@@ -238,7 +234,9 @@ function itemLabel(
   const detail = !n
     ? undefined
     : tool
-      ? plural(n, "{n} call", "{n} calls")
+      ? n === 1
+        ? `${n} call`
+        : `${n} calls`
       : String(n);
   return {
     name: tool && !sub ? item.name.slice(5) : item.name,
@@ -453,11 +451,11 @@ export function ContextPanel({
       className="absolute inset-x-0 bottom-full z-10 mb-2 overflow-y-auto rounded-md border border-neutral-800 bg-neutral-900 py-2"
     >
       <div className="flex items-center justify-between px-3 text-neutral-300">
-        {t("Context Usage")}
+        Context Usage
         <div className="flex items-center gap-1">
           {expandable.length > 0 && (
             <IconButton
-              label={allOpen ? t("Collapse all") : t("Expand all")}
+              label={allOpen ? "Collapse all" : "Expand all"}
               size="sm"
               onClick={() => setOpen(new Set(allOpen ? [] : expandable))}
             >
@@ -468,7 +466,7 @@ export function ContextPanel({
               )}
             </IconButton>
           )}
-          <IconButton label={t("Close")} size="sm" onClick={onClose}>
+          <IconButton label="Close" size="sm" onClick={onClose}>
             <X size={14} />
           </IconButton>
         </div>
@@ -488,15 +486,14 @@ export function ContextPanel({
             </span>
             <span className="text-neutral-400">
               {" "}
-              / {limit > 0 ? popupTokens(limit) : "?"} {t("tokens")}
+              / {limit > 0 ? popupTokens(limit) : "?"} tokens
             </span>
           </div>
           <div className="text-meta text-neutral-500">
-            {limit > 0 &&
-              t("{n} free", { n: popupTokens(Math.max(0, limit - total)) })}
+            {limit > 0 && `${popupTokens(Math.max(0, limit - total))} free`}
             {largest && total > 0 && (
               <>
-                {` · ${t("largest:")} `}
+                {` · ${"largest:"} `}
                 <span className="text-neutral-300">
                   {itemLabel(largest.key, largest.item).name}
                 </span>
@@ -513,7 +510,7 @@ export function ContextPanel({
           rows.map((p) => (
             <span
               key={p.key}
-              title={`${t(PARTS[p.key].label)}: ${popupTokens(p.tokens)}`}
+              title={`${PARTS[p.key].label}: ${popupTokens(p.tokens)}`}
               className={`min-w-0.5 rounded-full ${PARTS[p.key].color}`}
               style={{ width: `${(p.tokens / total) * 100}%` }}
             />
@@ -523,9 +520,7 @@ export function ContextPanel({
       {error ? (
         <div className="mt-2 px-3 text-meta text-red-400">{error}</div>
       ) : !parts ? (
-        <div className="mt-2 px-3 text-meta text-neutral-500">
-          {t("Measuring…")}
-        </div>
+        <div className="mt-2 px-3 text-meta text-neutral-500">Measuring…</div>
       ) : (
         <div className="mt-2">
           {rows.map((p) => {
@@ -550,9 +545,7 @@ export function ContextPanel({
                     aria-hidden
                     className={`size-3 shrink-0 rounded-sm ${PARTS[p.key].color}`}
                   />
-                  <span className="text-neutral-200">
-                    {t(PARTS[p.key].label)}
-                  </span>
+                  <span className="text-neutral-200">{PARTS[p.key].label}</span>
                   {items.length > 0 && (
                     <span className="text-meta text-neutral-500">
                       {items.length}
@@ -577,24 +570,23 @@ export function ContextPanel({
 
       <div className="mt-2 flex items-center justify-between gap-3 px-3">
         <span className="text-meta text-neutral-500">
-          {t(
-            "The total is pi's count; parts are estimates (about 4 characters a token).",
-          )}
+          The total is pi's count; parts are estimates (about 4 characters a
+          token).
         </span>
         <Button
           size="sm"
           disabled={busy || tokens <= 0}
           title={
             busy
-              ? t("Finish the turn to compact")
-              : t("Fold the conversation into a summary")
+              ? "Finish the turn to compact"
+              : "Fold the conversation into a summary"
           }
           onClick={() => {
             onClose();
             onCompact();
           }}
         >
-          {t("Compact")}
+          Compact
         </Button>
       </div>
     </div>
@@ -619,7 +611,7 @@ function Compacting() {
       <span aria-hidden className="w-3 text-center text-amber-400">
         {spinner}
       </span>
-      {t("compacting {time}", { time: elapsed(now - start) })}
+      {`compacting ${elapsed(now - start)}`}
     </span>
   );
 }
@@ -627,9 +619,7 @@ function Compacting() {
 /** 75000 -> "1m 15s". */
 function elapsed(ms: number): string {
   const secs = Math.floor(ms / 1000);
-  return secs < 60
-    ? t("{s}s", { s: secs })
-    : t("{m}m {s}s", { m: Math.floor(secs / 60), s: secs % 60 });
+  return secs < 60 ? `${secs}s` : `${Math.floor(secs / 60)}m ${secs % 60}s`;
 }
 
 /** Copy `text`; the icon swaps to a check for 1.2s. */
@@ -647,7 +637,7 @@ function CopyButton({ text }: { text: string }) {
   return (
     <IconButton
       size="sm"
-      label={copied ? t("Copied") : t("Copy")}
+      label={copied ? "Copied" : "Copy"}
       onClick={() => void copy()}
     >
       {copied ? <Check size={14} /> : <Copy size={14} />}
@@ -671,18 +661,13 @@ function UserFooter({
   return (
     <div className="chat-measure mt-1 flex items-center gap-1 text-meta text-neutral-500">
       <CopyButton text={text} />
-      <IconButton
-        size="sm"
-        label={t("Edit")}
-        disabled={!onEdit}
-        onClick={onEdit}
-      >
+      <IconButton size="sm" label="Edit" disabled={!onEdit} onClick={onEdit}>
         <PencilSimple size={14} />
       </IconButton>
       {at !== undefined && (
         <span
           className="msg-footer-time ml-1"
-          title={new Date(at).toLocaleString(locale())}
+          title={new Date(at).toLocaleString(undefined)}
         >
           {timeAgo(at)}
         </span>
@@ -774,21 +759,19 @@ function EditMessage({
                   if (canSend) onSend(draft, images);
                 }
               }}
-              placeholder={t("Message pi…")}
-              title={t(
-                "Enter to send, Shift+Enter for newline, Escape to cancel",
-              )}
+              placeholder="Message pi…"
+              title="Enter to send, Shift+Enter for newline, Escape to cancel"
               className="chat-prose field-sizing-content max-h-60 w-full resize-none bg-transparent outline-none placeholder:text-neutral-600"
             />
             <div className="mt-4 flex items-center justify-end gap-1.5">
               <Button size="sm" onClick={onCancel}>
-                {t("Cancel")}
+                Cancel
               </Button>
               <IconButton
                 onClick={() => onSend(draft, images)}
                 disabled={!canSend}
-                label={t("Send")}
-                title={t("Send (Enter)")}
+                label="Send"
+                title="Send (Enter)"
                 variant="bare"
                 size="sm"
                 round
@@ -825,11 +808,10 @@ export function NoticeText({ text }: { text: string }) {
     return <>{text}</>;
   return (
     <>
-      <div className="font-medium">{t("Agent memory could not be saved")}</div>
+      <div className="font-medium">Agent memory could not be saved</div>
       <div className="mt-1 text-body">
-        {t(
-          "This affects saved working memory, not files already edited. The agent may need to rebuild that memory after a restart.",
-        )}
+        This affects saved working memory, not files already edited. The agent
+        may need to rebuild that memory after a restart.
       </div>
       <details
         data-custom="notebook warning technical details"
@@ -839,7 +821,7 @@ export function NoticeText({ text }: { text: string }) {
           data-custom="notebook warning disclosure"
           className="cursor-pointer"
         >
-          {t("Technical details")}
+          Technical details
         </summary>
         <div className="mt-2 font-mono whitespace-pre-wrap break-words">
           {text}
@@ -915,7 +897,7 @@ export function CommandRow({
         {running && (
           <span className="flex items-center gap-1.5 font-mono text-meta text-amber-400">
             <span>{spinner}</span>
-            <span className="font-sans">{t("working…")}</span>
+            <span className="font-sans">working…</span>
           </span>
         )}
       </div>
@@ -995,11 +977,7 @@ export function UserMessage({
       {images.length > 0 && (
         <div className="mb-2 flex flex-wrap gap-2">
           {images.map((image, i) => (
-            <Thumb
-              key={i}
-              image={image}
-              label={t("attachment {n}", { n: i + 1 })}
-            />
+            <Thumb key={i} image={image} label={`attachment ${i + 1}`} />
           ))}
         </div>
       )}
@@ -1034,7 +1012,7 @@ export function AnswerActions({
       <CopyButton text={text} />
       <IconButton
         size="sm"
-        label={forking ? t("Forking…") : t("Fork from here")}
+        label={forking ? "Forking…" : "Fork from here"}
         disabled={forking}
         onClick={() => {
           setForking(true);

@@ -32,7 +32,7 @@ import {
 } from "./codemirror.js";
 import { Button, PanelHeader } from "./ui.js";
 import { api, unwrap } from "./api.js";
-import { t } from "./i18n.js";
+
 import { revealFileLine, type FileLocation } from "./fileNavigation.js";
 import { MarkdownEditor } from "./MarkdownEditor.js";
 
@@ -255,12 +255,7 @@ export function FileEditor({
         const body = (await r.json()) as { error?: string };
         throw new Error(
           r.status === 409
-            ? t(
-                "{error} — Reload to get the newer version (your edits stay in the tab until you do).",
-                {
-                  error: body.error ?? t("conflict"),
-                },
-              )
+            ? `${body.error ?? "conflict"} — Reload to get the newer version (your edits stay in the tab until you do).`
             : (body.error ?? `${r.status}`),
         );
       }
@@ -325,7 +320,7 @@ export function FileEditor({
           <div
             className="ml-auto flex gap-1"
             role="group"
-            aria-label={t("Markdown view")}
+            aria-label="Markdown view"
           >
             <Button
               variant={!formatted ? "subtle" : "ghost"}
@@ -333,7 +328,7 @@ export function FileEditor({
               aria-pressed={!formatted}
               onClick={() => setFormatted(false)}
             >
-              {t("Raw")}
+              Raw
             </Button>
             <Button
               variant={formatted ? "subtle" : "ghost"}
@@ -346,7 +341,7 @@ export function FileEditor({
                 setFormatted(true);
               }}
             >
-              {t("Formatted")}
+              Formatted
             </Button>
           </div>
         )}
@@ -356,19 +351,19 @@ export function FileEditor({
           className={isMarkdown ? undefined : "ml-auto"}
           onClick={() => void save()}
           disabled={!dirty || saving}
-          title={t("Save (Ctrl+S)")}
+          title="Save (Ctrl+S)"
         >
           <FloppyDisk size={13} />
-          {t("Save")}
+          Save
         </Button>
         <Button
           variant="ghost"
           size="sm"
           onClick={() => void reload()}
-          title={t("Re-read from disk, discarding edits in this tab")}
+          title="Re-read from disk, discarding edits in this tab"
         >
           <ArrowClockwise size={13} />
-          {t("Reload")}
+          Reload
         </Button>
       </PanelHeader>
 

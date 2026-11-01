@@ -31,7 +31,6 @@ import type { Side, TabGroup } from "./tabs.js";
 import { SplitZone } from "./SplitZone.js";
 import { type Attention } from "./attention.js";
 import { ContextMenu, MenuItem, MenuSeparator } from "./ui.js";
-import { t } from "./i18n.js";
 
 /**
  * One editor column: a tab strip, and whatever its selected tab shows.
@@ -157,9 +156,7 @@ export function EditorColumn({
         active={active}
         panelId={panelId}
         label={
-          side === "left"
-            ? t("Open sessions")
-            : t("Open sessions, second column")
+          side === "left" ? "Open sessions" : "Open sessions, second column"
         }
         listOpen={listOpen}
         onSelect={onSelect}
@@ -286,7 +283,7 @@ export function EditorColumn({
           {/* Nothing to show: an empty column says so rather than going blank. */}
           {!showsDoc && !chat && (
             <p className="m-auto px-4 text-center text-ui text-neutral-500">
-              {t("Drag a tab here, or pick one above.")}
+              Drag a tab here, or pick one above.
             </p>
           )}
         </div>
@@ -295,7 +292,7 @@ export function EditorColumn({
         <ContextMenu
           x={menu.x}
           y={menu.y}
-          label={t("New tab")}
+          label="New tab"
           onClose={() => setMenu(null)}
         >
           <MenuItem
@@ -307,7 +304,7 @@ export function EditorColumn({
               onNewSession();
             }}
           >
-            {t("New AI Session")}
+            New AI Session
           </MenuItem>
           <MenuItem
             icon={<TerminalWindow size={16} />}
@@ -318,7 +315,7 @@ export function EditorColumn({
               onNewTerminal?.();
             }}
           >
-            {t("New Terminal Tab")}
+            New Terminal Tab
           </MenuItem>
           <MenuItem
             icon={<Globe size={16} />}
@@ -328,7 +325,7 @@ export function EditorColumn({
               onNewWeb();
             }}
           >
-            {t("New Web Tab")}
+            New Web Tab
           </MenuItem>
           {canCopy && (
             <>
@@ -338,21 +335,21 @@ export function EditorColumn({
                 role="menuitem"
                 onClick={() => copy("chat")}
               >
-                {t("Copy Chat")}
+                Copy Chat
               </MenuItem>
               <MenuItem
                 icon={<Brain size={16} />}
                 role="menuitem"
                 onClick={() => copy("reasoning")}
               >
-                {t("Copy Chat with Reasoning")}
+                Copy Chat with Reasoning
               </MenuItem>
               <MenuItem
                 icon={<Wrench size={16} />}
                 role="menuitem"
                 onClick={() => copy("tools")}
               >
-                {t("Copy Chat with Reasoning and Tools")}
+                Copy Chat with Reasoning and Tools
               </MenuItem>
             </>
           )}
