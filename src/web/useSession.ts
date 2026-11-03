@@ -857,7 +857,7 @@ export function useSession({
       }) => Promise<void>,
       model = false,
     ) => {
-      if (!snapshot) return;
+      if (!snapshot) return false;
       const id = snapshot.id;
       const seq = attachSeq.current;
       const active = () => attachSeq.current === seq;
@@ -873,11 +873,13 @@ export function useSession({
       if (model) setModelError(null);
       try {
         await action({ id, active, update, refresh });
+        return true;
       } catch (err) {
-        if (!active()) return;
+        if (!active()) return false;
         const error = err instanceof Error ? err.message : String(err);
         if (model) setModelError(error);
         else update((s) => ({ ...s, error }));
+        return false;
       }
     },
     [snapshot],
@@ -890,7 +892,7 @@ export function useSession({
       askOnly = false,
       onUiCommand?: (name: string) => Promise<void> | void,
     ) => {
-      if (!snapshot) return;
+      if (!snapshot) return false;
       const trimmed = text.trim();
       const slash = parseSlashCommand(trimmed);
       if (slash) {
@@ -1298,7 +1300,7 @@ export function useSession({
           if (active()) await refresh();
         });
       }
-      await runSession(async ({ id, active, update, refresh }) => {
+      return runSession(async ({ id, active, update, refresh }) => {
         seenErrorRef.current = null;
         setBusy(true);
         setCommand(
@@ -1418,7 +1420,7 @@ export function useSession({
           api.sessions[":id"].fork.$post({ param: { id }, json: { at } }),
         );
         if (active()) await attach(body.file);
-      }),
+      }).then(() => {}),
     [runSession, attach],
   );
 
@@ -1548,7 +1550,7 @@ export function useSession({
           api.sessions[":id"].fast.$post({ param: { id }, json: { enabled } }),
         );
         if (active()) await refresh();
-      }, true),
+      }, true).then(() => {}),
     [runSession],
   );
 

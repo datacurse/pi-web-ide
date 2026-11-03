@@ -318,7 +318,11 @@ export function Chat({
    * it on screen; see useSession.ts for its lifetime.
    */
   command?: { text: string; running: boolean; result?: string } | null;
-  onSend: (text: string, images?: PiImage[], askOnly?: boolean) => void;
+  onSend: (
+    text: string,
+    images?: PiImage[],
+    askOnly?: boolean,
+  ) => Promise<boolean>;
   onAnswerAsk: (askId: string, answer: AskAnswer) => void;
   onAbort: () => void;
   onModelChange: (model: string) => void;
@@ -373,6 +377,8 @@ export function Chat({
    * side effect of rendering.
    */
   const staged = useRef<PiImage[]>([]);
+  const sending = useRef(false);
+  const draftVersion = useRef(0);
   /**
    * Whether the transcript is parked at its bottom, which is what decides
    * whether new content scrolls the view. Slack because "at the bottom" is
@@ -418,6 +424,7 @@ export function Chat({
   const seenKey = useRef(draftKey);
   useEffect(() => {
     if (!draftKey) return;
+    draftVersion.current++;
     const draft = readDraft(draftKey);
     setText(draft.text);
     const sameSession = seenKey.current === draftKey;
@@ -534,6 +541,7 @@ export function Chat({
    * other.
    */
   const changeText = (value: string) => {
+    draftVersion.current++;
     setText(value);
     writeDraftText(snapshot.id, value);
     // Typing is a new question, so a dismissed picker gets another chance:
@@ -555,6 +563,7 @@ export function Chat({
   };
   /** False when the attachments are staged but too big to persist as a draft. */
   const changeImages = (next: PiImage[]): boolean => {
+    draftVersion.current++;
     staged.current = next;
     setImages(next);
     return writeDraftImages(snapshot.id, next);
@@ -604,21 +613,29 @@ export function Chat({
     }
   };
 
-  const submit = () => {
+  const submit = async () => {
     const t = text.trim();
-    // An image on its own is a valid prompt; only block when nothing is staged.
-    if (!t && images.length === 0) return;
-    onSend(
-      pasted.attachments.length ? text : t,
-      images.length > 0 ? images : undefined,
-      askOnly,
-    );
-    if (askMode === "once") setAskOnly(false);
-    setText("");
-    setImages([]);
-    staged.current = [];
-    clearDraft(snapshot.id);
-    setAttachError(null);
+    // Keep the draft until accepted; repeated submits must not send it twice.
+    if (sending.current || (!t && images.length === 0)) return;
+    sending.current = true;
+    const version = draftVersion.current;
+    try {
+      const accepted = await onSend(
+        pasted.attachments.length ? text : t,
+        images.length > 0 ? images : undefined,
+        askOnly,
+      );
+      // Never erase newer typing or a different session's composer.
+      if (!accepted || draftVersion.current !== version) return;
+      if (askMode === "once") setAskOnly(false);
+      setText("");
+      setImages([]);
+      staged.current = [];
+      clearDraft(snapshot.id);
+      setAttachError(null);
+    } finally {
+      sending.current = false;
+    }
   };
 
   return (
