@@ -13,7 +13,6 @@
 import { useEffect, useState } from "react";
 import { Button, inputClass, OptionRow } from "./ui.js";
 import { api } from "./api.js";
-import { t } from "./i18n.js";
 
 /** What GET/PUT /api/personality answer with. */
 interface PersonalityFile {
@@ -59,10 +58,8 @@ export function Personality({ open }: { open: boolean }) {
       if (!loaded || typeof loaded.content !== "string") {
         setLoadError(
           r && !r.ok
-            ? t("could not read it (HTTP {status})", { status: r.status })
-            : t(
-                "could not read it — is this pwi older than the field? restart it",
-              ),
+            ? `could not read it (HTTP ${r.status})`
+            : "could not read it — is this pwi older than the field? restart it",
         );
         return;
       }
@@ -83,7 +80,7 @@ export function Personality({ open }: { open: boolean }) {
       .$put({ json: { remind } })
       .catch(() => null);
     if (!r?.ok) {
-      setSaveError(t("could not save the reminder setting"));
+      setSaveError("could not save the reminder setting");
       return;
     }
     setPersonality((p) => (p ? { ...p, remind } : p));
@@ -94,7 +91,7 @@ export function Personality({ open }: { open: boolean }) {
       .$put({ json: { enabled } })
       .catch(() => null);
     if (!r?.ok) {
-      setSaveError(t("could not save the personality setting"));
+      setSaveError("could not save the personality setting");
       return;
     }
     setSaveError(null);
@@ -113,7 +110,7 @@ export function Personality({ open }: { open: boolean }) {
       .catch(() => ({}))) as Partial<PersonalityFile> & { error?: string };
     if (!r?.ok) {
       setSaveState("idle");
-      setSaveError(body.error ?? t("could not save"));
+      setSaveError(body.error ?? "could not save");
       return;
     }
     // The server answers with what it wrote (a trailing newline may have
@@ -131,14 +128,14 @@ export function Personality({ open }: { open: boolean }) {
     setSaveState("saved");
   };
 
-  let status = t("Read from disk each time Packages is shown.");
-  if (dirty) status = t("Unsaved changes.");
+  let status = "Read from disk each time Packages is shown.";
+  if (dirty) status = "Unsaved changes.";
   else if (saveState === "saved")
-    status = t("Saved. Applies to sessions started from now on.");
+    status = "Saved. Applies to sessions started from now on.";
 
   return (
     <div className="mt-4">
-      <h4 className="px-2 text-ui text-neutral-200">{t("Personality")}</h4>
+      <h4 className="px-2 text-ui text-neutral-200">Personality</h4>
       <OptionRow className="mt-2">
         <input
           type="checkbox"
@@ -148,27 +145,24 @@ export function Personality({ open }: { open: boolean }) {
           className="size-4 shrink-0 accent-amber-400"
         />
         <span className="flex-1">
-          {t("Enable personality")}
+          Enable personality
           <span className="block text-meta text-neutral-500">
-            {t(
-              "When off, no personality text or reminders are sent. Your saved text is kept. Applies to sessions started from now on.",
-            )}
+            When off, no personality text or reminders are sent. Your saved text
+            is kept. Applies to sessions started from now on.
           </span>
         </span>
       </OptionRow>
       <label className="mt-1 block px-2">
         <span className="text-meta text-neutral-500">
-          {t("Appended to every new session's system prompt")}
+          Appended to every new session's system prompt
         </span>
         <span className="mt-0.5 block font-mono text-meta break-all text-neutral-500">
           {loadError ? (
             <span className="text-red-400">{loadError}</span>
           ) : (
             <>
-              {personality?.path ?? t("loading…")}
-              {personality &&
-                !personality.exists &&
-                ` ${t("(not created yet)")}`}
+              {personality?.path ?? "loading…"}
+              {personality && !personality.exists && ` ${"(not created yet)"}`}
             </>
           )}
         </span>
@@ -182,9 +176,7 @@ export function Personality({ open }: { open: boolean }) {
           rows={10}
           spellCheck={false}
           placeholder={
-            loadError
-              ? t("Unavailable.")
-              : t("Empty means nothing is appended.")
+            loadError ? "Unavailable." : "Empty means nothing is appended."
           }
           className={`mt-2 block w-full resize-y font-mono ${inputClass.sm}`}
         />
@@ -196,7 +188,7 @@ export function Personality({ open }: { open: boolean }) {
           onClick={() => void save()}
           disabled={!dirty || saveState === "saving"}
         >
-          {saveState === "saving" ? t("Saving…") : t("Save")}
+          {saveState === "saving" ? "Saving…" : "Save"}
         </Button>
         <span className="min-w-0 flex-1 text-meta text-neutral-500">
           {saveError ? (
@@ -215,11 +207,12 @@ export function Personality({ open }: { open: boolean }) {
           className="size-4 shrink-0 accent-amber-400"
         />
         <span className="flex-1">
-          {t("Repeat before every reply")}
+          Repeat before every reply
           <span className="block text-meta text-neutral-500">
-            {t(
-              "Also adds the text to the end of each of your messages on every model request, so long sessions do not drift from it. Costs its length in tokens per message, mostly at the cache-read rate. Applies to sessions started from now on.",
-            )}
+            Also adds the text to the end of each of your messages on every
+            model request, so long sessions do not drift from it. Costs its
+            length in tokens per message, mostly at the cache-read rate. Applies
+            to sessions started from now on.
           </span>
         </span>
       </OptionRow>

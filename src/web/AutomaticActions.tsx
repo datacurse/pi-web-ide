@@ -7,7 +7,6 @@ import {
 } from "../shared/automaticModels.js";
 import { api } from "./api.js";
 import { Button, inputClass, OptionRow } from "./ui.js";
-import { t } from "./i18n.js";
 
 const LABELS: Record<AutomaticAction, string> = {
   commitNaming: "Commit message model",
@@ -96,27 +95,24 @@ export function AutomaticActions() {
           className="size-4 shrink-0 accent-amber-400"
         />
         <span className="flex-1">
-          {t("Summarize when context is full")}
+          Summarize when context is full
           <span className="block text-meta text-neutral-500">
-            {t(
-              "Automatically summarize older messages when the conversation reaches its context limit. Off by default. Applies to open and new sessions; you can still compact manually when this is off.",
-            )}
+            Automatically summarize older messages when the conversation reaches
+            its context limit. Off by default. Applies to open and new sessions;
+            you can still compact manually when this is off.
           </span>
         </span>
       </OptionRow>
       <p className="text-meta text-neutral-500">
-        {t(
-          "Each model selection saves immediately and does not change the chat model. Default for all actions: {model}.",
-          { model: DEFAULT_AUTOMATIC_MODEL },
-        )}
+        {`Each model selection saves immediately and does not change the chat model. Default for all actions: ${DEFAULT_AUTOMATIC_MODEL}.`}
       </p>
       {AUTOMATIC_ACTIONS.map((action) => {
         const value = selected?.[action] ?? DEFAULT_AUTOMATIC_MODEL;
         return (
           <label key={action} className="block text-ui">
-            {t(LABELS[action])}
+            {LABELS[action]}
             <span className="mt-1 block text-meta text-neutral-500">
-              {t(HINTS[action])}
+              {HINTS[action]}
             </span>
             <select
               value={value}
@@ -145,15 +141,14 @@ export function AutomaticActions() {
         );
       })}
       <p className="text-meta text-neutral-500">
-        {t(
-          "Selecting a model does not enable an action. SoL-Pi online compaction and log reduction are enabled separately in Packages.",
-        )}
+        Selecting a model does not enable an action. SoL-Pi online compaction
+        and log reduction are enabled separately in Packages.
       </p>
       {error && (
         <div className="flex items-center gap-2">
           <p className="text-meta text-red-400">{error}</p>
           <Button size="sm" disabled={busy} onClick={() => void load()}>
-            {t("Retry")}
+            Retry
           </Button>
         </div>
       )}

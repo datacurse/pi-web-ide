@@ -1,18 +1,18 @@
 import { supportsFastMode } from "../shared/fastMode.js";
-import { t } from "./i18n.js";
+
 import type { StatsTurn } from "../shared/types.js";
 import { providerLabel, type UsageLimit } from "../shared/usage.js";
 
 export function usageLimitLabel(l: UsageLimit): string {
-  if (l.windowMs === 5 * 3_600_000) return t("Current session");
-  if (l.windowMs === 7 * 86_400_000) return t("This week");
-  if (l.windowMs) return t("{span} window", { span: span(l.windowMs) });
+  if (l.windowMs === 5 * 3_600_000) return "Current session";
+  if (l.windowMs === 7 * 86_400_000) return "This week";
+  if (l.windowMs) return `${span(l.windowMs)} window`;
   if (l.kind === "session" || l.kind === "openai_primary_window")
-    return t("Current session");
+    return "Current session";
   if (l.kind === "weekly_all" || l.kind === "openai_secondary_window")
-    return t("This week");
+    return "This week";
   const model = l.scope?.model?.display_name;
-  return model ? t("{model} this week", { model }) : l.kind.replace(/_/g, " ");
+  return model ? `${model} this week` : l.kind.replace(/_/g, " ");
 }
 
 export function turnProvider(turn: StatsTurn): string {
@@ -27,15 +27,15 @@ export function modelKey(turn: StatsTurn): string {
 
 export function statsProviderLabel(provider: string): string {
   return provider === "@mixed"
-    ? t("Mixed models")
+    ? "Mixed models"
     : provider === "@unknown"
-      ? t("Unknown provider")
+      ? "Unknown provider"
       : providerLabel(provider);
 }
 
 export function modelLabel(turn: StatsTurn): string {
   return turn.mixedModels
-    ? t("Mixed models")
+    ? "Mixed models"
     : `${statsProviderLabel(turnProvider(turn))} / ${turn.model || "?"}`;
 }
 
@@ -56,13 +56,13 @@ export function turnMode(
 export function turnModeLabel(turn: StatsTurn): string {
   switch (turnMode(turn)) {
     case "fast":
-      return t("Fast mode");
+      return "Fast mode";
     case "standard":
-      return t("Standard mode");
+      return "Standard mode";
     case "mixed":
-      return t("Mixed modes");
+      return "Mixed modes";
     case "unknown":
-      return t("Unknown mode");
+      return "Unknown mode";
   }
 }
 
@@ -187,16 +187,16 @@ export function percentile(sorted: number[], p: number): number {
 
 export function duration(ms: number): string {
   const s = Math.round(ms / 1000);
-  if (s < 60) return t("{s}s", { s });
+  if (s < 60) return `${s}s`;
   const m = Math.floor(s / 60);
-  if (m < 60) return t("{m}m {s}s", { m, s: s % 60 });
-  return t("{h}h {m}m", { h: Math.floor(m / 60), m: m % 60 });
+  if (m < 60) return `${m}m ${s % 60}s`;
+  return `${Math.floor(m / 60)}h ${m % 60}m`;
 }
 
 /** A tool call's time: `340ms`, `2.4s`, then as `duration`. */
 export function callDuration(ms: number): string {
-  if (ms < 1000) return t("{n}ms", { n: Math.round(ms) });
-  if (ms < 60_000) return t("{s}s", { s: (ms / 1000).toFixed(1) });
+  if (ms < 1000) return `${Math.round(ms)}ms`;
+  if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
   return duration(ms);
 }
 
@@ -275,8 +275,8 @@ export function pace(
 /** A coarse span: `2d 3h`, `3h 20m`, `45m`. */
 export function span(ms: number): string {
   const m = Math.max(0, Math.round(ms / 60_000));
-  if (m < 60) return t("{m}m", { m });
+  if (m < 60) return `${m}m`;
   const h = Math.floor(m / 60);
-  if (h < 24) return t("{h}h {m}m", { h, m: m % 60 });
-  return t("{d}d {h}h", { d: Math.floor(h / 24), h: h % 24 });
+  if (h < 24) return `${h}h ${m % 60}m`;
+  return `${Math.floor(h / 24)}d ${h % 24}h`;
 }

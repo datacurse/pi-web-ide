@@ -1,6 +1,5 @@
 import type { PiImage, PiMessage, PiSessionInfo } from "../shared/types.js";
 import { sessionPreview } from "../shared/sessionPreview.js";
-import { t } from "./i18n.js";
 
 /** Browser-only previews; never wait for the session file to catch up to Send. */
 export interface LiveSessionImages {
@@ -84,7 +83,7 @@ export function sessionLabel(
     (latest
       ? (info?.lastAttachments ?? info?.firstAttachments)
       : info?.firstAttachments) ?? preview.attachments;
-  return prompt || (attachments.length ? t("Attachments") : t("New session"));
+  return prompt || (attachments.length ? "Attachments" : "New session");
 }
 
 /**

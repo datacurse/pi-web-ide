@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Command, X } from "@phosphor-icons/react";
 import { matches } from "./Settings.js";
 import { IconButton } from "./ui.js";
-import { t } from "./i18n.js";
+
 import { ScrollPane } from "./OverlayScrollbar.js";
 
 export interface PaletteCommand {
@@ -59,7 +59,7 @@ export function CommandPalette({
   return (
     <dialog
       ref={ref}
-      aria-label={t("Command palette")}
+      aria-label="Command palette"
       onClose={onClose}
       onClick={(e) => {
         if (e.target === ref.current) onClose();
@@ -86,11 +86,11 @@ export function CommandPalette({
               pick(rows[active]);
             }
           }}
-          placeholder={t("Type a command…")}
-          aria-label={t("Command")}
+          placeholder="Type a command…"
+          aria-label="Command"
           className="min-w-0 flex-1 bg-transparent text-title text-neutral-100 outline-none placeholder:text-neutral-500"
         />
-        <IconButton onClick={onClose} label={t("Close command palette")}>
+        <IconButton onClick={onClose} label="Close command palette">
           <X size={13} />
         </IconButton>
       </div>
@@ -98,13 +98,13 @@ export function CommandPalette({
       <ScrollPane
         ref={list}
         role="listbox"
-        aria-label={t("Commands")}
+        aria-label="Commands"
         className="min-h-0 flex-1"
         innerClassName="p-1.5"
       >
         {rows.length === 0 && (
           <p className="px-3 py-4 text-ui text-neutral-400">
-            {t("No matching commands.")}
+            No matching commands.
           </p>
         )}
         {rows.map((c, i) => (

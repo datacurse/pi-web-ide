@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { api, unwrap } from "./api.js";
-import { t } from "./i18n.js";
+
 import { Button, inputClass } from "./ui.js";
 
 type Instructions = Awaited<ReturnType<typeof load>>;
@@ -51,7 +51,7 @@ export function AgentInstructions({
     if (
       content === undefined &&
       drafts[scope] !== (data?.[scope].content ?? "") &&
-      !window.confirm(t("Discard unsaved changes?"))
+      !window.confirm("Discard unsaved changes?")
     )
       return;
     if (!data || busy) return;
@@ -94,24 +94,21 @@ export function AgentInstructions({
   return (
     <div className="space-y-3">
       <p className="text-meta text-neutral-500">
-        {t(
-          "Start a fresh session after changing instructions. Existing sessions keep their loaded context.",
-        )}
+        Start a fresh session after changing instructions. Existing sessions
+        keep their loaded context.
       </p>
       {error && (
         <p role="alert" className="text-ui text-red-400">
           {error}
         </p>
       )}
-      {!data && !error && (
-        <p className="text-ui text-neutral-500">{t("Loading…")}</p>
-      )}
+      {!data && !error && <p className="text-ui text-neutral-500">Loading…</p>}
       {data && (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           {(
             [
-              ["global", t("Global AGENTS.md")],
-              ["local", t("Project AGENTS.md")],
+              ["global", "Global AGENTS.md"],
+              ["local", "Project AGENTS.md"],
             ] as const
           ).map(([key, label]) => {
             const file = data[key];
@@ -129,22 +126,20 @@ export function AgentInstructions({
                     disabled={busy || !!file.error}
                     onClick={() => void activate(key, null)}
                   >
-                    {t("New empty")}
+                    New empty
                   </Button>
                 </div>
                 <p className="break-all font-mono text-meta text-neutral-500">
                   {file.path}
                 </p>
-                <p className="text-meta text-neutral-400">{t("Current")}</p>
+                <p className="text-meta text-neutral-400">Current</p>
                 {file.error && (
                   <p role="alert" className="text-ui text-red-400">
                     {file.error}
                   </p>
                 )}
                 {!file.error && file.content === null && (
-                  <p className="text-ui text-neutral-500">
-                    {t("File not found.")}
-                  </p>
+                  <p className="text-ui text-neutral-500">File not found.</p>
                 )}
                 {!file.error && (
                   <>
@@ -160,7 +155,7 @@ export function AgentInstructions({
                           [key]: event.target.value,
                         }))
                       }
-                      placeholder={t("Write agent instructions…")}
+                      placeholder="Write agent instructions…"
                       className={`${inputClass.md} w-full resize-y font-mono`}
                     />
                     <div className="flex items-center gap-2">
@@ -170,7 +165,7 @@ export function AgentInstructions({
                         disabled={busy || (!dirty && file.content !== null)}
                         onClick={() => void activate(key, null, drafts[key])}
                       >
-                        {t("Save")}
+                        Save
                       </Button>
                       <Button
                         size="sm"
@@ -182,20 +177,20 @@ export function AgentInstructions({
                           }))
                         }
                       >
-                        {t("Cancel")}
+                        Cancel
                       </Button>
                       {dirty && (
                         <span className="text-meta text-neutral-500">
-                          {t("Unsaved changes")}
+                          Unsaved changes
                         </span>
                       )}
                     </div>
                   </>
                 )}
-                <h4 className="text-ui text-neutral-400">{t("Backlog")}</h4>
+                <h4 className="text-ui text-neutral-400">Backlog</h4>
                 {data.backlog[key].length === 0 && (
                   <p className="text-meta text-neutral-500">
-                    {t("No previous versions.")}
+                    No previous versions.
                   </p>
                 )}
                 {data.backlog[key].map((version) => (
@@ -208,14 +203,14 @@ export function AgentInstructions({
                     </summary>
                     <div className="mt-2 space-y-2">
                       <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words font-mono text-body text-neutral-200">
-                        {version.content || t("File is empty.")}
+                        {version.content || "File is empty."}
                       </pre>
                       <Button
                         size="sm"
                         disabled={busy || !!file.error}
                         onClick={() => void activate(key, version.id)}
                       >
-                        {t("Use as current")}
+                        Use as current
                       </Button>
                     </div>
                   </details>

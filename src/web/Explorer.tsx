@@ -54,7 +54,7 @@ import {
   inputClass,
 } from "./ui.js";
 import { api, unwrap } from "./api.js";
-import { locale, plural, t } from "./i18n.js";
+
 import { ScrollPane } from "./OverlayScrollbar.js";
 import { uploadFile } from "./Attachments.js";
 import { statusStyle } from "./SourceControl.js";
@@ -151,7 +151,7 @@ function formatBytes(n: number): string {
   const units = ["byte", "kilobyte", "megabyte", "gigabyte", "terabyte"];
   let i = 0;
   for (; n >= 1024 && i < units.length - 1; i++) n /= 1024;
-  return new Intl.NumberFormat(locale(), {
+  return new Intl.NumberFormat(undefined, {
     style: "unit",
     unit: units[i],
     unitDisplay: "short",
@@ -168,7 +168,7 @@ function formatDuration(ms: number): string {
       : s < 3600
         ? [Math.ceil(s / 60), "minute"]
         : [Math.ceil(s / 3600), "hour"];
-  return new Intl.NumberFormat(locale(), {
+  return new Intl.NumberFormat(undefined, {
     style: "unit",
     unit,
     unitDisplay: "long",
@@ -300,7 +300,7 @@ function NameRow({
       <input
         ref={field}
         autoFocus
-        aria-label={dir ? t("Folder name") : t("File name")}
+        aria-label={dir ? "Folder name" : "File name"}
         value={value}
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={(e) => {
@@ -778,7 +778,7 @@ export function Explorer({
     setError(err instanceof Error ? err.message : String(err));
   const guard = (path: string) => {
     if (hasUnsaved(path))
-      throw new Error(t("Save or discard the unsaved edits under it first."));
+      throw new Error("Save or discard the unsaved edits under it first.");
   };
 
   /** Start a new file or folder in `parent`, opening it so the field shows. */
@@ -932,14 +932,10 @@ export function Explorer({
     for (const p of paths) guard(p);
     const ask =
       paths.length === 1
-        ? t('Move "{name}" to the Trash?', {
-            name: paths[0].slice(paths[0].lastIndexOf("/") + 1),
-          })
-        : plural(
-            paths.length,
-            "Move {n} item to the Trash?",
-            "Move {n} items to the Trash?",
-          );
+        ? `Move "${paths[0].slice(paths[0].lastIndexOf("/") + 1)}" to the Trash?`
+        : paths.length === 1
+          ? `Move ${paths.length} item to the Trash?`
+          : `Move ${paths.length} items to the Trash?`;
     if (!window.confirm(ask)) return;
     try {
       for (const path of paths) {
@@ -1010,17 +1006,17 @@ export function Explorer({
 
   return (
     <section
-      aria-label={t("Explorer")}
+      aria-label="Explorer"
       className="flex min-h-0 min-w-0 flex-1 flex-col bg-neutral-950"
     >
-      <PanelHeader title={t("Explorer")} onClose={onClose} cells>
+      <PanelHeader title="Explorer" onClose={onClose} cells>
         <StripCell
           onClick={() => void expandAll().catch(fail)}
-          label={t("Expand all folders")}
+          label="Expand all folders"
         >
           <ArrowsOutLineVertical size={16} />
         </StripCell>
-        <StripCell onClick={collapseAll} label={t("Collapse all folders")}>
+        <StripCell onClick={collapseAll} label="Collapse all folders">
           <ArrowsInLineVertical size={16} />
         </StripCell>
       </PanelHeader>
@@ -1142,18 +1138,15 @@ export function Explorer({
           const took = performance.now() - started;
           const left =
             sent >= total
-              ? t("finishing…")
+              ? "finishing…"
               : sent > 0
-                ? t("{time} left", {
-                    time: formatDuration(((total - sent) * took) / sent),
-                  })
+                ? `${formatDuration(((total - sent) * took) / sent)} left`
                 : "";
           const parts = [
-            plural(count, "Uploading {n} file", "Uploading {n} files"),
-            t("{sent} of {total}", {
-              sent: formatBytes(sent),
-              total: formatBytes(total),
-            }),
+            count === 1
+              ? `Uploading ${count} file`
+              : `Uploading ${count} files`,
+            `${formatBytes(sent)} of ${formatBytes(total)}`,
             left,
           ];
           return (
@@ -1182,14 +1175,20 @@ export function Explorer({
           const clipName = clip
             ? clip.paths.length === 1
               ? clip.paths[0].slice(clip.paths[0].lastIndexOf("/") + 1)
-              : plural(clip.paths.length, "{n} item", "{n} items")
+              : clip.paths.length === 1
+                ? `${clip.paths.length} item`
+                : `${clip.paths.length} items`
             : "";
           return (
             <ContextMenu
               x={menu.x}
               y={menu.y}
               label={
-                many ? plural(targets.length, "{n} item", "{n} items") : m.name
+                many
+                  ? targets.length === 1
+                    ? `${targets.length} item`
+                    : `${targets.length} items`
+                  : m.name
               }
               onClose={() => setMenu(null)}
             >
@@ -1201,14 +1200,14 @@ export function Explorer({
                     autoFocus
                     onClick={act(() => startNew("file", m.path))}
                   >
-                    {t("New File…")}
+                    New File…
                   </MenuItem>
                   <MenuItem
                     icon={<FolderPlus size={16} />}
                     role="menuitem"
                     onClick={act(() => startNew("folder", m.path))}
                   >
-                    {t("New Folder…")}
+                    New Folder…
                   </MenuItem>
                 </>
               ) : (
@@ -1219,14 +1218,14 @@ export function Explorer({
                     autoFocus
                     onClick={act(() => onOpen(m.path))}
                   >
-                    {t("Open")}
+                    Open
                   </MenuItem>
                   <MenuItem
                     icon={<SquareSplitHorizontal size={16} />}
                     role="menuitem"
                     onClick={act(() => onOpenSide(m.path))}
                   >
-                    {t("Open to the Side")}
+                    Open to the Side
                   </MenuItem>
                   {git.files.has(relativePath(cwd, m.path)) && (
                     <MenuItem
@@ -1236,7 +1235,7 @@ export function Explorer({
                         onOpenDiff("", relativePath(cwd, m.path)),
                       )}
                     >
-                      {t("Open Changes")}
+                      Open Changes
                     </MenuItem>
                   )}
                 </>
@@ -1248,14 +1247,14 @@ export function Explorer({
                   role="menuitem"
                   autoFocus={many}
                   disabled={!onAddToChat}
-                  title={onAddToChat ? undefined : t("Open a session first")}
+                  title={onAddToChat ? undefined : "Open a session first"}
                   onClick={act(() =>
                     onAddToChat?.(
                       targets.map((p) => relativePath(cwd, p)).join(" "),
                     ),
                   )}
                 >
-                  {t("Add to Chat")}
+                  Add to Chat
                 </MenuItem>
               )}
               {!many && (
@@ -1265,7 +1264,7 @@ export function Explorer({
                   disabled={!onOpenTerminal}
                   onClick={act(() => onOpenTerminal?.(dir))}
                 >
-                  {t("Open in Terminal")}
+                  Open in Terminal
                 </MenuItem>
               )}
               {!m.dir && !many && (
@@ -1279,7 +1278,7 @@ export function Explorer({
                     a.click();
                   })}
                 >
-                  {t("Download")}
+                  Download
                 </MenuItem>
               )}
               <MenuSeparator />
@@ -1290,7 +1289,7 @@ export function Explorer({
                   navigator.clipboard.writeText(targets.join("\n")),
                 )}
               >
-                {t("Copy Path")}
+                Copy Path
               </MenuItem>
               {!menu.root && (
                 <MenuItem
@@ -1302,7 +1301,7 @@ export function Explorer({
                     ),
                   )}
                 >
-                  {t("Copy Relative Path")}
+                  Copy Relative Path
                 </MenuItem>
               )}
               <MenuSeparator />
@@ -1313,14 +1312,14 @@ export function Explorer({
                     role="menuitem"
                     onClick={act(() => setClip({ paths: targets, cut: true }))}
                   >
-                    {t("Cut")}
+                    Cut
                   </MenuItem>
                   <MenuItem
                     icon={<Copy size={16} />}
                     role="menuitem"
                     onClick={act(() => setClip({ paths: targets, cut: false }))}
                   >
-                    {t("Copy")}
+                    Copy
                   </MenuItem>
                 </>
               )}
@@ -1331,15 +1330,12 @@ export function Explorer({
                   disabled={!clip}
                   title={
                     clip
-                      ? t("Paste {name} into {dir}", {
-                          name: clipName,
-                          dir: relativePath(cwd, dir),
-                        })
+                      ? `Paste ${clipName} into ${relativePath(cwd, dir)}`
                       : undefined
                   }
                   onClick={act(() => paste(dir))}
                 >
-                  {t("Paste")}
+                  Paste
                 </MenuItem>
               )}
               {!menu.root && (
@@ -1359,7 +1355,7 @@ export function Explorer({
                         });
                       })}
                     >
-                      {t("Rename…")}
+                      Rename…
                     </MenuItem>
                   )}
                   <MenuItem
@@ -1367,7 +1363,7 @@ export function Explorer({
                     role="menuitem"
                     onClick={act(() => trash(targets))}
                   >
-                    {t("Delete")}
+                    Delete
                   </MenuItem>
                 </>
               )}

@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, unwrap } from "./api.js";
 import { Button, OptionRow } from "./ui.js";
-import { t } from "./i18n.js";
 
 type Mode = "off" | "on" | "only";
 const MODES: { mode: Mode; label: string; hint: string }[] = [
@@ -63,11 +62,13 @@ export function CodemodeSettings({ open }: { open: boolean }) {
     }
   };
   return (
-    <div role="radiogroup" aria-label={t("Native codemode")}>
+    <div role="radiogroup" aria-label="Native codemode">
       <p className="px-2 pb-2 text-meta text-neutral-500">
-        {t(
-          "Codemode lets the agent call tools from JavaScript, including batching calls. This is pi’s built-in tool, not the Pi Codex extension’s Code/Notebook modes. Saved on this machine; project settings may override it. Applies to new sessions; restart existing sessions to apply.",
-        )}
+        Codemode lets the agent call tools from JavaScript, including batching
+        calls. This is pi’s built-in tool, not the Pi Codex extension’s
+        Code/Notebook modes. Saved on this machine; project settings may
+        override it. Applies to new sessions; restart existing sessions to
+        apply.
       </p>
       {MODES.map((option) => (
         <OptionRow key={option.mode} selected={mode === option.mode}>
@@ -80,9 +81,9 @@ export function CodemodeSettings({ open }: { open: boolean }) {
             className="size-3.5 shrink-0 accent-amber-400"
           />
           <span className="flex-1">
-            {t(option.label)}
+            {option.label}
             <span className="block text-meta text-neutral-500">
-              {t(option.hint)}
+              {option.hint}
             </span>
           </span>
         </OptionRow>
@@ -91,7 +92,7 @@ export function CodemodeSettings({ open }: { open: boolean }) {
         <div className="px-2 text-ui text-red-400" role="alert">
           {error}
           <Button variant="subtle" disabled={busy} onClick={() => void load()}>
-            {t("Retry")}
+            Retry
           </Button>
         </div>
       )}

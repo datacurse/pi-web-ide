@@ -244,15 +244,17 @@ theme` (editor swatch, `Match app theme` or the theme's name, and a `Match app t
 - Defaults are starred inside the popups, not in the box: every model and reasoning
   option starts with a star that saves or clears it as pi's startup default
   (`defaultProvider`/`defaultModel`, `defaultThinkingLevel`) without picking it.
-  Filled amber for the default, `neutral-600` outline otherwise.
-- One model select, providers as `<optgroup>`s, plus the thinking select. Pills are
-  sans `text-meta` with `field-sizing-content` so each fits its current option.
-  Their popup is styled like a menu via `.pill-select` (index.css, customizable
-  `<select>`, Chromium 135+): `rounded-md` neutral-900 surface, `text-ui` rows,
-  provider labels as uppercase captions, current option in amber. Other browsers
-  show the native popup. Model-catalog requests have a 15-second timeout; a failed
-  load shows an error above the composer and a `Retry` button beside the picker,
-  rather than leaving it silently disabled until reload.
+  Filled amber for the default, `neutral-500` outline otherwise.
+- Model, thinking and speed use compact sans `text-meta` pill buttons and native
+  top-layer popovers, not `<select>` options: clickable default stars must work
+  in Firefox on Linux as well as Chromium. Providers are uppercase caption headings;
+  menus use `rounded-md` neutral-900 surfaces, `text-ui` rows and amber current values.
+  Every star is a keyboard-accessible button separate from the option's selection
+  button. Clicking it leaves the menu open and the active session unchanged.
+  Popovers dismiss on Escape or outside click; arrow keys/Home/End navigate options.
+  Long menus use `ScrollPane` and open scrolled to the current option.
+  Model-catalog requests have a 15-second timeout; a failed load shows an error
+  above the composer and a `Retry` button, rather than silently disabling it.
 - The context meter sits in the composer's left group, right of Attach. Git stays in
   the row above the box.
 - That row (jump-to-latest and git) floats over the transcript's bottom edge with no
@@ -694,8 +696,8 @@ px-1.5 py-0.5 font-mono text-meta`, `Blank` in `neutral-500` when unset), then `
   Defaults avoid those keys: Alt+Shift+T reopens the last tab closed in this page load,
   Alt+N starts a session in the last-used column, Ctrl+O, Ctrl+P, Ctrl+`, Alt+J, Alt+1–9.
 Changes live in `pwi:shortcuts`; the palette shows the current keys.
-- The interface is English-only, with no language setting. `i18n.ts` provides
-  placeholder and English plural helpers; dates and numbers use the browser locale.
+- The interface is English-only, with no language setting or translation layer.
+  Use plain English strings and template literals; dates and numbers use the browser locale.
 - A `Search settings` field (`inputClass.sm`) tops the nav. A query shows every matching
   setting from all categories, grouped under their category's `Section`; categories
   without a hit fade to `opacity-50`. A setting matches when every word is in its

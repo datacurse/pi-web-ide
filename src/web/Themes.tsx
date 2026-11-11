@@ -1,6 +1,5 @@
 import { useState, type CSSProperties } from "react";
 
-import { t } from "./i18n.js";
 import {
   editorThemeOf,
   MATCH_APP,
@@ -147,7 +146,7 @@ function ThemeCard({
         data-custom="theme card preview"
         onClick={onTheme}
         aria-pressed={current}
-        aria-label={t("Use {name}", { name: label })}
+        aria-label={`Use ${label}`}
         className={`overflow-hidden rounded-md border text-left ${current ? "border-amber-400" : "border-neutral-800 hover:border-neutral-600"}`}
       >
         {/* A VS Code theme's palette is not in index.css, so it comes along inline. */}
@@ -186,10 +185,10 @@ function ThemeCard({
       <div className="flex items-center gap-2">
         <span className="flex-1 text-ui text-neutral-100">{label}</span>
         {editor ? (
-          <span className="text-meta text-amber-400">{t("Editor")}</span>
+          <span className="text-meta text-amber-400">Editor</span>
         ) : (
           <Button size="sm" variant="ghost" onClick={onEditor}>
-            {t("Use for editor")}
+            Use for editor
           </Button>
         )}
       </div>
@@ -231,10 +230,10 @@ export function Themes({
   );
   return (
     <section
-      aria-label={t("Themes")}
+      aria-label="Themes"
       className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-neutral-950 text-neutral-100"
     >
-      <PanelHeader title={t("Themes")} onClose={onClose}>
+      <PanelHeader title="Themes" onClose={onClose}>
         <input
           type="search"
           value={query}
@@ -247,8 +246,8 @@ export function Themes({
             e.stopPropagation();
             setQuery("");
           }}
-          placeholder={t("Search themes")}
-          aria-label={t("Search themes")}
+          placeholder="Search themes"
+          aria-label="Search themes"
           className={`w-56 ${inputClass.sm}`}
         />
         {FILTERS.map((f) => (
@@ -259,14 +258,14 @@ export function Themes({
             aria-pressed={filter === f.id}
             onClick={() => setFilter(f.id)}
           >
-            {t(f.label)}
+            {f.label}
           </Button>
         ))}
       </PanelHeader>
       <div className="min-h-0 flex-1 overflow-y-auto p-4">
         {!shown.length && (
           <p className="text-ui text-neutral-500">
-            {t("No themes match “{query}”.", { query: query.trim() })}
+            {`No themes match “${query.trim()}”.`}
           </p>
         )}
         <div className="grid grid-cols-[repeat(auto-fill,minmax(16rem,1fr))] gap-4">

@@ -66,7 +66,7 @@ import {
   Notices,
   NoticeText,
 } from "./Transcript.js";
-import { formatDuration, t } from "./i18n.js";
+import { formatDuration } from "./format.js";
 import { PiMark } from "./piMark.js";
 import { PastedTexts } from "./PastedTexts.js";
 import {
@@ -118,7 +118,7 @@ function CommandPicker({
     <div
       ref={list}
       role="listbox"
-      aria-label={t("Slash commands")}
+      aria-label="Slash commands"
       className="mb-2 max-h-64 overflow-y-auto rounded-sm border border-neutral-700 bg-neutral-900"
     >
       {options.map((o, i) => (
@@ -200,13 +200,13 @@ const HistoryRow = memo(function HistoryRow({
       : undefined;
   const workLabel =
     (durationMs === undefined
-      ? t("Worked")
-      : t("Worked for {duration}", { duration: formatDuration(durationMs) })) +
+      ? "Worked"
+      : `Worked for ${formatDuration(durationMs)}`) +
     (row.roundtrips === undefined
       ? ""
-      : t(row.roundtrips === 1 ? ", {n} roundtrip" : ", {n} roundtrips", {
-          n: row.roundtrips,
-        }));
+      : row.roundtrips === 1
+        ? `, ${row.roundtrips} roundtrip`
+        : `, ${row.roundtrips} roundtrips`);
   return (
     <div className="chat-gutter my-3">
       <div className="chat-measure">
@@ -318,7 +318,11 @@ export function Chat({
    * it on screen; see useSession.ts for its lifetime.
    */
   command?: { text: string; running: boolean; result?: string } | null;
-  onSend: (text: string, images?: PiImage[], askOnly?: boolean) => void;
+  onSend: (
+    text: string,
+    images?: PiImage[],
+    askOnly?: boolean,
+  ) => Promise<boolean>;
   onAnswerAsk: (askId: string, answer: AskAnswer) => void;
   onAbort: () => void;
   onModelChange: (model: string) => void;
@@ -373,6 +377,8 @@ export function Chat({
    * side effect of rendering.
    */
   const staged = useRef<PiImage[]>([]);
+  const sending = useRef(false);
+  const draftVersion = useRef(0);
   /**
    * Whether the transcript is parked at its bottom, which is what decides
    * whether new content scrolls the view. Slack because "at the bottom" is
@@ -418,6 +424,7 @@ export function Chat({
   const seenKey = useRef(draftKey);
   useEffect(() => {
     if (!draftKey) return;
+    draftVersion.current++;
     const draft = readDraft(draftKey);
     setText(draft.text);
     const sameSession = seenKey.current === draftKey;
@@ -518,9 +525,9 @@ export function Chat({
 				  presentation and a state update per open is not.
 				*/}
         {opening ? (
-          <span className="opening-label">{t("Opening session…")}</span>
+          <span className="opening-label">Opening session…</span>
         ) : (
-          t("Select a session, or press + New.")
+          "Select a session, or press + New."
         )}
       </main>
     );
@@ -534,6 +541,7 @@ export function Chat({
    * other.
    */
   const changeText = (value: string) => {
+    draftVersion.current++;
     setText(value);
     writeDraftText(snapshot.id, value);
     // Typing is a new question, so a dismissed picker gets another chance:
@@ -555,6 +563,7 @@ export function Chat({
   };
   /** False when the attachments are staged but too big to persist as a draft. */
   const changeImages = (next: PiImage[]): boolean => {
+    draftVersion.current++;
     staged.current = next;
     setImages(next);
     return writeDraftImages(snapshot.id, next);
@@ -572,7 +581,7 @@ export function Chat({
     const isImage = (f: File) => SUPPORTED_IMAGE_MIME.includes(f.type);
     if (!canAttach && files.some(isImage)) {
       setAttachError(
-        t("This model does not accept images. Switch models to attach one."),
+        "This model does not accept images. Switch models to attach one.",
       );
       return;
     }
@@ -597,28 +606,36 @@ export function Chat({
        * is better said than silently promised.
        */
       setAttachError(
-        kept ? null : t("Attached, but too large to keep if the page reloads."),
+        kept ? null : "Attached, but too large to keep if the page reloads.",
       );
     } catch (err) {
       setAttachError(err instanceof Error ? err.message : String(err));
     }
   };
 
-  const submit = () => {
+  const submit = async () => {
     const t = text.trim();
-    // An image on its own is a valid prompt; only block when nothing is staged.
-    if (!t && images.length === 0) return;
-    onSend(
-      pasted.attachments.length ? text : t,
-      images.length > 0 ? images : undefined,
-      askOnly,
-    );
-    if (askMode === "once") setAskOnly(false);
-    setText("");
-    setImages([]);
-    staged.current = [];
-    clearDraft(snapshot.id);
-    setAttachError(null);
+    // Keep the draft until accepted; repeated submits must not send it twice.
+    if (sending.current || (!t && images.length === 0)) return;
+    sending.current = true;
+    const version = draftVersion.current;
+    try {
+      const accepted = await onSend(
+        pasted.attachments.length ? text : t,
+        images.length > 0 ? images : undefined,
+        askOnly,
+      );
+      // Never erase newer typing or a different session's composer.
+      if (!accepted || draftVersion.current !== version) return;
+      if (askMode === "once") setAskOnly(false);
+      setText("");
+      setImages([]);
+      staged.current = [];
+      clearDraft(snapshot.id);
+      setAttachError(null);
+    } finally {
+      sending.current = false;
+    }
   };
 
   return (
@@ -666,14 +683,12 @@ export function Chat({
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
                   <div className="min-w-0 flex-1 basis-48">
                     <div className="text-ui text-neutral-200">
-                      {t("Package updates available")}
+                      Package updates available
                     </div>
                     <div className="mt-1 text-meta text-neutral-500">
                       {busy
-                        ? t("Finish the current turn before restarting.")
-                        : t(
-                            "Restart to load updated commands and skills. Your conversation is kept.",
-                          )}
+                        ? "Finish the current turn before restarting."
+                        : "Restart to load updated commands and skills. Your conversation is kept."}
                     </div>
                   </div>
                   <Button
@@ -681,7 +696,7 @@ export function Chat({
                     onClick={onRestart}
                     disabled={busy || compacting || restarting}
                   >
-                    {restarting ? t("Restarting…") : t("Restart session")}
+                    {restarting ? "Restarting…" : "Restart session"}
                   </Button>
                 </div>
                 {restartError && (
@@ -704,7 +719,7 @@ export function Chat({
               {!atBottom && (
                 <IconButton
                   onClick={toBottom}
-                  label={t("Jump to the latest message")}
+                  label="Jump to the latest message"
                   variant="outline"
                   round
                 >
@@ -774,9 +789,7 @@ export function Chat({
                     className="mb-2 mr-2"
                     onClick={() => setZoomed(src)}
                   >
-                    {t("Annotated image · {n} marks", {
-                      n: workspace.exportedCount ?? 0,
-                    })}
+                    {`Annotated image · ${workspace.exportedCount ?? 0} marks`}
                   </Button>
                 ))}
 
@@ -875,13 +888,11 @@ export function Chat({
                 // `rows` is the fallback; where `field-sizing: content` is
                 // supported the box starts at one line and grows to max-h-60.
                 rows={2}
-                placeholder={t("Message pi…")}
+                placeholder="Message pi…"
                 title={
                   canAttach
-                    ? t(
-                        "Enter to send, Shift+Enter for newline, Ctrl+V to paste a screenshot",
-                      )
-                    : t("Enter to send, Shift+Enter for newline")
+                    ? "Enter to send, Shift+Enter for newline, Ctrl+V to paste a screenshot"
+                    : "Enter to send, Shift+Enter for newline"
                 }
                 // Transparent and borderless: the BOX is the control now, and a
                 // second inset panel inside it was two edges for one field.
@@ -893,7 +904,7 @@ export function Chat({
                 <div className="flex min-w-0 items-center gap-1.5">
                   <IconButton
                     onClick={() => fileInput.current?.click()}
-                    label={t("Attach a file")}
+                    label="Attach a file"
                     variant="bare"
                     size="sm"
                     round
@@ -936,8 +947,8 @@ export function Chat({
                   {busy && (
                     <IconButton
                       onClick={onAbort}
-                      label={t("Stop")}
-                      title={t("Stop this turn")}
+                      label="Stop"
+                      title="Stop this turn"
                       size="sm"
                       variant="outline"
                       round
@@ -953,8 +964,8 @@ export function Chat({
                     }}
                     label={
                       askOnly
-                        ? t("Ask only: on (no code changes)")
-                        : t("Ask only: off")
+                        ? "Ask only: on (no code changes)"
+                        : "Ask only: off"
                     }
                     aria-pressed={askOnly}
                     variant="bare"
@@ -971,7 +982,7 @@ export function Chat({
                     <ContextMenu
                       x={askMenu.x}
                       y={askMenu.y}
-                      label={t("Ask only button")}
+                      label="Ask only button"
                       onClose={() => setAskMenu(null)}
                     >
                       {ASK_MODES.map((m) => (
@@ -979,7 +990,7 @@ export function Chat({
                           key={m.id}
                           role="menuitemradio"
                           aria-checked={m.id === askMode}
-                          title={t(m.hint)}
+                          title={m.hint}
                           icon={
                             m.id === askMode ? <Check size={16} /> : <span />
                           }
@@ -988,7 +999,7 @@ export function Chat({
                             setAskMenu(null);
                           }}
                         >
-                          {t(m.label)}
+                          {m.label}
                         </MenuItem>
                       ))}
                     </ContextMenu>
@@ -996,8 +1007,8 @@ export function Chat({
                   <IconButton
                     onClick={submit}
                     disabled={!text.trim() && images.length === 0}
-                    label={t("Send")}
-                    title={t("Send (Enter)")}
+                    label="Send"
+                    title="Send (Enter)"
                     variant="bare"
                     size="sm"
                     round
@@ -1030,9 +1041,7 @@ export function Chat({
             onAdd={(image, previousSrc, reference) => {
               if (!canAttach) {
                 setAttachError(
-                  t(
-                    "This model does not accept images. Switch models to attach one.",
-                  ),
+                  "This model does not accept images. Switch models to attach one.",
                 );
                 return false;
               }
@@ -1047,7 +1056,7 @@ export function Chat({
               setAttachError(
                 kept
                   ? null
-                  : t("Attached, but too large to keep if the page reloads."),
+                  : "Attached, but too large to keep if the page reloads.",
               );
               const current = composer.current?.value ?? pasted.text;
               changeVisibleText(
@@ -1247,18 +1256,16 @@ const ChatTranscript = memo(function ChatTranscript({
         {snapshot.messages.length === 0 && !hasPartial && !busy && !command && (
           <div className="flex h-full flex-col items-center justify-center gap-2 text-center select-none">
             <PiMark className="text-display size-[1em] text-amber-400" />
-            <div className="text-title text-neutral-200">
-              {t("New session")}
-            </div>
+            <div className="text-title text-neutral-200">New session</div>
             <div className="text-ui text-neutral-500">
-              {t("in")}{" "}
+              in{" "}
               <span className="font-mono text-neutral-400">
                 {snapshot.cwd.split(/[\\/]/).filter(Boolean).at(-1) ??
                   snapshot.cwd}
               </span>
               {" · "}
-              {t("type")} <kbd className="font-mono text-neutral-400">/</kbd>{" "}
-              {t("for commands")}
+              type <kbd className="font-mono text-neutral-400">/</kbd> for
+              commands
             </div>
           </div>
         )}

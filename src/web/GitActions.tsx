@@ -3,7 +3,6 @@ import { CaretDown, Check, GitBranch, Sparkle } from "@phosphor-icons/react";
 import { readGitAutoName, writeGitAutoName } from "./prefs.js";
 import { Button, MenuItem, inputClass } from "./ui.js";
 import { api, unwrap } from "./api.js";
-import { t, plural } from "./i18n.js";
 
 /** What `GET /api/git` answers with. See src/server/git.ts. */
 export interface GitState {
@@ -211,18 +210,15 @@ export function busyLabel(a: {
   pr?: boolean;
 }) {
   const steps = [
-    a.branch && t("creating branch"),
-    a.commit && t("committing"),
-    a.push && t("pushing"),
-    a.pr && t("opening PR"),
+    a.branch && "creating branch",
+    a.commit && "committing",
+    a.push && "pushing",
+    a.pr && "opening PR",
   ].filter(Boolean) as string[];
   const text =
     steps.length > 1
-      ? t("{first} & {last}", {
-          first: steps.slice(0, -1).join(", "),
-          last: steps.at(-1)!,
-        })
-      : (steps[0] ?? t("working"));
+      ? `${steps.slice(0, -1).join(", ")} & ${steps.at(-1)!}`
+      : (steps[0] ?? "working");
   return `${text[0].toUpperCase()}${text.slice(1)}…`;
 }
 
@@ -292,7 +288,7 @@ export function GitActions({
    */
   const requestName = async (): Promise<string | null> => {
     setNaming(true);
-    setGitBusy(cwd, t("Naming…"));
+    setGitBusy(cwd, "Naming…");
     setNameError(null);
     try {
       const r = await api.git.name.$post({ json: { cwd } });
@@ -301,7 +297,7 @@ export function GitActions({
         error?: string;
       };
       if (!r.ok || !body.message) {
-        setNameError(body.error ?? t("could not name this commit"));
+        setNameError(body.error ?? "could not name this commit");
         return null;
       }
       return body.message;
@@ -413,7 +409,7 @@ export function GitActions({
           title={result.error}
           className="max-w-60 fade-end rounded-full px-2 py-1 text-meta text-red-400 hover:text-red-300"
         >
-          {result.error ?? t("Failed")}
+          {result.error ?? "Failed"}
         </button>
       )}
       {result?.ok && result.url && (
@@ -423,7 +419,7 @@ export function GitActions({
           rel="noreferrer"
           className="max-w-60 fade-end rounded-full px-2 py-1 text-meta text-neutral-400 hover:text-neutral-200"
         >
-          {t("Pull request ↗")}
+          Pull request ↗
         </a>
       )}
 
@@ -433,24 +429,26 @@ export function GitActions({
           onClick={() => void start(primary)}
           disabled={running}
           title={
-            t("{what} on {branch}", {
-              what: dirty
-                ? plural(state.changed, "{n} changed file", "{n} changed files")
-                : t("Nothing to commit"),
-              branch: state.branch,
-            }) + (autoName ? ` · ${t("auto-named, no dialog")}` : "")
+            `${
+              dirty
+                ? state.changed === 1
+                  ? `${state.changed} changed file`
+                  : `${state.changed} changed files`
+                : "Nothing to commit"
+            } on ${state.branch}` +
+            (autoName ? ` · ${"auto-named, no dialog"}` : "")
           }
           className="flex items-center gap-1.5 px-3 text-neutral-200 transition-colors duration-150 ease-out hover:bg-neutral-800 disabled:text-neutral-500 motion-reduce:transition-none"
         >
           {autoName ? <Sparkle size={13} /> : <GitBranch size={13} />}
-          {busyNow ?? t(primary.label)}
+          {busyNow ?? primary.label}
           {/* The count is the one number that decides whether to click. */}
           {dirty && <span className="text-neutral-500">{state.changed}</span>}
         </button>
         <button
           data-custom="composer pill"
           onClick={() => setMenuOpen((o) => !o)}
-          aria-label={t("More git actions")}
+          aria-label="More git actions"
           aria-expanded={menuOpen}
           className="flex items-center border-l border-neutral-700 px-1.5 text-neutral-400 transition-colors duration-150 ease-out hover:bg-neutral-800 hover:text-neutral-100 motion-reduce:transition-none"
         >
@@ -472,8 +470,8 @@ export function GitActions({
           <p className="fade-end px-3 pt-0.5 pb-1.5 text-meta text-neutral-500">
             <span className="text-neutral-400">{state.branch}</span>
             {state.remote
-              ? ` → ${state.upstream || t("{remote} (new)", { remote: state.remote })}`
-              : ` · ${t("no remote")}`}
+              ? ` → ${state.upstream || `${state.remote} (new)`}`
+              : ` · ${"no remote"}`}
           </p>
           <div className="mb-1 border-t border-neutral-800" />
           {ACTIONS.map((action) => {
@@ -491,12 +489,12 @@ export function GitActions({
                 title={
                   blocked
                     ? action.pr
-                      ? t("`gh` is not installed")
-                      : t("This repository has no remote")
+                      ? "`gh` is not installed"
+                      : "This repository has no remote"
                     : undefined
                 }
               >
-                {t(action.label)}
+                {action.label}
               </MenuItem>
             );
           })}
@@ -514,15 +512,13 @@ export function GitActions({
             }}
             role="menuitemcheckbox"
             aria-checked={autoName}
-            title={t(
-              "Write the commit message with a model that reads the diff, and stop asking",
-            )}
+            title="Write the commit message with a model that reads the diff, and stop asking"
           >
             <span className="flex items-center gap-2">
               <span className="flex w-3.5 shrink-0 justify-center text-neutral-400">
                 {autoName && <Check size={12} weight="bold" />}
               </span>
-              {t("Auto-name commits")}
+              Auto-name commits
             </span>
           </MenuItem>
         </div>
@@ -613,7 +609,7 @@ function GitDialog({
     <div
       role="dialog"
       aria-modal="true"
-      aria-label={t(action.label)}
+      aria-label={action.label}
       onClick={onCancel}
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6"
     >
@@ -627,20 +623,18 @@ function GitDialog({
       >
         <div className="mb-3 flex items-baseline justify-between gap-2">
           <h2 className="text-title font-semibold text-neutral-100">
-            {t(action.label)}
+            {action.label}
           </h2>
           <span className="fade-end font-mono text-meta text-neutral-500">
             {state.branch}
-            {state.changed > 0
-              ? ` · ${t("{n} changed", { n: state.changed })}`
-              : ""}
+            {state.changed > 0 ? ` · ${`${state.changed} changed`}` : ""}
           </span>
         </div>
 
         {action.branch && (
           <label className="mb-3 block">
             <span className="mb-1 block text-meta text-neutral-400">
-              {t("New branch")}
+              New branch
             </span>
             <input
               value={branch}
@@ -654,7 +648,7 @@ function GitDialog({
         {action.commit && (
           <label className="block">
             <span className="mb-1 block text-meta text-neutral-400">
-              {t("Commit message")}
+              Commit message
             </span>
             <textarea
               ref={field}
@@ -663,7 +657,7 @@ function GitDialog({
               // Room for a subject and a short body: an auto-named message
               // has both, and three rows hides the half that explains why.
               rows={10}
-              placeholder={state.suggestion || t("What changed")}
+              placeholder={state.suggestion || "What changed"}
               // Enter submits, as it does in the composer; a message that
               // needs a second paragraph gets Shift+Enter.
               onKeyDown={(e) => {
@@ -693,14 +687,14 @@ function GitDialog({
               type="button"
               onClick={onAutoName}
               disabled={naming || !!running}
-              title={t("Write the message with a model that reads the diff")}
+              title="Write the message with a model that reads the diff"
             >
               <Sparkle size={13} />
-              {naming ? t("Naming…") : t("Auto-name")}
+              {naming ? "Naming…" : "Auto-name"}
             </Button>
           )}
           <Button type="button" onClick={onCancel}>
-            {t("Cancel")}
+            Cancel
           </Button>
           <Button
             variant="primary"
@@ -711,7 +705,7 @@ function GitDialog({
               (action.commit && !message.trim() && !state.suggestion)
             }
           >
-            {running ?? t(action.label)}
+            {running ?? action.label}
           </Button>
         </div>
       </form>

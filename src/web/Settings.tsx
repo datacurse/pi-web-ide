@@ -85,7 +85,7 @@ import {
   type ThemeId,
   type UserMode,
 } from "./prefs.js";
-import { t } from "./i18n.js";
+
 import { SYNTAX_ROLES } from "./vscodeTheme.js";
 import { AutomaticActions } from "./AutomaticActions.js";
 import { AgentInstructions } from "./AgentInstructions.js";
@@ -229,9 +229,9 @@ function ChatFadeControl({ expandByDefault }: { expandByDefault: boolean }) {
             className="size-4 shrink-0 accent-amber-400"
           />
           <span className="flex-1">
-            {t("Fade above the message box")}
+            Fade above the message box
             <span className="block text-meta text-neutral-500">
-              {t("Gradually fade messages where they meet the message box.")}
+              Gradually fade messages where they meet the message box.
             </span>
           </span>
         </OptionRow>
@@ -241,7 +241,7 @@ function ChatFadeControl({ expandByDefault }: { expandByDefault: boolean }) {
             variant="ghost"
             onClick={() => change(DEFAULT_CHAT_FADE)}
           >
-            {t("Reset")}
+            Reset
           </Button>
         )}
         {on && (
@@ -249,8 +249,8 @@ function ChatFadeControl({ expandByDefault }: { expandByDefault: boolean }) {
           <button
             type="button"
             data-custom="settings gear"
-            aria-label={open ? t("Collapse") : t("Expand")}
-            title={open ? t("Collapse") : t("Expand")}
+            aria-label={open ? "Collapse" : "Expand"}
+            title={open ? "Collapse" : "Expand"}
             aria-expanded={open}
             onClick={() => setOpen((o) => !o)}
             className={`flex size-12 shrink-0 items-center justify-center self-center rounded-sm transition-colors duration-150 ease-out motion-reduce:transition-none ${
@@ -270,8 +270,8 @@ function ChatFadeControl({ expandByDefault }: { expandByDefault: boolean }) {
             {CHAT_FADE_FIELDS.map((f) => (
               <FadeField
                 key={f.key}
-                label={t(f.label)}
-                hint={t(f.hint)}
+                label={f.label}
+                hint={f.hint}
                 range={CHAT_FADE_RANGES[f.key]}
                 value={fade[f.key]}
                 onChange={(v) => change({ ...fade, [f.key]: v })}
@@ -304,21 +304,18 @@ function ScrollPastControl() {
           className="size-4 shrink-0 accent-amber-400"
         />
         <span className="flex-1">
-          {t("Scroll past the end")}
+          Scroll past the end
           <span className="block text-meta text-neutral-500">
-            {t(
-              "Add space below the last message so you can scroll it above the message box.",
-            )}
+            Add space below the last message so you can scroll it above the
+            message box.
           </span>
         </span>
       </OptionRow>
       {on && (
         <div className="grid grid-cols-[auto_1fr] items-center gap-x-3 gap-y-1 px-2">
           <FadeField
-            label={t("Extra space")}
-            hint={t(
-              "Space below the last message, as a percentage of the window height.",
-            )}
+            label="Extra space"
+            hint="Space below the last message, as a percentage of the window height."
             range={SCROLL_PAST_RANGE}
             value={amount}
             onChange={(v) => change(true, v)}
@@ -456,7 +453,7 @@ function ChatFadePreview({ fade }: { fade: ChatFade }) {
         </svg>
         <div className="mt-1 flex justify-between text-caption text-neutral-500">
           <span>0</span>
-          <span>{t("opacity")}</span>
+          <span>opacity</span>
           <span>1</span>
         </div>
       </div>
@@ -468,13 +465,14 @@ function ChatFadePreview({ fade }: { fade: ChatFade }) {
           {/* The box (overlapping 0.75rem) cuts through the middle of the last line's lowercase:
 					    the paragraph's bottom is trimmed to the baseline, then half an x-height below the box. */}
           <p className="mb-[calc(0.75rem_-_0.5ex)] text-body text-neutral-200 [text-box:trim-end_ex_alphabetic]">
-            {t(
-              "The tests pass and the build is clean. I renamed the helper, moved the parser into its own module and updated every caller, so nothing else should need to change. The old export stays as an alias for one release.",
-            )}
+            The tests pass and the build is clean. I renamed the helper, moved
+            the parser into its own module and updated every caller, so nothing
+            else should need to change. The old export stays as an alias for one
+            release.
           </p>
         </div>
         <div className="relative -mt-3 rounded-lg bg-neutral-900 px-3 py-2 text-body text-neutral-600 ring-1 ring-neutral-800 ring-inset">
-          {t("Message pi…")}
+          Message pi…
         </div>
       </div>
     </div>
@@ -560,14 +558,12 @@ export function Settings({
   }, [open, supported]);
   const notifyBlocked = !supported || permission === "denied";
   const notifyHint = !supported
-    ? t("Notifications require HTTPS or localhost and a supported browser.")
+    ? "Notifications require HTTPS or localhost and a supported browser."
     : permission === "denied"
-      ? t("Blocked — allow notifications for this site in your browser.")
+      ? "Blocked — allow notifications for this site in your browser."
       : permission === "default"
-        ? t("Enable to allow desktop notifications in your browser.")
-        : t(
-            "Send a desktop notification when the agent finishes while this page is in the background. Includes the first line of the answer.",
-          );
+        ? "Enable to allow desktop notifications in your browser."
+        : "Send a desktop notification when the agent finishes while this page is in the background. Includes the first line of the answer.";
   const changeNotifications = async (on: boolean) => {
     setNotificationPending(true);
     setNotificationStatus("");
@@ -585,7 +581,7 @@ export function Settings({
   const testNotification = () => {
     try {
       const notification = new Notification("pwi", {
-        body: t("Desktop notifications are working."),
+        body: "Desktop notifications are working.",
         tag: "pwi:test",
       });
       notification.onclick = () => {
@@ -594,12 +590,10 @@ export function Settings({
       };
       notification.onerror = () =>
         setNotificationStatus(
-          t("The browser could not display the notification."),
+          "The browser could not display the notification.",
         );
       setNotificationStatus(
-        t(
-          "Test notification sent. If it does not appear, check your system notification settings and Do Not Disturb.",
-        ),
+        "Test notification sent. If it does not appear, check your system notification settings and Do Not Disturb.",
       );
     } catch (error) {
       setNotificationStatus(
@@ -679,37 +673,37 @@ export function Settings({
   }[] = [
     {
       category: "appearance",
-      group: t("Themes"),
-      label: t("Theme"),
+      group: "Themes",
+      label: "Theme",
       text: `color colour palette dark light vs code browse ${THEMES.map((th) => th.label).join(" ")}`,
       node: (
         <div className="flex items-center gap-3 px-2 py-2 text-ui">
           <Swatch theme={theme} />
           <span className="flex-1">
-            {t("Theme")}
+            Theme
             <span className="block text-meta text-neutral-500">
               {THEMES.find((th) => th.id === theme)?.label}
             </span>
           </span>
           <Button size="sm" variant="subtle" onClick={onBrowseThemes}>
-            {t("Browse themes")}
+            Browse themes
           </Button>
         </div>
       ),
     },
     {
       category: "appearance",
-      group: t("Themes"),
-      label: t("Editor theme"),
+      group: "Themes",
+      label: "Editor theme",
       text: "code editor syntax color colour highlighting vs code match",
       node: (
         <div className="flex items-center gap-3 px-2 py-2 text-ui">
           <EditorSwatch theme={editorThemeOf(theme, editorTheme)} />
           <span className="flex-1">
-            {t("Editor theme")}
+            Editor theme
             <span className="block text-meta text-neutral-500">
               {editorTheme === MATCH_APP
-                ? t("Match app theme")
+                ? "Match app theme"
                 : VSCODE_THEMES[editorTheme].label}
             </span>
           </span>
@@ -719,7 +713,7 @@ export function Settings({
               variant="ghost"
               onClick={() => onEditorTheme(MATCH_APP)}
             >
-              {t("Match app theme")}
+              Match app theme
             </Button>
           )}
         </div>
@@ -727,11 +721,11 @@ export function Settings({
     },
     {
       category: "appearance",
-      group: t("Scrollbars"),
-      label: t("Scrollbar visibility"),
+      group: "Scrollbars",
+      label: "Scrollbar visibility",
       text: "scroll bar sidebar auto hide always visible hidden wheel touch keyboard",
       node: (
-        <div role="radiogroup" aria-label={t("Scrollbar visibility")}>
+        <div role="radiogroup" aria-label="Scrollbar visibility">
           {[
             {
               id: "auto",
@@ -768,9 +762,9 @@ export function Settings({
                   className="size-3.5 shrink-0 accent-amber-400"
                 />
                 <span className="flex-1">
-                  {t(mode.label)}
+                  {mode.label}
                   <span className="block text-meta text-neutral-500">
-                    {t(mode.hint)}
+                    {mode.hint}
                   </span>
                 </span>
               </OptionRow>
@@ -781,14 +775,14 @@ export function Settings({
     },
     {
       category: "appearance",
-      group: t("Scrollbars"),
-      label: t("Scrollbar tone"),
+      group: "Scrollbars",
+      label: "Scrollbar tone",
       text: "scroll bar sidebar tone dark color colour",
       node: (
-        <div role="radiogroup" aria-label={t("Scrollbar tone")}>
-          <div className="px-2 py-1 text-ui">{t("Scrollbar tone")}</div>
+        <div role="radiogroup" aria-label="Scrollbar tone">
+          <div className="px-2 py-1 text-ui">Scrollbar tone</div>
           <div className="px-2 pb-1 text-meta text-neutral-500">
-            {t("Pick a tone from the active theme.")}
+            Pick a tone from the active theme.
           </div>
           {SCROLLBAR_TONES.map((tone) => (
             <OptionRow key={tone.id} selected={scrollbarTone === tone.id}>
@@ -805,7 +799,7 @@ export function Settings({
                 className="size-4 shrink-0 rounded-sm border border-neutral-600"
                 style={{ background: tone.color }}
               />
-              <span>{t(tone.label)}</span>
+              <span>{tone.label}</span>
             </OptionRow>
           ))}
         </div>
@@ -813,16 +807,16 @@ export function Settings({
     },
     {
       category: "transcript",
-      group: t("Messages"),
-      label: t("Long user messages"),
-      text: `prompt collapse expand show more ${USER_MODES.map((m) => `${t(m.label)} ${t(m.hint)}`).join(" ")}`,
+      group: "Messages",
+      label: "Long user messages",
+      text: `prompt collapse expand show more ${USER_MODES.map((m) => `${m.label} ${m.hint}`).join(" ")}`,
       node: (
         <div role="radiogroup" aria-labelledby="user-mode-label">
           <div
             id="user-mode-label"
             className="px-2 pt-1 pb-1 text-ui text-neutral-300"
           >
-            {t("Long user messages")}
+            Long user messages
           </div>
           {USER_MODES.map((m) => (
             <OptionRow key={m.id} selected={m.id === userMode}>
@@ -835,9 +829,9 @@ export function Settings({
                 className="size-3.5 shrink-0 accent-amber-400"
               />
               <span className="flex-1">
-                {t(m.label)}
+                {m.label}
                 <span className="block text-meta text-neutral-500">
-                  {t(m.hint)}
+                  {m.hint}
                 </span>
               </span>
             </OptionRow>
@@ -847,9 +841,9 @@ export function Settings({
     },
     {
       category: "transcript",
-      group: t("Messages"),
-      label: t("Message separators"),
-      text: `divider line turn ${t("Show lines between conversation turns.")}`,
+      group: "Messages",
+      label: "Message separators",
+      text: `divider line turn ${"Show lines between conversation turns."}`,
       node: (
         <OptionRow>
           <input
@@ -862,9 +856,9 @@ export function Settings({
             className="size-4 shrink-0 accent-amber-400"
           />
           <span className="flex-1">
-            {t("Message separators")}
+            Message separators
             <span className="block text-meta text-neutral-500">
-              {t("Show lines between conversation turns.")}
+              Show lines between conversation turns.
             </span>
           </span>
         </OptionRow>
@@ -872,20 +866,19 @@ export function Settings({
     },
     {
       category: "transcript",
-      group: t("Messages"),
-      label: t("Message action layout"),
-      text: `copy edit fork time buttons right left align ${FOOTER_LAYOUTS.map((m) => `${t(m.label)} ${t(m.hint)}`).join(" ")}`,
+      group: "Messages",
+      label: "Message action layout",
+      text: `copy edit fork time buttons right left align ${FOOTER_LAYOUTS.map((m) => `${m.label} ${m.hint}`).join(" ")}`,
       node: (
         <div role="radiogroup" aria-labelledby="footer-layout-label">
           <div
             id="footer-layout-label"
             className="px-2 pt-1 pb-1 text-ui text-neutral-300"
           >
-            {t("Message action layout")}
+            Message action layout
             <span className="block text-meta text-neutral-500">
-              {t(
-                "Position the copy, edit, and fork buttons and the timestamp below messages.",
-              )}
+              Position the copy, edit, and fork buttons and the timestamp below
+              messages.
             </span>
           </div>
           {FOOTER_LAYOUTS.map((m) => (
@@ -902,9 +895,9 @@ export function Settings({
                 className="size-3.5 shrink-0 accent-amber-400"
               />
               <span className="flex-1">
-                {t(m.label)}
+                {m.label}
                 <span className="block text-meta text-neutral-500">
-                  {t(m.hint)}
+                  {m.hint}
                 </span>
               </span>
             </OptionRow>
@@ -914,16 +907,15 @@ export function Settings({
     },
     {
       category: "transcript",
-      group: t("Agent activity"),
-      label: t("Agent activity"),
+      group: "Agent activity",
+      label: "Agent activity",
       text: "cursor timeline working visualization phases timing rounds",
       node: (
-        <div role="radiogroup" aria-label={t("Agent activity")}>
-          <div className="px-2 py-1 text-ui">{t("Agent activity")}</div>
+        <div role="radiogroup" aria-label="Agent activity">
+          <div className="px-2 py-1 text-ui">Agent activity</div>
           <p className="px-2 pb-1 text-meta text-neutral-500">
-            {t(
-              "Choose how thinking, tool calls, and elapsed time appear in the conversation.",
-            )}
+            Choose how thinking, tool calls, and elapsed time appear in the
+            conversation.
           </p>
           {WORK_DISPLAYS.map((mode) => (
             <OptionRow key={mode.id} selected={workDisplay === mode.id}>
@@ -938,9 +930,9 @@ export function Settings({
                 className="size-3.5 shrink-0 accent-amber-400"
               />
               <span className="flex-1">
-                {t(mode.label)}
+                {mode.label}
                 <span className="block text-meta text-neutral-500">
-                  {t(mode.hint)}
+                  {mode.hint}
                 </span>
               </span>
             </OptionRow>
@@ -950,8 +942,8 @@ export function Settings({
     },
     {
       category: "transcript",
-      group: t("Agent activity"),
-      label: t("Collapse codemode"),
+      group: "Agent activity",
+      label: "Collapse codemode",
       text: "codemode collapsed expanded nested tools hide disclosure",
       node: (
         <OptionRow>
@@ -965,11 +957,10 @@ export function Settings({
             className="size-4 shrink-0 accent-amber-400"
           />
           <span className="flex-1">
-            {t("Collapse codemode")}
+            Collapse codemode
             <span className="block text-meta text-neutral-500">
-              {t(
-                "Start codemode groups collapsed. Click a group to show its nested tool calls.",
-              )}
+              Start codemode groups collapsed. Click a group to show its nested
+              tool calls.
             </span>
           </span>
         </OptionRow>
@@ -977,21 +968,20 @@ export function Settings({
     },
     {
       category: "transcript",
-      group: t("Agent activity"),
-      label: t("Nested tool labels"),
+      group: "Agent activity",
+      label: "Nested tool labels",
       text: "codemode nested tools modules names labels text icon both read search replace diagnostics command",
       node: (
         <OptionRow>
           <span className="flex-1">
-            {t("Nested tool labels")}
+            Nested tool labels
             <span className="block text-meta text-neutral-500">
-              {t(
-                "Show names, icons, or both for tools called inside codemode. The parent codemode label always shows its icon and name.",
-              )}
+              Show names, icons, or both for tools called inside codemode. The
+              parent codemode label always shows its icon and name.
             </span>
           </span>
           <select
-            aria-label={t("Nested tool labels")}
+            aria-label="Nested tool labels"
             value={codemodeToolLabels}
             onChange={(e) => {
               const mode = CODEMODE_TOOL_LABELS.find(
@@ -1005,7 +995,7 @@ export function Settings({
           >
             {CODEMODE_TOOL_LABELS.map((option) => (
               <option key={option.id} value={option.id}>
-                {t(option.label)}
+                {option.label}
               </option>
             ))}
           </select>
@@ -1014,8 +1004,8 @@ export function Settings({
     },
     {
       category: "transcript",
-      group: t("Agent activity"),
-      label: t("Shorten project file paths"),
+      group: "Agent activity",
+      label: "Shorten project file paths",
       text: "tools paths project relative absolute full directory",
       node: (
         <OptionRow>
@@ -1029,11 +1019,10 @@ export function Settings({
             className="size-4 shrink-0 accent-amber-400"
           />
           <span className="flex-1">
-            {t("Shorten project file paths")}
+            Shorten project file paths
             <span className="block text-meta text-neutral-500">
-              {t(
-                "Show paths relative to the project, such as src/app.ts, instead of full paths. Files outside the project keep their full paths.",
-              )}
+              Show paths relative to the project, such as src/app.ts, instead of
+              full paths. Files outside the project keep their full paths.
             </span>
           </span>
         </OptionRow>
@@ -1041,34 +1030,33 @@ export function Settings({
     },
     {
       category: "transcript",
-      group: t("Scrolling"),
-      label: t("Scroll past the end"),
-      text: `overscroll bottom padding ${t("Add space below the last message so you can scroll it above the message box.")} ${t("Extra space")}`,
+      group: "Scrolling",
+      label: "Scroll past the end",
+      text: `overscroll bottom padding ${"Add space below the last message so you can scroll it above the message box."} ${"Extra space"}`,
       node: <ScrollPastControl />,
     },
     {
       category: "transcript",
-      group: t("Scrolling"),
-      label: t("Fade above the message box"),
-      text: `gradient mask composer message box ${CHAT_FADE_FIELDS.map((f) => `${t(f.label)} ${t(f.hint)}`).join(" ")}`,
+      group: "Scrolling",
+      label: "Fade above the message box",
+      text: `gradient mask composer message box ${CHAT_FADE_FIELDS.map((f) => `${f.label} ${f.hint}`).join(" ")}`,
       node: <ChatFadeControl expandByDefault={expandDetails} />,
     },
     {
       category: "transcript",
-      group: t("Message box"),
-      label: t("Ask only behavior"),
-      text: `question once sticky ${ASK_MODES.map((m) => `${t(m.label)} ${t(m.hint)}`).join(" ")}`,
+      group: "Message box",
+      label: "Ask only behavior",
+      text: `question once sticky ${ASK_MODES.map((m) => `${m.label} ${m.hint}`).join(" ")}`,
       node: (
         <div role="radiogroup" aria-labelledby="ask-mode-label">
           <div
             id="ask-mode-label"
             className="px-2 pt-1 pb-1 text-ui text-neutral-300"
           >
-            {t("Ask only behavior")}
+            Ask only behavior
             <span className="block text-meta text-neutral-500">
-              {t(
-                "Choose when the message box’s ? button switches off after you enable it.",
-              )}
+              Choose when the message box’s ? button switches off after you
+              enable it.
             </span>
           </div>
           {ASK_MODES.map((m) => (
@@ -1082,9 +1070,9 @@ export function Settings({
                 className="size-3.5 shrink-0 accent-amber-400"
               />
               <span className="flex-1">
-                {t(m.label)}
+                {m.label}
                 <span className="block text-meta text-neutral-500">
-                  {t(m.hint)}
+                  {m.hint}
                 </span>
               </span>
             </OptionRow>
@@ -1094,19 +1082,18 @@ export function Settings({
     },
     {
       category: "sessions",
-      label: t("Sort sessions by"),
-      text: `sort order list ${SESSION_SORTS.map((s) => t(s.label)).join(" ")}`,
+      label: "Sort sessions by",
+      text: `sort order list ${SESSION_SORTS.map((s) => s.label).join(" ")}`,
       node: (
         <div role="radiogroup" aria-labelledby="session-sort-label">
           <div
             id="session-sort-label"
             className="px-2 pt-1 pb-1 text-ui text-neutral-300"
           >
-            {t("Sort sessions by")}
+            Sort sessions by
             <span className="block text-meta text-neutral-500">
-              {t(
-                "Choose the order of unpinned sessions in the sidebar. Pinned sessions stay at the top.",
-              )}
+              Choose the order of unpinned sessions in the sidebar. Pinned
+              sessions stay at the top.
             </span>
           </div>
           {SESSION_SORTS.map((s) => (
@@ -1119,7 +1106,7 @@ export function Settings({
                 onChange={() => onSessionSort(s.id)}
                 className="size-3.5 shrink-0 accent-amber-400"
               />
-              <span className="flex-1">{t(s.label)}</span>
+              <span className="flex-1">{s.label}</span>
             </OptionRow>
           ))}
         </div>
@@ -1127,24 +1114,23 @@ export function Settings({
     },
     {
       category: "sessions",
-      label: t("Unnamed session titles"),
-      text: `name first latest last recent prompt message ${t("First prompt")} ${t("Latest prompt")} ${t("Use the first or latest prompt for unnamed sessions. Renaming a session overrides this choice.")}`,
+      label: "Unnamed session titles",
+      text: `name first latest last recent prompt message ${"First prompt"} ${"Latest prompt"} ${"Use the first or latest prompt for unnamed sessions. Renaming a session overrides this choice."}`,
       node: (
         <div role="radiogroup" aria-labelledby="session-titles-label">
           <div
             id="session-titles-label"
             className="px-2 pt-1 pb-1 text-ui text-neutral-300"
           >
-            {t("Unnamed session titles")}
+            Unnamed session titles
             <span className="block text-meta text-neutral-500">
-              {t(
-                "Use the first or latest prompt for unnamed sessions. Renaming a session overrides this choice.",
-              )}
+              Use the first or latest prompt for unnamed sessions. Renaming a
+              session overrides this choice.
             </span>
           </div>
           {[
-            { latest: false, label: t("First prompt") },
-            { latest: true, label: t("Latest prompt") },
+            { latest: false, label: "First prompt" },
+            { latest: true, label: "Latest prompt" },
           ].map((m) => (
             <OptionRow key={m.label} selected={m.latest === latestPrompt}>
               <input
@@ -1162,17 +1148,17 @@ export function Settings({
     },
     {
       category: "sessions",
-      label: t("Session title lines"),
-      text: `session list name wrap new line multiline ${t("Maximum lines per sidebar title. All shows the full title.")} ${t("All")}`,
+      label: "Session title lines",
+      text: `session list name wrap new line multiline ${"Maximum lines per sidebar title. All shows the full title."} ${"All"}`,
       node: (
         <div role="radiogroup" aria-labelledby="session-lines-label">
           <div
             id="session-lines-label"
             className="px-2 pt-1 pb-1 text-ui text-neutral-300"
           >
-            {t("Session title lines")}
+            Session title lines
             <span className="block text-meta text-neutral-500">
-              {t("Maximum lines per sidebar title. All shows the full title.")}
+              Maximum lines per sidebar title. All shows the full title.
             </span>
           </div>
           {SESSION_LINES.map((m) => (
@@ -1188,7 +1174,7 @@ export function Settings({
                 }}
                 className="size-3.5 shrink-0 accent-amber-400"
               />
-              <span className="flex-1">{t(m.label)}</span>
+              <span className="flex-1">{m.label}</span>
             </OptionRow>
           ))}
         </div>
@@ -1196,8 +1182,8 @@ export function Settings({
     },
     {
       category: "sessions",
-      label: t("Show attachment previews"),
-      text: `text image pasted files thumbnails ${t("Show text and image attachment chips in the session list.")}`,
+      label: "Show attachment previews",
+      text: `text image pasted files thumbnails ${"Show text and image attachment chips in the session list."}`,
       node: (
         <OptionRow>
           <input
@@ -1207,9 +1193,9 @@ export function Settings({
             className="size-4 shrink-0 accent-amber-400"
           />
           <span className="flex-1">
-            {t("Show attachment previews")}
+            Show attachment previews
             <span className="block text-meta text-neutral-500">
-              {t("Show text and image attachment chips in the session list.")}
+              Show text and image attachment chips in the session list.
             </span>
           </span>
         </OptionRow>
@@ -1217,25 +1203,25 @@ export function Settings({
     },
     {
       category: "instructions",
-      label: t("Agent instructions"),
+      label: "Agent instructions",
       text: "global local project AGENTS.md agent.md instructions",
       node: <AgentInstructions cwd={cwd} open={open} />,
     },
     {
       category: "automatic",
-      label: t("Automatic actions"),
+      label: "Automatic actions",
       text: "commit naming message model session naming title model conversation summary compaction automatic summarize when context is full tool log reduction model provider gpt reducer compact rename history background SoL-Pi Packages",
       node: <AutomaticActions />,
     },
     {
       category: "tools",
-      label: t("Native codemode"),
+      label: "Native codemode",
       text: "native codemode code mode codex notebook tools off on only",
       node: <CodemodeSettings open={open} />,
     },
     {
       category: "notifications",
-      label: t("Notify when the agent finishes"),
+      label: "Notify when the agent finishes",
       text: `alert desktop done ${notifyHint}`,
       node: (
         <div className="space-y-2">
@@ -1248,7 +1234,7 @@ export function Settings({
               className="size-4 shrink-0 accent-amber-400"
             />
             <span className="flex-1">
-              {t("Notify when the agent finishes")}
+              Notify when the agent finishes
               <span className="block text-meta text-neutral-500">
                 {notifyHint}
               </span>
@@ -1261,7 +1247,7 @@ export function Settings({
             }
             onClick={testNotification}
           >
-            {t("Send test notification")}
+            Send test notification
           </Button>
           {notificationStatus && (
             <p role="status" className="text-meta text-neutral-500">
@@ -1273,7 +1259,7 @@ export function Settings({
     },
     {
       category: "general",
-      label: t("Expand advanced controls by default"),
+      label: "Expand advanced controls by default",
       text: "collapse open default advanced controls chat fade sliders",
       node: (
         <OptionRow>
@@ -1287,11 +1273,10 @@ export function Settings({
             className="size-4 shrink-0 accent-amber-400"
           />
           <span className="flex-1">
-            {t("Expand advanced controls by default")}
+            Expand advanced controls by default
             <span className="block text-meta text-neutral-500">
-              {t(
-                "Open advanced controls automatically, such as the sliders for fading above the message box.",
-              )}
+              Open advanced controls automatically, such as the sliders for
+              fading above the message box.
             </span>
           </span>
         </OptionRow>
@@ -1307,36 +1292,33 @@ export function Settings({
       else if (!keys) look = "bg-neutral-800 text-neutral-500";
       return {
         category: "shortcuts" as const,
-        label: t(s.label),
+        label: s.label,
         text: `shortcut hotkey keys ${shown}`,
         node: (
           <div
             className={`flex items-center gap-1 rounded-sm py-1 pr-1 pl-2 text-ui hover:bg-neutral-900 ${recording === s.id ? "bg-neutral-900" : ""}`}
           >
-            <span className="flex-1">{t(s.label)}</span>
+            <span className="flex-1">{s.label}</span>
             {recording === s.id ? (
               <kbd className={`${chip} bg-amber-900/40 text-amber-200`}>
-                {t("Press keys…")}
+                Press keys…
               </kbd>
             ) : (
               <kbd
                 title={
                   blocked
-                    ? t(
-                        "Your browser keeps {keys} for itself, so this shortcut will not work.",
-                        { keys: shown },
-                      )
+                    ? `Your browser keeps ${shown} for itself, so this shortcut will not work.`
                     : undefined
                 }
                 className={`${chip} ${look}`}
               >
-                {shown || t("Blank")}
+                {shown || "Blank"}
               </kbd>
             )}
             {keys !== s.keys && (
               <IconButton
                 size="sm"
-                label={t("Restore default")}
+                label="Restore default"
                 onClick={() => setBindings(writeBinding(s.id, s.keys))}
               >
                 <ArrowCounterClockwise size={14} />
@@ -1345,7 +1327,7 @@ export function Settings({
             {keys && (
               <IconButton
                 size="sm"
-                label={t("Remove shortcut")}
+                label="Remove shortcut"
                 onClick={() => setBindings(writeBinding(s.id, ""))}
               >
                 <X size={14} />
@@ -1353,7 +1335,7 @@ export function Settings({
             )}
             <IconButton
               size="sm"
-              label={t("Change shortcut")}
+              label="Change shortcut"
               onClick={() => setRecording(s.id)}
             >
               <PencilSimple size={14} />
@@ -1372,7 +1354,7 @@ export function Settings({
         ? matches(
             query,
             i.label,
-            `${t(CATEGORIES.find((c) => c.id === i.category)?.label ?? "")} ${i.group ?? ""} ${i.text}`,
+            `${CATEGORIES.find((c) => c.id === i.category)?.label ?? ""} ${i.group ?? ""} ${i.text}`,
           )
         : i.category === category && ("none" as const),
     }))
@@ -1393,13 +1375,13 @@ export function Settings({
 
   return (
     <section
-      aria-label={t("Settings")}
+      aria-label="Settings"
       className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-neutral-950 text-neutral-100"
     >
-      <PanelHeader title={t("Settings")} onClose={onClose} />
+      <PanelHeader title="Settings" onClose={onClose} />
       <div className="flex min-h-0 flex-1">
         <nav
-          aria-label={t("Settings categories")}
+          aria-label="Settings categories"
           className="flex w-48 shrink-0 flex-col gap-0.5 overflow-y-auto border-r border-neutral-800 p-2"
         >
           <input
@@ -1414,8 +1396,8 @@ export function Settings({
               e.stopPropagation();
               setQuery("");
             }}
-            placeholder={t("Search settings")}
-            aria-label={t("Search settings")}
+            placeholder="Search settings"
+            aria-label="Search settings"
             className={`mb-2 w-full ${inputClass.sm}`}
           />
           {CATEGORIES.map((c) => (
@@ -1433,7 +1415,7 @@ export function Settings({
                 setCategory(c.id);
               }}
             >
-              {t(c.label)}
+              {c.label}
             </NavItem>
           ))}
         </nav>
@@ -1444,17 +1426,13 @@ export function Settings({
           >
             {searching && !shown.length && (
               <p className="px-2 text-ui text-neutral-500">
-                {t("No settings match “{query}”.", { query: query.trim() })}
+                {`No settings match “${query.trim()}”.`}
               </p>
             )}
             {CATEGORIES.filter((c) => hitCategories.has(c.id)).map((c, n) => (
-              <Section
-                key={c.id}
-                title={t(c.label)}
-                className={n ? "mt-6" : ""}
-              >
+              <Section key={c.id} title={c.label} className={n ? "mt-6" : ""}>
                 <p className="mb-4 px-2 text-meta text-neutral-500">
-                  {t(CATEGORY_HINTS[c.id])}
+                  {CATEGORY_HINTS[c.id]}
                 </p>
                 <div className="flex flex-col gap-2">
                   {Array.from(

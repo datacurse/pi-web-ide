@@ -47,7 +47,7 @@ import {
 } from "./prefs.js";
 import { Button, ListRow, PanelHeader, StripCell, sectionLabel } from "./ui.js";
 import { api, unwrap } from "./api.js";
-import { plural, t } from "./i18n.js";
+
 import { ScrollPane } from "./OverlayScrollbar.js";
 import { commitGraph, CommitGraph, CommitRefs } from "./CommitGraph.js";
 
@@ -127,7 +127,7 @@ function FileRow({
   return (
     <ListRow
       onClick={onOpen}
-      title={t("{path} — open diff", { path: short })}
+      title={`${short} — open diff`}
       style={{ paddingLeft: `${0.75 + depth}rem` }}
     >
       <FileGlyph name={name} size={13} />
@@ -150,18 +150,18 @@ function gitAgo(when: string, ago: boolean): string {
       /(\d+) (second|minute|hour|day|week|month|year)s?/g,
       (_, n: string, unit: string) => {
         const units: Record<string, string> = {
-          second: t("{n} sec", { n }),
-          minute: t("{n} min", { n }),
-          hour: t("{n} hr", { n }),
-          day: t("{n} d", { n }),
-          week: t("{n} wk", { n }),
-          month: t("{n} mo", { n }),
-          year: t("{n} yr", { n }),
+          second: `${n} sec`,
+          minute: `${n} min`,
+          hour: `${n} hr`,
+          day: `${n} d`,
+          week: `${n} wk`,
+          month: `${n} mo`,
+          year: `${n} yr`,
         };
         return units[unit];
       },
     );
-  return ago ? t("{time} ago", { time: text }) : text;
+  return ago ? `${text} ago` : text;
 }
 
 /** The checkbox that turns on looking one folder down for repositories. */
@@ -180,7 +180,7 @@ function NestedToggle({
         onChange={(e) => onChange(e.target.checked)}
         className="size-3.5 accent-amber-400"
       />
-      {t("Find repositories one folder down")}
+      Find repositories one folder down
     </label>
   );
 }
@@ -313,7 +313,7 @@ export function SourceControl({
       onChanges={noop}
       repos={
         <div className="shrink-0 border-b border-neutral-800">
-          <p className={`px-3 py-1.5 ${sectionLabel}`}>{t("Repositories")}</p>
+          <p className={`px-3 py-1.5 ${sectionLabel}`}>Repositories</p>
           {repos.map((r) => (
             <RepoRow
               key={r}
@@ -434,7 +434,7 @@ function RepoView({
    */
   const requestName = async (): Promise<string | null> => {
     setNaming(true);
-    setGitBusy(cwd, t("Naming…"));
+    setGitBusy(cwd, "Naming…");
     setError(null);
     try {
       const r = await api.git.name.$post({ json: { cwd } });
@@ -443,7 +443,7 @@ function RepoView({
         error?: string;
       };
       if (!r.ok || !body.message) {
-        setError(body.error ?? t("could not name this commit"));
+        setError(body.error ?? "could not name this commit");
         return null;
       }
       setMessage(body.message);
@@ -491,7 +491,7 @@ function RepoView({
         ok?: boolean;
         error?: string;
       };
-      if (!body.ok) setError(body.error ?? t("failed"));
+      if (!body.ok) setError(body.error ?? "failed");
       else setMessage("");
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -502,7 +502,7 @@ function RepoView({
   };
 
   const initRepo = async () => {
-    setGitBusy(cwd, t("Initializing…"));
+    setGitBusy(cwd, "Initializing…");
     setError(null);
     try {
       const r = await api.git.init.$post({ json: { cwd } });
@@ -510,7 +510,7 @@ function RepoView({
         ok?: boolean;
         error?: string;
       };
-      if (!body.ok) setError(body.error ?? t("failed"));
+      if (!body.ok) setError(body.error ?? "failed");
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -524,7 +524,7 @@ function RepoView({
       <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-neutral-950">
         <Header onClose={onClose} branch="" />
         <p className="p-3 text-ui text-neutral-500">
-          {t("This folder is not a git repository.")}
+          This folder is not a git repository.
         </p>
         <Button
           variant="primary"
@@ -533,7 +533,7 @@ function RepoView({
           disabled={running}
           title={cwd}
         >
-          {t("Initialize Repository")}
+          Initialize Repository
         </Button>
         {error && <p className="px-4 pb-2 text-meta text-red-300">{error}</p>}
         {notRepo}
@@ -557,7 +557,7 @@ function RepoView({
           value={message}
           onChange={(e) => setMessage(e.target.value)}
           rows={2}
-          placeholder={state?.suggestion || t("Message (Ctrl+Enter to commit)")}
+          placeholder={state?.suggestion || "Message (Ctrl+Enter to commit)"}
           onKeyDown={(e) => {
             if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
               e.preventDefault();
@@ -581,13 +581,13 @@ function RepoView({
               // The accent every other checkbox in the app uses (Settings.tsx).
               className="size-3.5 accent-amber-400"
             />
-            {t("Auto-name commits")}
+            Auto-name commits
           </label>
           <StripCell
             onClick={() => void requestName()}
             disabled={naming || running || !dirty}
-            label={t("Auto-name this commit")}
-            title={t("Write the message with a model that reads the diff")}
+            label="Auto-name this commit"
+            title="Write the message with a model that reads the diff"
           >
             <Sparkle
               size={16}
@@ -605,12 +605,10 @@ function RepoView({
           }
           title={
             dirty
-              ? plural(
-                  state?.changed ?? 0,
-                  "Commit {n} file and push",
-                  "Commit {n} files and push",
-                )
-              : t("Push what is already committed")
+              ? (state?.changed ?? 0) === 1
+                ? `Commit ${state?.changed ?? 0} file and push`
+                : `Commit ${state?.changed ?? 0} files and push`
+              : "Push what is already committed"
           }
           /*
            * The app's primary button, not a blue one: `amber-500` under
@@ -624,9 +622,7 @@ function RepoView({
             className={running ? "animate-spin" : undefined}
           />
           {busyNow ??
-            (dirty
-              ? t("Commit & Push {n}", { n: state?.changed ?? 0 })
-              : t("Sync Changes"))}
+            (dirty ? `Commit & Push ${state?.changed ?? 0}` : "Sync Changes")}
           {/* What a sync would actually move, the way git counts it. */}
           {!dirty && (ahead > 0 || behind > 0) && (
             // Dimmed against the button's OWN ground rather than given a
@@ -653,20 +649,19 @@ function RepoView({
         <p
           className={`sticky top-0 z-10 bg-neutral-950 px-3 py-1.5 ${sectionLabel}`}
         >
-          {t("Changes")}
+          Changes
           {dirty && (
             <span className="ml-1 text-neutral-500">{state?.changed}</span>
           )}
         </p>
         {files === null ? (
           <p className="px-3 py-2 text-meta text-neutral-500">
-            {t("Reading the working tree…")}
+            Reading the working tree…
           </p>
         ) : files.length === 0 ? (
           <p className="px-3 py-2 text-meta text-neutral-500">
-            {t(
-              "Nothing changed. Uncommitted edits — the agent's or your own — show up here.",
-            )}
+            Nothing changed. Uncommitted edits — the agent's or your own — show
+            up here.
           </p>
         ) : (
           files.map((f) => (
@@ -687,7 +682,7 @@ function RepoView({
         <p
           className={`sticky top-0 z-10 bg-neutral-950 px-3 py-1.5 ${sectionLabel}`}
         >
-          {t("Commits")}
+          Commits
         </p>
         {commitGraph(commits).map(({ commit: c, ...graph }) => {
           const expanded = open[c.hash] === true;
@@ -744,13 +739,13 @@ function RepoView({
 /** The panel's title row. Its own component only because two returns use it. */
 function Header({ branch, onClose }: { branch: string; onClose: () => void }) {
   return (
-    <PanelHeader title={t("Source Control")} onClose={onClose} cells>
+    <PanelHeader title="Source Control" onClose={onClose} cells>
       {/* The branch is a LABEL, not an action: same dim mono the rest of the
 			    app uses for paths, rather than the accent, which in this window
 			    means "working" and would read as a live session. */}
       {branch && (
         <span
-          title={t("On branch {branch}", { branch })}
+          title={`On branch ${branch}`}
           className="min-w-0 fade-end font-mono text-meta text-neutral-500"
         >
           {branch}

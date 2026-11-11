@@ -8,7 +8,7 @@ import {
 } from "react";
 import { X } from "@phosphor-icons/react";
 import type { PiImage } from "../shared/types.js";
-import { t } from "./i18n.js";
+
 import { Button, IconButton, inputClass } from "./ui.js";
 import {
   annotationReference,
@@ -248,12 +248,12 @@ export function Lightbox({
         canvas.width = size.width;
         canvas.height = size.height;
         const context = canvas.getContext("2d");
-        if (!context) throw new Error(t("Could not render annotations."));
+        if (!context) throw new Error("Could not render annotations.");
         context.drawImage(image.current, 0, 0);
         context.drawImage(overlay, 0, 0);
         const exportedSrc = canvas.toDataURL("image/png");
         if (!exportedSrc.startsWith("data:image/png;base64,"))
-          throw new Error(t("Could not render annotations."));
+          throw new Error("Could not render annotations.");
         const reference = `${annotationReference(chosen, size.width, size.height)}: ${description}`;
         if (
           mounted.current &&
@@ -282,39 +282,31 @@ export function Lightbox({
   return (
     <div
       role="dialog"
-      aria-label={t("Attachment")}
+      aria-label="Attachment"
       style={{ bottom }}
       className="pointer-events-none fixed inset-x-0 top-0 z-50 flex items-center justify-center p-6"
     >
       <div className="pointer-events-auto flex max-h-full max-w-full flex-col overflow-hidden rounded-md border-2 border-neutral-200 bg-neutral-950 shadow-2xl">
         <div className="flex flex-wrap items-center gap-1 border-b border-neutral-800 p-2">
           <Button size="sm" onClick={fit}>
-            {t("Fit")}
+            Fit
           </Button>
           <Button size="sm" onClick={() => zoom(1 / view.scale)}>
             100%
           </Button>
-          <Button
-            size="sm"
-            aria-label={t("Zoom out")}
-            onClick={() => zoom(0.8)}
-          >
+          <Button size="sm" aria-label="Zoom out" onClick={() => zoom(0.8)}>
             −
           </Button>
-          <Button
-            size="sm"
-            aria-label={t("Zoom in")}
-            onClick={() => zoom(1.25)}
-          >
+          <Button size="sm" aria-label="Zoom in" onClick={() => zoom(1.25)}>
             +
           </Button>
           {(
             [
-              ["hand", t("Pan")],
-              ["select", t("Select")],
-              ["arrow", t("Arrow")],
-              ["area", t("Rectangle")],
-              ["pen", t("Pen")],
+              ["hand", "Pan"],
+              ["select", "Select"],
+              ["arrow", "Arrow"],
+              ["area", "Rectangle"],
+              ["pen", "Pen"],
             ] as [Tool, string][]
           ).map(([value, label]) => (
             <Button
@@ -328,9 +320,9 @@ export function Lightbox({
             </Button>
           ))}
           <label className="text-meta text-neutral-400">
-            {t("Color")}{" "}
+            Color{" "}
             <select
-              aria-label={t("Color")}
+              aria-label="Color"
               className={inputClass.sm}
               disabled={busy}
               value={color}
@@ -351,19 +343,15 @@ export function Lightbox({
             >
               {COLORS.map((value, i) => (
                 <option key={value} value={value}>
-                  {
-                    [t("Red"), t("Yellow"), t("Green"), t("Blue"), t("White")][
-                      i
-                    ]
-                  }
+                  {["Red", "Yellow", "Green", "Blue", "White"][i]}
                 </option>
               ))}
             </select>
           </label>
           <label className="text-meta text-neutral-400">
-            {t("Stroke")}{" "}
+            Stroke{" "}
             <select
-              aria-label={t("Stroke")}
+              aria-label="Stroke"
               className={inputClass.sm}
               disabled={busy}
               value={stroke}
@@ -399,7 +387,7 @@ export function Lightbox({
               onChange({ ...workspace, marks: history.current.pop()! });
             }}
           >
-            {t("Undo")}
+            Undo
           </Button>
           <Button
             size="sm"
@@ -409,10 +397,10 @@ export function Lightbox({
               onChange({ ...workspace, marks: future.current.pop()! });
             }}
           >
-            {t("Redo")}
+            Redo
           </Button>
           <IconButton
-            label={t("Close")}
+            label="Close"
             size="sm"
             className="ml-auto"
             onClick={onClose}
@@ -454,7 +442,7 @@ export function Lightbox({
               ref={image}
               src={src}
               draggable={false}
-              alt={t("Attachment, full size")}
+              alt="Attachment, full size"
               className="pointer-events-none block"
               onLoad={(e) =>
                 setSize({
@@ -485,8 +473,8 @@ export function Lightbox({
             <>
               <span>{markLabel(chosen)}</span>
               <input
-                aria-label={t("Describe this mark")}
-                placeholder={t("Describe this mark")}
+                aria-label="Describe this mark"
+                placeholder="Describe this mark"
                 className={`${inputClass.sm} flex-1`}
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
@@ -505,7 +493,7 @@ export function Lightbox({
                   setSelected(null);
                 }}
               >
-                {t("Delete")}
+                Delete
               </Button>
               <Button
                 size="sm"
@@ -513,19 +501,15 @@ export function Lightbox({
                 disabled={busy || !onAdd}
                 onClick={() => void add()}
               >
-                {t("Add to prompt")}
+                Add to prompt
               </Button>
             </>
           ) : (
             <span>
-              {t(
-                "Draw a mark, then select it to add a reference to your prompt.",
-              )}
+              Draw a mark, then select it to add a reference to your prompt.
             </span>
           )}
-          <span>
-            {t("Annotations are sent only when you choose Add to prompt.")}
-          </span>
+          <span>Annotations are sent only when you choose Add to prompt.</span>
           {error && (
             <span role="alert" className="text-red-400">
               {error}

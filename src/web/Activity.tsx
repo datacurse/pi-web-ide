@@ -20,7 +20,6 @@ import {
   type ActivityStep,
   type TurnActivity,
 } from "../shared/activity.js";
-import { t, plural } from "./i18n.js";
 
 const PHASE_STYLE = {
   requesting: {
@@ -71,43 +70,38 @@ function rememberBreakdownOpen(start: number, open: boolean): void {
 function phaseTitle(kind: ActivityPhase): string {
   switch (kind) {
     case "requesting":
-      return t("Requesting");
+      return "Requesting";
     case "thinking":
-      return t("Thinking");
+      return "Thinking";
     case "receiving":
-      return t("Receiving");
+      return "Receiving";
     case "doing":
-      return t("Doing");
+      return "Doing";
     case "retry":
-      return t("Waiting to retry");
+      return "Waiting to retry";
     case "compaction":
-      return t("Compacting conversation");
+      return "Compacting conversation";
     case "input":
-      return t("Waiting for your input");
+      return "Waiting for your input";
   }
 }
 
 function phaseHint(kind: ActivityPhase): string | undefined {
   if (kind === "requesting")
-    return t(
-      "Recorded preparation up to the provider request hook. Browser delivery and exact upload completion are not measured.",
-    );
+    return "Recorded preparation up to the provider request hook. Browser delivery and exact upload completion are not measured.";
   return kind === "thinking"
-    ? t(
-        "Waiting from the provider request hook until visible model output, including hidden reasoning and network waiting—not isolated thinking time.",
-      )
+    ? "Waiting from the provider request hook until visible model output, including hidden reasoning and network waiting—not isolated thinking time."
     : undefined;
 }
 
 function phaseLabel(step: ActivityStep): string {
   if (step.kind === "tools")
-    return t("Running {tools}", { tools: step.label.replace(/^Running /, "") });
+    return `Running ${step.label.replace(/^Running /, "")}`;
   const status = /^Provider responded \(HTTP (\d+)\)$/.exec(step.label);
-  if (status)
-    return t("Provider responded (HTTP {status})", { status: status[1] });
+  if (status) return `Provider responded (HTTP ${status[1]})`;
   if (step.kind === "retry")
-    return step.label.replace("Waiting to retry", t("Waiting to retry"));
-  return t(step.label);
+    return step.label.replace("Waiting to retry", "Waiting to retry");
+  return step.label;
 }
 
 export function PhaseIcon({
@@ -315,9 +309,7 @@ function RoundGroup({
         ) : (
           <>
             {tools.some((tool) => tool.label === "codemode") && (
-              <p className="mb-2 text-meta text-neutral-500">
-                {t("via codemode")}
-              </p>
+              <p className="mb-2 text-meta text-neutral-500">via codemode</p>
             )}
             {calls.map((tool) => (
               <div
@@ -328,7 +320,7 @@ function RoundGroup({
                   className={`min-w-0 flex-1 break-words font-mono ${tool.isError ? "text-red-400" : "text-neutral-400"}`}
                 >
                   {tool.label}
-                  {tool.isError ? ` · ${t("failed")}` : ""}
+                  {tool.isError ? ` · ${"failed"}` : ""}
                 </span>
                 <span className="shrink-0 tabular-nums text-neutral-500">
                   {activityDuration((tool.end ?? now) - tool.start)}
@@ -358,7 +350,7 @@ export function ActivityBreakdown({
     [activity],
   );
   return (
-    <ol className="mt-1 space-y-0" aria-label={t("Turn timeline")}>
+    <ol className="mt-1 space-y-0" aria-label="Turn timeline">
       {rounds.map((round, index) => {
         const content = renderContent?.(round, now);
         if (renderContent && content == null) return null;
@@ -366,11 +358,11 @@ export function ActivityBreakdown({
         const failed = tools.some((tool) => tool.isError);
         const completed = round.end !== undefined;
         const outcome = failed
-          ? t("failed")
+          ? "failed"
           : completed
-            ? t("Completed")
-            : t("In progress");
-        const timing = `${t("Round {n}", { n: index + 1 })} · ${outcome} · ${activityDuration((round.end ?? now) - round.start)}`;
+            ? "Completed"
+            : "In progress";
+        const timing = `${`Round ${index + 1}`} · ${outcome} · ${activityDuration((round.end ?? now) - round.start)}`;
         return (
           <li
             key={round.id}
@@ -430,7 +422,7 @@ export function ActivityHistory({
   return (
     <span
       className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1"
-      aria-label={t("Elapsed activity history, not completion progress")}
+      aria-label="Elapsed activity history, not completion progress"
     >
       {phases.map((kind) => {
         const Icon = PHASE_STYLE[kind].icon;
@@ -513,7 +505,7 @@ export function ActivityPanel({
           role="status"
         >
           {waitingForInput
-            ? t("Waiting for your input")
+            ? "Waiting for your input"
             : ["requesting", "thinking"].includes(current.kind)
               ? phaseTitle(current.kind)
               : phaseLabel(step)}
@@ -537,7 +529,7 @@ export function ActivityPanel({
           setOpenOverride(next);
         }}
         aria-expanded={breakdownAvailable ? open : undefined}
-        aria-label={t("Toggle breakdown")}
+        aria-label="Toggle breakdown"
       >
         <span className="flex shrink-0 items-center gap-3">
           <span className="flex items-center gap-1">
@@ -545,7 +537,7 @@ export function ActivityPanel({
               <ListNumbers size={12} aria-hidden />
             </span>
             <span
-              aria-label={plural(roundCount, "1 round", "{n} rounds")}
+              aria-label={roundCount === 1 ? "1 round" : `${roundCount} rounds`}
               className="tabular-nums"
             >
               {roundCount}
@@ -553,7 +545,7 @@ export function ActivityPanel({
           </span>
           <span
             className="flex items-center gap-1"
-            title={`${t("Total time")} · ${activityDuration((activity.end ?? now) - activity.start)}`}
+            title={`${"Total time"} · ${activityDuration((activity.end ?? now) - activity.start)}`}
           >
             <span className="flex w-3 shrink-0 justify-center">
               <Clock size={12} aria-hidden />
@@ -567,7 +559,7 @@ export function ActivityPanel({
         {activity.end === undefined && silence >= 3000 && (
           <span className="shrink-0">
             {" "}
-            · {t("No new output for")}{" "}
+            · No new output for{" "}
             <span className="tabular-nums">{activityDuration(silence)}</span>
           </span>
         )}
@@ -633,8 +625,8 @@ export function TurnStatus({
         ) : (
           <div className="text-body text-neutral-400" role="status">
             {waitingForInput
-              ? t("Waiting for your input")
-              : t("Waiting for pi activity")}{" "}
+              ? "Waiting for your input"
+              : "Waiting for pi activity"}{" "}
             · {activityDuration(now - (since ?? mounted))}
           </div>
         )}

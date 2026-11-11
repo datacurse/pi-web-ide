@@ -1,28 +1,20 @@
-import { type SyntheticEvent, useEffect, useMemo, useState } from "react";
-import { Star } from "@phosphor-icons/react";
+import {
+  type SyntheticEvent,
+  useEffect,
+  useMemo,
+  useRef,
+  useId,
+  useState,
+} from "react";
+import { CaretDown, Star } from "@phosphor-icons/react";
 import { Button } from "./ui.js";
+import { ScrollPane } from "./OverlayScrollbar.js";
 import { api } from "./api.js";
-import { t } from "./i18n.js";
+
 import { thinkingChoices } from "../shared/thinking.js";
 import { supportsFastMode } from "../shared/fastMode.js";
 
-/**
- * Composer controls for the active session's model: one select for the model
- * (grouped by provider), one for reasoning effort.
- *
- * All native <select>. A custom dropdown bought us a filter box and cost
- * click-outside handling, escape handling, and a scroll container; provider
- * `<optgroup>`s keep the one list scannable without it. `field-sizing: content`
- * sizes each select to its CURRENT option rather than its widest one, which
- * left a gap before the chevron; browsers without it fall back to `max-w-44`.
- *
- * Models are fetched once per mount and cached — the available set only
- * changes when auth changes, which happens outside this app. Switching is
- * disabled while streaming (see registry.setModel for why) and shown as a
- * disabled control rather than hidden, so it is clear the feature exists but
- * is momentarily unavailable. The thinking select is NOT disabled: it takes
- * effect on the next turn, so there is nothing in flight for it to disturb.
- */
+/** Composer controls with cross-browser startup default stars. */
 export function ModelSelector({
   model,
   disabled,
@@ -76,7 +68,7 @@ export function ModelSelector({
         }
         if (cancelled) return;
         if (!d.models?.length)
-          throw new Error(t("No authenticated models available"));
+          throw new Error("No authenticated models available");
         setModels(d.models);
         setDefaultModel(d.default ?? null);
         setDefaultThinking(d.defaultThinking ?? null);
@@ -87,10 +79,8 @@ export function ModelSelector({
         if (!cancelled)
           setCatalogError(
             controller.signal.aborted
-              ? t("Model list timed out. Retry to reconnect.")
-              : t("Could not load models: {error}", {
-                  error: err instanceof Error ? err.message : String(err),
-                }),
+              ? "Model list timed out. Retry to reconnect."
+              : `Could not load models: ${err instanceof Error ? err.message : String(err)}`,
           );
       } finally {
         window.clearTimeout(timeout);
@@ -126,173 +116,132 @@ export function ModelSelector({
     if (r.ok) set(next);
     else
       alert(
-        t("Could not save default: {error}", {
-          error:
-            ((await r.json().catch(() => ({}))) as { error?: string }).error ??
-            r.status,
-        }),
+        `Could not save default: ${
+          ((await r.json().catch(() => ({}))) as { error?: string }).error ??
+          r.status
+        }`,
       );
   };
 
-  // Pills, not boxed inputs: these live INSIDE the composer, where a
-  // bordered field inside a bordered field is two edges for one control.
-  // Sans, like the rest of the composer.
-  const cls =
-    "pill-select field-sizing-content max-w-44 truncate rounded-full bg-transparent px-2 py-1 text-meta";
-  const tone = disabled
-    ? "cursor-not-allowed text-neutral-600"
-    : "text-neutral-300 hover:bg-neutral-800";
-
   return (
     <div className="relative flex items-center gap-0.5">
-      <select
-        data-custom="composer pill"
+      <PillPicker
         value={model ?? ""}
+        label={model?.split("/").pop() ?? "(no model)"}
         disabled={disabled || models.length === 0}
         title={
           disabled
-            ? t("Cannot switch models while streaming")
+            ? "Cannot switch models while streaming"
             : loading
-              ? t("Loading models…")
-              : (catalogError ?? model ?? t("Switch model"))
+              ? "Loading models…"
+              : (catalogError ?? model ?? "Switch model")
         }
-        onChange={(e) => onChange(e.target.value)}
-        className={`${cls} ${tone}`}
-      >
-        {/* The session's model may be missing from the list (not fetched
-				    yet, or auth changed); show it rather than a wrong one. */}
-        {(!model || !models.includes(model)) && (
-          <option value={model ?? ""}>
-            {model?.split("/").pop() ?? t("(no model)")}
-          </option>
-        )}
-        {providers.map((p) => (
-          <optgroup key={p} label={p}>
-            {models
-              .filter((m) => m.startsWith(`${p}/`))
-              .map((m) => (
-                <option key={m} value={m}>
-                  <DefaultStar
-                    what="model"
-                    saved={m === defaultModel}
-                    onToggle={() =>
-                      toggleDefault(
-                        (model) =>
-                          api["default-model"].$post({ json: { model } }),
-                        defaultModel,
-                        m,
-                        setDefaultModel,
-                      )
-                    }
-                  />
-                  {m.slice(p.length + 1)}
-                </option>
-              ))}
-          </optgroup>
-        ))}
-      </select>
-
+        what="model"
+        groups={providers.map((provider) => ({
+          label: provider,
+          options: models
+            .filter((m) => m.startsWith(`${provider}/`))
+            .map((m) => ({ value: m, label: m.slice(provider.length + 1) })),
+        }))}
+        saved={defaultModel}
+        onChange={onChange}
+        onDefault={(value) =>
+          toggleDefault(
+            (model) => api["default-model"].$post({ json: { model } }),
+            defaultModel,
+            value,
+            setDefaultModel,
+          )
+        }
+      />
       {thinking.levels.length > 0 && (
-        <select
-          data-custom="composer pill"
+        <PillPicker
           value={selectedThinking ?? ""}
-          title={t("Reasoning effort — applies from the next turn")}
-          onChange={(e) => onThinkingChange(e.target.value)}
-          className={`${cls} text-neutral-300 hover:bg-neutral-800`}
-        >
-          {/* pi can report a level outside the model's own list (a
-					    session resumed under a different model). Show it rather
-					    than silently displaying the wrong one. */}
-          {selectedThinking !== undefined &&
-            !thinking.levels.includes(selectedThinking) && (
-              <option value={selectedThinking}>{selectedThinking}</option>
-            )}
-          {thinking.levels.map((l) => (
-            <option key={l} value={l}>
-              <DefaultStar
-                what="reasoning level"
-                saved={l === savedThinking}
-                onToggle={() =>
-                  toggleDefault(
-                    (level) =>
-                      api["default-thinking"].$post({ json: { level } }),
-                    savedThinking ?? null,
-                    l,
-                    setDefaultThinking,
-                  )
-                }
-              />
-              {l}
-            </option>
-          ))}
-        </select>
+          label={selectedThinking ?? "Reasoning"}
+          title="Reasoning effort — applies from the next turn"
+          what="reasoning level"
+          groups={[
+            {
+              options: thinking.levels.map((value) => ({
+                value,
+                label: value,
+              })),
+            },
+          ]}
+          saved={savedThinking ?? null}
+          onChange={onThinkingChange}
+          onDefault={(value) =>
+            toggleDefault(
+              (level) => api["default-thinking"].$post({ json: { level } }),
+              savedThinking ?? null,
+              value,
+              setDefaultThinking,
+            )
+          }
+        />
       )}
-
       {supportsFastMode(model) && onFastChange && (
-        <select
-          data-custom="composer pill"
+        <PillPicker
           value={fastMode ? "on" : "off"}
+          label={
+            fastMode
+              ? model === "openai-codex/gpt-6.1-sol"
+                ? "Fast · 2.5× usage"
+                : "Fast"
+              : "Standard"
+          }
           disabled={disabled || fastPending || fastMode === undefined}
           title={
             fastMode === undefined
-              ? t("Restart this session to use Fast mode")
+              ? "Restart this session to use Fast mode"
               : model === "openai-codex/gpt-6.1-sol"
-                ? t(
-                    "Fast mode — uses 2.5× subscription allowance; availability depends on your account",
-                  )
-                : t(
-                    "Fast mode — requests priority service; availability and pricing depend on your provider and account",
-                  )
+                ? "Fast mode — uses 2.5× subscription allowance; availability depends on your account"
+                : "Fast mode — requests priority service; availability and pricing depend on your provider and account"
           }
-          className={`${cls} text-neutral-300 hover:bg-neutral-800`}
-          onChange={async (event) => {
+          what="speed"
+          groups={[
+            {
+              options: [
+                { value: "off", label: "Standard" },
+                {
+                  value: "on",
+                  label:
+                    model === "openai-codex/gpt-6.1-sol"
+                      ? "Fast · 2.5× usage"
+                      : "Fast",
+                },
+              ],
+            },
+          ]}
+          saved={defaultFast}
+          onChange={async (value) => {
             setFastPending(true);
             try {
-              await onFastChange(event.target.value === "on");
+              await onFastChange(value === "on");
             } finally {
               setFastPending(false);
             }
           }}
-        >
-          {[
-            { value: "off", label: t("Standard") },
-            {
-              value: "on",
-              label:
-                model === "openai-codex/gpt-6.1-sol"
-                  ? t("Fast · 2.5× usage")
-                  : t("Fast"),
-            },
-          ].map(({ value, label }) => (
-            <option key={value} value={value}>
-              <DefaultStar
-                what="speed"
-                saved={defaultFast === value}
-                onToggle={() =>
-                  toggleDefault(
-                    (next) =>
-                      api["default-fast-mode"].$post({
-                        json: { enabled: next === null ? null : next === "on" },
-                      }),
-                    defaultFast,
-                    value,
-                    setDefaultFast,
-                  )
-                }
-              />
-              {label}
-            </option>
-          ))}
-        </select>
+          onDefault={(value) =>
+            toggleDefault(
+              (next) =>
+                api["default-fast-mode"].$post({
+                  json: { enabled: next === null ? null : next === "on" },
+                }),
+              defaultFast,
+              value,
+              setDefaultFast,
+            )
+          }
+        />
       )}
-
       {catalogError && (
         <Button
           size="sm"
           variant="ghost"
           onClick={() => setAttempt((n) => n + 1)}
         >
-          {t("Retry")}
+          Retry
         </Button>
       )}
       {(error || catalogError) && (
@@ -307,14 +256,7 @@ export function ModelSelector({
   );
 }
 
-/**
- * A star inside a pill's popup option: saves or clears that option as pi's
- * startup default. It must not also pick the option, and Chromium's
- * customizable select skips its option handling for a prevented event.
- * Cancelling pointerdown suppresses the mousedown/mouseup that would select;
- * the click is cancelled where it is handled. Other browsers render options
- * as plain text, so there the star simply does not appear.
- */
+/** Save a startup default without changing the active selection. */
 function DefaultStar({
   what,
   saved,
@@ -329,19 +271,22 @@ function DefaultStar({
     e.stopPropagation();
   };
   return (
-    <span
+    <button
+      data-custom="startup default star"
+      type="button"
+      aria-pressed={saved}
       title={
         what === "model"
           ? saved
-            ? t("Startup default model \u2014 click to clear")
-            : t("Make this the startup default model")
+            ? "Startup default model — click to clear"
+            : "Make this the startup default model"
           : what === "speed"
             ? saved
-              ? t("Startup default speed — click to clear")
-              : t("Make this the startup default speed")
+              ? "Startup default speed — click to clear"
+              : "Make this the startup default speed"
             : saved
-              ? t("Startup default reasoning level — click to clear")
-              : t("Make this the startup default reasoning level")
+              ? "Startup default reasoning level — click to clear"
+              : "Make this the startup default reasoning level"
       }
       onPointerDown={stop}
       onPointerUp={stop}
@@ -349,9 +294,171 @@ function DefaultStar({
         stop(e);
         onToggle();
       }}
-      className={`mr-2 inline-flex align-middle ${saved ? "text-amber-400" : "text-neutral-600 hover:text-neutral-300"}`}
+      className={`inline-flex size-control-sm shrink-0 items-center justify-center rounded-sm ${saved ? "text-amber-400" : "text-neutral-500 hover:text-neutral-300"}`}
     >
       <Star size={13} weight={saved ? "fill" : "regular"} />
-    </span>
+    </button>
+  );
+}
+
+/** Native popovers provide top-layer placement, Escape and outside-click dismissal. */
+function PillPicker({
+  value,
+  label,
+  title,
+  disabled,
+  groups,
+  saved,
+  what,
+  onChange,
+  onDefault,
+}: {
+  value: string;
+  label: string;
+  title: string;
+  disabled?: boolean;
+  groups: { label?: string; options: { value: string; label: string }[] }[];
+  saved: string | null;
+  what: "model" | "reasoning level" | "speed";
+  onChange: (value: string) => void;
+  onDefault: (value: string) => void;
+}) {
+  const id = useId();
+  const trigger = useRef<HTMLButtonElement>(null);
+  const popup = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
+  const [position, setPosition] = useState({
+    left: 0,
+    bottom: 0,
+    maxHeight: 0,
+  });
+
+  useEffect(() => {
+    if (disabled) popup.current?.hidePopover();
+  }, [disabled]);
+
+  return (
+    <>
+      <button
+        data-custom="composer pill"
+        ref={trigger}
+        type="button"
+        title={title}
+        disabled={disabled}
+        popoverTarget={id}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        onClick={() => {
+          const rect = trigger.current!.getBoundingClientRect();
+          setPosition({
+            left: Math.max(8, Math.min(rect.left, window.innerWidth - 328)),
+            bottom: window.innerHeight - rect.top + 4,
+            maxHeight: Math.max(
+              0,
+              Math.min(window.innerHeight * 0.6, rect.top - 12),
+            ),
+          });
+        }}
+        className="inline-flex max-w-44 items-center gap-1 rounded-full px-2 py-1 text-meta text-neutral-300 hover:bg-neutral-800 disabled:cursor-not-allowed disabled:text-neutral-600"
+      >
+        <span className="fade-end min-w-0 overflow-hidden whitespace-nowrap">
+          {label}
+        </span>
+        <CaretDown size={12} className="shrink-0" />
+      </button>
+      <div
+        ref={popup}
+        id={id}
+        popover="auto"
+        role="dialog"
+        aria-label={`Choose ${what} or startup default`}
+        onToggle={(event) => {
+          const next = event.newState === "open";
+          setOpen(next);
+          if (next) {
+            const selected = popup.current?.querySelector<HTMLButtonElement>(
+              '[data-current="true"]',
+            );
+            selected?.focus({ preventScroll: true });
+            selected?.scrollIntoView({ block: "nearest" });
+          }
+        }}
+        onKeyDown={(event) => {
+          if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key))
+            return;
+          const buttons = [
+            ...event.currentTarget.querySelectorAll<HTMLButtonElement>(
+              "button[data-choice]",
+            ),
+          ];
+          if (!buttons.length) return;
+          event.preventDefault();
+          const current = buttons.indexOf(
+            document.activeElement as HTMLButtonElement,
+          );
+          const index =
+            event.key === "Home"
+              ? 0
+              : event.key === "End"
+                ? buttons.length - 1
+                : (current +
+                    (event.key === "ArrowUp" ? -1 : 1) +
+                    buttons.length) %
+                  buttons.length;
+          buttons[index]?.focus();
+        }}
+        style={{
+          left: position.left,
+          bottom: position.bottom,
+          top: "auto",
+          width: "min(20rem, calc(100vw - 1rem))",
+        }}
+        className="m-0 overflow-hidden rounded-md border border-neutral-700 bg-neutral-900 p-1 text-neutral-200 shadow-xl"
+      >
+        <ScrollPane
+          style={{ maxHeight: position.maxHeight }}
+          innerClassName="py-1"
+        >
+          {groups.map((group, index) => (
+            <div key={group.label ?? index}>
+              {group.label && (
+                <div className="px-2 py-1 text-caption uppercase tracking-wide text-neutral-500">
+                  {group.label}
+                </div>
+              )}
+              {group.options.map((option) => (
+                <div
+                  key={option.value}
+                  className="flex items-center rounded-sm hover:bg-neutral-800 focus-within:bg-neutral-800"
+                >
+                  <DefaultStar
+                    what={what}
+                    saved={saved === option.value}
+                    onToggle={() => onDefault(option.value)}
+                  />
+                  <button
+                    data-custom="composer popup option"
+                    type="button"
+                    data-choice=""
+                    data-current={value === option.value}
+                    aria-current={value === option.value ? "true" : undefined}
+                    className={`min-w-0 flex-1 rounded-sm px-2 py-1 text-left text-ui focus-visible:outline focus-visible:outline-amber-400 ${value === option.value ? "text-amber-400" : "text-neutral-200"}`}
+                    onClick={() => {
+                      onChange(option.value);
+                      popup.current?.hidePopover();
+                      trigger.current?.focus();
+                    }}
+                  >
+                    <span className="fade-end block overflow-hidden whitespace-nowrap">
+                      {option.label}
+                    </span>
+                  </button>
+                </div>
+              ))}
+            </div>
+          ))}
+        </ScrollPane>
+      </div>
+    </>
   );
 }

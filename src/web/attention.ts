@@ -48,11 +48,10 @@ export function attentionRank(a: Attention): number {
   return a === "needs" ? 0 : a === "ready" ? 1 : 2;
 }
 
-/** The window title: waiting count, then `●` while anything works. */
+/** The window title keeps the waiting count; the favicon shows activity. */
 export function attentionTitle(states: Attention[], name: string): string {
   const waiting = states.filter((a) => a === "needs" || a === "ready").length;
-  const working = states.includes("working");
-  return `${waiting ? `${waiting} ` : ""}${working ? "\u25cf " : ""}${name}`;
+  return `${waiting ? `${waiting} ` : ""}${name}`;
 }
 
 /**

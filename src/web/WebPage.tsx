@@ -8,7 +8,6 @@ import {
 } from "@phosphor-icons/react";
 import { IconButton, IconLink, inputClass } from "./ui.js";
 import { writeStored } from "./tabStore.js";
-import { t } from "./i18n.js";
 
 // Never accept executable URLs. Bare local addresses use HTTP for dev servers.
 function pageUrl(value: string): string {
@@ -24,7 +23,7 @@ function pageUrl(value: string): string {
     url.username ||
     url.password
   )
-    throw new Error(t("Enter an HTTP or HTTPS URL without credentials."));
+    throw new Error("Enter an HTTP or HTTPS URL without credentials.");
   return url.href;
 }
 
@@ -64,7 +63,7 @@ export function WebPage({ entry, active }: { entry: string; active: boolean }) {
         setIndex(index + 1);
       }
     } catch {
-      setError(t("Enter a valid HTTP or HTTPS URL."));
+      setError("Enter a valid HTTP or HTTPS URL.");
     }
   };
 
@@ -78,7 +77,7 @@ export function WebPage({ entry, active }: { entry: string; active: boolean }) {
         }}
       >
         <IconButton
-          label={t("Back (address bar history)")}
+          label="Back (address bar history)"
           disabled={index === 0}
           onClick={() => {
             setError("");
@@ -88,7 +87,7 @@ export function WebPage({ entry, active }: { entry: string; active: boolean }) {
           <ArrowLeft size={16} />
         </IconButton>
         <IconButton
-          label={t("Forward (address bar history)")}
+          label="Forward (address bar history)"
           disabled={index >= history.length - 1}
           onClick={() => {
             setError("");
@@ -98,7 +97,7 @@ export function WebPage({ entry, active }: { entry: string; active: boolean }) {
           <ArrowRight size={16} />
         </IconButton>
         <IconButton
-          label={t("Reload page")}
+          label="Reload page"
           disabled={!url}
           onClick={() => setReload((n) => n + 1)}
         >
@@ -106,8 +105,8 @@ export function WebPage({ entry, active }: { entry: string; active: boolean }) {
         </IconButton>
         <input
           ref={input}
-          aria-label={t("Web address")}
-          placeholder={t("Enter URL, e.g. localhost:3000")}
+          aria-label="Web address"
+          placeholder="Enter URL, e.g. localhost:3000"
           className={`${inputClass.sm} min-w-0 flex-1`}
           value={address}
           onChange={(e) => setAddress(e.target.value)}
@@ -117,7 +116,7 @@ export function WebPage({ entry, active }: { entry: string; active: boolean }) {
           spellCheck={false}
         />
         {url && (
-          <IconLink label={t("Open externally")} href={url}>
+          <IconLink label="Open externally" href={url}>
             <ArrowSquareOut size={16} />
           </IconLink>
         )}
@@ -130,14 +129,14 @@ export function WebPage({ entry, active }: { entry: string; active: boolean }) {
       {url ? (
         <>
           <p className="border-b border-neutral-800 px-3 py-1 text-meta text-neutral-500">
-            {t(
-              "Some sites block embedding. Use Open externally if the page is blank. Navigation tracks addresses entered above, not links inside the page.",
-            )}
+            Some sites block embedding. Use Open externally if the page is
+            blank. Navigation tracks addresses entered above, not links inside
+            the page.
           </p>
           <iframe
             key={`${url}:${reload}`}
             src={url}
-            title={t("Web page: {url}", { url })}
+            title={`Web page: ${url}`}
             className="min-h-0 w-full flex-1 border-0 bg-white"
             sandbox="allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-downloads allow-modals"
             referrerPolicy="no-referrer"
@@ -146,8 +145,8 @@ export function WebPage({ entry, active }: { entry: string; active: boolean }) {
       ) : (
         <div className="m-auto flex flex-col items-center gap-3 px-4 text-center text-neutral-500">
           <Globe size={32} />
-          <p className="text-title text-neutral-200">{t("Open a web page")}</p>
-          <p>{t("Enter a website or local development server URL above.")}</p>
+          <p className="text-title text-neutral-200">Open a web page</p>
+          <p>Enter a website or local development server URL above.</p>
         </div>
       )}
     </div>

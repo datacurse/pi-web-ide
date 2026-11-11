@@ -35,7 +35,7 @@ import {
   sectionLabel,
   useBatches,
 } from "./ui.js";
-import { perLocale, plural, t } from "./i18n.js";
+
 import { ScrollPane } from "./OverlayScrollbar.js";
 
 /** The timestamp a row shows, which is always the one it is sorted by. */
@@ -50,26 +50,23 @@ export function timeAgo(iso: string | number, short = false): string {
     0,
     Math.floor((Date.now() - new Date(iso).getTime()) / 1000),
   );
-  if (s < 60) return short ? t("now") : t("just now");
+  if (s < 60) return short ? "now" : "just now";
   const m = Math.floor(s / 60);
-  if (m < 60) return short ? t("{n}m", { n: m }) : t("{n}m ago", { n: m });
+  if (m < 60) return short ? `${m}m` : `${m}m ago`;
   const h = Math.floor(m / 60);
-  if (h < 24) return short ? t("{n}h", { n: h }) : t("{n}h ago", { n: h });
+  if (h < 24) return short ? `${h}h` : `${h}h ago`;
   const d = Math.floor(h / 24);
-  if (d < 30) return short ? t("{n}d", { n: d }) : t("{n}d ago", { n: d });
+  if (d < 30) return short ? `${d}d` : `${d}d ago`;
   const mo = Math.floor(d / 30);
-  if (mo < 12) return short ? t("{n}mo", { n: mo }) : t("{n}mo ago", { n: mo });
+  if (mo < 12) return short ? `${mo}mo` : `${mo}mo ago`;
   const y = Math.floor(mo / 12);
-  return short ? t("{n}y", { n: y }) : t("{n}y ago", { n: y });
+  return short ? `${y}y` : `${y}y ago`;
 }
 
-const dateFmt = perLocale(
-  (l) =>
-    new Intl.DateTimeFormat(l, {
-      day: "numeric",
-      month: "long",
-    }),
-);
+const dateFmt = new Intl.DateTimeFormat(undefined, {
+  day: "numeric",
+  month: "long",
+});
 
 /**
  * Left panel: flat, read-only list of EVERY session in the project.
@@ -245,7 +242,7 @@ export function SessionList({
 			*/}
       <aside
         id="session-list"
-        aria-label={t("All sessions")}
+        aria-label="All sessions"
         // Right edge now, opposite the activity rail: `border-l` and the
         // drawer anchored to `right-0`, or it would slide in from the side it
         // no longer lives on.
@@ -273,8 +270,8 @@ export function SessionList({
         <div className="flex justify-end border-b border-neutral-800 px-2 py-1.5 wide:hidden">
           <IconButton
             onClick={onToggle}
-            label={t("Hide session list")}
-            title={t("Hide sessions")}
+            label="Hide session list"
+            title="Hide sessions"
           >
             <X size={13} />
           </IconButton>
@@ -291,21 +288,18 @@ export function SessionList({
               onKeyDown={(e) => {
                 if (e.key === "Escape") setQuery("");
               }}
-              placeholder={t("Search sessions")}
-              aria-label={t("Search sessions")}
+              placeholder="Search sessions"
+              aria-label="Search sessions"
               className="min-w-0 flex-1 bg-transparent text-ui text-neutral-100 outline-none placeholder:text-neutral-500"
             />
           </label>
-          <StripCell
-            onClick={onSearch}
-            label={t("Open search window (Ctrl+O)")}
-          >
+          <StripCell onClick={onSearch} label="Open search window (Ctrl+O)">
             <ArrowsOut size={16} />
           </StripCell>
           <StripCell
             className="narrow:hidden"
             onClick={onHide}
-            label={t("Hide session history")}
+            label="Hide session history"
           >
             <X size={16} />
           </StripCell>
@@ -314,10 +308,14 @@ export function SessionList({
         <div className="flex h-bar shrink-0 items-stretch border-b border-neutral-800">
           <span className={`min-w-0 flex-1 self-center pl-3 ${sectionLabel}`}>
             {pending
-              ? t("Searching…")
+              ? "Searching…"
               : searching
-                ? plural(rows.length, "{n} match", "{n} matches")
-                : plural(rows.length, "{n} session", "{n} sessions")}
+                ? rows.length === 1
+                  ? `${rows.length} match`
+                  : `${rows.length} matches`
+                : rows.length === 1
+                  ? `${rows.length} session`
+                  : `${rows.length} sessions`}
           </span>
           {hiddenCount > 0 && (
             <StripCell
@@ -325,12 +323,10 @@ export function SessionList({
               aria-pressed={showHidden}
               label={
                 showHidden
-                  ? t("Leave out hidden sessions")
-                  : plural(
-                      hiddenCount,
-                      "Show {n} hidden session",
-                      "Show {n} hidden sessions",
-                    )
+                  ? "Leave out hidden sessions"
+                  : hiddenCount === 1
+                    ? `Show ${hiddenCount} hidden session`
+                    : `Show ${hiddenCount} hidden sessions`
               }
             >
               {showHidden ? (
@@ -350,11 +346,9 @@ export function SessionList({
               const i = SESSION_SORTS.findIndex((s) => s.id === sort);
               onSort(SESSION_SORTS[(i + 1) % SESSION_SORTS.length].id);
             }}
-            title={t(
-              "Switch between newest-created, most-recently-active and last-asked",
-            )}
+            title="Switch between newest-created, most-recently-active and last-asked"
           >
-            {t(SESSION_SORTS.find((s) => s.id === sort)?.label ?? "")}
+            {SESSION_SORTS.find((s) => s.id === sort)?.label ?? ""}
             <CaretUpDown size={14} className="text-neutral-500" />
           </Button>
         </div>
@@ -371,7 +365,7 @@ export function SessionList({
           ) : (
             rows.length === 0 && (
               <p className="px-3 py-4 text-meta text-neutral-400">
-                {searching ? t("No sessions match.") : t("No sessions yet.")}
+                {searching ? "No sessions match." : "No sessions yet."}
               </p>
             )
           )}
@@ -418,11 +412,11 @@ export function SessionList({
                       if (e.key === "Escape") setRenaming(null);
                     }}
                     onBlur={() => setRenaming(null)}
-                    aria-label={t("Rename {name}", { name: label })}
+                    aria-label={`Rename ${label}`}
                     className={`w-full ${inputClass.sm}`}
                   />
                   <p className="mt-0.5 text-meta text-neutral-500">
-                    {t("Enter to save, Escape to cancel")}
+                    Enter to save, Escape to cancel
                   </p>
                 </form>
               );
@@ -463,11 +457,11 @@ export function SessionList({
                   {state && (
                     <span
                       className={`mr-1.5 inline-block size-1.5 rounded-full align-middle ${ATTENTION_UI[state].dot}`}
-                      title={t(ATTENTION_UI[state].label)}
+                      title={ATTENTION_UI[state].label}
                     />
                   )}
                   {naming === s.path
-                    ? t("Naming…")
+                    ? "Naming…"
                     : highlight(sessionLabel(s, latestPrompt), terms)}
                 </div>
                 {/*
@@ -494,7 +488,7 @@ export function SessionList({
                                   version: s.lastAsked ?? s.lastActive,
                                 })}`
                           }
-                          alt={t("Image {n}", { n: attachment.index })}
+                          alt={`Image ${attachment.index}`}
                           loading="lazy"
                           className="size-14 rounded-md border border-neutral-700 object-cover"
                         />
@@ -521,11 +515,7 @@ export function SessionList({
                   ) : (
                     <div
                       className="min-w-0 flex-1 flex items-center gap-3 text-meta text-neutral-400"
-                      title={t("Created {date}, {ago} · last active {active}", {
-                        date: dateFmt().format(new Date(s.created)),
-                        ago: timeAgo(s.created),
-                        active: timeAgo(s.lastActive),
-                      })}
+                      title={`Created ${dateFmt.format(new Date(s.created))}, ${timeAgo(s.created)} · last active ${timeAgo(s.lastActive)}`}
                     >
                       <span className="inline-flex items-center gap-1">
                         <Clock
@@ -548,14 +538,14 @@ export function SessionList({
                           size={12}
                           weight="fill"
                           className="shrink-0 text-neutral-500"
-                          aria-label={t("Pinned")}
+                          aria-label="Pinned"
                         />
                       )}
                       {isHidden && (
                         <EyeSlash
                           size={12}
                           className="shrink-0 text-neutral-500"
-                          aria-label={t("Hidden session")}
+                          aria-label="Hidden session"
                         />
                       )}
                     </div>
@@ -563,9 +553,9 @@ export function SessionList({
                   {isOpen && (
                     <span
                       className="shrink-0 text-neutral-500"
-                      title={t("Open in a tab")}
+                      title="Open in a tab"
                     >
-                      <Eye size={14} aria-label={t("Open in a tab")} />
+                      <Eye size={14} aria-label="Open in a tab" />
                     </span>
                   )}
                 </div>
@@ -580,9 +570,7 @@ export function SessionList({
         <ContextMenu
           x={menu.x}
           y={menu.y}
-          label={t("Session {name}", {
-            name: sessionLabel(menuSession, latestPrompt),
-          })}
+          label={`Session ${sessionLabel(menuSession, latestPrompt)}`}
           onClose={() => setMenu(null)}
         >
           <MenuItem
@@ -593,7 +581,7 @@ export function SessionList({
               setMenu(null);
             }}
           >
-            {pins.includes(menuSession.path) ? t("Unpin") : t("Pin to top")}
+            {pins.includes(menuSession.path) ? "Unpin" : "Pin to top"}
           </MenuItem>
           <MenuItem
             role="menuitem"
@@ -603,7 +591,7 @@ export function SessionList({
               setMenu(null);
             }}
           >
-            {t("Rename…")}
+            Rename…
           </MenuItem>
           <MenuItem
             role="menuitem"
@@ -612,9 +600,7 @@ export function SessionList({
               setMenu(null);
             }}
           >
-            {hidden.includes(menuSession.path)
-              ? t("Unhide")
-              : t("Hide from list")}
+            {hidden.includes(menuSession.path) ? "Unhide" : "Hide from list"}
           </MenuItem>
           {/*
 					  The two automatic options, cheapest first. Naming from the
@@ -630,7 +616,7 @@ export function SessionList({
               if (next) onRename(menuSession, next);
             }}
           >
-            {t("Name from first prompt")}
+            Name from first prompt
           </MenuItem>
           <MenuItem
             role="menuitem"
@@ -640,9 +626,9 @@ export function SessionList({
               void onAutoName(menuSession).finally(() => setNaming(null));
             }}
           >
-            {t("Summarise with pi")}
+            Summarise with pi
             <span className="block text-meta text-neutral-500">
-              {t("Asks pi to title the conversation")}
+              Asks pi to title the conversation
             </span>
           </MenuItem>
         </ContextMenu>

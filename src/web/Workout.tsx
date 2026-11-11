@@ -6,24 +6,24 @@ import {
   type WorkoutPlan,
 } from "../shared/types.js";
 import { Button } from "./ui.js";
-import { t } from "./i18n.js";
+
 import { api } from "./api.js";
 import { WorkoutFigure } from "./workoutFigures.js";
 
 export function muscleName(m: Muscle): string {
   switch (m) {
     case "chest":
-      return t("chest");
+      return "chest";
     case "arms":
-      return t("arms");
+      return "arms";
     case "core":
-      return t("core");
+      return "core";
     case "legs":
-      return t("legs");
+      return "legs";
     case "glutes":
-      return t("glutes");
+      return "glutes";
     case "calves":
-      return t("calves");
+      return "calves";
   }
 }
 
@@ -39,39 +39,39 @@ export function exerciseText(kind: WorkoutKind): {
   const n = EXERCISES[kind].amount;
   switch (kind) {
     case "pushups":
-      return { name: t("Pushups"), task: t("Do {n} pushups", { n }) };
+      return { name: "Pushups", task: `Do ${n} pushups` };
     case "situps":
-      return { name: t("Situps"), task: t("Do {n} situps", { n }) };
+      return { name: "Situps", task: `Do ${n} situps` };
     case "squats":
-      return { name: t("Squats"), task: t("Do {n} squats", { n }) };
+      return { name: "Squats", task: `Do ${n} squats` };
     case "lunges":
       return {
-        name: t("Lunges"),
-        task: t("Do {n} lunges on each leg", { n: n / 2 }),
+        name: "Lunges",
+        task: `Do ${n / 2} lunges on each leg`,
       };
     case "burpees":
-      return { name: t("Burpees"), task: t("Do {n} burpees", { n }) };
+      return { name: "Burpees", task: `Do ${n} burpees` };
     case "jumpingJacks":
       return {
-        name: t("Jumping jacks"),
-        task: t("Do {n} jumping jacks", { n }),
+        name: "Jumping jacks",
+        task: `Do ${n} jumping jacks`,
       };
     case "calfRaises":
-      return { name: t("Calf raises"), task: t("Do {n} calf raises", { n }) };
+      return { name: "Calf raises", task: `Do ${n} calf raises` };
     case "gluteBridges":
       return {
-        name: t("Glute bridges"),
-        task: t("Do {n} glute bridges", { n }),
+        name: "Glute bridges",
+        task: `Do ${n} glute bridges`,
       };
     case "plank":
       return {
-        name: t("Plank"),
-        task: t("Hold a plank for {n} seconds", { n }),
+        name: "Plank",
+        task: `Hold a plank for ${n} seconds`,
       };
     case "wallSit":
       return {
-        name: t("Wall sit"),
-        task: t("Hold a wall sit for {n} seconds", { n }),
+        name: "Wall sit",
+        task: `Hold a wall sit for ${n} seconds`,
       };
   }
 }
@@ -136,7 +136,7 @@ export function WorkoutCard() {
     )
       return;
     // One per set across windows: the same tag replaces rather than stacks.
-    const n = new Notification(t("Workout"), {
+    const n = new Notification("Workout", {
       body: exerciseText(next.kind).task,
       tag: `pwi-workout-${next.at}`,
       requireInteraction: true,
@@ -181,7 +181,7 @@ export function WorkoutCard() {
         }
       }}
       tabIndex={-1}
-      aria-label={t("Workout")}
+      aria-label="Workout"
       // Only its buttons close it: not Escape, not a click outside.
       onCancel={(e) => e.preventDefault()}
       // Enter is Done once it unlocks.
@@ -201,7 +201,7 @@ export function WorkoutCard() {
           variant="ghost"
           onClick={() => act(() => api.workouts.skip.$post())}
         >
-          {t("Skip")}
+          Skip
         </Button>
         <Button
           size="sm"
@@ -211,10 +211,10 @@ export function WorkoutCard() {
             )
           }
         >
-          {t("Snooze {n} min", { n: SNOOZE_MIN })}
+          {`Snooze ${SNOOZE_MIN} min`}
         </Button>
         <Button size="sm" variant="primary" disabled={left > 0} onClick={done}>
-          {left > 0 ? t("Done in {n}s", { n: left }) : t("Done")}
+          {left > 0 ? `Done in ${left}s` : "Done"}
         </Button>
       </div>
     </dialog>

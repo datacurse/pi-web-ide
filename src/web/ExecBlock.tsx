@@ -17,7 +17,6 @@ import {
   type ExecCall,
 } from "./execDisplay.js";
 import { IconButton } from "./ui.js";
-import { plural, t } from "./i18n.js";
 
 /** Literal, copyable text. Never interpreted as Markdown or executable JavaScript. */
 function ExecText({
@@ -60,7 +59,7 @@ function ExecText({
   return (
     <div className="group/exec relative min-w-0">
       <IconButton
-        label={copied ? t("Copied") : t("Copy")}
+        label={copied ? "Copied" : "Copy"}
         size="sm"
         className="absolute top-1 right-1 opacity-0 group-hover/exec:opacity-100 focus-visible:opacity-100"
         onClick={() => {
@@ -127,7 +126,7 @@ function CallInput({ call }: { call: ExecCall }) {
       <div className="border-b border-neutral-800 last:border-b-0">
         <div className="flex items-center gap-2 px-3 pt-3 text-caption text-neutral-500">
           <Terminal size={14} />
-          <span>{t("Command")}</span>
+          <span>Command</span>
           {call.cwd && (
             <span className="fade-end ml-auto font-mono" title={call.cwd}>
               {call.cwd}
@@ -161,7 +160,7 @@ function CallInput({ call }: { call: ExecCall }) {
           >
             {files.length === 1
               ? files[0].split("/").pop()
-              : t("{count} files", { count: files.length })}
+              : `${files.length} files`}
           </span>
           <span className="ml-auto shrink-0 font-mono text-caption">
             <span className="text-green-400">+{added}</span>{" "}
@@ -192,24 +191,22 @@ function Metadata({ values }: { values: Record<string, unknown> }) {
         <span
           className={`font-mono ${exit_code === 0 ? "text-neutral-400" : "text-red-400"}`}
         >
-          {t("Exit {code}", { code: exit_code })}
+          {`Exit ${exit_code}`}
         </span>
       )}
       {typeof session_id === "number" && (
-        <span className="font-mono">
-          {t("Session {id}", { id: session_id })}
-        </span>
+        <span className="font-mono">{`Session ${session_id}`}</span>
       )}
       {truncated === true && (
-        <span className="text-amber-400">{t("Output truncated")}</span>
+        <span className="text-amber-400">Output truncated</span>
       )}
       {typeof original_token_count === "number" && (
-        <span>{t("{count} tokens", { count: original_token_count })}</span>
+        <span>{`${original_token_count} tokens`}</span>
       )}
       {Object.keys(other).length > 0 && (
         <div className="w-full">
           <OriginalText
-            label={t("Metadata")}
+            label="Metadata"
             text={JSON.stringify(other, null, 2)}
             lang="json"
           />
@@ -248,11 +245,19 @@ export const ExecBlock = memo(function ExecBlock({
   const patches = calls.filter((call) => call.patch !== undefined).length;
   const title =
     [
-      commands ? plural(commands, "{n} command", "{n} commands") : "",
-      patches ? plural(patches, "{n} patch", "{n} patches") : "",
+      commands
+        ? commands === 1
+          ? `${commands} command`
+          : `${commands} commands`
+        : "",
+      patches
+        ? patches === 1
+          ? `${patches} patch`
+          : `${patches} patches`
+        : "",
     ]
       .filter(Boolean)
-      .join(" · ") || t("JavaScript");
+      .join(" · ") || "JavaScript";
   const preview = calls
     .find((call) => call.command !== undefined)
     ?.command?.split("\n")[0];
@@ -280,14 +285,14 @@ export const ExecBlock = memo(function ExecBlock({
           className={`ml-auto shrink-0 text-caption ${failed ? "text-red-400" : running ? "text-amber-400" : "text-neutral-500"}`}
         >
           {tool.interrupted
-            ? t("Interrupted")
+            ? "Interrupted"
             : failed
-              ? t("Failed")
+              ? "Failed"
               : running
-                ? t("Running…")
+                ? "Running…"
                 : tool.outputUnavailable
-                  ? t("Output unavailable")
-                  : t("Done")}
+                  ? "Output unavailable"
+                  : "Done"}
         </span>
         {tool.durationMs !== undefined && (
           <span className="shrink-0 font-mono text-caption text-neutral-600">
@@ -308,7 +313,7 @@ export const ExecBlock = memo(function ExecBlock({
           {tool.result !== undefined && (
             <div className="border-t border-neutral-800 bg-neutral-900/30">
               <div className="px-3 pt-2 text-caption text-neutral-500">
-                {t("Output")}
+                Output
               </div>
               {parts.map((part, i) =>
                 part.metadata ? (
@@ -323,7 +328,7 @@ export const ExecBlock = memo(function ExecBlock({
               )}
               {!tool.result.trim() && (
                 <p className="px-3 py-2 text-meta text-neutral-500">
-                  {t("No output")}
+                  No output
                 </p>
               )}
             </div>
@@ -332,13 +337,13 @@ export const ExecBlock = memo(function ExecBlock({
           <div className="space-y-2 border-t border-neutral-800 px-3 py-2 text-caption text-neutral-500">
             {source && calls.length > 0 && (
               <OriginalText
-                label={t("Original JavaScript")}
+                label="Original JavaScript"
                 text={source}
                 lang="javascript"
               />
             )}
             {tool.result !== undefined && (
-              <OriginalText label={t("Raw output")} text={tool.result} />
+              <OriginalText label="Raw output" text={tool.result} />
             )}
           </div>
         </div>

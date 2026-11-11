@@ -14,7 +14,7 @@ import { Button, IconButton, IconLink, PanelHeader } from "./ui.js";
 import { timeAgo } from "./SessionList.js";
 import { Terminal } from "./Terminal.js";
 import { api } from "./api.js";
-import { t } from "./i18n.js";
+
 import { ScrollPane } from "./OverlayScrollbar.js";
 
 const PWI: Record<FleetPwi, { text: string; tone: string; hint: string }> = {
@@ -127,7 +127,7 @@ function Row({
             {m.name}
             {m.self && (
               <span className="ml-2 text-caption text-neutral-500">
-                {t("this PC")}
+                this PC
               </span>
             )}
           </p>
@@ -139,28 +139,24 @@ function Row({
         </div>
         <p
           className={`shrink-0 text-meta ${pwi?.tone ?? "text-neutral-500"}`}
-          title={pwi && t(pwi.hint)}
+          title={pwi && pwi.hint}
         >
           {pwi
-            ? t(pwi.text)
+            ? pwi.text
             : m.lastSeen
-              ? t("offline, seen {ago}", { ago: timeAgo(m.lastSeen) })
-              : t("offline")}
+              ? `offline, seen ${timeAgo(m.lastSeen)}`
+              : "offline"}
         </p>
         {m.online && !m.self && m.pwi !== "running" && (
           <Button size="sm" onClick={() => void start()} disabled={starting}>
-            {starting ? t("Starting…") : t("Start pwi")}
+            {starting ? "Starting…" : "Start pwi"}
           </Button>
         )}
         <IconButton
           size="sm"
           variant={shown ? "outline" : "ghost"}
           aria-pressed={shown}
-          label={
-            m.self
-              ? t("Terminal on this PC")
-              : t("Terminal: ssh {alias}", { alias: m.ssh })
-          }
+          label={m.self ? "Terminal on this PC" : `Terminal: ssh ${m.ssh}`}
           onClick={onTerminal}
           disabled={!m.online}
         >
@@ -169,7 +165,7 @@ function Row({
         <IconLink
           size="sm"
           href={m.url}
-          label={`${pwi ? t(pwi.hint) : t("Open its pwi")}: ${m.url}`}
+          label={`${pwi ? pwi.hint : "Open its pwi"}: ${m.url}`}
         >
           <TailscaleLogo />
         </IconLink>
@@ -263,10 +259,7 @@ export function Fleet({
         error?: string;
       };
       if (!r.ok || !body.id)
-        return setError(
-          body.error ??
-            t("could not start a shell ({status})", { status: r.status }),
-        );
+        return setError(body.error ?? `could not start a shell (${r.status})`);
       const id = body.id;
       saveShells((s) => ({ ...s, [m.dns]: id }));
     }
@@ -290,17 +283,15 @@ export function Fleet({
 
   return (
     <section
-      aria-label={t("Fleet")}
+      aria-label="Fleet"
       className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-neutral-950 text-neutral-100"
     >
-      <PanelHeader title={t("Fleet")} onClose={onClose}>
-        <IconButton size="sm" label={t("Refresh")} onClick={() => void load()}>
+      <PanelHeader title="Fleet" onClose={onClose}>
+        <IconButton size="sm" label="Refresh" onClick={() => void load()}>
           <ArrowClockwise size={14} />
         </IconButton>
         {loading && (
-          <span className="text-meta text-neutral-500">
-            {t("Checking machines…")}
-          </span>
+          <span className="text-meta text-neutral-500">Checking machines…</span>
         )}
       </PanelHeader>
       <ScrollPane className="max-h-1/2 shrink-0">
@@ -331,7 +322,7 @@ export function Fleet({
           <PanelHeader
             title={shownName}
             onClose={() => closeShell(shown, shellId)}
-            closeLabel={t("Close this shell")}
+            closeLabel="Close this shell"
           />
           <div className="min-h-0 flex-1">
             <Terminal
@@ -344,7 +335,7 @@ export function Fleet({
         </div>
       ) : (
         <p className="flex flex-1 items-center justify-center text-meta text-neutral-500">
-          {t("A machine's terminal button opens a shell on it here.")}
+          A machine's terminal button opens a shell on it here.
         </p>
       )}
     </section>
