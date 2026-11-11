@@ -498,7 +498,7 @@ function RepoView({
   const sync = async () => {
     if (!state) return;
     const dirty = state.changed > 0;
-    let text = message.trim();
+    let text = autoName ? "" : message.trim();
     if (dirty && !text && autoName) {
       const named = await requestName();
       if (!named) return;
@@ -581,20 +581,22 @@ function RepoView({
 
       {/* TOP HALF: the working tree, and what to call it. */}
       <div className="flex min-h-0 shrink-0 flex-col border-b border-neutral-800">
-        <textarea
-          data-custom="the whole row, like the session search field"
-          value={message}
-          onChange={(e) => setMessage(e.target.value)}
-          rows={2}
-          placeholder={state?.suggestion || "Message (Ctrl+Enter to commit)"}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
-              e.preventDefault();
-              void sync();
-            }
-          }}
-          className="block h-[calc(var(--spacing-bar)*2)] resize-none border-b border-neutral-800 bg-neutral-950 px-3 py-2 text-ui text-neutral-100 outline-none transition-colors duration-150 ease-out placeholder:text-neutral-500 hover:bg-neutral-900 focus:bg-neutral-900 motion-reduce:transition-none"
-        />
+        {!autoName && (
+          <textarea
+            data-custom="the whole row, like the session search field"
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            rows={2}
+            placeholder={state?.suggestion || "Message (Ctrl+Enter to commit)"}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+                e.preventDefault();
+                void sync();
+              }
+            }}
+            className="block h-[calc(var(--spacing-bar)*2)] resize-none border-b border-neutral-800 bg-neutral-950 px-3 py-2 text-ui text-neutral-100 outline-none transition-colors duration-150 ease-out placeholder:text-neutral-500 hover:bg-neutral-900 focus:bg-neutral-900 motion-reduce:transition-none"
+          />
+        )}
 
         <div className="flex h-bar items-stretch border-b border-neutral-800">
           {/* Auto-name is shared with GitActions' menu: one preference, so
