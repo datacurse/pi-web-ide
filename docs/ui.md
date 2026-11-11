@@ -574,6 +574,10 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
   each child folder with a `.git`: `FolderSimple` 13px, name, branch in dim mono,
   uncommitted count as a `text-caption` right. The selected row shows the usual
   panel below; the checkbox sits under the list. The rail badge sums all repos.
+- Commit history uses connected colored lanes for actual parent relationships. Branch
+  and tag refs are individual bordered badges below the subject, wrapping rather than
+  fading out. The current branch has an amber badge and explicit `HEAD` marker;
+  several refs on one commit stay individually visible without inventing divergence.
 
 ## Rail, panels, pages and the terminal dock
 

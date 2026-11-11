@@ -26,7 +26,6 @@ import {
   CaretDown,
   CaretRight,
   FolderSimple,
-  GitCommit,
   Sparkle,
 } from "@phosphor-icons/react";
 import { FileGlyph } from "./fileIcon.js";
@@ -50,6 +49,7 @@ import { Button, ListRow, PanelHeader, StripCell, sectionLabel } from "./ui.js";
 import { api, unwrap } from "./api.js";
 import { plural, t } from "./i18n.js";
 import { ScrollPane } from "./OverlayScrollbar.js";
+import { commitGraph, CommitGraph, CommitRefs } from "./CommitGraph.js";
 
 /** `/home/me/proj/src/web/App.tsx` → `src/web/App.tsx` when it is under `cwd`. */
 function shortPath(path: string, cwd: string): string {
@@ -65,6 +65,8 @@ interface Change {
 /** Mirrors GitCommit in src/server/git.ts. */
 interface Commit {
   hash: string;
+  parents: string[];
+  refs: string[];
   subject: string;
   author: string;
   when: string;
@@ -375,15 +377,14 @@ function RepoView({
 
   const reload = useCallback(async () => {
     try {
-      const [git, changes] = await Promise.all([
+      const [, changes] = await Promise.all([
         refreshGitState(cwd),
         unwrap(api.git.changes.$get({ query: { cwd } })),
       ]);
       setFiles(changes.files);
       onChanges(changes.files.length);
-      // A bundle can outlive its server: without a HEAD marker, retain the
-      // old full-refresh behavior rather than leaving commits stale.
-      if (git.head === undefined) setHistoryRevision((n) => n + 1);
+      // Branch refs can change without moving HEAD (new branches or a fetch).
+      setHistoryRevision((n) => n + 1);
       setError(null);
     } catch (err) {
       setFiles([]);
@@ -688,46 +689,50 @@ function RepoView({
         >
           {t("Commits")}
         </p>
-        {commits.map((c) => {
+        {commitGraph(commits).map(({ commit: c, ...graph }) => {
           const expanded = open[c.hash] === true;
           return (
-            <div key={c.hash}>
-              <ListRow
-                onClick={() => setOpen((o) => ({ ...o, [c.hash]: !expanded }))}
-                aria-expanded={expanded}
-                title={`${c.subject}\n${c.author} · ${gitAgo(c.when, true)} · ${c.hash.slice(0, 7)}`}
-                className="gap-1 pl-1"
-              >
-                <span className="shrink-0 text-neutral-600">
-                  {expanded ? (
-                    <CaretDown size={11} />
-                  ) : (
-                    <CaretRight size={11} />
-                  )}
-                </span>
-                <GitCommit size={13} className="shrink-0 text-neutral-600" />
-                <span className="fade-end">{c.subject}</span>
-                {/*
-                 * "3 hours ago" on all fifty rows is the same three words
-                 * repeated down a 300px column, which crowds out the subject
-                 * — the only part that differs. Dropping "ago" keeps the
-                 * ordering legible at a glance; the full stamp, the author and
-                 * the sha are in the tooltip.
-                 */}
-                <span className="ml-auto shrink-0 pl-2 text-caption text-neutral-600">
-                  {gitAgo(c.when, false)}
-                </span>
-              </ListRow>
-              {expanded &&
-                c.files.map((f) => (
-                  <FileRow
-                    key={f.path}
-                    change={f}
-                    cwd={cwd}
-                    depth={1}
-                    onOpen={() => onOpenDiff(c.hash, f.path)}
-                  />
-                ))}
+            <div key={c.hash} className="relative flex pl-3">
+              <CommitGraph {...graph} />
+              <div className="min-w-0 flex-1">
+                <ListRow
+                  onClick={() =>
+                    setOpen((o) => ({ ...o, [c.hash]: !expanded }))
+                  }
+                  aria-expanded={expanded}
+                  title={`${c.subject}\n${c.author} · ${gitAgo(c.when, true)} · ${c.hash.slice(0, 7)}`}
+                  className="items-start gap-1 pl-1"
+                >
+                  <span className="mt-1 shrink-0 text-neutral-600">
+                    {expanded ? (
+                      <CaretDown size={11} />
+                    ) : (
+                      <CaretRight size={11} />
+                    )}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="flex min-w-0 items-center gap-2">
+                      <span className="min-w-0 flex-1 fade-end">
+                        {c.subject}
+                      </span>
+                      <span className="shrink-0 text-caption text-neutral-600">
+                        {gitAgo(c.when, false)}
+                      </span>
+                    </span>
+                    <CommitRefs refs={c.refs ?? []} lane={graph.lane} />
+                  </span>
+                </ListRow>
+                {expanded &&
+                  c.files.map((f) => (
+                    <FileRow
+                      key={f.path}
+                      change={f}
+                      cwd={cwd}
+                      depth={1}
+                      onOpen={() => onOpenDiff(c.hash, f.path)}
+                    />
+                  ))}
+              </div>
             </div>
           );
         })}

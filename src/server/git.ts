@@ -280,6 +280,8 @@ export interface GitFileDiff {
 /** One commit, with the paths it touched. */
 export interface GitCommit {
   hash: string;
+  parents: string[];
+  refs: string[];
   subject: string;
   author: string;
   /** Relative, as git formats it: "2 hours ago". */
@@ -433,7 +435,7 @@ export async function init(cwd: string): Promise<GitResult> {
 const FS = "\x1f";
 
 /**
- * The last `limit` commits on HEAD, each with its changed paths.
+ * The last `limit` commits across branches and remotes, with topology and paths.
  *
  * One `git log` and not one per commit: the panel draws a collapsible tree,
  * and a request per row would be fifty round trips to render a list nobody
@@ -446,10 +448,15 @@ const FS = "\x1f";
 export async function log(cwd: string, limit = 50): Promise<GitCommit[]> {
   const out = await git(cwd, [
     "log",
+    "--branches",
+    "--remotes",
+    "HEAD",
+    "--topo-order",
+    "--decorate=short",
     `-n${Math.max(1, Math.min(500, limit))}`,
     "-z",
     "--name-status",
-    `--format=%H${FS}%s${FS}%an${FS}%ar`,
+    `--format=%H${FS}%s${FS}%an${FS}%ar${FS}%P${FS}%D`,
   ]);
   if (out.code !== 0 || !out.stdout) return [];
 
@@ -461,8 +468,16 @@ export async function log(cwd: string, limit = 50): Promise<GitCommit[]> {
     const token = tokens[i].replace(/^\n/, "");
     if (!token) continue;
     if (token.includes(FS)) {
-      const [hash, subject, author, when] = token.split(FS);
-      commits.push({ hash, subject, author, when, files: [] });
+      const [hash, subject, author, when, parents, refs] = token.split(FS);
+      commits.push({
+        hash,
+        subject,
+        author,
+        when,
+        parents: parents ? parents.split(" ") : [],
+        refs: refs ? refs.split(", ") : [],
+        files: [],
+      });
       continue;
     }
     const commit = commits.at(-1);
