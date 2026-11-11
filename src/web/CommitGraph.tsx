@@ -38,6 +38,7 @@ export function commitGraph<T extends GraphCommit>(commits: T[]) {
     }
   }
   const describe = (hashes: string[]) => {
+    if (!hashes.length) return "";
     const refs = new Set(
       hashes.flatMap((hash) => [...(refsByHash.get(hash) ?? [])]),
     );
@@ -45,23 +46,39 @@ export function commitGraph<T extends GraphCommit>(commits: T[]) {
       ? [...refs].join("\n")
       : `Commit ${hashes[0]?.slice(0, 7) ?? "unknown"} (no named ref in loaded history)`;
   };
-  let lanes: string[] = [];
+  let lanes: (string | null)[] = [];
   let width = 1;
   const rows = commits.map((commit) => {
     const before = [...lanes];
     let lane = lanes.indexOf(commit.hash);
+    const head = (commit.refs ?? []).some(
+      (ref) => ref === "HEAD" || ref.startsWith("HEAD -> "),
+    );
+    const branchTip = (commit.refs ?? []).some(
+      (ref) =>
+        ref !== "HEAD" && !ref.startsWith("tag: ") && !ref.endsWith("/HEAD"),
+    );
+    // Give an ancestor branch tip a distinct lane, even in linear history.
+    // A vacant slot keeps the previous branch's incoming edge intact without
+    // drawing a duplicate commit or inventing a parallel ancestry path.
+    if (lane >= 0 && branchTip && !head) {
+      const previous = lane;
+      const vacant = lanes.indexOf(null);
+      lane = vacant < 0 ? lanes.length : vacant;
+      lanes[previous] = null;
+      lanes[lane] = commit.hash;
+    }
     if (lane < 0) {
       lane = lanes.length;
       lanes.push(commit.hash);
     }
     const parents = commit.parents ?? [];
     lanes.splice(lane, 1, ...parents.filter((p) => !lanes.includes(p)));
-    const incoming = before.map((hash, from) => ({
-      from,
-      to: hash === commit.hash ? lane : from,
-    }));
+    const incoming = before.flatMap((hash, from) =>
+      hash ? [{ from, to: hash === commit.hash ? lane : from }] : [],
+    );
     const outgoing = before.flatMap((hash, from) =>
-      hash === commit.hash ? [] : [{ from, to: lanes.indexOf(hash) }],
+      !hash || hash === commit.hash ? [] : [{ from, to: lanes.indexOf(hash) }],
     );
     for (const parent of parents) {
       outgoing.push({ from: lane, to: lanes.indexOf(parent) });
@@ -70,12 +87,10 @@ export function commitGraph<T extends GraphCommit>(commits: T[]) {
     return {
       commit,
       lane,
-      head: (commit.refs ?? []).some(
-        (ref) => ref === "HEAD" || ref.startsWith("HEAD -> "),
-      ),
+      head,
       incoming,
       outgoing,
-      continuing: lanes.map((_, i) => i),
+      continuing: lanes.flatMap((hash, i) => (hash ? [i] : [])),
       columnTitles: Array.from({ length: width }, (_, column) =>
         describe(
           [
@@ -163,9 +178,11 @@ export function CommitGraph({
           />
         ))}
       </svg>
-      {columnTitles.map((title, column) => (
-        <GraphLaneTooltip key={column} label={title} column={column} />
-      ))}
+      {columnTitles.map((title, column) =>
+        title ? (
+          <GraphLaneTooltip key={column} label={title} column={column} />
+        ) : null,
+      )}
     </div>
   );
 }
