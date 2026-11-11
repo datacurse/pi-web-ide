@@ -579,6 +579,7 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
   panel below; the checkbox sits under the list. The rail badge sums all repos.
 - Commit history uses connected colored lanes for actual parent relationships. Collapsed
   commits stay one line; branch and tag refs are available in the row's hover tooltip.
+  HEAD's graph node is filled in its lane color; all other commit nodes are hollow.
   Hovering a graph lane shows its known refs, including multiple refs for shared ancestry;
   unnamed history is labelled explicitly rather than guessing from the lane color.
   Lane tooltips use a themed `neutral-900` surface, `neutral-800` border, `rounded-md`,

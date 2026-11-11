@@ -13,6 +13,7 @@ interface Edge {
 }
 interface GraphRow {
   lane: number;
+  head: boolean;
   incoming: Edge[];
   outgoing: Edge[];
   continuing: number[];
@@ -69,6 +70,9 @@ export function commitGraph<T extends GraphCommit>(commits: T[]) {
     return {
       commit,
       lane,
+      head: (commit.refs ?? []).some(
+        (ref) => ref === "HEAD" || ref.startsWith("HEAD -> "),
+      ),
       incoming,
       outgoing,
       continuing: lanes.map((_, i) => i),
@@ -96,6 +100,7 @@ const x = (lane: number) => 8 + lane * 16;
 
 export function CommitGraph({
   lane,
+  head,
   incoming,
   outgoing,
   continuing,
@@ -133,7 +138,7 @@ export function CommitGraph({
           cx={x(lane)}
           cy="11"
           r="3.5"
-          fill="var(--color-neutral-950)"
+          fill={head ? "currentColor" : "var(--color-neutral-950)"}
           stroke="currentColor"
           strokeWidth="1.5"
           className={tones[lane % tones.length]}
