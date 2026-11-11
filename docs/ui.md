@@ -582,6 +582,8 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
   HEAD's graph node is filled in its lane color; all other commit nodes are hollow.
   Named branch tips get distinct colored lanes even in linear history; the graph
   connects the lanes at the shared commit without duplicating commits.
+  Lane transitions use smooth cubic Bézier curves with short vertical tangents,
+  avoiding angular joins and the flattened middle of the original S-curves.
   Hovering a graph lane shows its known refs, including multiple refs for shared ancestry;
   unnamed history is labelled explicitly rather than guessing from the lane color.
   Lane tooltips use a themed `neutral-900` surface, `neutral-800` border, `rounded-md`,

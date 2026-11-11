@@ -113,6 +113,15 @@ const tones = [
 ];
 const x = (lane: number) => 8 + lane * 16;
 
+/** Smooth lane changes with short vertical tangents and no angular joins. */
+function edgePath(from: number, to: number, top: number, bottom: number) {
+  const start = x(from);
+  const end = x(to);
+  if (from === to) return `M ${start} ${top} V ${bottom}`;
+  const bend = (bottom - top) * 0.28;
+  return `M ${start} ${top} C ${start} ${top + bend} ${end} ${bottom - bend} ${end} ${bottom}`;
+}
+
 export function CommitGraph({
   lane,
   head,
@@ -132,7 +141,7 @@ export function CommitGraph({
         {incoming.map(({ from, to }, i) => (
           <path
             key={i}
-            d={`M ${x(from)} 0 C ${x(from)} 5.5 ${x(to)} 5.5 ${x(to)} 11`}
+            d={edgePath(from, to, 0, 11)}
             fill="none"
             stroke="currentColor"
             strokeWidth="1.5"
@@ -142,7 +151,7 @@ export function CommitGraph({
         {outgoing.map(({ from, to }, i) => (
           <path
             key={i}
-            d={`M ${x(from)} 11 C ${x(from)} 16.5 ${x(to)} 16.5 ${x(to)} 22`}
+            d={edgePath(from, to, 11, 22)}
             fill="none"
             stroke="currentColor"
             strokeWidth="1.5"
