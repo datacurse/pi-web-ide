@@ -20,7 +20,13 @@
  * through the same two endpoints.
  */
 
-import { type ReactNode, useCallback, useEffect, useState } from "react";
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import {
   ArrowsClockwise,
   CaretDown,
@@ -40,16 +46,29 @@ import {
   useGitState,
 } from "./GitActions.js";
 import {
+  readStored,
+  writeStored,
   readGitAutoName,
   readGitNested,
   writeGitAutoName,
   writeGitNested,
 } from "./prefs.js";
-import { Button, ListRow, PanelHeader, StripCell, sectionLabel } from "./ui.js";
+import {
+  Button,
+  hoverIntent,
+  ListRow,
+  PanelHeader,
+  StripCell,
+  sectionLabel,
+} from "./ui.js";
 import { api, unwrap } from "./api.js";
 
 import { ScrollPane } from "./OverlayScrollbar.js";
 import { commitGraph, CommitGraph, CommitRefs } from "./CommitGraph.js";
+import { startPointerDrag } from "./pointerDrag.js";
+
+const clampHistoryHeight = (height: number) =>
+  Math.min(90, Math.max(10, height));
 
 /** `/home/me/proj/src/web/App.tsx` → `src/web/App.tsx` when it is under `cwd`. */
 function shortPath(path: string, cwd: string): string {
@@ -374,6 +393,16 @@ function RepoView({
   const busyNow = useGitBusy(cwd);
   const running = busyNow !== null;
   const [error, setError] = useState<string | null>(null);
+  const lists = useRef<HTMLDivElement>(null);
+  const [historyHeight, setHistoryHeight] = useState(() => {
+    const stored = Number(readStored("pwi:gitHistoryHeight") ?? 50);
+    return Number.isFinite(stored) ? clampHistoryHeight(stored) : 50;
+  });
+  const resizeHistory = (height: number) => {
+    const next = clampHistoryHeight(height);
+    setHistoryHeight(next);
+    writeStored("pwi:gitHistoryHeight", String(next));
+  };
 
   const reload = useCallback(async () => {
     try {
@@ -642,96 +671,147 @@ function RepoView({
         </div>
       )}
 
-      {/* Two scrollers, not one: scanning fifty commits used to push the
-			    changed files off the top, and they are the half you act on. Equal
-			    halves (flex-1 basis-0) so neither list can starve the other. */}
-      <ScrollPane className="min-h-0 flex-1 basis-0">
-        <p
-          className={`sticky top-0 z-10 bg-neutral-950 px-3 py-1.5 ${sectionLabel}`}
+      <div ref={lists} className="flex min-h-0 flex-1 flex-col">
+        <div
+          className="flex min-h-0 flex-col"
+          style={{ flex: `${100 - historyHeight} 1 0%` }}
         >
-          Changes
-          {dirty && (
-            <span className="ml-1 text-neutral-500">{state?.changed}</span>
-          )}
-        </p>
-        {files === null ? (
-          <p className="px-3 py-2 text-meta text-neutral-500">
-            Reading the working tree…
-          </p>
-        ) : files.length === 0 ? (
-          <p className="px-3 py-2 text-meta text-neutral-500">
-            Nothing changed. Uncommitted edits — the agent's or your own — show
-            up here.
-          </p>
-        ) : (
-          files.map((f) => (
-            <FileRow
-              key={f.path}
-              change={f}
-              cwd={cwd}
-              depth={0}
-              onOpen={() => onOpenDiff("", f.path)}
-            />
-          ))
-        )}
-      </ScrollPane>
+          <ScrollPane className="min-h-0 flex-1">
+            <p
+              className={`sticky top-0 z-10 bg-neutral-950 px-3 py-1.5 ${sectionLabel}`}
+            >
+              Changes
+              {dirty && (
+                <span className="ml-1 text-neutral-500">{state?.changed}</span>
+              )}
+            </p>
+            {files === null ? (
+              <p className="px-3 py-2 text-meta text-neutral-500">
+                Reading the working tree…
+              </p>
+            ) : files.length === 0 ? (
+              <p className="px-3 py-2 text-meta text-neutral-500">
+                Nothing changed. Uncommitted edits — the agent's or your own —
+                show up here.
+              </p>
+            ) : (
+              files.map((f) => (
+                <FileRow
+                  key={f.path}
+                  change={f}
+                  cwd={cwd}
+                  depth={0}
+                  onOpen={() => onOpenDiff("", f.path)}
+                />
+              ))
+            )}
+          </ScrollPane>
+        </div>
+        <div
+          role="separator"
+          aria-label="Resize commit history"
+          aria-orientation="horizontal"
+          aria-valuemin={10}
+          aria-valuemax={90}
+          aria-valuenow={Math.round(historyHeight)}
+          aria-valuetext={`Commits: ${Math.round(historyHeight)}% of list area`}
+          tabIndex={0}
+          {...hoverIntent}
+          onPointerDown={(event) => {
+            if (event.button !== 0) return;
+            const area = lists.current?.getBoundingClientRect();
+            if (!area?.height) return;
+            startPointerDrag(
+              event,
+              (moved) =>
+                resizeHistory(
+                  ((area.bottom - moved.clientY) / area.height) * 100,
+                ),
+              () => {},
+            );
+          }}
+          onDoubleClick={() => resizeHistory(50)}
+          onKeyDown={(event) => {
+            const step = event.shiftKey ? 10 : 2;
+            const next =
+              event.key === "ArrowUp"
+                ? historyHeight + step
+                : event.key === "ArrowDown"
+                  ? historyHeight - step
+                  : event.key === "Home"
+                    ? 10
+                    : event.key === "End"
+                      ? 90
+                      : undefined;
+            if (next === undefined) return;
+            event.preventDefault();
+            resizeHistory(next);
+          }}
+          className="relative z-10 h-0 shrink-0 touch-none data-hover:cursor-row-resize border-t border-neutral-800 transition-colors delay-1000 duration-500 ease-out after:absolute after:inset-x-0 after:-top-1.25 after:-bottom-1 after:content-[''] data-hover:border-amber-600 data-hover:delay-0 data-hover:duration-100 focus-visible:border-amber-500 motion-reduce:transition-none"
+        />
 
-      {/* BOTTOM HALF: history. Collapsed, because a commit is a row you
+        {/* BOTTOM HALF: history. Collapsed, because a commit is a row you
 			    scan and only sometimes open. */}
-      <ScrollPane className="min-h-0 flex-1 basis-0 border-t border-neutral-800">
-        <p
-          className={`sticky top-0 z-10 bg-neutral-950 px-3 py-1.5 ${sectionLabel}`}
+        <div
+          className="flex min-h-0 flex-col"
+          style={{ flex: `${historyHeight} 1 0%` }}
         >
-          Commits
-        </p>
-        {commitGraph(commits).map(({ commit: c, ...graph }) => {
-          const expanded = open[c.hash] === true;
-          return (
-            <div key={c.hash} className="relative flex pl-3">
-              <CommitGraph {...graph} />
-              <div className="min-w-0 flex-1">
-                <ListRow
-                  onClick={() =>
-                    setOpen((o) => ({ ...o, [c.hash]: !expanded }))
-                  }
-                  aria-expanded={expanded}
-                  title={`${c.subject}\n${c.author} · ${gitAgo(c.when, true)} · ${c.hash.slice(0, 7)}`}
-                  className="items-start gap-1 pl-1"
-                >
-                  <span className="mt-1 shrink-0 text-neutral-600">
-                    {expanded ? (
-                      <CaretDown size={11} />
-                    ) : (
-                      <CaretRight size={11} />
-                    )}
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="flex min-w-0 items-center gap-2">
-                      <span className="min-w-0 flex-1 fade-end">
-                        {c.subject}
+          <ScrollPane className="min-h-0 flex-1">
+            <p
+              className={`sticky top-0 z-10 bg-neutral-950 px-3 py-1.5 ${sectionLabel}`}
+            >
+              Commits
+            </p>
+            {commitGraph(commits).map(({ commit: c, ...graph }) => {
+              const expanded = open[c.hash] === true;
+              return (
+                <div key={c.hash} className="relative flex pl-3">
+                  <CommitGraph {...graph} />
+                  <div className="min-w-0 flex-1">
+                    <ListRow
+                      onClick={() =>
+                        setOpen((o) => ({ ...o, [c.hash]: !expanded }))
+                      }
+                      aria-expanded={expanded}
+                      title={`${c.subject}\n${c.author} · ${gitAgo(c.when, true)} · ${c.hash.slice(0, 7)}`}
+                      className="items-start gap-1 pl-1"
+                    >
+                      <span className="mt-1 shrink-0 text-neutral-600">
+                        {expanded ? (
+                          <CaretDown size={11} />
+                        ) : (
+                          <CaretRight size={11} />
+                        )}
                       </span>
-                      <span className="shrink-0 text-caption text-neutral-600">
-                        {gitAgo(c.when, false)}
+                      <span className="min-w-0 flex-1">
+                        <span className="flex min-w-0 items-center gap-2">
+                          <span className="min-w-0 flex-1 fade-end">
+                            {c.subject}
+                          </span>
+                          <span className="shrink-0 text-caption text-neutral-600">
+                            {gitAgo(c.when, false)}
+                          </span>
+                        </span>
+                        <CommitRefs refs={c.refs ?? []} lane={graph.lane} />
                       </span>
-                    </span>
-                    <CommitRefs refs={c.refs ?? []} lane={graph.lane} />
-                  </span>
-                </ListRow>
-                {expanded &&
-                  c.files.map((f) => (
-                    <FileRow
-                      key={f.path}
-                      change={f}
-                      cwd={cwd}
-                      depth={1}
-                      onOpen={() => onOpenDiff(c.hash, f.path)}
-                    />
-                  ))}
-              </div>
-            </div>
-          );
-        })}
-      </ScrollPane>
+                    </ListRow>
+                    {expanded &&
+                      c.files.map((f) => (
+                        <FileRow
+                          key={f.path}
+                          change={f}
+                          cwd={cwd}
+                          depth={1}
+                          onOpen={() => onOpenDiff(c.hash, f.path)}
+                        />
+                      ))}
+                  </div>
+                </div>
+              );
+            })}
+          </ScrollPane>
+        </div>
+      </div>
     </div>
   );
 }

@@ -580,6 +580,10 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
   and tag refs are individual bordered badges below the subject, wrapping rather than
   fading out. The current branch has an amber badge and explicit `HEAD` marker;
   several refs on one commit stay individually visible without inventing divergence.
+- Drag the horizontal divider between Changes and Commits to resize their shared
+  list area (10–90% for Commits, default 50%, `pwi:gitHistoryHeight` per browser).
+  Arrow Up/Down adjusts it, Shift speeds up, Home/End selects the limits, and
+  double-click restores the equal split. The divider uses the terminal's hover style.
 
 ## Rail, panels, pages and the terminal dock
 
