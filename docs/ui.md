@@ -577,10 +577,15 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
   each child folder with a `.git`: `FolderSimple` 13px, name, branch in dim mono,
   uncommitted count as a `text-caption` right. The selected row shows the usual
   panel below; the checkbox sits under the list. The rail badge sums all repos.
-- Commit history uses connected colored lanes for actual parent relationships. Branch
-  and tag refs are individual bordered badges below the subject, wrapping rather than
-  fading out. The current branch has an amber badge and explicit `HEAD` marker;
-  several refs on one commit stay individually visible without inventing divergence.
+- Commit history uses connected colored lanes for actual parent relationships. Collapsed
+  commits stay one line; branch and tag refs are available in the row's hover tooltip.
+  Hovering a graph lane shows its known refs, including multiple refs for shared ancestry;
+  unnamed history is labelled explicitly rather than guessing from the lane color.
+  Lane tooltips use a themed `neutral-900` surface, `neutral-800` border, `rounded-md`,
+  branch/tag icons and an amber `HEAD` marker instead of browser-native titles. They
+  float outside the scrolling list, stay within the viewport, and dismiss on leave,
+  scrolling, resize or Escape.
+  Expanding a commit shows only its changed files; ref labels remain hover-only.
 - Drag the horizontal divider between Changes and Commits to resize their shared
   list area (10–90% for Commits, default 50%, `pwi:gitHistoryHeight` per browser).
   Arrow Up/Down adjusts it, Shift speeds up, Home/End selects the limits, and

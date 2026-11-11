@@ -1,8 +1,11 @@
 import { GitBranch, Tag } from "@phosphor-icons/react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 /** Lay out topologically ordered commits in lanes, retaining parent connections. */
 interface GraphCommit {
   hash: string;
   parents: string[];
+  refs?: string[];
 }
 interface Edge {
   from: number;
@@ -14,9 +17,33 @@ interface GraphRow {
   outgoing: Edge[];
   continuing: number[];
   width: number;
+  columnTitles: string[];
 }
 
 export function commitGraph<T extends GraphCommit>(commits: T[]) {
+  // Git lanes are commit paths, not unique branches: shared history can belong
+  // to several refs. Carry the known refs through ancestry rather than guessing
+  // a branch from the lane's color (lane positions can be reused).
+  const refsByHash = new Map<string, Set<string>>();
+  for (const commit of commits) {
+    refsByHash.set(commit.hash, new Set(commit.refs ?? []));
+  }
+  for (const commit of commits) {
+    const refs = refsByHash.get(commit.hash)!;
+    for (const parent of commit.parents ?? []) {
+      const inherited = refsByHash.get(parent) ?? new Set<string>();
+      for (const ref of refs) inherited.add(ref);
+      refsByHash.set(parent, inherited);
+    }
+  }
+  const describe = (hashes: string[]) => {
+    const refs = new Set(
+      hashes.flatMap((hash) => [...(refsByHash.get(hash) ?? [])]),
+    );
+    return refs.size
+      ? [...refs].join("\n")
+      : `Commit ${hashes[0]?.slice(0, 7) ?? "unknown"} (no named ref in loaded history)`;
+  };
   let lanes: string[] = [];
   let width = 1;
   const rows = commits.map((commit) => {
@@ -45,6 +72,15 @@ export function commitGraph<T extends GraphCommit>(commits: T[]) {
       incoming,
       outgoing,
       continuing: lanes.map((_, i) => i),
+      columnTitles: Array.from({ length: width }, (_, column) =>
+        describe(
+          [
+            before[column],
+            column === lane ? commit.hash : undefined,
+            lanes[column],
+          ].filter((hash): hash is string => Boolean(hash)),
+        ),
+      ),
     };
   });
   return rows.map((row) => ({ ...row, width }));
@@ -64,11 +100,12 @@ export function CommitGraph({
   outgoing,
   continuing,
   width,
+  columnTitles,
 }: GraphRow) {
   return (
     <div
       aria-hidden="true"
-      className="pointer-events-none relative shrink-0"
+      className="relative shrink-0"
       style={{ width: width * 16 }}
     >
       <svg width="100%" height="22" className="block">
@@ -121,38 +158,91 @@ export function CommitGraph({
           />
         ))}
       </svg>
+      {columnTitles.map((title, column) => (
+        <GraphLaneTooltip key={column} label={title} column={column} />
+      ))}
     </div>
   );
 }
 
-/** Each ref gets its own readable badge, even when several share a commit. */
-export function CommitRefs({ refs, lane }: { refs: string[]; lane: number }) {
-  if (!refs.length) return null;
+function GraphLaneTooltip({
+  label,
+  column,
+}: {
+  label: string;
+  column: number;
+}) {
+  const [anchor, setAnchor] = useState<DOMRect | null>(null);
+  const popup = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const element = popup.current;
+    if (!anchor || !element) return;
+    const bounds = element.getBoundingClientRect();
+    element.style.left = `${Math.max(8, Math.min(anchor.right + 8, window.innerWidth - bounds.width - 8))}px`;
+    element.style.top = `${Math.max(8, Math.min(anchor.top, window.innerHeight - bounds.height - 8))}px`;
+  }, [anchor, label]);
+  useEffect(() => {
+    if (!anchor) return;
+    const close = () => setAnchor(null);
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") close();
+    };
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", close);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [anchor]);
   return (
-    <span className="flex flex-wrap gap-1 py-1">
-      {refs.map((ref) => {
-        const current = ref.startsWith("HEAD -> ");
-        const name = current ? ref.slice(8) : ref;
-        const tag = name.startsWith("tag: ");
-        const Icon = tag ? Tag : GitBranch;
-        return (
-          <span
-            key={ref}
-            title={current ? `Current branch: ${name}` : ref}
-            className={`inline-flex max-w-full items-center gap-1 rounded-sm border px-1.5 py-0.5 text-caption ${
-              current
-                ? "border-amber-400/50 bg-amber-950/60 text-amber-400"
-                : `border-neutral-700 bg-neutral-900 ${tones[lane % tones.length]}`
-            }`}
+    <span
+      className="absolute inset-y-0"
+      style={{ left: column * 16, width: 16 }}
+      onPointerEnter={(event) => {
+        if (event.pointerType !== "touch") {
+          setAnchor(event.currentTarget.getBoundingClientRect());
+        }
+      }}
+      onPointerLeave={() => setAnchor(null)}
+      onPointerDown={() => setAnchor(null)}
+    >
+      {anchor &&
+        createPortal(
+          <div
+            ref={popup}
+            role="tooltip"
+            className="pointer-events-none fixed z-50 max-w-[calc(100vw-1rem)] rounded-md border border-neutral-800 bg-neutral-900 px-3 py-2 text-ui text-neutral-200 shadow-lg"
+            style={{ left: anchor.right + 8, top: anchor.top }}
           >
-            <Icon size={12} className="shrink-0" />
-            <span className="min-w-0 break-all font-mono">
-              {tag ? name.slice(5) : name}
-            </span>
-            {current && <span className="shrink-0 font-semibold">HEAD</span>}
-          </span>
-        );
-      })}
+            <p className="mb-1 text-caption uppercase tracking-wide text-neutral-500">
+              Branch / ref
+            </p>
+            {label.split("\n").map((ref) => {
+              const current = ref.startsWith("HEAD -> ");
+              const tag = ref.startsWith("tag: ");
+              const Icon = tag ? Tag : GitBranch;
+              return (
+                <div key={ref} className="flex items-start gap-2 py-0.5">
+                  <Icon
+                    size={13}
+                    className={`mt-0.5 shrink-0 ${current ? "text-amber-400" : tones[column % tones.length]}`}
+                  />
+                  <span className="min-w-0 break-words font-mono text-meta">
+                    {current ? ref.slice(8) : tag ? ref.slice(5) : ref}
+                  </span>
+                  {current && (
+                    <span className="text-caption font-semibold text-amber-400">
+                      HEAD
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>,
+          document.body,
+        )}
     </span>
   );
 }

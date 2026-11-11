@@ -64,7 +64,7 @@ import {
 import { api, unwrap } from "./api.js";
 
 import { ScrollPane } from "./OverlayScrollbar.js";
-import { commitGraph, CommitGraph, CommitRefs } from "./CommitGraph.js";
+import { commitGraph, CommitGraph } from "./CommitGraph.js";
 import { startPointerDrag } from "./pointerDrag.js";
 
 const clampHistoryHeight = (height: number) =>
@@ -775,7 +775,7 @@ function RepoView({
                         setOpen((o) => ({ ...o, [c.hash]: !expanded }))
                       }
                       aria-expanded={expanded}
-                      title={`${c.subject}\n${c.author} · ${gitAgo(c.when, true)} · ${c.hash.slice(0, 7)}`}
+                      title={`${c.subject}\n${c.author} · ${gitAgo(c.when, true)} · ${c.hash.slice(0, 7)}${c.refs?.length ? `\n${c.refs.join("\n")}` : ""}`}
                       className="items-start gap-1 pl-1"
                     >
                       <span className="mt-1 shrink-0 text-neutral-600">
@@ -794,7 +794,6 @@ function RepoView({
                             {gitAgo(c.when, false)}
                           </span>
                         </span>
-                        <CommitRefs refs={c.refs ?? []} lane={graph.lane} />
                       </span>
                     </ListRow>
                     {expanded &&
