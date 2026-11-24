@@ -431,6 +431,21 @@ export async function init(cwd: string): Promise<GitResult> {
     : { ok: false, steps, error: r.stderr || r.stdout };
 }
 
+/** Update remote-tracking refs without merging or changing working files. */
+export async function fetchRemotes(cwd: string): Promise<GitResult> {
+  const state = await status(cwd);
+  if (!state.repo)
+    return { ok: false, steps: [], error: `not a git repository: ${cwd}` };
+  if (!state.remote)
+    return { ok: false, steps: [], error: "this repository has no remote" };
+
+  const result = await git(cwd, ["fetch", "--all", "--no-recurse-submodules"]);
+  const output = result.stderr || result.stdout;
+  return result.code === 0
+    ? { ok: true, steps: [{ step: "fetch", output }] }
+    : { ok: false, steps: [], error: output || "fetch failed" };
+}
+
 /** Field separator inside one commit's header line. */
 const FS = "\x1f";
 

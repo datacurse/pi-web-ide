@@ -28,6 +28,7 @@ import {
   useState,
 } from "react";
 import {
+  ArrowDown,
   ArrowsClockwise,
   CaretDown,
   CaretRight,
@@ -352,6 +353,7 @@ export function SourceControl({
 }
 
 const noop = () => {};
+const FETCHING = "Fetching…";
 
 /**
  * One repository's panel.
@@ -392,7 +394,10 @@ function RepoView({
   const [naming, setNaming] = useState(false);
   const busyNow = useGitBusy(cwd);
   const running = busyNow !== null;
-  const [error, setError] = useState<string | null>(null);
+  const fetching = busyNow === FETCHING;
+  const [actionError, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const error = actionError ?? loadError;
   const lists = useRef<HTMLDivElement>(null);
   const [historyHeight, setHistoryHeight] = useState(() => {
     const stored = Number(readStored("pwi:gitHistoryHeight") ?? 50);
@@ -414,10 +419,10 @@ function RepoView({
       onChanges(changes.files.length);
       // Branch refs can change without moving HEAD (new branches or a fetch).
       setHistoryRevision((n) => n + 1);
-      setError(null);
+      setLoadError(null);
     } catch (err) {
       setFiles([]);
-      setError(err instanceof Error ? err.message : String(err));
+      setLoadError(err instanceof Error ? err.message : String(err));
     }
   }, [cwd, onChanges]);
 
@@ -432,7 +437,8 @@ function RepoView({
         if (live) setCommits(log.commits);
       },
       (err) => {
-        if (live) setError(err instanceof Error ? err.message : String(err));
+        if (live)
+          setLoadError(err instanceof Error ? err.message : String(err));
       },
     );
     return () => {
@@ -496,7 +502,7 @@ function RepoView({
    * in a sidebar is how a panel becomes a git client.
    */
   const sync = async () => {
-    if (!state) return;
+    if (!state || running) return;
     const dirty = state.changed > 0;
     let text = autoName ? "" : message.trim();
     if (dirty && !text && autoName) {
@@ -522,6 +528,21 @@ function RepoView({
       };
       if (!body.ok) setError(body.error ?? "failed");
       else setMessage("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setGitBusy(cwd, null);
+      gitChanged(cwd);
+    }
+  };
+
+  const fetchRemotes = async () => {
+    if (!state?.remote || running) return;
+    setGitBusy(cwd, FETCHING);
+    setError(null);
+    try {
+      const result = await unwrap(api.git.fetch.$post({ json: { cwd } }));
+      if (!result.ok) setError(result.error ?? "fetch failed");
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -627,44 +648,61 @@ function RepoView({
           </StripCell>
         </div>
 
-        <Button
-          variant="primary"
-          size="bar"
-          onClick={() => void sync()}
-          disabled={
-            running || naming || (!dirty && ahead === 0 && behind === 0)
-          }
-          title={
-            dirty
-              ? (state?.changed ?? 0) === 1
-                ? `Commit ${state?.changed ?? 0} file and push`
-                : `Commit ${state?.changed ?? 0} files and push`
-              : "Push what is already committed"
-          }
-          /*
-           * The app's primary button, not a blue one: `amber-500` under
-           * `neutral-950` text is what Chat.tsx's confirm buttons already
-           * use, and VS Code's blue here would be the one control in the
-           * window ignoring the active theme.
-           */
-        >
-          <ArrowsClockwise
-            size={13}
-            className={running ? "animate-spin" : undefined}
-          />
-          {busyNow ??
-            (dirty ? `Commit & Push ${state?.changed ?? 0}` : "Sync Changes")}
-          {/* What a sync would actually move, the way git counts it. */}
-          {!dirty && (ahead > 0 || behind > 0) && (
-            // Dimmed against the button's OWN ground rather than given a
-            // palette color: nothing else in the app sits on amber, so there
-            // is no themed token that is correct here.
-            <span className="opacity-70">
-              {ahead > 0 && `${ahead}↑`}
-              {behind > 0 && ` ${behind}↓`}
-            </span>
-          )}
-        </Button>
+        <div className="flex">
+          <Button
+            variant="primary"
+            size="bar"
+            onClick={() => void sync()}
+            className="min-w-0 flex-1"
+            disabled={
+              running || naming || (!dirty && ahead === 0 && behind === 0)
+            }
+            title={
+              dirty
+                ? (state?.changed ?? 0) === 1
+                  ? `Commit ${state?.changed ?? 0} file and push`
+                  : `Commit ${state?.changed ?? 0} files and push`
+                : "Push what is already committed"
+            }
+            /*
+             * The app's primary button, not a blue one: `amber-500` under
+             * `neutral-950` text is what Chat.tsx's confirm buttons already
+             * use, and VS Code's blue here would be the one control in the
+             * window ignoring the active theme.
+             */
+          >
+            <ArrowsClockwise
+              size={13}
+              className={running && !fetching ? "animate-spin" : undefined}
+            />
+            {(fetching ? null : busyNow) ??
+              (dirty ? `Commit & Push ${state?.changed ?? 0}` : "Sync Changes")}
+            {/* What a sync would actually move, the way git counts it. */}
+            {!dirty && (ahead > 0 || behind > 0) && (
+              // Dimmed against the button's OWN ground rather than given a
+              // palette color: nothing else in the app sits on amber, so there
+              // is no themed token that is correct here.
+              <span className="opacity-70">
+                {ahead > 0 && `${ahead}↑`}
+                {behind > 0 && ` ${behind}↓`}
+              </span>
+            )}
+          </Button>
+          <Button
+            variant="cell"
+            size="bar"
+            onClick={() => void fetchRemotes()}
+            disabled={!state?.remote || running || naming}
+            title={
+              state?.remote
+                ? "Fetch updates from remotes without pulling"
+                : "No Git remote configured"
+            }
+          >
+            <ArrowDown size={13} />
+            {fetching ? FETCHING : "Fetch"}
+          </Button>
+        </div>
       </div>
 
       {error && (

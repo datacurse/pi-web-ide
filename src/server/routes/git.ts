@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import {
   apply,
+  fetchRemotes,
   init as gitInit,
   changes as gitChanges,
   log as gitLog,
@@ -131,6 +132,12 @@ export function gitRoutes({ cwd: CWD }: Deps) {
         const b = c.req.valid("json");
         const cwd = typeof b.cwd === "string" && b.cwd ? b.cwd : CWD;
         return c.json(await gitInit(cwd), 200);
+      })
+
+      .post("/git/fetch", json<{ cwd?: string }>(), async (c) => {
+        const b = c.req.valid("json");
+        const cwd = typeof b.cwd === "string" && b.cwd ? b.cwd : CWD;
+        return c.json(await fetchRemotes(cwd), 200);
       })
 
       .post(

@@ -575,7 +575,9 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
   boxes: the commit message textarea (borderless, `px-3 py-2`, `text-ui`, `neutral-900` on
   hover and focus, two `bar`s tall: `h-[calc(var(--spacing-bar)*2)]`); an `h-bar` row with the `Auto-name commits` checkbox (`text-ui`, `pl-3`)
   and the `Sparkle` auto-name `StripCell` at its right end; then `Commit & Push` as a
-  `Button size="bar"` (flat, full width). `Initialize Repository` is one too.
+  `Button size="bar"` filling the row beside a `Fetch` text cell.
+  Fetch updates remote-tracking refs and refreshes the history and counts without pulling.
+  `Initialize Repository` uses a full-width bar.
 - Hide the commit message textarea while `Auto-name commits` is on; automatic naming ignores any saved manual draft.
 - When the project folder is not a git repository, a checkbox (same style as
   `Auto-name commits`) reads `Find repositories one folder down` (`pwi:gitNested`,
