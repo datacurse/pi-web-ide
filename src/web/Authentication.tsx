@@ -8,6 +8,8 @@ import type {
 import { api, unwrap } from "./api.js";
 import { Button, IconButton, inputClass, NavItem, PanelHeader } from "./ui.js";
 import { ScrollPane } from "./OverlayScrollbar.js";
+import { ModelDefaultsPanel } from "./ModelDefaults.js";
+import { useModelDefaults } from "./useModelDefaults.js";
 
 function PromptForm({
   prompt,
@@ -78,6 +80,7 @@ export function Authentication({
   open: boolean;
   onClose: () => void;
 }) {
+  const defaults = useModelDefaults(open);
   const [providers, setProviders] = useState<AuthProvider[]>([]);
   const [selected, setSelected] = useState("");
   const [login, setLogin] = useState<ProviderLogin | null>(null);
@@ -204,13 +207,61 @@ export function Authentication({
                   setError("");
                 }}
               >
-                {p.name}
+                <span className="min-w-0 flex-1">{p.name}</span>
+                {p.id === defaults.data?.defaultProvider && (
+                  <span className="shrink-0 text-caption font-medium text-amber-400">
+                    Default
+                  </span>
+                )}
               </NavItem>
             ))}
           </div>
         </ScrollPane>
         <ScrollPane className="min-w-0 flex-1 p-6">
           <div className="flex max-w-xl flex-col gap-4">
+            <section
+              aria-label="Default for new chats"
+              className="flex flex-col gap-2"
+            >
+              <h2 className="text-ui font-medium">Default for new chats</h2>
+              {defaults.data ? (
+                <>
+                  <p className="break-words font-mono text-body text-amber-400">
+                    {defaults.data.default ??
+                      defaults.data.defaultProvider ??
+                      "Automatic — Pi chooses"}
+                  </p>
+                  <p className="text-meta text-neutral-400">
+                    {`Reasoning: ${defaults.data.defaultThinking ?? "Automatic"} · Speed: ${defaults.data.defaultFast ? "Fast" : "Standard"}`}
+                  </p>
+                  {defaults.data.startupOverride && (
+                    <p className="text-meta text-amber-400">
+                      {`App override: ${defaults.data.startupOverride} (PWI_MODEL)`}
+                    </p>
+                  )}
+                </>
+              ) : (
+                <p className="text-meta text-neutral-500">
+                  {defaults.error || "Loading defaults…"}
+                </p>
+              )}
+              <p className="text-meta text-neutral-500">
+                Connected does not mean default. Existing chats keep their own
+                model.
+              </p>
+              <details>
+                <summary className="cursor-pointer text-ui text-neutral-300">
+                  Change defaults
+                </summary>
+                <div className="mt-3">
+                  <ModelDefaultsPanel
+                    defaults={defaults}
+                    disabled={busy || !!pending}
+                  />
+                </div>
+              </details>
+            </section>
+            <div className="border-t border-neutral-800" />
             <p className="text-meta text-neutral-500">
               Sign in to AI providers on this machine. Credentials are saved in
               Pi’s auth.json and shared with terminal Pi. This does not protect

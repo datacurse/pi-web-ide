@@ -90,9 +90,11 @@ import { SYNTAX_ROLES } from "./vscodeTheme.js";
 import { AutomaticActions } from "./AutomaticActions.js";
 import { AgentInstructions } from "./AgentInstructions.js";
 import { CodemodeSettings } from "./CodemodeSettings.js";
+import { ModelDefaults } from "./ModelDefaults.js";
 
 const CATEGORIES = [
   { id: "appearance", label: "Appearance", icon: <Palette size={16} /> },
+  { id: "models", label: "Model defaults", icon: <GearSix size={16} /> },
   { id: "transcript", label: "Chat", icon: <ChatText size={16} /> },
   { id: "sessions", label: "Sessions", icon: <ListBullets size={16} /> },
   {
@@ -115,6 +117,8 @@ type Category = (typeof CATEGORIES)[number]["id"];
 const CATEGORY_HINTS: Record<Category, string> = {
   appearance:
     "Themes and scrollbars. Saved in this browser; changes apply immediately.",
+  models:
+    "Default provider, model, reasoning and speed for new conversations. Saved in Pi on this machine; existing chats keep their own settings.",
   transcript:
     "How conversations look and how the message box behaves. Saved in this browser.",
   sessions: "How sessions appear in the sidebar. Saved in this browser.",
@@ -1200,6 +1204,12 @@ export function Settings({
           </span>
         </OptionRow>
       ),
+    },
+    {
+      category: "models",
+      label: "Model defaults",
+      text: "default provider model startup reasoning thinking effort speed fast standard authentication login new conversations settings.json",
+      node: <ModelDefaults open={open} />,
     },
     {
       category: "instructions",

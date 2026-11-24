@@ -33,13 +33,13 @@ import {
 import { Button, PanelHeader } from "./ui.js";
 import { api, unwrap } from "./api.js";
 
-import { revealFileLine, type FileLocation } from "./fileNavigation.js";
+import {
+  revealFileLine,
+  shortPath,
+  type FileLocation,
+} from "./fileNavigation.js";
+import { ImagePreview } from "./ImagePreview.js";
 import { MarkdownEditor } from "./MarkdownEditor.js";
-
-/** `/home/me/proj/src/App.tsx` → `src/App.tsx` when it is under `cwd`. */
-function shortPath(path: string, cwd: string): string {
-  return cwd && path.startsWith(`${cwd}/`) ? path.slice(cwd.length + 1) : path;
-}
 
 export function FileEditor({
   path,
@@ -66,15 +66,18 @@ export function FileEditor({
   const [dirty, setDirty] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [formatted, setFormatted] = useState(false);
+  const isMarkdown = /\.(md|markdown|mdown|mkd)$/i.test(path);
+  const isSvg = /\.svg$/i.test(path);
+  const [formatted, setFormatted] = useState(isSvg && reveal?.path !== path);
   const [preview, setPreview] = useState("");
   const [previewVersion, setPreviewVersion] = useState(0);
-  const isMarkdown = /\.(md|markdown|mdown|mkd)$/i.test(path);
+  const showPreview = formatted && base !== null;
 
   const host = useRef<HTMLDivElement | null>(null);
   const view = useRef<EditorView | null>(null);
   const revealRef = useRef(reveal);
   revealRef.current = reveal;
+  const revealed = useRef<FileLocation | undefined>(undefined);
   /*
    * The saved baseline, read from inside callbacks that were created before
    * the latest save. The listener and the save handler both need the CURRENT
@@ -110,7 +113,7 @@ export function FileEditor({
     setBase(null);
     setDirty(false);
     setError(null);
-    setFormatted(false);
+    setFormatted(isSvg && revealRef.current?.path !== path);
     setPreview("");
 
     void (async () => {
@@ -125,6 +128,7 @@ export function FileEditor({
         const text = file.content ?? "";
         setBase(text);
         baseRef.current = text;
+        if (isSvg) setPreview(text);
 
         view.current = new cm.EditorView({
           parent: host.current,
@@ -171,8 +175,10 @@ export function FileEditor({
           ],
         });
         const target = revealRef.current;
-        if (target?.path === path)
+        if (target?.path === path) {
           revealFileLine(view.current, cm, target.line);
+          revealed.current = target;
+        }
       } catch (err) {
         // A failed read or a chunk that will not load otherwise leaves an
         // empty pane and no clue why — the failure mode of a lazily loaded
@@ -186,7 +192,7 @@ export function FileEditor({
       view.current?.destroy();
       view.current = null;
     };
-  }, [path]);
+  }, [path, isSvg]);
 
   // Reveal cached content immediately, then refresh only an untouched buffer.
   // Never overwrite edits made while this request was in flight.
@@ -224,17 +230,24 @@ export function FileEditor({
 
   // Reveal subsequent links without rebuilding the editor or losing unsaved text/undo history.
   useEffect(() => {
-    if (!reveal || reveal.path !== path || !view.current) return;
-    setFormatted(false);
+    if (!reveal || reveal.path !== path || reveal === revealed.current) return;
+    // Wait for the code pane to be visible before focusing it.
+    if (formatted) {
+      setFormatted(false);
+      return;
+    }
+    if (!view.current) return;
     let live = true;
     void loadCodeMirror().then((cm) => {
-      if (live && view.current && revealRef.current === reveal)
+      if (live && view.current && revealRef.current === reveal) {
         revealFileLine(view.current, cm, reveal.line);
+        revealed.current = reveal;
+      }
     });
     return () => {
       live = false;
     };
-  }, [path, reveal]);
+  }, [formatted, path, reveal]);
 
   // Keep the same editor alive across views, preserving selection and undo.
   useEffect(() => {
@@ -316,11 +329,11 @@ export function FileEditor({
         >
           {shortPath(path, cwd)}
         </span>
-        {isMarkdown && (
+        {(isMarkdown || isSvg) && (
           <div
-            className="ml-auto flex gap-1"
+            className="ml-auto flex shrink-0 gap-1"
             role="group"
-            aria-label="Markdown view"
+            aria-label={isSvg ? "SVG view" : "Markdown view"}
           >
             <Button
               variant={!formatted ? "subtle" : "ghost"}
@@ -328,7 +341,7 @@ export function FileEditor({
               aria-pressed={!formatted}
               onClick={() => setFormatted(false)}
             >
-              Raw
+              {isSvg ? "Code" : "Raw"}
             </Button>
             <Button
               variant={formatted ? "subtle" : "ghost"}
@@ -341,14 +354,14 @@ export function FileEditor({
                 setFormatted(true);
               }}
             >
-              Formatted
+              {isSvg ? "Preview" : "Formatted"}
             </Button>
           </div>
         )}
         <Button
           variant="ghost"
           size="sm"
-          className={isMarkdown ? undefined : "ml-auto"}
+          className={isMarkdown || isSvg ? undefined : "ml-auto"}
           onClick={() => void save()}
           disabled={!dirty || saving}
           title="Save (Ctrl+S)"
@@ -375,15 +388,25 @@ export function FileEditor({
 
       <div
         ref={host}
-        className={`cm-editor-host min-h-0 flex-1 overflow-auto text-body${formatted ? " hidden" : ""}`}
+        className={`cm-editor-host min-h-0 flex-1 overflow-auto text-body${showPreview ? " hidden" : ""}`}
       />
-      {formatted && (
-        <MarkdownEditor
-          key={previewVersion}
-          text={preview}
-          onChange={editFormatted}
-        />
-      )}
+      {showPreview &&
+        (isSvg ? (
+          // Load as an image, never as inline SVG or a document, so scripts and
+          // external resources in workspace SVGs are not loaded.
+          <ImagePreview
+            key={previewVersion}
+            src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(preview.toWellFormed())}`}
+            alt="SVG preview"
+            error="Couldn’t render this SVG. Switch to Code to inspect it."
+          />
+        ) : (
+          <MarkdownEditor
+            key={previewVersion}
+            text={preview}
+            onChange={editFormatted}
+          />
+        ))}
     </div>
   );
 }

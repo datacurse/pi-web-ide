@@ -13,6 +13,10 @@ import { api } from "./api.js";
 
 import { thinkingChoices } from "../shared/thinking.js";
 import { supportsFastMode } from "../shared/fastMode.js";
+import {
+  modelDefaultsChanged,
+  onModelDefaultsChanged,
+} from "./useModelDefaults.js";
 
 /** Composer controls with cross-browser startup default stars. */
 export function ModelSelector({
@@ -50,6 +54,7 @@ export function ModelSelector({
   const [defaultFast, setDefaultFast] = useState<string | null>(null);
   const [fastPending, setFastPending] = useState(false);
 
+  useEffect(() => onModelDefaultsChanged(() => setAttempt((n) => n + 1)), []);
   useEffect(() => {
     let cancelled = false;
     const controller = new AbortController();
@@ -113,8 +118,10 @@ export function ModelSelector({
   ) => {
     const next = current === value ? null : value;
     const r = await save(next);
-    if (r.ok) set(next);
-    else
+    if (r.ok) {
+      set(next);
+      modelDefaultsChanged();
+    } else
       alert(
         `Could not save default: ${
           ((await r.json().catch(() => ({}))) as { error?: string }).error ??

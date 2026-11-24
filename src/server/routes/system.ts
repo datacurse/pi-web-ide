@@ -3,6 +3,7 @@ import { browseAction, type BrowseAction } from "../browseActions.js";
 import {
   listModels,
   readSettings,
+  settingsPath,
   writeSettings,
   setDefaultModel,
   setDefaultThinkingLevel,
@@ -103,7 +104,13 @@ export function systemRoutes({
           return c.json(
             {
               models: await listModels(),
-              default: p && m ? `${p}/${m}` : null,
+              default:
+                typeof p === "string" && typeof m === "string"
+                  ? `${p}/${m}`
+                  : null,
+              defaultProvider: typeof p === "string" ? p : null,
+              settingsPath: settingsPath(),
+              startupOverride: MODEL ?? null,
               defaultThinking: typeof t === "string" ? t : null,
               defaultFast: typeof f === "boolean" ? f : null,
             },

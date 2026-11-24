@@ -109,6 +109,12 @@ fits none of the existing ones, and record it here.
   indent (`wrapIndent()`, `.cm-wrapIndent`).
 - The file editor shows the active-line background only with an empty selection;
   selecting text hides it so the line and selection highlights do not overlap.
+- SVG file tabs default to a centered Preview that fits the pane. The header's
+  Code / Preview buttons switch views without losing edits or undo history. A
+  link to a source line opens Code; Preview renders the current buffer as an
+  image, so workspace SVG scripts never run.
+- PNG file tabs show a centered, read-only image fitted to the pane, with
+  Reload in the header instead of text editing controls.
 
 | Token        | Size | Use                                            |
 | ------------ | ---- | ---------------------------------------------- |
@@ -222,7 +228,7 @@ theme` (editor swatch, `Match app theme` or the theme's name, and a `Match app t
   `Ask only behavior`, `pwi:askMode`) to pick `Toggle` (default: stays on until switched
   off) or `One shot` (switches off after each send). The menu marks the current mode
   with a `Check`.
-- GPT-6 Sol and GPT-6.1 Sol on `openai` and `openai-codex` have a Standard /
+- GPT-6 Sol, GPT-6.1 Sol, and GPT-6.2 Sol on `openai` and `openai-codex` have a Standard /
   Fast pill beside reasoning. Each option has the same default star as model
   and thinking: click to save or clear the startup default without changing
   the active session. All three closed selectors use the same neutral text color; the selected mode
@@ -669,7 +675,7 @@ Tab`, both in that column. Not over buttons or the composer area (the box, git r
   It is re-read each time the page is shown unless there are unsaved edits, and the
   pwi extensions tab stays mounted (hidden) on the other tabs so an unsaved edit survives. Changes
   apply to sessions started afterwards. pwi's own plumbing (rewind, context) is not listed.
-- Settings has a `w-48` category nav on the left (`NavItem`s: Appearance, Chat,
+- Settings has a `w-48` category nav on the left (`NavItem`s: Appearance, Model defaults, Chat,
   Sessions, Agent instructions, Automation, Tools, Notifications, Keyboard shortcuts, General); the right side shows only the
   chosen category, `max-w-xl p-6`. Opens on Appearance.
   Each category explains its scope (browser-local display preferences versus machine-wide agent settings).
@@ -678,6 +684,15 @@ Tab`, both in that column. Not over buttons or the composer area (the box, git r
   Sessions contains sidebar preferences only, ordered by sorting, title source, title lines, then attachments.
   General holds `Expand advanced controls by default`; Appearance contains themes and scrollbars.
   Automation explains each model's job and when it applies; choosing a model does not enable SoL-Pi mechanisms.
+- Settings > Model defaults shows Pi's saved provider/model, reasoning and Piwi speed defaults,
+  with provider-grouped model choices and immediate saves to the displayed settings.json path.
+  Changing defaults never switches an existing chat. Automatic clears the saved override;
+  unavailable saved models remain visible. PWI_MODEL is shown explicitly when it overrides the
+  saved startup model. Composer default stars refresh after a settings change, and vice versa.
+- Authentication shows a compact Default for new chats summary and a Default badge beside the
+  saved provider, separate from connected checkmarks and the currently selected login page.
+  Change defaults expands the same controls as Settings. Auth actions remain available when
+  the model catalog fails; defaults have their own error and retry state.
 - Agent instructions shows global and selected-project `AGENTS.md` files side by side
   (`md:grid-cols-2`, stacked on narrow screens), using the full Settings content width.
   Each has its full path, a Current preview and a `New empty` button that archives the

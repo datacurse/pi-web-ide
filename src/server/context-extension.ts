@@ -14,6 +14,7 @@
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 // With `.ts`: pi's loader, not tsx, resolves these.
 import {
   contentChars,
@@ -41,8 +42,8 @@ type Message = {
   output?: string;
 };
 
-/** The minimum of pi's ExtensionAPI this file uses; pi is not a dependency here. */
-interface Pi {
+/** The parts of pi's ExtensionAPI this extension uses. */
+interface Pi extends Pick<ExtensionAPI, "on"> {
   getActiveTools(): string[];
   getAllTools(): { name: string; description?: string; parameters?: unknown }[];
   registerCommand(
@@ -217,6 +218,29 @@ function measuredSteps(sessionId: string): Map<string, Step[]> {
 }
 
 export default function context(pi: Pi) {
+  // Pi's provider serializers skip incomplete assistant messages but can
+  // still send their tool results, which the API rejects as unmatched. Patch
+  // only the outgoing transcript, preserving system updates and saved history.
+  pi.on("context_with_system", ({ messages }) => {
+    const incompleteCalls = new Set<string>();
+    const filtered = messages.filter((message) => {
+      if (message.role === "assistant") {
+        const incomplete =
+          message.stopReason === "aborted" || message.stopReason === "error";
+        for (const block of message.content) {
+          if (block.type !== "toolCall") continue;
+          if (incomplete) incompleteCalls.add(block.id);
+          else incompleteCalls.delete(block.id);
+        }
+      }
+      return (
+        message.role !== "toolResult" ||
+        !incompleteCalls.has(message.toolCallId)
+      );
+    });
+    if (filtered.length !== messages.length) return { messages: filtered };
+  });
+
   pi.registerCommand(COMMAND, {
     description: "pwi internal: measure the context",
     handler: async (_args, ctx) => {

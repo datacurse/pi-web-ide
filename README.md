@@ -57,6 +57,11 @@ being signalled. Stop an existing dev runner before starting another one.
 | `PWI_PACKAGES_TIMEOUT_MS` | limit for one `pi install/remove/update`                       | `300000`                   |
 | `PWI_SEARCH_CACHE_MS`     | npm package gallery cache lifetime                             | `600000`                   |
 
+Settings > Model defaults shows and changes Pi's startup provider/model, reasoning and
+Piwi speed defaults. Authentication also labels the saved default provider separately from
+connected accounts. Changes apply to new conversations, not existing chats; the page shows
+the settings file and any PWI_MODEL server override.
+
 Settings > Automatic actions selects separate models for commit naming, session naming,
 compaction and SoL-Pi log reduction. All default to `openai-codex/gpt-6.1-sol`,
 independently of the chat model. Compaction and reducer support applies to newly

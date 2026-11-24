@@ -16,6 +16,7 @@ import { Terminal } from "./Terminal.js";
 import { WebPage } from "./WebPage.js";
 import { DiffView } from "./DiffView.js";
 import { FileEditor } from "./FileEditor.js";
+import { PngViewer } from "./ImagePreview.js";
 import type { FileLocation } from "./fileNavigation.js";
 import {
   diffParts,
@@ -214,23 +215,31 @@ export function EditorColumn({
           }}
           className="relative flex min-h-0 min-w-0 flex-1 flex-col"
         >
-          {group.files.filter(isFileTab).map((entry) => (
-            <RetainedView
-              key={entry}
-              active={entry === active}
-              preloadDelay={300 + group.files.indexOf(entry) * 150}
-            >
-              <FileEditor
-                path={tabPath(entry)}
-                reveal={
-                  fileReveal?.path === tabPath(entry) ? fileReveal : undefined
-                }
-                cwd={cwd}
-                onDirty={onDirty}
+          {group.files.filter(isFileTab).map((entry) => {
+            const path = tabPath(entry);
+            const isPng = /\.png$/i.test(path);
+            return (
+              <RetainedView
+                key={entry}
                 active={entry === active}
-              />
-            </RetainedView>
-          ))}
+                preloadDelay={
+                  isPng ? undefined : 300 + group.files.indexOf(entry) * 150
+                }
+              >
+                {isPng ? (
+                  <PngViewer path={path} cwd={cwd} />
+                ) : (
+                  <FileEditor
+                    path={path}
+                    reveal={fileReveal?.path === path ? fileReveal : undefined}
+                    cwd={cwd}
+                    onDirty={onDirty}
+                    active={entry === active}
+                  />
+                )}
+              </RetainedView>
+            );
+          })}
           {group.files.filter(isDiffTab).map((entry) => (
             <RetainedView
               key={entry}

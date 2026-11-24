@@ -185,9 +185,10 @@ export function filesRoutes({ cwd: CWD }: Deps) {
 
       /**
        * A file as a download, for the explorer's "Download". Raw bytes and no size
-       * cap: unlike /api/file it is streamed to disk, never rendered.
+       * cap. Read-only PNG tabs also use this endpoint as an image source (`v`
+       * busts the browser cache on Reload), rather than decoding bytes as text.
        */
-      .get("/download", (c) => {
+      .get("/download", query<{ path?: string; v?: string }>(), (c) => {
         try {
           const full = safePath(CWD, c.req.query("path") ?? "");
           const stat = statSync(full);

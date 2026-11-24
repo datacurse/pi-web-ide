@@ -6,7 +6,9 @@ export function supportsFastMode(model: string | undefined): boolean {
   return (
     model === "openai/gpt-6-sol" ||
     model === "openai/gpt-6.1-sol" ||
+    model === "openai/gpt-6.2-sol" ||
     model === "openai-codex/gpt-6-sol" ||
-    model === "openai-codex/gpt-6.1-sol"
+    model === "openai-codex/gpt-6.1-sol" ||
+    model === "openai-codex/gpt-6.2-sol"
   );
 }

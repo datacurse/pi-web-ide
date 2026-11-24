@@ -7,6 +7,11 @@ export const FileNavigationContext = createContext<OpenSourceFile | undefined>(
   undefined,
 );
 
+/** `/home/me/proj/src/App.tsx` → `src/App.tsx` when it is under `cwd`. */
+export function shortPath(path: string, cwd: string): string {
+  return cwd && path.startsWith(`${cwd}/`) ? path.slice(cwd.length + 1) : path;
+}
+
 export interface FileLocation {
   path: string;
   line: number;
