@@ -585,10 +585,16 @@ Every session has one state, shown the same way everywhere (`ATTENTION_UI` in `a
   each child folder with a `.git`: `FolderSimple` 13px, name, branch in dim mono,
   uncommitted count as a `text-caption` right. The selected row shows the usual
   panel below; the checkbox sits under the list. The rail badge sums all repos.
-- Commit history uses connected colored lanes for actual parent relationships. Collapsed
+- The Commits toolbar switches between `History` and `By branch` (remembered per
+  browser), with a refresh cell for Git changes made outside the panel.
+  `By branch` pins one labeled column per local branch in name order, with an amber
+  dot for the current branch. Each track ends at its tip's commit row, independently
+  of parent edges; branches sharing a tip converge on one node. An ellipsis marks
+  tips outside the loaded history. The graph can scroll horizontally on narrow panels.
+- In `History`, commit lanes show parent relationships. In both modes, collapsed
   commits stay one line; branch and tag refs are available in the row's hover tooltip.
   HEAD's graph node is filled in its lane color; all other commit nodes are hollow.
-  Named branch tips get distinct colored lanes even in linear history; the graph
+  In `History`, named tips get distinct colored lanes even in linear history; the graph
   connects the lanes at the shared commit without duplicating commits.
   Lane transitions use smooth cubic Bézier curves with short vertical tangents,
   avoiding angular joins and the flattened middle of the original S-curves.

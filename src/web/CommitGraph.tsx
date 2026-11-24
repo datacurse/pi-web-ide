@@ -1,6 +1,8 @@
 import { GitBranch, Tag } from "@phosphor-icons/react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import type { GitBranch as LocalBranch } from "../server/git.js";
+
 /** Lay out topologically ordered commits in lanes, retaining parent connections. */
 interface GraphCommit {
   hash: string;
@@ -19,9 +21,16 @@ interface GraphRow {
   continuing: number[];
   width: number;
   columnTitles: string[];
+  branches?: {
+    width: number;
+    tracks: BranchTrack[];
+  };
 }
 
-export function commitGraph<T extends GraphCommit>(commits: T[]) {
+export function commitGraph<T extends GraphCommit>(
+  commits: T[],
+  splitNamedTips = true,
+) {
   // Git lanes are commit paths, not unique branches: shared history can belong
   // to several refs. Carry the known refs through ancestry rather than guessing
   // a branch from the lane's color (lane positions can be reused).
@@ -54,10 +63,12 @@ export function commitGraph<T extends GraphCommit>(commits: T[]) {
     const head = (commit.refs ?? []).some(
       (ref) => ref === "HEAD" || ref.startsWith("HEAD -> "),
     );
-    const branchTip = (commit.refs ?? []).some(
-      (ref) =>
-        ref !== "HEAD" && !ref.startsWith("tag: ") && !ref.endsWith("/HEAD"),
-    );
+    const branchTip =
+      splitNamedTips &&
+      (commit.refs ?? []).some(
+        (ref) =>
+          ref !== "HEAD" && !ref.startsWith("tag: ") && !ref.endsWith("/HEAD"),
+      );
     // Give an ancestor branch tip a distinct lane, even in linear history.
     // A vacant slot keeps the previous branch's incoming edge intact without
     // drawing a duplicate commit or inventing a parallel ancestry path.
@@ -105,6 +116,78 @@ export function commitGraph<T extends GraphCommit>(commits: T[]) {
   return rows.map((row) => ({ ...row, width }));
 }
 
+interface BranchColumn extends LocalBranch {
+  tipRow: number | undefined;
+}
+
+interface BranchTrack {
+  column: number;
+  current: boolean;
+  atTip: boolean;
+}
+
+const BRANCH_COLUMN_WIDTH = 64;
+const branchX = (column: number) => (column + 0.5) * BRANCH_COLUMN_WIDTH;
+
+/** Ref positions are independent of the parent graph and its lane colors. */
+export function branchGraph<T extends GraphCommit>(
+  commits: T[],
+  branches: LocalBranch[],
+) {
+  const rowsByHash = new Map(commits.map(({ hash }, row) => [hash, row]));
+  const columns = branches.map((branch) => ({
+    ...branch,
+    tipRow: rowsByHash.get(branch.hash),
+  }));
+  const width = columns.length * BRANCH_COLUMN_WIDTH;
+  const rows = commitGraph(commits, false).map((row, index) => ({
+    ...row,
+    branches: {
+      width,
+      tracks: columns.flatMap(({ tipRow, current }, column) =>
+        tipRow !== undefined && index <= tipRow
+          ? [{ column, current, atTip: index === tipRow }]
+          : [],
+      ),
+    },
+  }));
+  return { columns, rows, width: width + (rows[0]?.width ?? 0) * 16 };
+}
+
+export function BranchColumnHeaders({ columns }: { columns: BranchColumn[] }) {
+  return (
+    <div className="sticky top-0 z-10 flex bg-neutral-950 pl-3">
+      {columns.map(({ name, hash, current, tipRow }) => {
+        const title = `${name} · ${hash.slice(0, 7)}${current ? " · current branch" : ""}${tipRow === undefined ? " · tip outside loaded history" : ""}`;
+        return (
+          <div
+            key={name}
+            title={title}
+            className={`flex h-bar shrink-0 items-center justify-center gap-1 px-1 font-mono text-meta ${current ? "text-amber-400" : tipRow === undefined ? "text-neutral-500" : "text-neutral-300"}`}
+            style={{ width: BRANCH_COLUMN_WIDTH }}
+          >
+            <span className="min-w-0 fade-end">{name}</span>
+            {current && (
+              <span className="shrink-0" role="img" aria-label="Current branch">
+                ●
+              </span>
+            )}
+            {tipRow === undefined && (
+              <span
+                className="shrink-0"
+                role="img"
+                aria-label="Tip outside loaded history"
+              >
+                …
+              </span>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 const tones = [
   "text-amber-400",
   "text-blue-400",
@@ -112,6 +195,8 @@ const tones = [
   "text-red-400",
 ];
 const x = (lane: number) => 8 + lane * 16;
+const branchTone = (current: boolean) =>
+  current ? "text-amber-400" : "text-neutral-500";
 
 /** Smooth lane changes with short vertical tangents and no angular joins. */
 function edgePath(from: number, to: number, top: number, bottom: number) {
@@ -130,43 +215,70 @@ export function CommitGraph({
   continuing,
   width,
   columnTitles,
+  branches,
 }: GraphRow) {
+  const offset = branches?.width ?? 0;
+  const tracks = branches?.tracks ?? [];
+  const passing = tracks.filter(({ atTip }) => !atTip);
   return (
     <div
       aria-hidden="true"
       className="relative shrink-0"
-      style={{ width: width * 16 }}
+      style={{ width: offset + width * 16 }}
     >
       <svg width="100%" height="22" className="block">
-        {incoming.map(({ from, to }, i) => (
+        {passing.map(({ column, current }) => (
           <path
-            key={i}
-            d={edgePath(from, to, 0, 11)}
-            fill="none"
+            key={column}
+            d={`M ${branchX(column)} 0 V 22`}
             stroke="currentColor"
             strokeWidth="1.5"
-            className={tones[from % tones.length]}
+            className={branchTone(current)}
           />
         ))}
-        {outgoing.map(({ from, to }, i) => (
-          <path
-            key={i}
-            d={edgePath(from, to, 11, 22)}
-            fill="none"
+        {tracks
+          .filter(({ atTip }) => atTip)
+          .map(({ column, current }) => (
+            <path
+              key={column}
+              d={`M ${branchX(column)} 0 V 5 q 0 6 6 6 H ${offset + x(lane)}`}
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              className={branchTone(current)}
+            />
+          ))}
+        <g transform={offset ? `translate(${offset})` : undefined}>
+          {incoming.map(({ from, to }, i) => (
+            <path
+              key={i}
+              d={edgePath(from, to, 0, 11)}
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              className={tones[from % tones.length]}
+            />
+          ))}
+          {outgoing.map(({ from, to }, i) => (
+            <path
+              key={i}
+              d={edgePath(from, to, 11, 22)}
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              className={tones[to % tones.length]}
+            />
+          ))}
+          <circle
+            cx={x(lane)}
+            cy="11"
+            r="3.5"
+            fill={head ? "currentColor" : "var(--color-neutral-950)"}
             stroke="currentColor"
             strokeWidth="1.5"
-            className={tones[to % tones.length]}
+            className={tones[lane % tones.length]}
           />
-        ))}
-        <circle
-          cx={x(lane)}
-          cy="11"
-          r="3.5"
-          fill={head ? "currentColor" : "var(--color-neutral-950)"}
-          stroke="currentColor"
-          strokeWidth="1.5"
-          className={tones[lane % tones.length]}
-        />
+        </g>
       </svg>
       <svg
         width="100%"
@@ -174,11 +286,23 @@ export function CommitGraph({
         className="absolute left-0"
         style={{ top: 22, height: "calc(100% - 22px)" }}
       >
+        {passing.map(({ column, current }) => (
+          <line
+            key={`branch:${column}`}
+            x1={branchX(column)}
+            x2={branchX(column)}
+            y1="0"
+            y2="100%"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            className={branchTone(current)}
+          />
+        ))}
         {continuing.map((column) => (
           <line
             key={column}
-            x1={x(column)}
-            x2={x(column)}
+            x1={offset + x(column)}
+            x2={offset + x(column)}
             y1="0"
             y2="100%"
             stroke="currentColor"
@@ -189,7 +313,12 @@ export function CommitGraph({
       </svg>
       {columnTitles.map((title, column) =>
         title ? (
-          <GraphLaneTooltip key={column} label={title} column={column} />
+          <GraphLaneTooltip
+            key={column}
+            label={title}
+            column={column}
+            offset={offset}
+          />
         ) : null,
       )}
     </div>
@@ -199,9 +328,11 @@ export function CommitGraph({
 function GraphLaneTooltip({
   label,
   column,
+  offset,
 }: {
   label: string;
   column: number;
+  offset: number;
 }) {
   const [anchor, setAnchor] = useState<DOMRect | null>(null);
   const popup = useRef<HTMLDivElement>(null);
@@ -230,7 +361,7 @@ function GraphLaneTooltip({
   return (
     <span
       className="absolute inset-y-0"
-      style={{ left: column * 16, width: 16 }}
+      style={{ left: offset + column * 16, width: 16 }}
       onPointerEnter={(event) => {
         if (event.pointerType !== "touch") {
           setAnchor(event.currentTarget.getBoundingClientRect());

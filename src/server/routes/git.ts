@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import {
   apply,
+  branches as gitBranches,
   fetchRemotes,
   init as gitInit,
   changes as gitChanges,
@@ -65,15 +66,11 @@ export function gitRoutes({ cwd: CWD }: Deps) {
       .get("/git/log", query<{ cwd?: string; limit?: string }>(), async (c) => {
         const cwd = c.req.query("cwd") || CWD;
         const limit = Number(c.req.query("limit"));
-        return c.json(
-          {
-            commits: await gitLog(
-              cwd,
-              Number.isFinite(limit) ? limit : undefined,
-            ),
-          },
-          200,
-        );
+        const [commits, branches] = await Promise.all([
+          gitLog(cwd, Number.isFinite(limit) ? limit : undefined),
+          gitBranches(cwd),
+        ]);
+        return c.json({ commits, branches }, 200);
       })
 
       /**

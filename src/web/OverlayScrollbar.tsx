@@ -193,8 +193,15 @@ export function OverlayScrollbar({
  */
 export const ScrollPane = forwardRef<
   HTMLDivElement,
-  HTMLAttributes<HTMLDivElement> & { innerClassName?: string }
->(function ScrollPane({ className = "", innerClassName = "", ...props }, ref) {
+  HTMLAttributes<HTMLDivElement> & {
+    innerClassName?: string;
+    /** For layouts that may also need a horizontal scrollbar. */
+    nativeScrollbars?: boolean;
+  }
+>(function ScrollPane(
+  { className = "", innerClassName = "", nativeScrollbars = false, ...props },
+  ref,
+) {
   const pane = useRef<HTMLDivElement | null>(null);
   return (
     <div className={`relative flex flex-col ${className}`}>
@@ -205,9 +212,9 @@ export const ScrollPane = forwardRef<
           if (typeof ref === "function") ref(el);
           else if (ref) ref.current = el;
         }}
-        className={`no-scrollbar scroll-fade-y min-h-0 flex-1 overflow-auto ${innerClassName}`}
+        className={`${nativeScrollbars ? "" : "no-scrollbar scroll-fade-y"} min-h-0 flex-1 overflow-auto ${innerClassName}`}
       />
-      <OverlayScrollbar target={pane} />
+      {!nativeScrollbars && <OverlayScrollbar target={pane} />}
     </div>
   );
 });

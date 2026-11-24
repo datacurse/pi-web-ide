@@ -24,10 +24,12 @@ import {
   type ReactNode,
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
 import {
+  ArrowClockwise,
   ArrowDown,
   ArrowsClockwise,
   CaretDown,
@@ -35,6 +37,7 @@ import {
   FolderSimple,
   Sparkle,
 } from "@phosphor-icons/react";
+import type { GitBranch } from "../server/git.js";
 import { FileGlyph } from "./fileIcon.js";
 import {
   GIT_CHANGED,
@@ -65,7 +68,12 @@ import {
 import { api, unwrap } from "./api.js";
 
 import { ScrollPane } from "./OverlayScrollbar.js";
-import { commitGraph, CommitGraph } from "./CommitGraph.js";
+import {
+  BranchColumnHeaders,
+  branchGraph,
+  commitGraph,
+  CommitGraph,
+} from "./CommitGraph.js";
 import { startPointerDrag } from "./pointerDrag.js";
 
 const clampHistoryHeight = (height: number) =>
@@ -358,9 +366,8 @@ const FETCHING = "Fetching…";
 /**
  * One repository's panel.
  *
- * Refresh the working tree on each revision. History only changes when HEAD
- * or the branch changes, or after an explicit Git action; ordinary file edits
- * should not reread and redraw the commit list.
+ * Reload the graph on refresh even when HEAD is unchanged: refs can move or
+ * appear without a new commit or checkout.
  */
 function RepoView({
   cwd,
@@ -386,7 +393,13 @@ function RepoView({
 }) {
   const state = useGitState(cwd);
   const [files, setFiles] = useState<Change[] | null>(null);
-  const [commits, setCommits] = useState<Commit[]>([]);
+  const [history, setHistory] = useState<{
+    commits: Commit[];
+    branches: GitBranch[];
+  } | null>(null);
+  const [historyMode, setHistoryMode] = useState(() =>
+    readStored("pwi:gitHistoryMode") === "branches" ? "branches" : "history",
+  );
   const [historyRevision, setHistoryRevision] = useState(0);
   const [message, setMessage] = useState("");
   const [open, setOpen] = useState<Record<string, boolean>>({});
@@ -409,6 +422,14 @@ function RepoView({
     writeStored("pwi:gitHistoryHeight", String(next));
   };
 
+  const branchMode = historyMode === "branches";
+  const graph = useMemo(() => {
+    const commits = history?.commits ?? [];
+    return branchMode
+      ? branchGraph(commits, history?.branches ?? [])
+      : { rows: commitGraph(commits), columns: [], width: 0 };
+  }, [history, branchMode]);
+
   const reload = useCallback(async () => {
     try {
       const [, changes] = await Promise.all([
@@ -428,13 +449,13 @@ function RepoView({
 
   useEffect(() => {
     if (!state?.repo) {
-      if (state) setCommits([]);
+      if (state) setHistory(null);
       return;
     }
     let live = true;
     void unwrap(api.git.log.$get({ query: { cwd } })).then(
       (log) => {
-        if (live) setCommits(log.commits);
+        if (live) setHistory(log);
       },
       (err) => {
         if (live)
@@ -454,7 +475,6 @@ function RepoView({
     const on = (e: Event) => {
       const change = e as GitChangedEvent;
       if (change.detail !== cwd) return;
-      if (change.history !== false) setHistoryRevision((n) => n + 1);
       void reload();
     };
     window.addEventListener(GIT_CHANGED, on);
@@ -796,58 +816,103 @@ function RepoView({
           className="flex min-h-0 flex-col"
           style={{ flex: `${historyHeight} 1 0%` }}
         >
-          <ScrollPane className="min-h-0 flex-1">
+          <div className="flex h-bar shrink-0 items-stretch border-b border-neutral-800">
             <p
-              className={`sticky top-0 z-10 bg-neutral-950 px-3 py-1.5 ${sectionLabel}`}
+              className={`flex min-w-0 flex-1 items-center pl-3 ${sectionLabel}`}
             >
-              Commits
+              <span className="fade-end">Commits</span>
             </p>
-            {commitGraph(commits).map(({ commit: c, ...graph }) => {
-              const expanded = open[c.hash] === true;
-              return (
-                <div key={c.hash} className="relative flex pl-3">
-                  <CommitGraph {...graph} />
-                  <div className="min-w-0 flex-1">
-                    <ListRow
-                      onClick={() =>
-                        setOpen((o) => ({ ...o, [c.hash]: !expanded }))
-                      }
-                      aria-expanded={expanded}
-                      title={`${c.subject}\n${c.author} · ${gitAgo(c.when, true)} · ${c.hash.slice(0, 7)}${c.refs?.length ? `\n${c.refs.join("\n")}` : ""}`}
-                      className="items-start gap-1 pl-1"
-                    >
-                      <span className="mt-1 shrink-0 text-neutral-600">
-                        {expanded ? (
-                          <CaretDown size={11} />
-                        ) : (
-                          <CaretRight size={11} />
-                        )}
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="flex min-w-0 items-center gap-2">
-                          <span className="min-w-0 flex-1 fade-end">
-                            {c.subject}
-                          </span>
-                          <span className="shrink-0 text-caption text-neutral-600">
-                            {gitAgo(c.when, false)}
+            {(["history", "branches"] as const).map((mode) => (
+              <Button
+                key={mode}
+                variant="cell"
+                size="bar"
+                aria-pressed={historyMode === mode}
+                className="aria-pressed:bg-neutral-900 aria-pressed:text-neutral-100"
+                onClick={() => {
+                  setHistoryMode(mode);
+                  writeStored("pwi:gitHistoryMode", mode);
+                }}
+              >
+                {mode === "branches" ? "By branch" : "History"}
+              </Button>
+            ))}
+            <StripCell
+              label="Refresh commit history"
+              onClick={() => void reload()}
+            >
+              <ArrowClockwise size={16} />
+            </StripCell>
+          </div>
+          <ScrollPane
+            className="min-h-0 flex-1"
+            nativeScrollbars={branchMode}
+            tabIndex={branchMode ? 0 : undefined}
+            aria-label="Commit graph"
+          >
+            <div
+              style={
+                branchMode && graph.columns.length
+                  ? { minWidth: graph.width + 144 }
+                  : undefined
+              }
+            >
+              {branchMode &&
+                history &&
+                (graph.columns.length ? (
+                  <BranchColumnHeaders columns={graph.columns} />
+                ) : (
+                  <p className="px-3 py-1.5 text-meta text-neutral-500">
+                    No local branches.
+                  </p>
+                ))}
+              {graph.rows.map(({ commit: c, ...row }) => {
+                const expanded = open[c.hash] === true;
+                return (
+                  <div key={c.hash} className="relative flex pl-3">
+                    <CommitGraph {...row} />
+                    <div className="min-w-0 flex-1">
+                      <ListRow
+                        onClick={() =>
+                          setOpen((o) => ({ ...o, [c.hash]: !expanded }))
+                        }
+                        aria-expanded={expanded}
+                        title={`${c.subject}\n${c.author} · ${gitAgo(c.when, true)} · ${c.hash.slice(0, 7)}${c.refs?.length ? `\n${c.refs.join("\n")}` : ""}`}
+                        className="items-start gap-1 pl-1"
+                      >
+                        <span className="mt-1 shrink-0 text-neutral-600">
+                          {expanded ? (
+                            <CaretDown size={11} />
+                          ) : (
+                            <CaretRight size={11} />
+                          )}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="flex min-w-0 items-center gap-2">
+                            <span className="min-w-0 flex-1 fade-end">
+                              {c.subject}
+                            </span>
+                            <span className="shrink-0 text-caption text-neutral-600">
+                              {gitAgo(c.when, false)}
+                            </span>
                           </span>
                         </span>
-                      </span>
-                    </ListRow>
-                    {expanded &&
-                      c.files.map((f) => (
-                        <FileRow
-                          key={f.path}
-                          change={f}
-                          cwd={cwd}
-                          depth={1}
-                          onOpen={() => onOpenDiff(c.hash, f.path)}
-                        />
-                      ))}
+                      </ListRow>
+                      {expanded &&
+                        c.files.map((f) => (
+                          <FileRow
+                            key={f.path}
+                            change={f}
+                            cwd={cwd}
+                            depth={1}
+                            onOpen={() => onOpenDiff(c.hash, f.path)}
+                          />
+                        ))}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </ScrollPane>
         </div>
       </div>

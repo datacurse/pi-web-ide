@@ -449,6 +449,36 @@ export async function fetchRemotes(cwd: string): Promise<GitResult> {
 /** Field separator inside one commit's header line. */
 const FS = "\x1f";
 
+export interface GitBranch {
+  name: string;
+  hash: string;
+  current: boolean;
+}
+
+/** Local refs are independent of the log window and can share a tip. */
+export async function branches(cwd: string): Promise<GitBranch[]> {
+  const out = await git(
+    cwd,
+    [
+      "for-each-ref",
+      "--sort=refname",
+      "--format=%(refname:lstrip=2)%09%(objectname)%09%(HEAD)",
+      "refs/heads/",
+    ],
+    true,
+  );
+  if (out.code !== 0 || !out.stdout) return [];
+
+  // lstrip preserves the actual branch name even when a tag has the same name.
+  return out.stdout
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => {
+      const [name, hash, head] = line.split("\t");
+      return { name, hash, current: head === "*" };
+    });
+}
+
 /**
  * The last `limit` commits across branches and remotes, with topology and paths.
  *
